@@ -1,21 +1,21 @@
-<!-- AI-CONTEXT: Money tab (design-prd §10.3) — the driver's P&L with the platform.
-     Anatomy at 360 dp: month summary in The Meter treatment (recovered total,
-     ledger) → receivables list (status pills + aging in Mono) → per-receivable
-     next action. S3 comfortable density (max ~7 rows/viewport, §7.4). Money is
-     ALWAYS Mono + tabular, never truncated (T-2/T-6). Fixture-backed pending the
-     live /accessorial/owed API. -->
+<!-- AI-CONTEXT: Money tab (design-prd §10.3 / §238) — the driver's P&L with the
+     platform. Anatomy at 360 dp: month summary in The Meter treatment — the
+     North Star DRIVER DOLLARS DELIVERED (recovered + fuel saved + audit-flagged,
+     M9-FR4) → its breakdown → receivables list (status pills + aging in Mono).
+     S3 comfortable density (§7.4). Money is ALWAYS Mono + tabular, never
+     truncated (T-2/T-6). Fixture-backed until the live APIs answer. -->
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, onMounted } from "vue";
 import TheMeter from "../core/components/TheMeter.vue";
 import { useI18n } from "../core/i18n.js";
 import { formatMoney } from "../core/meter.js";
 import { receivableStatusToken } from "../core/presentation.js";
-import { fetchOwed, fetchFuelAnalytics } from "../core/api.js";
-import { SAMPLE_OWED, SAMPLE_FUEL_ANALYTICS } from "../core/fixtures.js";
+import { fetchOwed, fetchEarnings } from "../core/api.js";
+import { SAMPLE_OWED, SAMPLE_EARNINGS } from "../core/fixtures.js";
 
 const { t } = useI18n();
 const rows = ref(SAMPLE_OWED);
-const fuel = ref(SAMPLE_FUEL_ANALYTICS);
+const earnings = ref(SAMPLE_EARNINGS);
 
 onMounted(async () => {
   try {
@@ -24,15 +24,11 @@ onMounted(async () => {
     rows.value = SAMPLE_OWED; // unauthenticated / offline
   }
   try {
-    fuel.value = await fetchFuelAnalytics();
+    earnings.value = await fetchEarnings();
   } catch {
-    fuel.value = SAMPLE_FUEL_ANALYTICS; // unauthenticated / offline
+    earnings.value = SAMPLE_EARNINGS; // unauthenticated / offline
   }
 });
-
-const recoveredCents = computed(() =>
-  rows.value.filter((r) => r.state === "recovered").reduce((s, r) => s + r.amount_cents, 0),
-);
 
 function kindLabel(kind) {
   return t(`money.kind.${kind}`);
@@ -44,13 +40,29 @@ function stateLabel(state) {
 
 <template>
   <div class="money">
+    <!-- North Star: Driver Dollars Delivered (§238 month summary, Meter) -->
     <section class="card meter-card">
       <TheMeter
-        :label="t('money.recovered')"
-        :figure="formatMoney(recoveredCents)"
+        :label="t('money.delivered')"
+        :figure="formatMoney(earnings.ddd_cents)"
         variant="accruing"
       />
     </section>
+
+    <ul class="breakdown">
+      <li class="breakdown__row">
+        <span>{{ t("money.recovered") }}</span>
+        <span class="mono">{{ formatMoney(earnings.recovered_cents) }}</span>
+      </li>
+      <li class="breakdown__row">
+        <span>{{ t("fuel.saved") }}</span>
+        <span class="mono">{{ formatMoney(earnings.fuel_saved_cents) }}</span>
+      </li>
+      <li v-if="earnings.flagged_cents > 0" class="breakdown__row">
+        <span>{{ t("money.flagged") }}</span>
+        <span class="mono">{{ formatMoney(earnings.flagged_cents) }}</span>
+      </li>
+    </ul>
 
     <h1 class="money__title">{{ t("money.title") }}</h1>
     <ul class="rows">
@@ -70,15 +82,6 @@ function stateLabel(state) {
         </div>
       </li>
     </ul>
-
-    <!-- fuel savings-to-date (design-prd §238 savings row; M7-FR4) -->
-    <div v-if="fuel.txn_count > 0" class="savings">
-      <div class="savings__main">
-        <span class="row__kind">{{ t("fuel.saved") }}</span>
-        <span class="savings__gallons">{{ Math.round(fuel.gallons_milli / 1000) }} {{ t("fuel.gallons") }}</span>
-      </div>
-      <span class="savings__amount">{{ formatMoney(fuel.savings_cents) }}</span>
-    </div>
   </div>
 </template>
 
@@ -150,34 +153,28 @@ function stateLabel(state) {
   font-size: var(--type-caption-size);
   color: var(--text-3);
 }
-.savings {
-  min-height: 64px;
+/* DDD breakdown — the three streams behind the North Star figure (M9-FR4) */
+.breakdown {
+  list-style: none;
+  margin: 0 0 var(--s-4);
+  padding: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-3);
-  margin-top: var(--s-3);
-  padding: var(--s-3) var(--s-4);
-  background: var(--ink-1);
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-card);
-}
-.savings__main {
-  display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--s-2);
-  min-width: 0;
 }
-.savings__gallons {
+.breakdown__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--line-1);
+  font-size: var(--type-body-size);
+  color: var(--text-2);
+}
+.mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: var(--type-caption-size);
-  color: var(--text-3);
-}
-.savings__amount {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--type-title-size);
+  font-size: var(--type-body-size);
   color: var(--ledger-500);
 }
 </style>

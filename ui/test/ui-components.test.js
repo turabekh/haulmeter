@@ -190,13 +190,17 @@ describe("FuelSurface — pump-code flow (M7, NAV-3 / §8.7 one net price)", () 
   });
 });
 
-describe("MoneySurface — fuel savings row (M7-FR4, design-prd §238)", () => {
-  it("surfaces savings-to-date in ledger-green Mono (fixture)", async () => {
+describe("MoneySurface — Driver Dollars Delivered (M9-FR4, design-prd §238)", () => {
+  it("leads with the DDD North Star figure + breakdown (fixture)", async () => {
     const w = mount(MoneySurface);
     await flushPromises();
-    expect(w.find(".savings").exists()).toBe(true);
-    expect(w.find(".savings__amount").text()).toBe("$362.50"); // 36250c saved
-    expect(w.find(".savings").text()).toContain("1450"); // gallons in Mono
+    // hero Meter = recovered + fuel saved + flagged = $587.50 (fixture DDD)
+    expect(w.find(".meter__figure").text()).toBe("$587.50");
+    // breakdown carries the three streams, fuel saved among them
+    const breakdown = w.find(".breakdown").text();
+    expect(breakdown).toContain("$125.00"); // recovered 12500c
+    expect(breakdown).toContain("$362.50"); // fuel saved 36250c
+    expect(breakdown).toContain("$100.00"); // audit-flagged 10000c
     // the receivables list is unchanged — still exactly three rows
     expect(w.findAll(".row")).toHaveLength(3);
     w.unmount();

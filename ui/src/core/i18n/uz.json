@@ -98,5 +98,7 @@
   "auth.error_taken": "Bu email allaqachon ro'yxatdan o'tgan. Kiring.",
   "auth.error_network": "Aloqa yo'q. Signalni tekshiring.",
   "auth.logout": "Chiqish",
-  "more.account": "Hisob"
+  "more.account": "Hisob",
+  "money.delivered": "Sizga yetkazildi",
+  "money.flagged": "Ko'rib chiqish uchun belgilangan"
 }

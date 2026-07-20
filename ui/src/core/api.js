@@ -155,6 +155,13 @@ export async function fetchFuelCorridor({ lat, lon, headingDeg = 0, maxDistanceM
   return resp.json();
 }
 
+export async function fetchEarnings() {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/money/earnings`, { headers: headers() });
+  if (!resp.ok) throw new Error(`earnings failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchFuelAnalytics() {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const resp = await fetch(`${API_BASE}/fuel/analytics`, { headers: headers() });

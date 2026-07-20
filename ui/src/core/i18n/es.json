@@ -98,5 +98,7 @@
   "auth.error_taken": "Ese correo ya tiene cuenta. Inicia sesión.",
   "auth.error_network": "Sin conexión. Revisa la señal e inténtalo.",
   "auth.logout": "Cerrar sesión",
-  "more.account": "Cuenta"
+  "more.account": "Cuenta",
+  "money.delivered": "Entregado a ti",
+  "money.flagged": "Marcado para revisar"
 }

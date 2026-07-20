@@ -68,6 +68,15 @@ export const SAMPLE_PINS = [
   },
 ];
 
+// AI-CONTEXT: fixture Driver Dollars Delivered (M9-FR4 / North Star), pending
+// live /money/earnings. recovered (M3/M4) + fuel saved (M7) + audit-flagged.
+export const SAMPLE_EARNINGS = {
+  recovered_cents: 12500,
+  fuel_saved_cents: 36250,
+  flagged_cents: 10000,
+  ddd_cents: 58750,
+};
+
 // AI-CONTEXT: fixture fuel savings-to-date (M7-FR4), pending live /fuel/analytics.
 // Shape matches driver_analytics() exactly (gallons in thousandths, money cents).
 export const SAMPLE_FUEL_ANALYTICS = {

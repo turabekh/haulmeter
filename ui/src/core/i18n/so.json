@@ -98,5 +98,7 @@
   "auth.error_taken": "Iimaylkaas akoon ayuu leeyahay. Fadlan gal.",
   "auth.error_network": "Xiriir ma jiro. Hubi calaamadda oo isku day.",
   "auth.logout": "Ka bax",
-  "more.account": "Akoon"
+  "more.account": "Akoon",
+  "money.delivered": "Lagu keenay",
+  "money.flagged": "loo calaamadeeyay dib-u-eegis"
 }

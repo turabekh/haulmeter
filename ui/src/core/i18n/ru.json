@@ -98,5 +98,7 @@
   "auth.error_taken": "У этой почты уже есть аккаунт. Войдите.",
   "auth.error_network": "Нет связи. Проверьте сигнал и повторите.",
   "auth.logout": "Выйти",
-  "more.account": "Аккаунт"
+  "more.account": "Аккаунт",
+  "money.delivered": "Доставлено вам",
+  "money.flagged": "Отмечено на проверку"
 }

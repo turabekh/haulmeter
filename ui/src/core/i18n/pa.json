@@ -98,5 +98,7 @@
   "auth.error_taken": "ਇਸ ਈਮੇਲ ਦਾ ਖਾਤਾ ਪਹਿਲਾਂ ਹੈ। ਲੌਗ ਇਨ ਕਰੋ।",
   "auth.error_network": "ਕੋਈ ਕਨੈਕਸ਼ਨ ਨਹੀਂ। ਸਿਗਨਲ ਚੈੱਕ ਕਰੋ।",
   "auth.logout": "ਲੌਗ ਆਊਟ",
-  "more.account": "ਖਾਤਾ"
+  "more.account": "ਖਾਤਾ",
+  "money.delivered": "ਤੁਹਾਨੂੰ ਦਿੱਤਾ",
+  "money.flagged": "ਸਮੀਖਿਆ ਲਈ ਨਿਸ਼ਾਨਬੱਧ"
 }

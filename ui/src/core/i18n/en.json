@@ -98,5 +98,7 @@
   "auth.error_taken": "That email already has an account. Log in instead.",
   "auth.error_network": "No connection. Check signal and try again.",
   "auth.logout": "Log out",
-  "more.account": "Account"
+  "more.account": "Account",
+  "money.delivered": "Delivered to you",
+  "money.flagged": "Flagged for review"
 }
