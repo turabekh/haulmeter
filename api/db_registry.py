@@ -29,6 +29,7 @@ MODEL_MODULES = [
     "app.modules.m04_accessorial.domain.models",
     "app.modules.m05_protection.domain.models",
     "app.modules.m06_parking.domain.models",
+    "app.modules.m07_fuel.domain.models",
 ]
 
 

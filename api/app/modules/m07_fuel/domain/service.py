@@ -1,0 +1,259 @@
+"""AI-CONTEXT: M7 Fuel Savings Network (PRD §8.7) — the sleeper economics. The map
+shows the driver's NET price after discount along the corridor; a tap issues a
+pump code and the transaction settles on the F7 ledger with spread accounting.
+Mudflap's model fused into the corridor view. The platform keeps a per-gallon
+SPREAD baked between the merchant discount and the driver-facing discount, so the
+driver sees one net price with no fees/minimums (PRD §8.7 user story). The card
+charge / merchant settlement is the F7 PaymentGateway SEAM (payment partner
+deferred, wired at activation — mirrors M6's Stripe seam). F7 already ships the
+`fuel_clearing` account + `fuel_txn` entry type. Composes foundation publics +
+m01.public (corridor). Runs behind the F13 flag m07_fuel, gated on a signed
+merchant agreement + a live payment partner.
+"""
+
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.foundation.f07_ledger import public as ledger
+from app.foundation.f10_crowd import public as crowd
+from app.modules.m01_map import public as m1
+
+from .enums import FuelTxnState, PriceSource
+from .models import FuelTransaction, Merchant, StationPricing
+
+FLAG_KEY = "m07_fuel"
+MODULE = "m07"
+GATES = ["merchant_agreement", "payment_partner"]
+DEFAULT_GALLONS = 100.0  # a typical fill for corridor true-cost ranking
+
+
+class NotAFuelPartner(Exception):
+    pass
+
+
+@dataclass
+class FuelStop:
+    facility_id: object
+    name: str
+    distance_m: float
+    gross_cents_per_gal: int
+    net_cents_per_gal: int
+    savings_cents_per_gal: int
+    true_cost_cents: int
+    is_network: bool
+
+
+@dataclass
+class DriverFuelAnalytics:
+    gallons_milli: int
+    spend_cents: int
+    savings_cents: int
+    txn_count: int
+
+
+def register_module(db: Session) -> None:
+    from app.foundation.f13_flags import public as flags
+    from app.foundation.f14_admin import public as admin
+
+    flags.register_flag(db, FLAG_KEY, description="M7 Fuel Savings Network")
+    for gate in GATES:
+        flags.add_gate(db, FLAG_KEY, gate)
+    admin.register_admin_view(db, "m07.fuel", MODULE, "Fuel Network", "/admin/m07/fuel")
+
+
+# --- Merchant network + station pricing (M7-FR1) ---
+def register_merchant(db: Session, name: str, settlement_terms: str = "net_15") -> Merchant:
+    merchant = Merchant(name=name, settlement_terms=settlement_terms)
+    db.add(merchant)
+    db.flush()
+    return merchant
+
+
+def set_station_pricing(
+    db: Session,
+    facility_ref,
+    gross_cents_per_gal: int,
+    discount_cents_per_gal: int = 0,
+    spread_cents_per_gal: int = 0,
+    merchant_id=None,
+    source: PriceSource = PriceSource.feed,
+) -> StationPricing:
+    pricing = db.scalar(select(StationPricing).where(StationPricing.facility_ref == facility_ref))
+    if pricing is None:
+        pricing = StationPricing(facility_ref=facility_ref)
+        db.add(pricing)
+    pricing.gross_cents_per_gal = gross_cents_per_gal
+    pricing.discount_cents_per_gal = discount_cents_per_gal
+    pricing.spread_cents_per_gal = spread_cents_per_gal
+    pricing.merchant_id = merchant_id
+    pricing.source = source
+    db.flush()
+    return pricing
+
+
+def net_cents_per_gal(pricing: StationPricing) -> int:
+    return pricing.gross_cents_per_gal - pricing.discount_cents_per_gal
+
+
+def _is_network(pricing: StationPricing) -> bool:
+    return pricing.merchant_id is not None
+
+
+# --- Crowd price confirmation keeps non-network honest (M7-FR5) ---
+def confirm_price(
+    db: Session, account_id, facility_ref, price_cents_per_gal: int, submitted_at: datetime
+) -> int | None:
+    crowd.submit(
+        db,
+        account_id,
+        facility_ref,
+        crowd.SignalType.fuel_price,
+        {"price_cents": price_cents_per_gal},
+        submitted_at=submitted_at,
+    )
+    belief = crowd.update_belief(db, facility_ref, crowd.SignalType.fuel_price, as_of=submitted_at)
+    if belief is None:
+        return None
+    consensus = belief.value["price_cents"]
+    # non-network / crowd-sourced stations track the consensus gross on the same layer
+    pricing = db.scalar(select(StationPricing).where(StationPricing.facility_ref == facility_ref))
+    if pricing is None:
+        set_station_pricing(db, facility_ref, consensus, source=PriceSource.crowd)
+    elif not _is_network(pricing):
+        pricing.gross_cents_per_gal = consensus
+        pricing.source = PriceSource.crowd
+        db.flush()
+    return consensus
+
+
+# --- Net-price corridor, ranked by true cost (M7-FR2) ---
+def corridor_fuel(
+    db: Session,
+    account_id,
+    origin_lat: float,
+    origin_lon: float,
+    heading_deg: float,
+    max_distance_m: float,
+    gallons: float = DEFAULT_GALLONS,
+) -> list[FuelStop]:
+    entries = m1.corridor_view(
+        db, account_id, origin_lat, origin_lon, heading_deg, max_distance_m, preset=m1.Preset.fuel
+    )
+    refs = [e.facility_id for e in entries]
+    pricing = {
+        p.facility_ref: p
+        for p in db.scalars(select(StationPricing).where(StationPricing.facility_ref.in_(refs)))
+    }
+    gallons_milli = round(gallons * 1000)
+    stops: list[FuelStop] = []
+    for entry in entries:
+        p = pricing.get(entry.facility_id)
+        if p is None:
+            continue
+        net = net_cents_per_gal(p)
+        true_cost = round(net * gallons_milli / 1000)
+        stops.append(
+            FuelStop(
+                facility_id=entry.facility_id,
+                name=entry.name,
+                distance_m=entry.distance_m,
+                gross_cents_per_gal=p.gross_cents_per_gal,
+                net_cents_per_gal=net,
+                savings_cents_per_gal=p.discount_cents_per_gal,
+                true_cost_cents=true_cost,
+                is_network=_is_network(p),
+            )
+        )
+    # AI-CONTEXT: rank by the driver's net price, then proximity — no fabricated
+    # deviation-mile coefficient (design-prd §11.7, never fake precision).
+    stops.sort(key=lambda s: (s.net_cents_per_gal, s.distance_m))
+    return stops
+
+
+# --- In-app fuel payment: pump code + spread settlement (M7-FR3) ---
+def _pump_code() -> str:
+    return uuid.uuid4().hex[:8].upper()
+
+
+def issue_pump_code(
+    db: Session, account_id, station_ref, gallons: float, gateway=None
+) -> FuelTransaction:
+    pricing = db.scalar(select(StationPricing).where(StationPricing.facility_ref == station_ref))
+    if pricing is None or not _is_network(pricing):
+        raise NotAFuelPartner(str(station_ref))
+    gallons_milli = round(gallons * 1000)
+    net_per_gal = net_cents_per_gal(pricing)
+    gross_cents = round(pricing.gross_cents_per_gal * gallons_milli / 1000)
+    net_cents = round(net_per_gal * gallons_milli / 1000)
+    spread_cents = round(pricing.spread_cents_per_gal * gallons_milli / 1000)
+
+    if gateway is not None:  # payment partner seam (deferred); ledger is the truth
+        gateway.authorize_pump(net_cents, f"fuel:{station_ref}")
+    txn = FuelTransaction(
+        driver_account_id=account_id,
+        station_ref=station_ref,
+        merchant_id=pricing.merchant_id,
+        gallons_milli=gallons_milli,
+        gross_cents_per_gal=pricing.gross_cents_per_gal,
+        net_cents_per_gal=net_per_gal,
+        spread_cents_per_gal=pricing.spread_cents_per_gal,
+        gross_cents=gross_cents,
+        net_cents=net_cents,
+        spread_cents=spread_cents,
+        pump_code=_pump_code(),
+        state=FuelTxnState.code_issued,
+    )
+    db.add(txn)
+    db.flush()
+    return txn
+
+
+def settle(db: Session, txn: FuelTransaction) -> FuelTransaction:
+    # driver pays net; platform keeps the spread; the merchant is owed the rest.
+    cash = ledger.get_or_create_account(
+        db, ledger.LedgerAccountKind.cash_clearing, "cash:fuel", ledger.Currency.usd
+    )
+    platform = ledger.get_or_create_account(
+        db, ledger.LedgerAccountKind.platform_revenue, "revenue:fuel", ledger.Currency.usd
+    )
+    merchant = ledger.get_or_create_account(
+        db,
+        ledger.LedgerAccountKind.fuel_clearing,
+        f"merchant:{txn.merchant_id}",
+        ledger.Currency.usd,
+    )
+    entry = ledger.post_entry(
+        db,
+        ledger.EntryType.fuel_txn,
+        [
+            ledger.Posting(cash.id, ledger.Direction.debit, txn.net_cents),
+            ledger.Posting(platform.id, ledger.Direction.credit, txn.spread_cents),
+            ledger.Posting(merchant.id, ledger.Direction.credit, txn.net_cents - txn.spread_cents),
+        ],
+        description=f"fuel settlement {txn.id}",
+    )
+    txn.state = FuelTxnState.settled
+    txn.entry_ref = entry.id
+    txn.settled_at = txn.created_at
+    db.flush()
+    return txn
+
+
+# --- Fuel spend analytics + savings-to-date (M7-FR4; IFTA export -> M9 hook) ---
+def driver_analytics(db: Session, account_id) -> DriverFuelAnalytics:
+    txns = list(
+        db.scalars(
+            select(FuelTransaction).where(
+                FuelTransaction.driver_account_id == account_id,
+                FuelTransaction.state == FuelTxnState.settled,
+            )
+        )
+    )
+    gallons_milli = sum(t.gallons_milli for t in txns)
+    spend = sum(t.net_cents for t in txns)
+    savings = sum(t.gross_cents - t.net_cents for t in txns)
+    return DriverFuelAnalytics(gallons_milli, spend, savings, len(txns))
