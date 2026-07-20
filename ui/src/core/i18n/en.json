@@ -170,5 +170,20 @@
   "fleet.open": "Open",
   "fleet.none": "You don't run a fleet yet.",
   "fleet.create_go": "Create",
-  "system.pending": "Saved on your phone"
+  "system.pending": "Saved on your phone",
+  "cond.title": "Cargo condition",
+  "cond.start": "Capture cargo condition",
+  "cond.take": "Take photo",
+  "cond.done": "Condition documented",
+  "cond.step": "Step",
+  "cond.of": "of",
+  "cond.step.trailer_exterior": "Trailer exterior",
+  "cond.step.seals": "Seals",
+  "cond.step.load_blocking": "Load blocking",
+  "cond.step.reefer_setpoint": "Reefer setpoint",
+  "incident.title": "Report an incident",
+  "incident.kind": "What happened?",
+  "incident.note": "Add a note",
+  "incident.file": "File incident",
+  "incident.filed": "Incident documented"
 }

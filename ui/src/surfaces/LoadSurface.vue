@@ -188,6 +188,11 @@ function endLoad() {
 
       <button class="cta" type="button" @click="onPrimary">{{ primaryCta }}</button>
 
+      <!-- M5-FR2: camera-first cargo-condition capture for the active stop -->
+      <button v-if="live" class="cta cta--text" type="button" @click="router.push('/protection/condition')">
+        {{ t("cond.start") }}
+      </button>
+
       <button v-if="!live" class="cta cta--outline" type="button" @click="starting = true">
         {{ t("load.start") }}
       </button>

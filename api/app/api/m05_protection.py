@@ -3,6 +3,7 @@ Document wallet + inspection mode are reads; on-time proof / condition / inciden
 are captures (F4 evidence). F8 gateway seam (recording) in dev.
 """
 
+import base64
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -88,6 +89,59 @@ def incident(
 ) -> dict:
     inc = m5.capture_incident(db, account.id, body.kind, note=body.note)
     return {"incident_id": str(inc.id), "evidence_log_ref": str(inc.evidence_log_ref)}
+
+
+# --- Cargo-condition capture (M5-FR2): a guided, hash-chained photo sequence ---
+class ConditionStartIn(BaseModel):
+    stop_id: uuid.UUID
+    phase: str = "delivery"  # pickup | delivery
+
+
+@router.get("/condition/sequence")
+def condition_sequence(
+    account: identity.Account = Depends(current_account),
+) -> list[str]:
+    return m5.condition_sequence()
+
+
+@router.post("/condition/start", status_code=201)
+def condition_start(
+    body: ConditionStartIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    stop = loads.get_stop(db, body.stop_id)
+    if stop is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "stop not found")
+    phase = m5.CapturePhase(body.phase)
+    capture = m5.start_condition_capture(db, stop, account.id, phase)
+    return {"capture_id": str(capture.id), "sequence": m5.condition_sequence()}
+
+
+class ConditionPhotoIn(BaseModel):
+    prompt: str
+    content_b64: str | None = None  # the captured image; a dev placeholder if absent
+
+
+@router.post("/condition/{capture_id}/photo", status_code=201)
+def condition_photo(
+    capture_id: uuid.UUID,
+    body: ConditionPhotoIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    capture = db.get(m5.ConditionCapture, capture_id)
+    if capture is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "capture not found")
+    content = (
+        base64.b64decode(body.content_b64) if body.content_b64 else f"photo:{body.prompt}".encode()
+    )
+    m5.add_condition_photo(db, capture, body.prompt, content=content)
+    return {
+        "capture_id": str(capture.id),
+        "photo_count": capture.photo_count,
+        "prompt": body.prompt,
+    }
 
 
 @router.get("/summary/{stop_id}")

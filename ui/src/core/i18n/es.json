@@ -170,5 +170,20 @@
   "fleet.open": "Abrir",
   "fleet.none": "Aún no gestionas una flota.",
   "fleet.create_go": "Crear",
-  "system.pending": "Guardado en tu teléfono"
+  "system.pending": "Guardado en tu teléfono",
+  "cond.title": "Condición de la carga",
+  "cond.start": "Documentar condición",
+  "cond.take": "Tomar foto",
+  "cond.done": "Condición documentada",
+  "cond.step": "Paso",
+  "cond.of": "de",
+  "cond.step.trailer_exterior": "Exterior del remolque",
+  "cond.step.seals": "Sellos",
+  "cond.step.load_blocking": "Sujeción de carga",
+  "cond.step.reefer_setpoint": "Ajuste del refrigerador",
+  "incident.title": "Reportar un incidente",
+  "incident.kind": "¿Qué pasó?",
+  "incident.note": "Agregar nota",
+  "incident.file": "Registrar incidente",
+  "incident.filed": "Incidente documentado"
 }

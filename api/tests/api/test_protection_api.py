@@ -86,3 +86,39 @@ def test_on_time_endpoint(client, db):
     )
     assert resp.status_code == 201
     assert resp.json()["within_window"] is True
+
+
+def test_condition_capture_guided_sequence(client, db):
+    from app.foundation.f02_facility import public as facility
+    from app.foundation.f05_load import public as loads
+
+    account_id, headers = _auth(client)
+    fac = facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, "Receiver", 32.7767, -96.797
+    )
+    import uuid as _uuid
+
+    load = loads.create_load(db, _uuid.UUID(account_id))
+    stop = loads.add_stop(db, load, fac.id, loads.StopType.delivery)
+
+    seq = client.get("/protection/condition/sequence", headers=headers)
+    assert seq.status_code == 200
+    assert seq.json() == ["trailer_exterior", "seals", "load_blocking", "reefer_setpoint"]
+
+    started = client.post(
+        "/protection/condition/start",
+        json={"stop_id": str(stop.id), "phase": "delivery"},
+        headers=headers,
+    )
+    assert started.status_code == 201
+    capture_id = started.json()["capture_id"]
+
+    # walk the guided sequence, one hash-chained photo per step
+    for i, prompt in enumerate(started.json()["sequence"], start=1):
+        photo = client.post(
+            f"/protection/condition/{capture_id}/photo",
+            json={"prompt": prompt},
+            headers=headers,
+        )
+        assert photo.status_code == 201
+        assert photo.json()["photo_count"] == i

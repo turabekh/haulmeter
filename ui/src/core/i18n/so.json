@@ -170,5 +170,20 @@
   "fleet.open": "Fur",
   "fleet.none": "Weli ganacsi ma maamusho.",
   "fleet.create_go": "Samee",
-  "system.pending": "Lagu kaydiyay taleefankaaga"
+  "system.pending": "Lagu kaydiyay taleefankaaga",
+  "cond.title": "Xaaladda xamuulka",
+  "cond.start": "Diiwaangeli xaaladda",
+  "cond.take": "Qaad sawir",
+  "cond.done": "Xaaladda waa la diiwaangeliyay",
+  "cond.step": "Tallaabo",
+  "cond.of": "ka mid ah",
+  "cond.step.trailer_exterior": "Dibedda gaadhiga",
+  "cond.step.seals": "Shaabadaha",
+  "cond.step.load_blocking": "Xidhitaanka xamuulka",
+  "cond.step.reefer_setpoint": "Heerka qaboojiyaha",
+  "incident.title": "Soo sheeg dhacdo",
+  "incident.kind": "Maxaa dhacay?",
+  "incident.note": "Ku dar qoraal",
+  "incident.file": "Diiwaangeli dhacdada",
+  "incident.filed": "Dhacdada waa la diiwaangeliyay"
 }

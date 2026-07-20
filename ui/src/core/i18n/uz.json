@@ -170,5 +170,20 @@
   "fleet.open": "Ochish",
   "fleet.none": "Sizda hali avtopark yo'q.",
   "fleet.create_go": "Yaratish",
-  "system.pending": "Telefoningizga saqlandi"
+  "system.pending": "Telefoningizga saqlandi",
+  "cond.title": "Yuk holati",
+  "cond.start": "Holatni hujjatlashtirish",
+  "cond.take": "Rasmga olish",
+  "cond.done": "Holat hujjatlashtirildi",
+  "cond.step": "Qadam",
+  "cond.of": "dan",
+  "cond.step.trailer_exterior": "Tirkama tashqi ko'rinishi",
+  "cond.step.seals": "Muhrlar",
+  "cond.step.load_blocking": "Yuk mahkamlash",
+  "cond.step.reefer_setpoint": "Refrijerator sozlamasi",
+  "incident.title": "Hodisa haqida xabar",
+  "incident.kind": "Nima bo'ldi?",
+  "incident.note": "Izoh qo'shish",
+  "incident.file": "Hodisani qayd etish",
+  "incident.filed": "Hodisa hujjatlashtirildi"
 }

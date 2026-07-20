@@ -22,6 +22,7 @@ import MoreSurface from "../src/surfaces/MoreSurface.vue";
 import VoiceSheet from "../src/core/components/VoiceSheet.vue";
 import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
 import AuditSurface from "../src/surfaces/AuditSurface.vue";
+import ConditionSurface from "../src/surfaces/ConditionSurface.vue";
 import GhostwriterSheet from "../src/core/components/GhostwriterSheet.vue";
 import SleepSheet from "../src/core/components/SleepSheet.vue";
 import HandoffSheet from "../src/core/components/HandoffSheet.vue";
@@ -606,6 +607,47 @@ describe("FacilityCard — free-lot handoff (M10-FR2)", () => {
     await btn.trigger("click");
     expect(w.emitted().handoff).toBeTruthy();
     expect(w.emitted().handoff[0][0].facility_id).toBe("f-1");
+  });
+});
+
+describe("ConditionSurface — cargo-condition capture (M5-FR2)", () => {
+  it("guides the first step when an active stop starts the sequence", async () => {
+    setToken("tok-cond");
+    setActiveStop("stop-c1");
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          capture_id: "cap-1",
+          sequence: ["trailer_exterior", "seals", "load_blocking", "reefer_setpoint"],
+        }),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      router.push("/protection/condition");
+      await router.isReady();
+      const w = mount(ConditionSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      expect(w.text()).toContain("Step 1 of 4"); // guided, one decision per step
+      expect(w.text()).toContain("Trailer exterior");
+      expect(w.find(".shoot").exists()).toBe(true); // camera-first target
+      expect(fetchStub.mock.calls[0][0]).toContain("/protection/condition/start");
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
+
+  it("prompts to start a load when there's no active stop", async () => {
+    logout();
+    setActiveStop(null);
+    const router = testRouter();
+    const w = mount(ConditionSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(w.text()).toContain("Start a load");
+    w.unmount();
   });
 });
 

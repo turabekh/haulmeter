@@ -170,5 +170,20 @@
   "fleet.open": "ਖੋਲ੍ਹੋ",
   "fleet.none": "ਤੁਸੀਂ ਹਾਲੇ ਕੋਈ ਫਲੀਟ ਨਹੀਂ ਚਲਾਉਂਦੇ।",
   "fleet.create_go": "ਬਣਾਓ",
-  "system.pending": "ਤੁਹਾਡੇ ਫ਼ੋਨ 'ਤੇ ਸੰਭਾਲਿਆ"
+  "system.pending": "ਤੁਹਾਡੇ ਫ਼ੋਨ 'ਤੇ ਸੰਭਾਲਿਆ",
+  "cond.title": "ਮਾਲ ਦੀ ਹਾਲਤ",
+  "cond.start": "ਹਾਲਤ ਦਰਜ ਕਰੋ",
+  "cond.take": "ਫੋਟੋ ਲਓ",
+  "cond.done": "ਹਾਲਤ ਦਰਜ ਹੋ ਗਈ",
+  "cond.step": "ਕਦਮ",
+  "cond.of": "ਵਿੱਚੋਂ",
+  "cond.step.trailer_exterior": "ਟ੍ਰੇਲਰ ਬਾਹਰ",
+  "cond.step.seals": "ਸੀਲਾਂ",
+  "cond.step.load_blocking": "ਲੋਡ ਬਲਾਕਿੰਗ",
+  "cond.step.reefer_setpoint": "ਰੀਫ਼ਰ ਸੈੱਟਪੁਆਇੰਟ",
+  "incident.title": "ਘਟਨਾ ਦੀ ਰਿਪੋਰਟ",
+  "incident.kind": "ਕੀ ਹੋਇਆ?",
+  "incident.note": "ਨੋਟ ਜੋੜੋ",
+  "incident.file": "ਘਟਨਾ ਦਰਜ ਕਰੋ",
+  "incident.filed": "ਘਟਨਾ ਦਰਜ ਹੋ ਗਈ"
 }

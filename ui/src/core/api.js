@@ -521,6 +521,30 @@ export async function fetchSleepPlan({ lat, lon, hosMinutesRemaining, headingDeg
   return resp.json();
 }
 
+export async function startConditionCapture(stopId, phase = "delivery") {
+  const resp = await fetch(`${API_BASE}/protection/condition/start`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ stop_id: stopId, phase }),
+  });
+  if (!resp.ok) throw new Error(`condition start failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function addConditionPhoto(captureId, prompt, contentB64 = null) {
+  const resp = await fetch(`${API_BASE}/protection/condition/${captureId}/photo`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ prompt, content_b64: contentB64 }),
+  });
+  if (!resp.ok) throw new Error(`condition photo failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fileIncident(kind, note) {
+  return queuedPost("/protection/incident", { kind, note });
+}
+
 export async function submitReview(facilityId, ratings, text) {
   // F12: a review written offline queues and syncs on reconnect
   return queuedPost(`/facility/${facilityId}/review`, { ratings, text });

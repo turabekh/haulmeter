@@ -170,5 +170,20 @@
   "fleet.open": "Открыть",
   "fleet.none": "У вас пока нет автопарка.",
   "fleet.create_go": "Создать",
-  "system.pending": "Сохранено на телефоне"
+  "system.pending": "Сохранено на телефоне",
+  "cond.title": "Состояние груза",
+  "cond.start": "Задокументировать состояние",
+  "cond.take": "Сделать фото",
+  "cond.done": "Состояние задокументировано",
+  "cond.step": "Шаг",
+  "cond.of": "из",
+  "cond.step.trailer_exterior": "Внешний вид прицепа",
+  "cond.step.seals": "Пломбы",
+  "cond.step.load_blocking": "Крепление груза",
+  "cond.step.reefer_setpoint": "Уставка рефрижератора",
+  "incident.title": "Сообщить об инциденте",
+  "incident.kind": "Что случилось?",
+  "incident.note": "Добавить примечание",
+  "incident.file": "Зарегистрировать инцидент",
+  "incident.filed": "Инцидент задокументирован"
 }
