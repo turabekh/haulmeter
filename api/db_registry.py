@@ -12,6 +12,7 @@ MODEL_MODULES = [
     "app.foundation.f01_identity.domain.models",
     "app.foundation.f02_facility.domain.models",
     "app.foundation.f03_location.domain.models",
+    "app.foundation.f04_evidence.domain.models",
 ]
 
 
