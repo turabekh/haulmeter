@@ -18,5 +18,18 @@
   "map.status.empty": "Пусто",
   "map.status.some": "Частично",
   "map.status.full": "Полно",
-  "surface.placeholder": "Эта вкладка появится вместе со своим модулем."
+  "surface.placeholder": "Эта вкладка появится вместе со своим модулем.",
+  "facility.view": "Открыть объект",
+  "profile.dock_time": "Время на доке",
+  "profile.median": "медиана",
+  "profile.stops": "остановок",
+  "profile.rating": "Рейтинг",
+  "profile.reviews": "отзывов",
+  "profile.no_reviews": "Отзывов пока нет",
+  "profile.no_dwell": "Пока нет данных о времени на доке",
+  "profile.add_review": "Добавить отзыв",
+  "review.overall": "Оцените эту остановку",
+  "review.placeholder": "Что стоит знать другим водителям?",
+  "review.pending": "Отзывы проверяются перед публикацией.",
+  "review.submit": "Отправить отзыв"
 }

@@ -18,5 +18,18 @@
   "map.status.empty": "ਖਾਲੀ",
   "map.status.some": "ਕੁਝ",
   "map.status.full": "ਭਰਿਆ",
-  "surface.placeholder": "ਇਹ ਟੈਬ ਆਪਣੇ ਮੋਡੀਊਲ ਨਾਲ ਆਵੇਗੀ।"
+  "surface.placeholder": "ਇਹ ਟੈਬ ਆਪਣੇ ਮੋਡੀਊਲ ਨਾਲ ਆਵੇਗੀ।",
+  "facility.view": "ਸਹੂਲਤ ਵੇਖੋ",
+  "profile.dock_time": "ਡੌਕ ਸਮਾਂ",
+  "profile.median": "ਮੱਧਮਾਨ",
+  "profile.stops": "ਸਟਾਪ",
+  "profile.rating": "ਰੇਟਿੰਗ",
+  "profile.reviews": "ਸਮੀਖਿਆਵਾਂ",
+  "profile.no_reviews": "ਹਾਲੇ ਕੋਈ ਸਮੀਖਿਆ ਨਹੀਂ",
+  "profile.no_dwell": "ਹਾਲੇ ਡੌਕ ਸਮੇਂ ਦਾ ਡਾਟਾ ਨਹੀਂ",
+  "profile.add_review": "ਸਮੀਖਿਆ ਸ਼ਾਮਲ ਕਰੋ",
+  "review.overall": "ਇਸ ਸਟਾਪ ਨੂੰ ਰੇਟ ਕਰੋ",
+  "review.placeholder": "ਹੋਰ ਡਰਾਈਵਰਾਂ ਨੂੰ ਕੀ ਪਤਾ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ?",
+  "review.pending": "ਸਮੀਖਿਆਵਾਂ ਦਿਖਣ ਤੋਂ ਪਹਿਲਾਂ ਜਾਂਚੀਆਂ ਜਾਂਦੀਆਂ ਹਨ।",
+  "review.submit": "ਸਮੀਖਿਆ ਭੇਜੋ"
 }

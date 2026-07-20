@@ -18,5 +18,18 @@
   "map.status.empty": "Bo'sh",
   "map.status.some": "Bir oz",
   "map.status.full": "To'la",
-  "surface.placeholder": "Bu bo'lim o'z moduli bilan keladi."
+  "surface.placeholder": "Bu bo'lim o'z moduli bilan keladi.",
+  "facility.view": "Obyektni ko'rish",
+  "profile.dock_time": "Dok vaqti",
+  "profile.median": "mediana",
+  "profile.stops": "to'xtash",
+  "profile.rating": "Reyting",
+  "profile.reviews": "sharh",
+  "profile.no_reviews": "Hozircha sharhlar yo'q",
+  "profile.no_dwell": "Hozircha dok vaqti ma'lumoti yo'q",
+  "profile.add_review": "Sharh qo'shish",
+  "review.overall": "Bu to'xtashni baholang",
+  "review.placeholder": "Boshqa haydovchilar nimani bilishi kerak?",
+  "review.pending": "Sharhlar chiqishdan oldin tekshiriladi.",
+  "review.submit": "Sharh yuborish"
 }

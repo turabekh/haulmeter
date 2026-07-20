@@ -18,5 +18,18 @@
   "map.status.empty": "Empty",
   "map.status.some": "Some",
   "map.status.full": "Full",
-  "surface.placeholder": "This tab arrives with its module."
+  "surface.placeholder": "This tab arrives with its module.",
+  "facility.view": "View facility",
+  "profile.dock_time": "Dock time",
+  "profile.median": "median",
+  "profile.stops": "stops",
+  "profile.rating": "Driver rating",
+  "profile.reviews": "reviews",
+  "profile.no_reviews": "No reviews yet",
+  "profile.no_dwell": "No dock-time data yet",
+  "profile.add_review": "Add review",
+  "review.overall": "Rate this stop",
+  "review.placeholder": "What should other drivers know?",
+  "review.pending": "Reviews are checked before they appear.",
+  "review.submit": "Submit review"
 }

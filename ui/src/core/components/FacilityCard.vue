@@ -5,6 +5,7 @@
 <script setup>
 import { computed } from "vue";
 import { Navigation } from "lucide-vue-next";
+import { useRouter } from "vue-router";
 import StatusPill from "./StatusPill.vue";
 import { freshnessLabel, isStale } from "../presentation.js";
 import { useI18n } from "../i18n.js";
@@ -14,6 +15,11 @@ const props = defineProps({
 });
 const emit = defineEmits(["navigate", "report"]);
 const { t } = useI18n();
+const router = useRouter();
+
+function viewFacility() {
+  router.push(`/facility/${props.pin.facility_id}`);
+}
 
 const now = Date.now();
 const fresh = computed(() => freshnessLabel(props.pin.freshness, now));
@@ -38,6 +44,9 @@ const fuel = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_price
     </button>
     <button class="cta cta--secondary" type="button" @click="emit('report', pin)">
       {{ t("map.report") }}
+    </button>
+    <button class="cta cta--tertiary" type="button" @click="viewFacility">
+      {{ t("facility.view") }}
     </button>
   </div>
 </template>
@@ -93,5 +102,12 @@ const fuel = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_price
   background: transparent;
   border: 1px solid var(--line-1);
   color: var(--text-1);
+}
+/* tertiary = text button (§8), the cross-link verb to the facility scorecard (NAV-5) */
+.cta--tertiary {
+  margin-top: var(--s-2);
+  min-height: 48px;
+  background: transparent;
+  color: var(--shield-500);
 }
 </style>

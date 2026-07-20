@@ -18,5 +18,18 @@
   "map.status.empty": "Madhan",
   "map.status.some": "Qaar",
   "map.status.full": "Buuxa",
-  "surface.placeholder": "Tabkani wuxuu la yimaadaa moduulkiisa."
+  "surface.placeholder": "Tabkani wuxuu la yimaadaa moduulkiisa.",
+  "facility.view": "Eeg goobta",
+  "profile.dock_time": "Wakhtiga dooca",
+  "profile.median": "dhexdhexaad",
+  "profile.stops": "joogsi",
+  "profile.rating": "Qiimeyn",
+  "profile.reviews": "faallo",
+  "profile.no_reviews": "Weli faallo ma jirto",
+  "profile.no_dwell": "Weli xog wakhtiga dooca ma jirto",
+  "profile.add_review": "Ku dar faallo",
+  "review.overall": "Qiimee joogsigan",
+  "review.placeholder": "Maxay tabayaal kale ogaan lahaayeen?",
+  "review.pending": "Faallooyinka waa la hubiyaa ka hor inta aan la muujin.",
+  "review.submit": "Dir faallo"
 }

@@ -46,3 +46,20 @@ export async function report(facilityId, signalType, value) {
   if (!resp.ok) throw new Error(`report failed: ${resp.status}`);
   return resp.json();
 }
+
+export async function fetchProfile(facilityId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/facility/${facilityId}/profile`, { headers: headers() });
+  if (!resp.ok) throw new Error(`profile failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function submitReview(facilityId, ratings, text) {
+  const resp = await fetch(`${API_BASE}/facility/${facilityId}/review`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ ratings, text }),
+  });
+  if (!resp.ok) throw new Error(`review failed: ${resp.status}`);
+  return resp.json();
+}

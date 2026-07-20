@@ -3,14 +3,21 @@
 // (NAV-1), preset chips (§11.3), facility card single primary CTA + report, and
 // DRIVING → Corridor mode (§11.4).
 import { describe, it, expect, beforeEach } from "vitest";
-import { mount } from "@vue/test-utils";
+import { mount, flushPromises } from "@vue/test-utils";
+import { createRouter, createMemoryHistory } from "vue-router";
 import TabBar from "../src/core/components/TabBar.vue";
 import PresetChips from "../src/core/components/PresetChips.vue";
 import FacilityCard from "../src/core/components/FacilityCard.vue";
 import MapSurface from "../src/surfaces/MapSurface.vue";
+import FacilityProfileSurface from "../src/surfaces/FacilityProfileSurface.vue";
+import { routes } from "../src/router.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 
 const routerStub = { global: { stubs: { "router-link": { template: "<a class='rl'><slot/></a>" } } } };
+
+function testRouter() {
+  return createRouter({ history: createMemoryHistory(), routes });
+}
 
 describe("TabBar (design-prd §4 NAV-1)", () => {
   it("renders exactly 5 labeled tabs and no hamburger", () => {
@@ -44,11 +51,28 @@ describe("FacilityCard (design-prd §10.1)", () => {
       badges: [{ kind: "fuel_price", value: 4.19 }],
       freshness: { reported_at: new Date().toISOString(), sample_size: 3 },
     };
-    const w = mount(FacilityCard, { props: { pin } });
+    const router = testRouter();
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [router] } });
     expect(w.text()).toContain("Navigate");
+    expect(w.text()).toContain("View facility");
     expect(w.text()).toContain("$4.19");
     await w.find(".cta").trigger("click");
     expect(w.emitted().navigate).toBeTruthy();
+  });
+});
+
+describe("FacilityProfileSurface (M2, PRD §8.2)", () => {
+  it("shows dwell figures with sample size and reviews (fixture fallback)", async () => {
+    const router = testRouter();
+    router.push("/facility/f-1");
+    await router.isReady();
+    const w = mount(FacilityProfileSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    const text = w.text();
+    expect(text).toContain("Dock time");
+    expect(text).toContain("stops"); // sample size always shown (§11.7)
+    expect(w.find(".dwell__figure").exists()).toBe(true);
+    expect(text).toContain("Add review");
   });
 });
 

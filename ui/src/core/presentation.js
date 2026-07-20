@@ -35,3 +35,12 @@ export function isStale(freshness, nowMs) {
 
 // §11.2 pin shapes are a data classification from facility type
 export const PIN_SHAPES = new Set(["circle", "square", "diamond", "small_square"]);
+
+// dwell durations as tabular "Hh Mm" (Mono figures, §6.2 T-2)
+export function formatDwell(seconds) {
+  if (seconds == null) return null;
+  const total = Math.round(seconds / 60);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}

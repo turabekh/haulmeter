@@ -54,6 +54,29 @@ export const SAMPLE_PINS = [
   },
 ];
 
+// AI-CONTEXT: fixture facility profile (M2) for the profile surface pending auth.
+// Shape matches GET /facility/{id}/profile exactly.
+export function sampleProfile(facilityId) {
+  const pin = SAMPLE_PINS.find((p) => p.facility_id === facilityId) ?? SAMPLE_PINS[0];
+  return {
+    facility_id: pin.facility_id,
+    name: pin.name,
+    check_in_procedure: "Check in at guard shack; keep PPE on in the yard.",
+    overnight_parking: true,
+    restrooms: true,
+    dwell: {
+      overall: { median_seconds: 8100, p90_seconds: 15300, sample_size: 12 },
+      by_hour: { 6: { median_seconds: 5400, sample_size: 4 }, 14: { median_seconds: 12600, sample_size: 5 } },
+    },
+    ratings: { overall: 3.8, review_count: 2, per_aspect: {} },
+    detention_risk: { rate: null, sample_size: 0, basis: "m3_pending" },
+    reviews: [
+      { id: "r-1", ratings: { would_return: 4 }, text: "Quick unload at 6am, slow by afternoon.", created_at: new Date().toISOString() },
+      { id: "r-2", ratings: { would_return: 3 }, text: "Tight backing but staff were helpful.", created_at: new Date().toISOString() },
+    ],
+  };
+}
+
 export const SAMPLE_CORRIDOR = [
   { facility_id: "f-2", name: "Pilot #77", facility_type: "truck_stop", distance_m: 5400, status: "full" },
   { facility_id: "f-3", name: "Yardline Secured Parking", facility_type: "parking_property", distance_m: 9200, status: "empty" },

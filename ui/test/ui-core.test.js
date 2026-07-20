@@ -2,7 +2,12 @@
 // machine (SM-4), presentation helpers (§11), and the i18n resolver (F15).
 import { describe, it, expect, beforeEach } from "vitest";
 import { useDriverState, DriverState } from "../src/core/state.js";
-import { statusPresentation, freshnessLabel, isStale } from "../src/core/presentation.js";
+import {
+  statusPresentation,
+  freshnessLabel,
+  isStale,
+  formatDwell,
+} from "../src/core/presentation.js";
 import { useI18n } from "../src/core/i18n.js";
 
 describe("driver state machine (design-prd §5, SM-4)", () => {
@@ -33,6 +38,12 @@ describe("presentation (design-prd §11)", () => {
     const old = { reported_at: new Date(now - 5 * 3600 * 1000).toISOString(), sample_size: 1 };
     expect(isStale(old, now)).toBe(true);
     expect(freshnessLabel(null, now)).toBe(null);
+  });
+
+  it("formats dwell durations as tabular H/M", () => {
+    expect(formatDwell(8100)).toBe("2h 15m");
+    expect(formatDwell(1800)).toBe("30m");
+    expect(formatDwell(null)).toBe(null);
   });
 });
 

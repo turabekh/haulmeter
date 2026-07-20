@@ -18,5 +18,18 @@
   "map.status.empty": "Vacío",
   "map.status.some": "Algo",
   "map.status.full": "Lleno",
-  "surface.placeholder": "Esta pestaña llega con su módulo."
+  "surface.placeholder": "Esta pestaña llega con su módulo.",
+  "facility.view": "Ver instalación",
+  "profile.dock_time": "Tiempo en muelle",
+  "profile.median": "mediana",
+  "profile.stops": "paradas",
+  "profile.rating": "Calificación",
+  "profile.reviews": "reseñas",
+  "profile.no_reviews": "Aún no hay reseñas",
+  "profile.no_dwell": "Aún no hay datos de tiempo en muelle",
+  "profile.add_review": "Añadir reseña",
+  "review.overall": "Califica esta parada",
+  "review.placeholder": "¿Qué deben saber otros conductores?",
+  "review.pending": "Las reseñas se revisan antes de aparecer.",
+  "review.submit": "Enviar reseña"
 }
