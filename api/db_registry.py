@@ -26,6 +26,7 @@ MODEL_MODULES = [
     "app.modules.m02_facility_intel.domain.models",
     "app.modules.m03_detention.domain.models",
     "app.modules.m04_accessorial.domain.models",
+    "app.modules.m05_protection.domain.models",
 ]
 
 
