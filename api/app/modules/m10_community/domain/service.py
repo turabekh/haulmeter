@@ -213,6 +213,21 @@ def confirm_handoff(db: Session, handoff: Handoff, now: datetime) -> Handoff:
     return handoff
 
 
+def nearby_handoffs(db: Session, lat: float, lon: float, radius_m: float) -> list[Handoff]:
+    # open "leaving soon" broadcasts at free lots within reach — the claimable feed
+    facilities = facility_registry.nearest(db, lat, lon, radius_m)
+    fac_ids = [f.id for f in facilities]
+    if not fac_ids:
+        return []
+    return list(
+        db.scalars(
+            select(Handoff).where(
+                Handoff.facility_ref.in_(fac_ids), Handoff.state == HandoffState.open
+            )
+        )
+    )
+
+
 # --- Contributor reputation (M10-FR3) ---
 def reputation(db: Session, account_id) -> Reputation:
     rows = list(db.scalars(select(ContributionLog).where(ContributionLog.account_id == account_id)))

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
+from app.foundation.f02_facility import public as facility
 from app.modules.m10_community import public as m10
 
 router = APIRouter(prefix="/community", tags=["community"])
@@ -79,6 +80,66 @@ def broadcast(
     except m10.NotPresent as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "must be on-site to relay") from exc
     return {"handoff_id": str(handoff.id), "state": handoff.state.value}
+
+
+@router.get("/handoff/nearby")
+def nearby(
+    lat: float,
+    lon: float,
+    radius_m: float = 8000,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    out = []
+    for h in m10.nearby_handoffs(db, lat, lon, radius_m):
+        fac = facility.get_facility(db, h.facility_ref)
+        out.append(
+            {
+                "handoff_id": str(h.id),
+                "facility_name": fac.name if fac else None,
+                "leaving_at": h.leaving_at.isoformat(),
+                "mine": h.broadcaster_id == account.id,
+            }
+        )
+    return out
+
+
+def _handoff_or_404(db: Session, handoff_id: uuid.UUID):
+    h = db.get(m10.Handoff, handoff_id)
+    if h is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "handoff not found")
+    return h
+
+
+@router.post("/handoff/{handoff_id}/claim", status_code=201)
+def claim(
+    handoff_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    h = _handoff_or_404(db, handoff_id)
+    try:
+        m10.claim_handoff(db, h, account.id, datetime.now(UTC))
+    except m10.HandoffNotClaimable as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "already claimed") from exc
+    return {"handoff_id": str(h.id), "state": h.state.value}
+
+
+@router.post("/handoff/{handoff_id}/confirm", status_code=201)
+def confirm(
+    handoff_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    # the claimer's arrival confirms the handoff; both earn
+    h = _handoff_or_404(db, handoff_id)
+    try:
+        m10.confirm_handoff(db, h, datetime.now(UTC))
+    except m10.HandoffNotClaimable as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "not claimed") from exc
+    except m10.NotPresent as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "claimer must be on-site") from exc
+    return {"handoff_id": str(h.id), "state": h.state.value}
 
 
 @router.get("/questions/{facility_id}")
