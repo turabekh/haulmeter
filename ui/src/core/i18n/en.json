@@ -111,5 +111,9 @@
   "qa.onsite": "on-site",
   "qa.empty": "No questions yet",
   "qa.placeholder": "What do you want to know?",
-  "qa.submit": "Post question"
+  "qa.submit": "Post question",
+  "voice.title": "Copilot",
+  "voice.placeholder": "Ask about parking, fuel, or what you're owed",
+  "voice.ask": "Ask",
+  "voice.mic": "Voice"
 }

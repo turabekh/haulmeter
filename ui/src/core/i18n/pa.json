@@ -111,5 +111,9 @@
   "qa.onsite": "ਮੌਕੇ 'ਤੇ",
   "qa.empty": "ਹਾਲੇ ਕੋਈ ਸਵਾਲ ਨਹੀਂ",
   "qa.placeholder": "ਤੁਸੀਂ ਕੀ ਜਾਣਨਾ ਚਾਹੁੰਦੇ ਹੋ?",
-  "qa.submit": "ਸਵਾਲ ਪੋਸਟ ਕਰੋ"
+  "qa.submit": "ਸਵਾਲ ਪੋਸਟ ਕਰੋ",
+  "voice.title": "ਕੋਪਾਇਲਟ",
+  "voice.placeholder": "ਪਾਰਕਿੰਗ, ਤੇਲ ਜਾਂ ਬਕਾਏ ਬਾਰੇ ਪੁੱਛੋ",
+  "voice.ask": "ਪੁੱਛੋ",
+  "voice.mic": "ਆਵਾਜ਼"
 }

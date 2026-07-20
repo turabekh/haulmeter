@@ -232,6 +232,16 @@ export async function askQuestion(facilityId, text) {
   return resp.json();
 }
 
+export async function askVoice(text, driving = false) {
+  const resp = await fetch(`${API_BASE}/voice/ask`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ text, driving }),
+  });
+  if (!resp.ok) throw new Error(`voice failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function submitReview(facilityId, ratings, text) {
   const resp = await fetch(`${API_BASE}/facility/${facilityId}/review`, {
     method: "POST",

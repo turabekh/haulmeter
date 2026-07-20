@@ -111,5 +111,9 @@
   "qa.onsite": "joyida",
   "qa.empty": "Hali savollar yo'q",
   "qa.placeholder": "Nimani bilmoqchisiz?",
-  "qa.submit": "Savolni joylash"
+  "qa.submit": "Savolni joylash",
+  "voice.title": "Kopilot",
+  "voice.placeholder": "Parkovka, yoqilg'i yoki qarz haqida so'rang",
+  "voice.ask": "So'rash",
+  "voice.mic": "Ovoz"
 }

@@ -111,5 +111,9 @@
   "qa.onsite": "goobta",
   "qa.empty": "Weli su'aalo ma jiraan",
   "qa.placeholder": "Maxaad rabtaa inaad ogaato?",
-  "qa.submit": "Dir su'aasha"
+  "qa.submit": "Dir su'aasha",
+  "voice.title": "Kaaliye",
+  "voice.placeholder": "Weydii baabuur-dhigasho, shidaal ama waxa lagugu leeyahay",
+  "voice.ask": "Weydii",
+  "voice.mic": "Cod"
 }

@@ -19,6 +19,7 @@ import FuelSurface from "../src/surfaces/FuelSurface.vue";
 import LoadCalcSurface from "../src/surfaces/LoadCalcSurface.vue";
 import AuthSurface from "../src/surfaces/AuthSurface.vue";
 import MoreSurface from "../src/surfaces/MoreSurface.vue";
+import VoiceSheet from "../src/core/components/VoiceSheet.vue";
 import { routes, installAuthGuard } from "../src/router.js";
 import { setToken, logout, isAuthenticated } from "../src/core/api.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
@@ -380,6 +381,58 @@ describe("FacilityProfileSurface — driver Q&A (M10-FR4)", () => {
     expect(text).toContain("Driver Q&A");
     expect(text).toContain("Is the north entrance still closed?");
     expect(w.find(".qa__badge").text()).toBe("on-site"); // presence-proven answer badged
+  });
+});
+
+describe("VoiceSheet — copilot ask/answer (M11-FR1)", () => {
+  it("asks over /voice/ask and shows the intent-routed spoken answer", async () => {
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ intent: "money_owed", spoken: "You're owed $150.00 across 1 claims." }),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(VoiceSheet);
+      await w.find(".voice__input").setValue("what am I owed");
+      await w.find("form").trigger("submit");
+      await flushPromises();
+      expect(w.find(".voice__answer").text()).toContain("$150.00");
+      // the POST went to the voice endpoint
+      expect(fetchStub.mock.calls[0][0]).toContain("/voice/ask");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("renders the spoken answer oversized while driving (§14 voice-first)", async () => {
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ intent: "help", spoken: "Ask me anything." }),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(VoiceSheet, { props: { driving: true } });
+      await w.find(".voice__input").setValue("help");
+      await w.find("form").trigger("submit");
+      await flushPromises();
+      expect(w.find(".voice__answer").classes()).toContain("hero");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("MapSurface — voice wake affordance (M11-FR5)", () => {
+  it("shows the mic chip and opens the copilot sheet", async () => {
+    logout(); // no session -> fixture overlay (no network)
+    const router = testRouter();
+    const w = mount(MapSurface, { global: { plugins: [router] } });
+    expect(w.find(".voice-chip").exists()).toBe(true);
+    await w.find(".voice-chip").trigger("click");
+    await flushPromises();
+    // the voice sheet mounts its input
+    expect(w.find(".voice__input").exists()).toBe(true);
+    w.unmount();
   });
 });
 

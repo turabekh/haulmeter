@@ -6,13 +6,14 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
-import { CircleDot } from "lucide-vue-next";
+import { CircleDot, Mic } from "lucide-vue-next";
 import MapCanvas from "../core/components/MapCanvas.vue";
 import PresetChips from "../core/components/PresetChips.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import FacilityCard from "../core/components/FacilityCard.vue";
 import CorridorStack from "../core/components/CorridorStack.vue";
 import ReportSheet from "../core/components/ReportSheet.vue";
+import VoiceSheet from "../core/components/VoiceSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { SAMPLE_PINS, SAMPLE_CORRIDOR } from "../core/fixtures.js";
@@ -56,6 +57,7 @@ const pins = computed(() => {
 
 const selected = ref(null);
 const reporting = ref(false);
+const listening = ref(false);
 
 function navigate(pin) {
   const url = `https://www.google.com/maps/dir/?api=1&destination=${pin.lat},${pin.lon}`;
@@ -109,6 +111,19 @@ function submitReport() {
       </div>
     </template>
 
+    <!-- M11-FR5: the copilot wake affordance (on-screen button; headset maps
+         here too). Voice is the DRIVING-state input (§14), so it stays present
+         in both IDLE and Corridor modes. No always-on hotword. -->
+    <button
+      class="voice-chip"
+      :class="{ 'voice-chip--driving': isDriving }"
+      type="button"
+      :aria-label="t('voice.mic')"
+      @click="listening = true"
+    >
+      <Mic :size="24" :stroke-width="2" aria-hidden="true" />
+    </button>
+
     <BottomSheet :open="!!selected" :title="selected?.name || ''" @close="selected = null">
       <FacilityCard
         v-if="selected"
@@ -123,6 +138,10 @@ function submitReport() {
     <BottomSheet :open="reporting" :title="t('map.report')" @close="reporting = false">
       <ReportSheet @report="submitReport" />
     </BottomSheet>
+
+    <BottomSheet :open="listening" :title="t('voice.title')" @close="listening = false">
+      <VoiceSheet :driving="isDriving" />
+    </BottomSheet>
   </div>
 </template>
 
@@ -131,6 +150,30 @@ function submitReport() {
   display: flex;
   flex-direction: column;
   height: 100%;
+  position: relative;
+}
+.voice-chip {
+  position: absolute;
+  left: var(--s-4);
+  bottom: var(--s-4);
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-float);
+  z-index: 2;
+}
+/* voice is the DRIVING input (§14): a bigger, centered target in Corridor mode */
+.voice-chip--driving {
+  left: 50%;
+  transform: translateX(-50%);
+  width: 72px;
+  height: 72px;
 }
 .map__canvas {
   position: relative;

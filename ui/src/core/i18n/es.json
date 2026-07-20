@@ -111,5 +111,9 @@
   "qa.onsite": "en sitio",
   "qa.empty": "Aún no hay preguntas",
   "qa.placeholder": "¿Qué quieres saber?",
-  "qa.submit": "Publicar pregunta"
+  "qa.submit": "Publicar pregunta",
+  "voice.title": "Copiloto",
+  "voice.placeholder": "Pregunta sobre estacionamiento, combustible o lo que te deben",
+  "voice.ask": "Preguntar",
+  "voice.mic": "Voz"
 }
