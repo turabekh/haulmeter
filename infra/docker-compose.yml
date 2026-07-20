@@ -1,0 +1,102 @@
+name: ${COMPOSE_PROJECT_NAME:-longhaul}
+
+services:
+  postgres:
+    build:
+      context: ./postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: ["postgres", "-p", "${POSTGRES_PORT}"]
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -p ${POSTGRES_PORT}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--port", "${REDIS_PORT}"]
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "${REDIS_PORT}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data", "--address", ":${MINIO_API_PORT}", "--console-address", ":${MINIO_CONSOLE_PORT}"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_API_PORT}:${MINIO_API_PORT}"
+      - "${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}"
+    volumes:
+      - miniodata:/data
+
+  mailpit:
+    image: axllent/mailpit:latest
+    environment:
+      MP_SMTP_BIND_ADDR: "0.0.0.0:${MAILPIT_SMTP_PORT}"
+      MP_UI_BIND_ADDR: "0.0.0.0:${MAILPIT_UI_PORT}"
+    ports:
+      - "${MAILPIT_SMTP_PORT}:${MAILPIT_SMTP_PORT}"
+      - "${MAILPIT_UI_PORT}:${MAILPIT_UI_PORT}"
+
+  api:
+    build:
+      context: ../api
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${API_PORT} --reload"]
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    volumes:
+      - ../api:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../api
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    command: ["python", "-m", "app.worker"]
+    volumes:
+      - ../api:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ui:
+    build:
+      context: ../ui
+      dockerfile: Dockerfile.dev
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "${UI_PORT}"]
+    ports:
+      - "${UI_PORT}:${UI_PORT}"
+    volumes:
+      - ../ui:/app
+      - /app/node_modules
+
+volumes:
+  pgdata:
+  miniodata:

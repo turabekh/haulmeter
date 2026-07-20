@@ -1,0 +1,36 @@
+# Secrets — real env lives outside version control (HANDOFF §4.9). Only .env.example is committed.
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Node / Quasar
+node_modules/
+ui/dist/
+ui/.quasar/
+*.log
+npm-debug.log*
+
+# Docker / local volumes
+.pgdata/
+.miniodata/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

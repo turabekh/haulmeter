@@ -1,0 +1,6 @@
+"""AI-CONTEXT: Public interface for F14 Admin Console & Analytics.
+
+The ONLY import surface other packages may use to reach this foundation
+component. Internal domain code lives under .domain and is off-limits to
+other packages (import-linter enforced). Empty until built in its session.
+"""
