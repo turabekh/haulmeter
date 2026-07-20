@@ -7,6 +7,7 @@ import {
   freshnessLabel,
   isStale,
   formatDwell,
+  receivableStatusToken,
 } from "../src/core/presentation.js";
 import { useI18n } from "../src/core/i18n.js";
 import {
@@ -34,6 +35,13 @@ describe("presentation (design-prd §11)", () => {
     expect(statusPresentation("empty")).toEqual({ token: "--ledger-500", label: "Empty" });
     expect(statusPresentation("full").token).toBe("--flare-500");
     expect(statusPresentation(null).label).toBe("Unknown");
+  });
+
+  it("maps receivable state to a status token (§10.3)", () => {
+    expect(receivableStatusToken("recovered")).toBe("--ledger-500");
+    expect(receivableStatusToken("disputed")).toBe("--marker-500");
+    expect(receivableStatusToken("escalated")).toBe("--flare-500");
+    expect(receivableStatusToken("weird")).toBe("--text-2");
   });
 
   it("freshness is honest and relative (§11.7)", () => {

@@ -36,6 +36,20 @@ export function isStale(freshness, nowMs) {
 // §11.2 pin shapes are a data classification from facility type
 export const PIN_SHAPES = new Set(["circle", "square", "diamond", "small_square"]);
 
+// receivable state -> semantic token (design-prd §10.3 status pills; color+label, C-1)
+export const RECEIVABLE_STATUS_TOKEN = {
+  invoiced: "--text-2",
+  acknowledged: "--shield-500",
+  disputed: "--marker-500",
+  escalated: "--flare-500",
+  recovered: "--ledger-500",
+  written_off: "--text-3",
+};
+
+export function receivableStatusToken(state) {
+  return RECEIVABLE_STATUS_TOKEN[state] ?? "--text-2";
+}
+
 // dwell durations as tabular "Hh Mm" (Mono figures, §6.2 T-2)
 export function formatDwell(seconds) {
   if (seconds == null) return null;

@@ -39,5 +39,14 @@
   "load.photos": "Fotos",
   "load.notice_sent": "Aviso no enviado",
   "load.cta.notice": "Enviar aviso",
-  "load.cta.claim": "Generar reclamo"
+  "load.cta.claim": "Generar reclamo",
+  "money.kind.detention": "Detention",
+  "money.kind.tonu": "TONU",
+  "money.kind.layover": "Layover",
+  "money.kind.lumper": "Lumper",
+  "money.title": "Dinero adeudado",
+  "money.recovered": "Recuperado",
+  "money.state.invoiced": "Facturado",
+  "money.state.disputed": "En disputa",
+  "money.state.recovered": "Recuperado"
 }

@@ -39,5 +39,14 @@
   "load.photos": "Rasmlar",
   "load.notice_sent": "Ogohlantirish yuborilmadi",
   "load.cta.notice": "Ogohlantirish yuborish",
-  "load.cta.claim": "Da'vo yaratish"
+  "load.cta.claim": "Da'vo yaratish",
+  "money.kind.detention": "Detention",
+  "money.kind.tonu": "TONU",
+  "money.kind.layover": "Layover",
+  "money.kind.lumper": "Lumper",
+  "money.title": "Qarzdorlik",
+  "money.recovered": "Qaytarildi",
+  "money.state.invoiced": "Hisob-faktura",
+  "money.state.disputed": "Nizoli",
+  "money.state.recovered": "Qaytarildi"
 }

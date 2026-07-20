@@ -39,5 +39,14 @@
   "load.photos": "Sawirro",
   "load.notice_sent": "Ogeysiis lama dirin",
   "load.cta.notice": "Dir ogeysiis",
-  "load.cta.claim": "Samee sheegasho"
+  "load.cta.claim": "Samee sheegasho",
+  "money.kind.detention": "Detention",
+  "money.kind.tonu": "TONU",
+  "money.kind.layover": "Layover",
+  "money.kind.lumper": "Lumper",
+  "money.title": "Lacagta la leeyahay",
+  "money.recovered": "La soo celiyay",
+  "money.state.invoiced": "La qoray",
+  "money.state.disputed": "Muran",
+  "money.state.recovered": "La soo celiyay"
 }

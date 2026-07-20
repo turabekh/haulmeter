@@ -54,6 +54,13 @@ export async function fetchProfile(facilityId) {
   return resp.json();
 }
 
+export async function fetchOwed() {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/accessorial/owed`, { headers: headers() });
+  if (!resp.ok) throw new Error(`owed failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function submitReview(facilityId, ratings, text) {
   const resp = await fetch(`${API_BASE}/facility/${facilityId}/review`, {
     method: "POST",

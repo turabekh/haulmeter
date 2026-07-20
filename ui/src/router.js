@@ -5,6 +5,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import MapSurface from "./surfaces/MapSurface.vue";
 import FacilityProfileSurface from "./surfaces/FacilityProfileSurface.vue";
 import LoadSurface from "./surfaces/LoadSurface.vue";
+import MoneySurface from "./surfaces/MoneySurface.vue";
 import PlaceholderSurface from "./surfaces/PlaceholderSurface.vue";
 
 export const routes = [
@@ -12,7 +13,7 @@ export const routes = [
   { path: "/map", name: "map", component: MapSurface },
   { path: "/facility/:id", name: "facility", component: FacilityProfileSurface },
   { path: "/load", name: "load", component: LoadSurface },
-  { path: "/money", name: "money", component: PlaceholderSurface, props: { titleKey: "nav.money" } },
+  { path: "/money", name: "money", component: MoneySurface },
   { path: "/docs", name: "docs", component: PlaceholderSurface, props: { titleKey: "nav.docs" } },
   { path: "/more", name: "more", component: PlaceholderSurface, props: { titleKey: "nav.more" } },
 ];

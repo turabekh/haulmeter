@@ -12,6 +12,7 @@ import MapSurface from "../src/surfaces/MapSurface.vue";
 import FacilityProfileSurface from "../src/surfaces/FacilityProfileSurface.vue";
 import TheMeter from "../src/core/components/TheMeter.vue";
 import LoadSurface from "../src/surfaces/LoadSurface.vue";
+import MoneySurface from "../src/surfaces/MoneySurface.vue";
 import { routes } from "../src/router.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 
@@ -80,6 +81,18 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
     expect(w.find(".meter__figure").exists()).toBe(true);
     expect(w.text()).toContain("Detention"); // accruing label
     w.unmount();
+  });
+});
+
+describe("MoneySurface (M4 Money tab, design-prd §10.3)", () => {
+  it("lists receivables with Mono amounts + status pills (fixture)", async () => {
+    const w = mount(MoneySurface);
+    await flushPromises();
+    expect(w.findAll(".row")).toHaveLength(3);
+    const text = w.text();
+    expect(text).toContain("$150.00"); // detention 15000c, tabular
+    expect(text).toContain("Detention"); // jargon stays English (§12.3)
+    expect(text).toContain("11d"); // aging in Mono
   });
 });
 

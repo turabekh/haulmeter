@@ -90,6 +90,14 @@ export const SAMPLE_STOP = {
   evidence: { bol: true, photos_taken: 2, photos_total: 4, notice_sent: false },
 };
 
+// AI-CONTEXT: fixture "Money Owed" rows (M3+M4 receivables), pending the live
+// /accessorial/owed API. Shape matches money_owed() exactly.
+export const SAMPLE_OWED = [
+  { receivable_id: "r-1", kind: "detention", amount_cents: 15000, state: "invoiced", aging_days: 3, is_reimbursement: false },
+  { receivable_id: "r-2", kind: "tonu", amount_cents: 30000, state: "disputed", aging_days: 11, is_reimbursement: false },
+  { receivable_id: "r-3", kind: "lumper", amount_cents: 12500, state: "recovered", aging_days: 21, is_reimbursement: true },
+];
+
 export const SAMPLE_CORRIDOR = [
   { facility_id: "f-2", name: "Pilot #77", facility_type: "truck_stop", distance_m: 5400, status: "full" },
   { facility_id: "f-3", name: "Yardline Secured Parking", facility_type: "parking_property", distance_m: 9200, status: "empty" },

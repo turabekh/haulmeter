@@ -39,5 +39,14 @@
   "load.photos": "Фото",
   "load.notice_sent": "Уведомление не отправлено",
   "load.cta.notice": "Отправить уведомление",
-  "load.cta.claim": "Создать претензию"
+  "load.cta.claim": "Создать претензию",
+  "money.kind.detention": "Detention",
+  "money.kind.tonu": "TONU",
+  "money.kind.layover": "Layover",
+  "money.kind.lumper": "Lumper",
+  "money.title": "Задолженность",
+  "money.recovered": "Возвращено",
+  "money.state.invoiced": "Выставлено",
+  "money.state.disputed": "Спор",
+  "money.state.recovered": "Возвращено"
 }
