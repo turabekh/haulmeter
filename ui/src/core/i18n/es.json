@@ -115,5 +115,13 @@
   "voice.title": "Copiloto",
   "voice.placeholder": "Pregunta sobre estacionamiento, combustible o lo que te deben",
   "voice.ask": "Preguntar",
-  "voice.mic": "Voz"
+  "voice.mic": "Voz",
+  "fleet.title": "Espacio de flota",
+  "fleet.owed": "Adeudado",
+  "fleet.drivers": "Conductores",
+  "fleet.members": "Miembros",
+  "fleet.claims": "Mesa de reclamos",
+  "fleet.broker": "Bróker",
+  "fleet.recovery_rate": "Tasa de recuperación",
+  "fleet.driver": "Conductor"
 }

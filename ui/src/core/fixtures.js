@@ -68,6 +68,32 @@ export const SAMPLE_PINS = [
   },
 ];
 
+// AI-CONTEXT: fixture Fleet Workspace data (M12), pending live /fleet/*. The
+// web-first portal (§18); recovered/owed/fuel + per-member + counterparty rates.
+export const SAMPLE_FLEET = {
+  report: {
+    driver_count: 4,
+    recovered_cents: 184000,
+    owed_cents: 92500,
+    fuel_saved_cents: 213400,
+    members: [
+      { driver_account_id: "Marcus D.", recovered_cents: 75000, owed_cents: 15000, fuel_saved_cents: 68200 },
+      { driver_account_id: "Rosa V.", recovered_cents: 45000, owed_cents: 30000, fuel_saved_cents: 51100 },
+      { driver_account_id: "Danny K.", recovered_cents: 39000, owed_cents: 17500, fuel_saved_cents: 49900 },
+      { driver_account_id: "Priya S.", recovered_cents: 25000, owed_cents: 30000, fuel_saved_cents: 44200 },
+    ],
+  },
+  claims: {
+    owed_cents: 92500,
+    recovered_cents: 184000,
+    by_counterparty: {
+      "Sunbelt Logistics": { total: 120000, recovered: 108000, owed: 12000, recovery_rate: 0.9 },
+      "Range Freight": { total: 96500, recovered: 52000, owed: 44500, recovery_rate: 0.539 },
+      "Delta 3PL": { total: 60000, recovered: 24000, owed: 36000, recovery_rate: 0.4 },
+    },
+  },
+};
+
 // AI-CONTEXT: fixture points/reputation (M10), pending live /community/points.
 export const SAMPLE_POINTS = {
   balance: 340,

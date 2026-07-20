@@ -11,10 +11,11 @@ import TabBar from "./core/components/TabBar.vue";
 
 const route = useRoute();
 const chrome = computed(() => route.meta.chrome !== false);
+const portal = computed(() => route.meta.portal === true);
 </script>
 
 <template>
-  <div class="app-frame">
+  <div class="app-frame" :class="{ 'app-frame--wide': portal }">
     <StatusStrip v-if="chrome" :online="true" />
     <main class="app-content">
       <router-view />

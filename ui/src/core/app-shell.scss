@@ -40,6 +40,12 @@ button {
   margin: 0 auto;
 }
 
+// §18: the web-first portals (Fleet Workspace) are the ONLY surfaces allowed to
+// exceed the driver column — desktop-first, comfortable tables, 1200 dp cap.
+.app-frame--wide {
+  max-width: 1200px;
+}
+
 .app-content {
   flex: 1 1 auto;
   overflow-y: auto;

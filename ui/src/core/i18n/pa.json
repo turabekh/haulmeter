@@ -115,5 +115,13 @@
   "voice.title": "ਕੋਪਾਇਲਟ",
   "voice.placeholder": "ਪਾਰਕਿੰਗ, ਤੇਲ ਜਾਂ ਬਕਾਏ ਬਾਰੇ ਪੁੱਛੋ",
   "voice.ask": "ਪੁੱਛੋ",
-  "voice.mic": "ਆਵਾਜ਼"
+  "voice.mic": "ਆਵਾਜ਼",
+  "fleet.title": "ਫਲੀਟ ਵਰਕਸਪੇਸ",
+  "fleet.owed": "ਬਕਾਇਆ",
+  "fleet.drivers": "ਡਰਾਈਵਰ",
+  "fleet.members": "ਮੈਂਬਰ",
+  "fleet.claims": "ਦਾਅਵਾ ਡੈਸਕ",
+  "fleet.broker": "ਬ੍ਰੋਕਰ",
+  "fleet.recovery_rate": "ਵਸੂਲੀ ਦਰ",
+  "fleet.driver": "ਡਰਾਈਵਰ"
 }

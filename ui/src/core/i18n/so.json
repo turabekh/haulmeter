@@ -115,5 +115,13 @@
   "voice.title": "Kaaliye",
   "voice.placeholder": "Weydii baabuur-dhigasho, shidaal ama waxa lagugu leeyahay",
   "voice.ask": "Weydii",
-  "voice.mic": "Cod"
+  "voice.mic": "Cod",
+  "fleet.title": "Meesha Ganacsiga",
+  "fleet.owed": "La leeyahay",
+  "fleet.drivers": "Darawallada",
+  "fleet.members": "Xubnaha",
+  "fleet.claims": "Miiska sheegashada",
+  "fleet.broker": "Dilaal",
+  "fleet.recovery_rate": "Heerka soo-celinta",
+  "fleet.driver": "Darawal"
 }

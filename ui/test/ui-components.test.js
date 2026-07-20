@@ -20,6 +20,7 @@ import LoadCalcSurface from "../src/surfaces/LoadCalcSurface.vue";
 import AuthSurface from "../src/surfaces/AuthSurface.vue";
 import MoreSurface from "../src/surfaces/MoreSurface.vue";
 import VoiceSheet from "../src/core/components/VoiceSheet.vue";
+import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
 import { routes, installAuthGuard } from "../src/router.js";
 import { setToken, logout, isAuthenticated } from "../src/core/api.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
@@ -432,6 +433,22 @@ describe("MapSurface — voice wake affordance (M11-FR5)", () => {
     await flushPromises();
     // the voice sheet mounts its input
     expect(w.find(".voice__input").exists()).toBe(true);
+    w.unmount();
+  });
+});
+
+describe("FleetWorkspaceSurface — web-first portal (M12, design-prd §18)", () => {
+  it("shows fleet KPIs, members table, and broker recovery rates (fixture)", async () => {
+    const w = mount(FleetWorkspaceSurface);
+    await flushPromises();
+    expect(w.text()).toContain("Fleet Workspace");
+    // recovered KPI in Mono ($1,840.00 = 184000c)
+    expect(w.find(".kpi__figure").text()).toBe("$1,840.00");
+    // members table has a row per driver
+    expect(w.findAll("tbody tr").length).toBeGreaterThanOrEqual(4);
+    // a broker that pays well is flagged good, a laggard bad
+    expect(w.find(".good").exists()).toBe(true);
+    expect(w.find(".bad").exists()).toBe(true);
     w.unmount();
   });
 });

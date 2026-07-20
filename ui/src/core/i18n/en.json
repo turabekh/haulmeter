@@ -115,5 +115,13 @@
   "voice.title": "Copilot",
   "voice.placeholder": "Ask about parking, fuel, or what you're owed",
   "voice.ask": "Ask",
-  "voice.mic": "Voice"
+  "voice.mic": "Voice",
+  "fleet.title": "Fleet Workspace",
+  "fleet.owed": "Owed",
+  "fleet.drivers": "Drivers",
+  "fleet.members": "Members",
+  "fleet.claims": "Claims desk",
+  "fleet.broker": "Broker",
+  "fleet.recovery_rate": "Recovery rate",
+  "fleet.driver": "Driver"
 }

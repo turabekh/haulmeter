@@ -13,6 +13,7 @@ import FuelSurface from "./surfaces/FuelSurface.vue";
 import LoadCalcSurface from "./surfaces/LoadCalcSurface.vue";
 import AuthSurface from "./surfaces/AuthSurface.vue";
 import MoreSurface from "./surfaces/MoreSurface.vue";
+import FleetWorkspaceSurface from "./surfaces/FleetWorkspaceSurface.vue";
 import { isAuthenticated } from "./core/api.js";
 
 export const routes = [
@@ -29,6 +30,8 @@ export const routes = [
   { path: "/money", name: "money", component: MoneySurface },
   { path: "/docs", name: "docs", component: DocsSurface },
   { path: "/more", name: "more", component: MoreSurface },
+  // §18 web-first portal — no tab chrome, wider frame; auth required (fleet owner)
+  { path: "/fleet", name: "fleet", component: FleetWorkspaceSurface, meta: { chrome: false, portal: true } },
 ];
 
 // AI-CONTEXT: the auth gate. No session -> the login flow; already signed in ->

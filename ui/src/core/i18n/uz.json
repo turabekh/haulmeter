@@ -115,5 +115,13 @@
   "voice.title": "Kopilot",
   "voice.placeholder": "Parkovka, yoqilg'i yoki qarz haqida so'rang",
   "voice.ask": "So'rash",
-  "voice.mic": "Ovoz"
+  "voice.mic": "Ovoz",
+  "fleet.title": "Avtopark",
+  "fleet.owed": "Qarz",
+  "fleet.drivers": "Haydovchilar",
+  "fleet.members": "A'zolar",
+  "fleet.claims": "Da'volar bo'limi",
+  "fleet.broker": "Broker",
+  "fleet.recovery_rate": "Qaytarish darajasi",
+  "fleet.driver": "Haydovchi"
 }

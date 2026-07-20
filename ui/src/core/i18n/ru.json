@@ -115,5 +115,13 @@
   "voice.title": "Копилот",
   "voice.placeholder": "Спросите о парковке, топливе или задолженности",
   "voice.ask": "Спросить",
-  "voice.mic": "Голос"
+  "voice.mic": "Голос",
+  "fleet.title": "Автопарк",
+  "fleet.owed": "Задолженность",
+  "fleet.drivers": "Водители",
+  "fleet.members": "Участники",
+  "fleet.claims": "Отдел претензий",
+  "fleet.broker": "Брокер",
+  "fleet.recovery_rate": "Уровень возврата",
+  "fleet.driver": "Водитель"
 }
