@@ -100,5 +100,16 @@
   "auth.logout": "Ka bax",
   "more.account": "Akoon",
   "money.delivered": "Lagu keenay",
-  "money.flagged": "loo calaamadeeyay dib-u-eegis"
+  "money.flagged": "loo calaamadeeyay dib-u-eegis",
+  "points.title": "Dhibcaha",
+  "points.level.rookie": "Bilow",
+  "points.level.regular": "Caadi",
+  "points.level.pro": "Pro",
+  "points.level.elite": "Sare",
+  "qa.title": "Su'aalaha darawallada",
+  "qa.ask": "Weydii su'aal",
+  "qa.onsite": "goobta",
+  "qa.empty": "Weli su'aalo ma jiraan",
+  "qa.placeholder": "Maxaad rabtaa inaad ogaato?",
+  "qa.submit": "Dir su'aasha"
 }

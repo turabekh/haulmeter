@@ -343,7 +343,17 @@ describe("AuthSurface + auth guard (F1, PRD §7.1)", () => {
   });
 });
 
-describe("MoreSurface — account + logout (F1)", () => {
+describe("MoreSurface — account + points + logout (F1 / M10)", () => {
+  it("shows the points balance + contributor level (fixture)", async () => {
+    logout(); // no session -> fixture path (no network)
+    const router = testRouter();
+    const w = mount(MoreSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(w.find(".points__figure").text()).toBe("340"); // fixture balance, Mono
+    expect(w.find(".points__level").text()).toBe("Regular"); // level -> i18n
+    w.unmount();
+  });
+
   it("logs out and returns to /login", async () => {
     setToken("tok-xyz");
     const router = createRouter({ history: createMemoryHistory(), routes });
@@ -356,6 +366,20 @@ describe("MoreSurface — account + logout (F1)", () => {
     await flushPromises();
     expect(isAuthenticated.value).toBe(false);
     expect(router.currentRoute.value.name).toBe("login");
+  });
+});
+
+describe("FacilityProfileSurface — driver Q&A (M10-FR4)", () => {
+  it("lists questions + answers with the on-site badge (fixture)", async () => {
+    const router = testRouter();
+    router.push("/facility/f-1");
+    await router.isReady();
+    const w = mount(FacilityProfileSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    const text = w.text();
+    expect(text).toContain("Driver Q&A");
+    expect(text).toContain("Is the north entrance still closed?");
+    expect(w.find(".qa__badge").text()).toBe("on-site"); // presence-proven answer badged
   });
 });
 

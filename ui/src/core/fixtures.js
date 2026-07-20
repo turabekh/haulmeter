@@ -68,6 +68,31 @@ export const SAMPLE_PINS = [
   },
 ];
 
+// AI-CONTEXT: fixture points/reputation (M10), pending live /community/points.
+export const SAMPLE_POINTS = {
+  balance: 340,
+  points_earned: 485,
+  contribution_count: 32,
+  trust_score: 1.4,
+  level: "regular",
+};
+
+// AI-CONTEXT: fixture facility Q&A (M10-FR4), pending live /community/questions.
+// presence_proven answers (on-site) rank first and carry the badge.
+export function sampleQuestions() {
+  return [
+    {
+      question_id: "q-1",
+      text: "Is the north entrance still closed?",
+      answers: [
+        { text: "Open as of this morning — go around the fuel island.", presence_proven: true },
+        { text: "Was closed last week.", presence_proven: false },
+      ],
+    },
+    { question_id: "q-2", text: "Any overnight parking after 8pm?", answers: [] },
+  ];
+}
+
 // AI-CONTEXT: fixture Driver Dollars Delivered (M9-FR4 / North Star), pending
 // live /money/earnings. recovered (M3/M4) + fuel saved (M7) + audit-flagged.
 export const SAMPLE_EARNINGS = {

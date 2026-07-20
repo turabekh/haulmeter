@@ -100,5 +100,16 @@
   "auth.logout": "Выйти",
   "more.account": "Аккаунт",
   "money.delivered": "Доставлено вам",
-  "money.flagged": "Отмечено на проверку"
+  "money.flagged": "Отмечено на проверку",
+  "points.title": "Очки",
+  "points.level.rookie": "Новичок",
+  "points.level.regular": "Обычный",
+  "points.level.pro": "Про",
+  "points.level.elite": "Элита",
+  "qa.title": "Вопросы водителей",
+  "qa.ask": "Задать вопрос",
+  "qa.onsite": "на месте",
+  "qa.empty": "Пока нет вопросов",
+  "qa.placeholder": "Что вы хотите узнать?",
+  "qa.submit": "Опубликовать вопрос"
 }

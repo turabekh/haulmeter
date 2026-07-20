@@ -16,8 +16,10 @@ import {
   submitReview,
   fetchDetentionRisk,
   fetchAppointmentHours,
+  fetchQuestions,
+  askQuestion,
 } from "../core/api.js";
-import { sampleProfile, sampleFacilityIntel } from "../core/fixtures.js";
+import { sampleProfile, sampleFacilityIntel, sampleQuestions } from "../core/fixtures.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -25,7 +27,18 @@ const { t } = useI18n();
 
 const profile = ref(null);
 const intel = ref(null);
+const questions = ref([]);
 const reviewing = ref(false);
+const asking = ref(false);
+const questionText = ref("");
+
+async function loadQuestions() {
+  try {
+    questions.value = await fetchQuestions(route.params.id);
+  } catch {
+    questions.value = sampleQuestions(); // unauthenticated / offline
+  }
+}
 
 async function load() {
   try {
@@ -42,8 +55,22 @@ async function load() {
   } catch {
     intel.value = sampleFacilityIntel(); // unauthenticated / offline
   }
+  await loadQuestions();
 }
 onMounted(load);
+
+async function onAsk() {
+  const text = questionText.value.trim();
+  asking.value = false;
+  questionText.value = "";
+  if (!text) return;
+  try {
+    await askQuestion(route.params.id, text);
+    await loadQuestions();
+  } catch {
+    /* queued/offline in a later pass (F12) */
+  }
+}
 
 // M8-FR6/FR2 presentation: percentage + a readable "06:00" hour label
 const riskPct = computed(() =>
@@ -119,12 +146,40 @@ async function onReview(payload) {
       <p v-else class="muted">{{ t("profile.no_reviews") }}</p>
     </section>
 
+    <!-- M10-FR4: moderated driver Q&A pinned to the facility page -->
+    <section class="card">
+      <h2 class="card__title">{{ t("qa.title") }}</h2>
+      <ul v-if="questions.length" class="qa">
+        <li v-for="q in questions" :key="q.question_id" class="qa__item">
+          <p class="qa__q">{{ q.text }}</p>
+          <p v-for="(a, i) in q.answers" :key="i" class="qa__a">
+            {{ a.text }}
+            <span v-if="a.presence_proven" class="qa__badge">{{ t("qa.onsite") }}</span>
+          </p>
+        </li>
+      </ul>
+      <p v-else class="muted">{{ t("qa.empty") }}</p>
+      <button class="cta cta--ghost" type="button" @click="asking = true">{{ t("qa.ask") }}</button>
+    </section>
+
     <button class="add-review" type="button" @click="reviewing = true">
       {{ t("profile.add_review") }}
     </button>
 
     <BottomSheet :open="reviewing" :title="t('profile.add_review')" @close="reviewing = false">
       <ReviewSheet @submit="onReview" />
+    </BottomSheet>
+
+    <BottomSheet :open="asking" :title="t('qa.ask')" @close="asking = false">
+      <div class="ask">
+        <textarea
+          v-model="questionText"
+          class="ask__input"
+          :placeholder="t('qa.placeholder')"
+          rows="3"
+        ></textarea>
+        <button class="cta" type="button" @click="onAsk">{{ t("qa.submit") }}</button>
+      </div>
     </BottomSheet>
   </div>
 </template>
@@ -248,5 +303,63 @@ async function onReview(payload) {
   color: var(--on-accent);
   font-size: var(--type-label-size);
   font-weight: 500;
+}
+.qa {
+  list-style: none;
+  margin: 0 0 var(--s-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.qa__q {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: 500;
+  color: var(--text-1);
+}
+.qa__a {
+  margin: var(--s-1) 0 0;
+  font-size: var(--type-body-size);
+  color: var(--text-2);
+}
+.qa__badge {
+  margin-left: var(--s-2);
+  padding: 1px var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--ledger-500);
+  color: var(--on-accent);
+  font-size: var(--type-caption-size);
+}
+.cta {
+  width: 100%;
+  min-height: 56px;
+  border-radius: var(--r-control);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.cta--ghost {
+  min-height: 48px;
+  background: transparent;
+  border: 1px solid var(--line-1);
+  color: var(--text-1);
+}
+.ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.ask__input {
+  width: 100%;
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  border: 1px solid var(--line-1);
+  background: var(--ink-1);
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+  font-family: inherit;
+  resize: vertical;
 }
 </style>

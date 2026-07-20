@@ -100,5 +100,16 @@
   "auth.logout": "Log out",
   "more.account": "Account",
   "money.delivered": "Delivered to you",
-  "money.flagged": "Flagged for review"
+  "money.flagged": "Flagged for review",
+  "points.title": "Points",
+  "points.level.rookie": "Rookie",
+  "points.level.regular": "Regular",
+  "points.level.pro": "Pro",
+  "points.level.elite": "Elite",
+  "qa.title": "Driver Q&A",
+  "qa.ask": "Ask a question",
+  "qa.onsite": "on-site",
+  "qa.empty": "No questions yet",
+  "qa.placeholder": "What do you want to know?",
+  "qa.submit": "Post question"
 }

@@ -100,5 +100,16 @@
   "auth.logout": "Chiqish",
   "more.account": "Hisob",
   "money.delivered": "Sizga yetkazildi",
-  "money.flagged": "Ko'rib chiqish uchun belgilangan"
+  "money.flagged": "Ko'rib chiqish uchun belgilangan",
+  "points.title": "Ballar",
+  "points.level.rookie": "Yangi",
+  "points.level.regular": "Oddiy",
+  "points.level.pro": "Pro",
+  "points.level.elite": "Elita",
+  "qa.title": "Haydovchilar savol-javobi",
+  "qa.ask": "Savol berish",
+  "qa.onsite": "joyida",
+  "qa.empty": "Hali savollar yo'q",
+  "qa.placeholder": "Nimani bilmoqchisiz?",
+  "qa.submit": "Savolni joylash"
 }

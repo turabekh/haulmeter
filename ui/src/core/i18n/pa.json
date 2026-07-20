@@ -100,5 +100,16 @@
   "auth.logout": "ਲੌਗ ਆਊਟ",
   "more.account": "ਖਾਤਾ",
   "money.delivered": "ਤੁਹਾਨੂੰ ਦਿੱਤਾ",
-  "money.flagged": "ਸਮੀਖਿਆ ਲਈ ਨਿਸ਼ਾਨਬੱਧ"
+  "money.flagged": "ਸਮੀਖਿਆ ਲਈ ਨਿਸ਼ਾਨਬੱਧ",
+  "points.title": "ਪੁਆਇੰਟ",
+  "points.level.rookie": "ਨਵਾਂ",
+  "points.level.regular": "ਨਿਯਮਿਤ",
+  "points.level.pro": "ਪ੍ਰੋ",
+  "points.level.elite": "ਐਲੀਟ",
+  "qa.title": "ਡਰਾਈਵਰ ਸਵਾਲ-ਜਵਾਬ",
+  "qa.ask": "ਸਵਾਲ ਪੁੱਛੋ",
+  "qa.onsite": "ਮੌਕੇ 'ਤੇ",
+  "qa.empty": "ਹਾਲੇ ਕੋਈ ਸਵਾਲ ਨਹੀਂ",
+  "qa.placeholder": "ਤੁਸੀਂ ਕੀ ਜਾਣਨਾ ਚਾਹੁੰਦੇ ਹੋ?",
+  "qa.submit": "ਸਵਾਲ ਪੋਸਟ ਕਰੋ"
 }

@@ -100,5 +100,16 @@
   "auth.logout": "Cerrar sesión",
   "more.account": "Cuenta",
   "money.delivered": "Entregado a ti",
-  "money.flagged": "Marcado para revisar"
+  "money.flagged": "Marcado para revisar",
+  "points.title": "Puntos",
+  "points.level.rookie": "Novato",
+  "points.level.regular": "Regular",
+  "points.level.pro": "Pro",
+  "points.level.elite": "Élite",
+  "qa.title": "Preguntas de conductores",
+  "qa.ask": "Hacer una pregunta",
+  "qa.onsite": "en sitio",
+  "qa.empty": "Aún no hay preguntas",
+  "qa.placeholder": "¿Qué quieres saber?",
+  "qa.submit": "Publicar pregunta"
 }

@@ -208,6 +208,30 @@ export async function fetchAppointmentHours(facilityId) {
   return resp.json();
 }
 
+export async function fetchPoints() {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/community/points`, { headers: headers() });
+  if (!resp.ok) throw new Error(`points failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchQuestions(facilityId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/community/questions/${facilityId}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`questions failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function askQuestion(facilityId, text) {
+  const resp = await fetch(`${API_BASE}/community/questions`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ facility_id: facilityId, text }),
+  });
+  if (!resp.ok) throw new Error(`ask failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function submitReview(facilityId, ratings, text) {
   const resp = await fetch(`${API_BASE}/facility/${facilityId}/review`, {
     method: "POST",
