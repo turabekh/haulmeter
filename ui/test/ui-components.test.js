@@ -21,6 +21,7 @@ import AuthSurface from "../src/surfaces/AuthSurface.vue";
 import MoreSurface from "../src/surfaces/MoreSurface.vue";
 import VoiceSheet from "../src/core/components/VoiceSheet.vue";
 import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
+import AuditSurface from "../src/surfaces/AuditSurface.vue";
 import { routes, installAuthGuard } from "../src/router.js";
 import { setToken, logout, isAuthenticated } from "../src/core/api.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
@@ -450,6 +451,36 @@ describe("FleetWorkspaceSurface — web-first portal (M12, design-prd §18)", ()
     expect(w.find(".good").exists()).toBe(true);
     expect(w.find(".bad").exists()).toBe(true);
     w.unmount();
+  });
+});
+
+describe("AuditSurface — settlement auditor (M9-FR1)", () => {
+  it("flags missed pay in flare with a review note", async () => {
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          discrepancies: [
+            { kind: "detention", owed_cents: 15000, paid_cents: 5000, missed_cents: 10000, status: "flagged" },
+          ],
+          total_missed_cents: 10000,
+        }),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      router.push("/money/audit");
+      await router.isReady();
+      const w = mount(AuditSurface, { global: { plugins: [router] } });
+      await w.find("form").trigger("submit");
+      await flushPromises();
+      expect(w.find(".result__figure").text()).toBe("$100.00"); // 10000c missed
+      expect(w.find(".result__figure").classes()).toContain("result__figure"); // flare hero
+      expect(w.text()).toContain("Review with your carrier"); // never legal advice
+      expect(fetchStub.mock.calls[0][0]).toContain("/money/settlements/audit");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

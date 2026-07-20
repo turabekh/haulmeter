@@ -123,5 +123,12 @@
   "fleet.claims": "Mesa de reclamos",
   "fleet.broker": "Bróker",
   "fleet.recovery_rate": "Tasa de recuperación",
-  "fleet.driver": "Conductor"
+  "fleet.driver": "Conductor",
+  "audit.title": "Auditar un acuerdo",
+  "audit.carrier": "Transportista",
+  "audit.paid": "Pagado en el acuerdo",
+  "audit.run": "Buscar pago faltante",
+  "audit.missed": "Pago faltante",
+  "audit.none": "Sin pagos faltantes: tu acuerdo coincide con tu evidencia.",
+  "audit.review": "Revísalo con tu transportista. Esto no es asesoría legal."
 }

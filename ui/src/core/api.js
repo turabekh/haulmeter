@@ -242,6 +242,21 @@ export async function askVoice(text, driving = false) {
   return resp.json();
 }
 
+export async function auditSettlement({ carrier, periodStart, periodEnd, lines }) {
+  const resp = await fetch(`${API_BASE}/money/settlements/audit`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      carrier,
+      period_start: periodStart,
+      period_end: periodEnd,
+      lines,
+    }),
+  });
+  if (!resp.ok) throw new Error(`audit failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function submitReview(facilityId, ratings, text) {
   const resp = await fetch(`${API_BASE}/facility/${facilityId}/review`, {
     method: "POST",

@@ -123,5 +123,12 @@
   "fleet.claims": "Da'volar bo'limi",
   "fleet.broker": "Broker",
   "fleet.recovery_rate": "Qaytarish darajasi",
-  "fleet.driver": "Haydovchi"
+  "fleet.driver": "Haydovchi",
+  "audit.title": "Hisob-kitobni tekshirish",
+  "audit.carrier": "Tashuvchi",
+  "audit.paid": "Hisob-kitobda to'langan",
+  "audit.run": "Yetmagan to'lovni topish",
+  "audit.missed": "Yetmagan to'lov",
+  "audit.none": "Yetmagan to'lov yo'q — hisob-kitob dalillaringizga mos.",
+  "audit.review": "Tashuvchingiz bilan ko'rib chiqing. Bu yuridik maslahat emas."
 }

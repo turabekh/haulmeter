@@ -123,5 +123,12 @@
   "fleet.claims": "Claims desk",
   "fleet.broker": "Broker",
   "fleet.recovery_rate": "Recovery rate",
-  "fleet.driver": "Driver"
+  "fleet.driver": "Driver",
+  "audit.title": "Audit a settlement",
+  "audit.carrier": "Carrier",
+  "audit.paid": "Paid on settlement",
+  "audit.run": "Find missed pay",
+  "audit.missed": "Missed pay",
+  "audit.none": "No missed pay — your settlement matches your evidence.",
+  "audit.review": "Review with your carrier. This isn't legal advice."
 }

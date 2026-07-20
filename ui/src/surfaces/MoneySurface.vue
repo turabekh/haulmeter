@@ -6,6 +6,7 @@
      truncated (T-2/T-6). Fixture-backed until the live APIs answer. -->
 <script setup>
 import { ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
 import { useI18n } from "../core/i18n.js";
 import { formatMoney } from "../core/meter.js";
@@ -14,6 +15,7 @@ import { fetchOwed, fetchEarnings } from "../core/api.js";
 import { SAMPLE_OWED, SAMPLE_EARNINGS } from "../core/fixtures.js";
 
 const { t } = useI18n();
+const router = useRouter();
 const rows = ref(SAMPLE_OWED);
 const earnings = ref(SAMPLE_EARNINGS);
 
@@ -82,6 +84,11 @@ function stateLabel(state) {
         </div>
       </li>
     </ul>
+
+    <!-- M9-FR1: the settlement auditor — the company-driver wedge (NAV-5) -->
+    <button class="audit-cta" type="button" @click="router.push('/money/audit')">
+      {{ t("audit.title") }}
+    </button>
   </div>
 </template>
 
@@ -176,5 +183,16 @@ function stateLabel(state) {
   font-variant-numeric: tabular-nums;
   font-size: var(--type-body-size);
   color: var(--ledger-500);
+}
+.audit-cta {
+  width: 100%;
+  min-height: 56px;
+  margin-top: var(--s-4);
+  border-radius: var(--r-control);
+  background: transparent;
+  border: 1px solid var(--line-1);
+  color: var(--text-1);
+  font-size: var(--type-label-size);
+  font-weight: 500;
 }
 </style>

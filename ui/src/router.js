@@ -11,6 +11,7 @@ import DocsSurface from "./surfaces/DocsSurface.vue";
 import BookingSurface from "./surfaces/BookingSurface.vue";
 import FuelSurface from "./surfaces/FuelSurface.vue";
 import LoadCalcSurface from "./surfaces/LoadCalcSurface.vue";
+import AuditSurface from "./surfaces/AuditSurface.vue";
 import AuthSurface from "./surfaces/AuthSurface.vue";
 import MoreSurface from "./surfaces/MoreSurface.vue";
 import FleetWorkspaceSurface from "./surfaces/FleetWorkspaceSurface.vue";
@@ -28,6 +29,7 @@ export const routes = [
   { path: "/load", name: "load", component: LoadSurface },
   { path: "/load/calc", name: "load-calc", component: LoadCalcSurface },
   { path: "/money", name: "money", component: MoneySurface },
+  { path: "/money/audit", name: "money-audit", component: AuditSurface },
   { path: "/docs", name: "docs", component: DocsSurface },
   { path: "/more", name: "more", component: MoreSurface },
   // §18 web-first portal — no tab chrome, wider frame; auth required (fleet owner)

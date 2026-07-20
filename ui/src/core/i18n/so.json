@@ -123,5 +123,12 @@
   "fleet.claims": "Miiska sheegashada",
   "fleet.broker": "Dilaal",
   "fleet.recovery_rate": "Heerka soo-celinta",
-  "fleet.driver": "Darawal"
+  "fleet.driver": "Darawal",
+  "audit.title": "Baadh xisaabinta",
+  "audit.carrier": "Xamuulka",
+  "audit.paid": "Lagu bixiyay xisaabinta",
+  "audit.run": "Hel lacag la seegay",
+  "audit.missed": "Lacag la seegay",
+  "audit.none": "Lacag la seegay ma jirto — xisaabintaadu waxay la mid tahay caddaymahaaga.",
+  "audit.review": "La eeg xamuulkaaga. Kanu maaha talo sharci."
 }

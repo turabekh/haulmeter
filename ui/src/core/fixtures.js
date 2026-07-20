@@ -119,6 +119,18 @@ export function sampleQuestions() {
   ];
 }
 
+// AI-CONTEXT: fixture settlement-audit result (M9-FR1), pending live
+// /money/settlements/audit. A flagged discrepancy = evidence-backed pay the
+// carrier didn't pay; "review with your carrier", never legal advice.
+export function sampleAudit() {
+  return {
+    discrepancies: [
+      { kind: "detention", owed_cents: 15000, paid_cents: 5000, missed_cents: 10000, status: "flagged" },
+    ],
+    total_missed_cents: 10000,
+  };
+}
+
 // AI-CONTEXT: fixture Driver Dollars Delivered (M9-FR4 / North Star), pending
 // live /money/earnings. recovered (M3/M4) + fuel saved (M7) + audit-flagged.
 export const SAMPLE_EARNINGS = {
