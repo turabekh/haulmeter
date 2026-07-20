@@ -61,8 +61,8 @@ See HANDOFF-001…010 for the full log. Load-bearing ones:
 ## 5. Blockers / owner questions
 
 **Now blocking (module UI starts next):**
-1. **Light-theme token values (design-prd §6.1/C-3).** The design gives only qualitative derivation, no hex — I have not invented them. **Needed before the first real screen.** Options: (a) approve me deriving the light ramp and logging exact hex as a §23 proposal for sign-off, or (b) supply values.
-2. **Locale wording** for pa/uz/so/ru/es (native-speaker review, F15 pipeline) — the CI completeness gate is live; the *translations themselves* need review before launch (not before building M1 in EN).
+1. ~~Light-theme token values.~~ **RESOLVED 2026-07-20 (owner-approved derivation).** Light theme derived + locked in `ui/src/core/tokens.scss` (`@mixin longhaul-light`, system + manual-override toggles), all §16 contrast ratios verified in both themes by `ui/test/contrast.test.js` (CI), logged in design-prd §23. **M1 driver screens are unblocked.**
+2. **Locale wording** for pa/uz/so/ru/es (native-speaker review, F15 pipeline) — the CI completeness gate is live; the *translations themselves* need review before launch (not before building M1 in EN). (Non-blocking for M1 build in EN.)
 
 **Activation seams awaiting owner input (not blocking build):** timestamping/PDF (F4); Stripe/Connect + points rate (F7); Twilio/FCM/email (F8); model provider keys + cost budgets + embedding dim (F9); MinIO bucket (F6); **Mapbox token + style (F11/M1)**; collection partner (M3); fuel data route (M7); brand name.
 
