@@ -54,6 +54,13 @@ export async function fetchProfile(facilityId) {
   return resp.json();
 }
 
+export async function fetchWallet() {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/protection/wallet`, { headers: headers() });
+  if (!resp.ok) throw new Error(`wallet failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchOwed() {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const resp = await fetch(`${API_BASE}/accessorial/owed`, { headers: headers() });

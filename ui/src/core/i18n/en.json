@@ -48,5 +48,9 @@
   "money.recovered": "Recovered",
   "money.state.invoiced": "Invoiced",
   "money.state.disputed": "Disputed",
-  "money.state.recovered": "Recovered"
+  "money.state.recovered": "Recovered",
+  "docs.inspection": "Inspection mode",
+  "docs.add": "Add document",
+  "docs.status.expiring": "expiring",
+  "docs.status.expired": "expired"
 }

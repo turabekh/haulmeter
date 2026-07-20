@@ -48,5 +48,9 @@
   "money.recovered": "La soo celiyay",
   "money.state.invoiced": "La qoray",
   "money.state.disputed": "Muran",
-  "money.state.recovered": "La soo celiyay"
+  "money.state.recovered": "La soo celiyay",
+  "docs.inspection": "Habka kormeerka",
+  "docs.add": "Ku dar dukumenti",
+  "docs.status.expiring": "dhacaya",
+  "docs.status.expired": "dhacay"
 }

@@ -48,5 +48,9 @@
   "money.recovered": "Qaytarildi",
   "money.state.invoiced": "Hisob-faktura",
   "money.state.disputed": "Nizoli",
-  "money.state.recovered": "Qaytarildi"
+  "money.state.recovered": "Qaytarildi",
+  "docs.inspection": "Tekshiruv rejimi",
+  "docs.add": "Hujjat qo'shish",
+  "docs.status.expiring": "muddati tugayapti",
+  "docs.status.expired": "muddati tugagan"
 }

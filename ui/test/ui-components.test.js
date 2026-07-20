@@ -13,6 +13,7 @@ import FacilityProfileSurface from "../src/surfaces/FacilityProfileSurface.vue";
 import TheMeter from "../src/core/components/TheMeter.vue";
 import LoadSurface from "../src/surfaces/LoadSurface.vue";
 import MoneySurface from "../src/surfaces/MoneySurface.vue";
+import DocsSurface from "../src/surfaces/DocsSurface.vue";
 import { routes } from "../src/router.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 
@@ -93,6 +94,17 @@ describe("MoneySurface (M4 Money tab, design-prd §10.3)", () => {
     expect(text).toContain("$150.00"); // detention 15000c, tabular
     expect(text).toContain("Detention"); // jargon stays English (§12.3)
     expect(text).toContain("11d"); // aging in Mono
+  });
+});
+
+describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
+  it("shows inspection button, expiring pills, and the document grid (fixture)", async () => {
+    const w = mount(DocsSurface);
+    await flushPromises();
+    expect(w.find(".inspect").text()).toContain("Inspection mode");
+    expect(w.findAll(".doc")).toHaveLength(4);
+    expect(w.text()).toContain("CDL"); // acronym stays English (§12.3)
+    expect(w.findAll(".pill").length).toBeGreaterThan(0); // expiring-soon strip
   });
 });
 

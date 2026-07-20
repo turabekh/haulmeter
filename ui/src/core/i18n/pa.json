@@ -48,5 +48,9 @@
   "money.recovered": "ਵਸੂਲਿਆ",
   "money.state.invoiced": "ਇਨਵੌਇਸ ਕੀਤਾ",
   "money.state.disputed": "ਵਿਵਾਦ",
-  "money.state.recovered": "ਵਸੂਲਿਆ"
+  "money.state.recovered": "ਵਸੂਲਿਆ",
+  "docs.inspection": "ਇੰਸਪੈਕਸ਼ਨ ਮੋਡ",
+  "docs.add": "ਦਸਤਾਵੇਜ਼ ਸ਼ਾਮਲ ਕਰੋ",
+  "docs.status.expiring": "ਮਿਆਦ ਖਤਮ ਹੋ ਰਹੀ",
+  "docs.status.expired": "ਮਿਆਦ ਖਤਮ"
 }

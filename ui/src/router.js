@@ -6,6 +6,7 @@ import MapSurface from "./surfaces/MapSurface.vue";
 import FacilityProfileSurface from "./surfaces/FacilityProfileSurface.vue";
 import LoadSurface from "./surfaces/LoadSurface.vue";
 import MoneySurface from "./surfaces/MoneySurface.vue";
+import DocsSurface from "./surfaces/DocsSurface.vue";
 import PlaceholderSurface from "./surfaces/PlaceholderSurface.vue";
 
 export const routes = [
@@ -14,7 +15,7 @@ export const routes = [
   { path: "/facility/:id", name: "facility", component: FacilityProfileSurface },
   { path: "/load", name: "load", component: LoadSurface },
   { path: "/money", name: "money", component: MoneySurface },
-  { path: "/docs", name: "docs", component: PlaceholderSurface, props: { titleKey: "nav.docs" } },
+  { path: "/docs", name: "docs", component: DocsSurface },
   { path: "/more", name: "more", component: PlaceholderSurface, props: { titleKey: "nav.more" } },
 ];
 

@@ -98,6 +98,20 @@ export const SAMPLE_OWED = [
   { receivable_id: "r-3", kind: "lumper", amount_cents: 12500, state: "recovered", aging_days: 21, is_reimbursement: true },
 ];
 
+// AI-CONTEXT: fixture document wallet (M5), pending live /protection/wallet.
+export const SAMPLE_WALLET = {
+  documents: [
+    { id: "d-1", doc_type: "cdl", expires_on: "2027-03-01", status: "ok" },
+    { id: "d-2", doc_type: "med_card", expires_on: "2026-08-01", status: "expiring" },
+    { id: "d-3", doc_type: "insurance", expires_on: "2026-01-01", status: "expired" },
+    { id: "d-4", doc_type: "permit", expires_on: null, status: "ok" },
+  ],
+  expiring: [
+    { id: "d-2", doc_type: "med_card", expires_on: "2026-08-01", status: "expiring" },
+    { id: "d-3", doc_type: "insurance", expires_on: "2026-01-01", status: "expired" },
+  ],
+};
+
 export const SAMPLE_CORRIDOR = [
   { facility_id: "f-2", name: "Pilot #77", facility_type: "truck_stop", distance_m: 5400, status: "full" },
   { facility_id: "f-3", name: "Yardline Secured Parking", facility_type: "parking_property", distance_m: 9200, status: "empty" },
