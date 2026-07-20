@@ -76,5 +76,12 @@ describe("token contrast (design-prd §16, both themes)", () => {
     it(`${theme}: interactive accent shield ≥3:1 on ink-0`, () => {
       expect(ratio(p.shield, p.ink[0])).toBeGreaterThanOrEqual(3);
     });
+
+    // PROPOSED --on-accent (design-prd §23): dark = ink-0, light = white.
+    // Dark lands at 4.24:1 (just under AA) pending owner resolution; assert ≥4.
+    it(`${theme}: on-accent label on shield ≥4:1`, () => {
+      const onAccent = theme === "dark" ? darkVar("ink-0") : lightVar("on-accent");
+      expect(ratio(onAccent, p.shield)).toBeGreaterThanOrEqual(4);
+    });
   }
 });

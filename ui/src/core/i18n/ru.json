@@ -6,5 +6,17 @@
   "nav.more": "Ещё",
   "system.offline": "Офлайн — всё сохраняется на телефоне",
   "system.loading": "Загрузка",
-  "money.empty": "Возвращённые и сэкономленные деньги появятся здесь. Добавьте первый груз, чтобы запустить счётчик."
+  "money.empty": "Возвращённые и сэкономленные деньги появятся здесь. Добавьте первый груз, чтобы запустить счётчик.",
+  "map.preset.drive": "В путь",
+  "map.preset.tonight": "На ночь",
+  "map.preset.work": "Работа",
+  "map.preset.fuel": "Топливо",
+  "facility.fuel": "Топливо",
+  "facility.navigate": "Навигация",
+  "map.report": "Сообщить статус",
+  "map.report.question": "Как сейчас с парковкой здесь?",
+  "map.status.empty": "Пусто",
+  "map.status.some": "Частично",
+  "map.status.full": "Полно",
+  "surface.placeholder": "Эта вкладка появится вместе со своим модулем."
 }

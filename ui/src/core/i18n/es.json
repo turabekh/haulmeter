@@ -6,5 +6,17 @@
   "nav.more": "Más",
   "system.offline": "Sin conexión — todo se guarda en tu teléfono",
   "system.loading": "Cargando",
-  "money.empty": "El dinero recuperado y ahorrado aparece aquí. Agrega tu primera carga para iniciar el medidor."
+  "money.empty": "El dinero recuperado y ahorrado aparece aquí. Agrega tu primera carga para iniciar el medidor.",
+  "map.preset.drive": "Conducir",
+  "map.preset.tonight": "Esta noche",
+  "map.preset.work": "Trabajo",
+  "map.preset.fuel": "Combustible",
+  "facility.fuel": "Combustible",
+  "facility.navigate": "Navegar",
+  "map.report": "Reportar estado",
+  "map.report.question": "¿Cómo está el estacionamiento ahora?",
+  "map.status.empty": "Vacío",
+  "map.status.some": "Algo",
+  "map.status.full": "Lleno",
+  "surface.placeholder": "Esta pestaña llega con su módulo."
 }

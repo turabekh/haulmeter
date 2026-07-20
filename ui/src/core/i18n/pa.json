@@ -6,5 +6,17 @@
   "nav.more": "ਹੋਰ",
   "system.offline": "ਆਫ਼ਲਾਈਨ — ਸਭ ਕੁਝ ਤੁਹਾਡੇ ਫ਼ੋਨ 'ਤੇ ਸੇਵ ਹੁੰਦਾ ਹੈ",
   "system.loading": "ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ",
-  "money.empty": "ਵਸੂਲਿਆ ਅਤੇ ਬਚਾਇਆ ਪੈਸਾ ਇੱਥੇ ਦਿਖਦਾ ਹੈ। ਮੀਟਰ ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਆਪਣਾ ਪਹਿਲਾ ਲੋਡ ਸ਼ਾਮਲ ਕਰੋ।"
+  "money.empty": "ਵਸੂਲਿਆ ਅਤੇ ਬਚਾਇਆ ਪੈਸਾ ਇੱਥੇ ਦਿਖਦਾ ਹੈ। ਮੀਟਰ ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਆਪਣਾ ਪਹਿਲਾ ਲੋਡ ਸ਼ਾਮਲ ਕਰੋ।",
+  "map.preset.drive": "ਗੱਡੀ",
+  "map.preset.tonight": "ਅੱਜ ਰਾਤ",
+  "map.preset.work": "ਕੰਮ",
+  "map.preset.fuel": "ਫਿਊਲ",
+  "facility.fuel": "ਫਿਊਲ",
+  "facility.navigate": "ਨੇਵੀਗੇਟ",
+  "map.report": "ਸਥਿਤੀ ਦੱਸੋ",
+  "map.report.question": "ਇੱਥੇ ਹੁਣ ਪਾਰਕਿੰਗ ਕਿਵੇਂ ਹੈ?",
+  "map.status.empty": "ਖਾਲੀ",
+  "map.status.some": "ਕੁਝ",
+  "map.status.full": "ਭਰਿਆ",
+  "surface.placeholder": "ਇਹ ਟੈਬ ਆਪਣੇ ਮੋਡੀਊਲ ਨਾਲ ਆਵੇਗੀ।"
 }

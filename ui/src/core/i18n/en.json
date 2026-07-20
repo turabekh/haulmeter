@@ -6,5 +6,17 @@
   "nav.more": "More",
   "system.offline": "Offline — everything saves to your phone",
   "system.loading": "Loading",
-  "money.empty": "Recovered and saved money shows up here. Add your first load to start the meter."
+  "money.empty": "Recovered and saved money shows up here. Add your first load to start the meter.",
+  "map.preset.drive": "Drive",
+  "map.preset.tonight": "Tonight",
+  "map.preset.work": "Work",
+  "map.preset.fuel": "Fuel",
+  "facility.fuel": "Fuel",
+  "facility.navigate": "Navigate",
+  "map.report": "Report status",
+  "map.report.question": "How's parking here right now?",
+  "map.status.empty": "Empty",
+  "map.status.some": "Some",
+  "map.status.full": "Full",
+  "surface.placeholder": "This tab arrives with its module."
 }

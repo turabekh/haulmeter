@@ -6,5 +6,17 @@
   "nav.more": "Ko'proq",
   "system.offline": "Oflayn — hammasi telefoningizga saqlanadi",
   "system.loading": "Yuklanmoqda",
-  "money.empty": "Qaytarilgan va tejalgan pul shu yerda ko'rinadi. Hisoblagichni ishga tushirish uchun birinchi yukingizni qo'shing."
+  "money.empty": "Qaytarilgan va tejalgan pul shu yerda ko'rinadi. Hisoblagichni ishga tushirish uchun birinchi yukingizni qo'shing.",
+  "map.preset.drive": "Yo'lda",
+  "map.preset.tonight": "Bugun tunda",
+  "map.preset.work": "Ish",
+  "map.preset.fuel": "Yoqilg'i",
+  "facility.fuel": "Yoqilg'i",
+  "facility.navigate": "Navigatsiya",
+  "map.report": "Holatni xabar qilish",
+  "map.report.question": "Hozir bu yerda parkovka qanday?",
+  "map.status.empty": "Bo'sh",
+  "map.status.some": "Bir oz",
+  "map.status.full": "To'la",
+  "surface.placeholder": "Bu bo'lim o'z moduli bilan keladi."
 }

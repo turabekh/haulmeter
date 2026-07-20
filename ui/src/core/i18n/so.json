@@ -6,5 +6,17 @@
   "nav.more": "Wax dheeraad ah",
   "system.offline": "Offline — wax walba wuxuu ku kaydsanayaa taleefankaaga",
   "system.loading": "Waa la soo raray",
-  "money.empty": "Lacagta la soo celiyay iyo la keydiyay halkan ayay ka muuqan doontaa. Ku dar xamuulkaaga ugu horreeya si aad u bilowdo mitirka."
+  "money.empty": "Lacagta la soo celiyay iyo la keydiyay halkan ayay ka muuqan doontaa. Ku dar xamuulkaaga ugu horreeya si aad u bilowdo mitirka.",
+  "map.preset.drive": "Wadid",
+  "map.preset.tonight": "Caawa",
+  "map.preset.work": "Shaqo",
+  "map.preset.fuel": "Shidaal",
+  "facility.fuel": "Shidaal",
+  "facility.navigate": "Hagid",
+  "map.report": "Sheeg xaaladda",
+  "map.report.question": "Sidee baabuur-dhigashadu hadda u tahay halkan?",
+  "map.status.empty": "Madhan",
+  "map.status.some": "Qaar",
+  "map.status.full": "Buuxa",
+  "surface.placeholder": "Tabkani wuxuu la yimaadaa moduulkiisa."
 }
