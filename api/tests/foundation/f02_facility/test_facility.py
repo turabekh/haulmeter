@@ -70,6 +70,30 @@ def test_dedup_ignores_far_or_dissimilar(db):
     assert far == []
 
 
+def test_contains_point_by_radius(db):
+    fac = facility.create_facility(
+        db, facility.FacilityType.truck_stop, "Radius Stop", *DALLAS
+    )
+    assert facility.contains_point(db, fac, DALLAS[0], DALLAS[1], radius_m=150) is True
+    assert facility.contains_point(db, fac, 32.7900, -96.7970, radius_m=150) is False
+
+
+def test_lot_polygon_overrides_radius_for_containment(db):
+    fac = facility.create_facility(
+        db, facility.FacilityType.parking_property, "Polygon Lot", *DALLAS
+    )
+    facility.set_lot_polygon(
+        db,
+        fac,
+        "POLYGON((-96.7990 32.7757, -96.7950 32.7757, "
+        "-96.7950 32.7777, -96.7990 32.7777, -96.7990 32.7757))",
+    )
+    inside = facility.contains_point(db, fac, 32.7767, -96.7970, radius_m=1)
+    assert inside is True
+    outside = facility.contains_point(db, fac, 32.7767, -96.7900, radius_m=1)
+    assert outside is False
+
+
 def test_merge_preserves_canonical_id_and_reassigns_sources(db):
     canonical = facility.create_facility(
         db, facility.FacilityType.truck_stop, "Canonical Stop", *DALLAS

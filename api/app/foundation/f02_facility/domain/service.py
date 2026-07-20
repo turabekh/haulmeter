@@ -155,6 +155,27 @@ def nearest(
     return list(db.scalars(stmt))
 
 
+def set_lot_polygon(db: Session, facility: Facility, polygon_wkt: str) -> Facility:
+    facility.lot_polygon = WKTElement(polygon_wkt, srid=4326)
+    db.flush()
+    return facility
+
+
+def contains_point(
+    db: Session, facility: Facility, lat: float, lon: float, radius_m: float
+) -> bool:
+    point = _point(lat, lon)
+    stmt = select(
+        func.coalesce(
+            func.ST_Contains(Facility.lot_polygon, point),
+            func.ST_DWithin(
+                cast(Facility.geom, Geography), cast(point, Geography), radius_m
+            ),
+        )
+    ).where(Facility.id == facility.id)
+    return bool(db.execute(stmt).scalar())
+
+
 def coordinates(db: Session, facility: Facility) -> tuple[float, float]:
     lon, lat = db.execute(
         select(func.ST_X(Facility.geom), func.ST_Y(Facility.geom)).where(

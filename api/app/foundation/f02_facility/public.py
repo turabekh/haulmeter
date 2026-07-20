@@ -9,6 +9,7 @@ from .domain.models import Facility, FacilitySource
 from .domain.service import (
     add_source,
     confirm_with_second_signal,
+    contains_point,
     coordinates,
     create_candidate_from_checkin,
     create_facility,
@@ -17,6 +18,7 @@ from .domain.service import (
     merge_facilities,
     nearest,
     resolve_canonical,
+    set_lot_polygon,
 )
 
 __all__ = [
@@ -27,6 +29,7 @@ __all__ = [
     "SourceKind",
     "add_source",
     "confirm_with_second_signal",
+    "contains_point",
     "coordinates",
     "create_candidate_from_checkin",
     "create_facility",
@@ -35,4 +38,5 @@ __all__ = [
     "merge_facilities",
     "nearest",
     "resolve_canonical",
+    "set_lot_polygon",
 ]
