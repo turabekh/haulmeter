@@ -12,7 +12,9 @@ import hashlib
 from dataclasses import dataclass
 from typing import Protocol
 
-EMBED_DIM = 16  # placeholder; the real embedding model's dimension is set at activation (a migration)
+# AI-CONTEXT: placeholder dimension; the real embedding model's dimension is
+# set at F9 activation (a migration + a pgvector ANN index at that point).
+EMBED_DIM = 16
 
 
 @dataclass
