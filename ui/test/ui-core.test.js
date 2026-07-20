@@ -153,6 +153,8 @@ describe("F12 write-queue (design-prd §15.1: everything saves to your phone)", 
     await flushQueue();
     expect(pendingWrites.value).toBe(0);
     expect(okStub.mock.calls[0][0]).toContain("/map/report"); // the real endpoint was replayed
+    // F12: the replay carries a stable idempotency key so the server dedupes it
+    expect(okStub.mock.calls[0][1].headers["Idempotency-Key"]).toBeTruthy();
 
     vi.unstubAllGlobals();
     logout();

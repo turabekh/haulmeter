@@ -5,8 +5,9 @@ are captures (F4 evidence). F8 gateway seam (recording) in dev.
 
 import base64
 import uuid
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -14,6 +15,7 @@ from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f05_load import public as loads
 from app.foundation.f08_notifications import public as notify
+from app.foundation.f12_offline import public as offline
 from app.modules.m05_protection import public as m5
 
 router = APIRouter(prefix="/protection", tags=["protection"])
@@ -86,9 +88,29 @@ def incident(
     body: IncidentIn,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None),
 ) -> dict:
-    inc = m5.capture_incident(db, account.id, body.kind, note=body.note)
-    return {"incident_id": str(inc.id), "evidence_log_ref": str(inc.evidence_log_ref)}
+    # F12: a key makes an offline-then-replayed incident create exactly one record
+    result: dict = {}
+
+    def _apply(_env):
+        inc = m5.capture_incident(db, account.id, body.kind, note=body.note)
+        result["incident_id"] = str(inc.id)
+        result["evidence_log_ref"] = str(inc.evidence_log_ref)
+
+    if idempotency_key:
+        receipt = offline.ingest(
+            db,
+            account.id,
+            idempotency_key,
+            "incident",
+            {"kind": body.kind},
+            datetime.now(UTC),
+            handler=_apply,
+        )
+        return {**result, "applied": receipt.applied}
+    _apply(None)
+    return {**result, "applied": True}
 
 
 # --- Cargo-condition capture (M5-FR2): a guided, hash-chained photo sequence ---
@@ -129,18 +151,40 @@ def condition_photo(
     body: ConditionPhotoIn,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None),
 ) -> dict:
     capture = db.get(m5.ConditionCapture, capture_id)
     if capture is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "capture not found")
-    content = (
-        base64.b64decode(body.content_b64) if body.content_b64 else f"photo:{body.prompt}".encode()
-    )
-    m5.add_condition_photo(db, capture, body.prompt, content=content)
+
+    def _apply(_env):
+        content = (
+            base64.b64decode(body.content_b64)
+            if body.content_b64
+            else f"photo:{body.prompt}".encode()
+        )
+        m5.add_condition_photo(db, capture, body.prompt, content=content)
+
+    # F12: an offline photo replayed with its key appends exactly once (no dup chain)
+    applied = True
+    if idempotency_key:
+        receipt = offline.ingest(
+            db,
+            account.id,
+            idempotency_key,
+            "condition_photo",
+            {"capture_id": str(capture_id), "prompt": body.prompt},
+            datetime.now(UTC),
+            handler=_apply,
+        )
+        applied = receipt.applied
+    else:
+        _apply(None)
     return {
         "capture_id": str(capture.id),
         "photo_count": capture.photo_count,
         "prompt": body.prompt,
+        "applied": applied,
     }
 
 

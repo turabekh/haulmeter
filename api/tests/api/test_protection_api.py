@@ -122,3 +122,35 @@ def test_condition_capture_guided_sequence(client, db):
         )
         assert photo.status_code == 201
         assert photo.json()["photo_count"] == i
+
+
+def test_condition_photo_is_idempotent_on_replay(client, db):
+    from app.foundation.f02_facility import public as facility
+    from app.foundation.f05_load import public as loads
+
+    account_id, headers = _auth(client)
+    fac = facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, "R", 32.7767, -96.797
+    )
+    import uuid as _uuid
+
+    load = loads.create_load(db, _uuid.UUID(account_id))
+    stop = loads.add_stop(db, load, fac.id, loads.StopType.delivery)
+    capture_id = client.post(
+        "/protection/condition/start", json={"stop_id": str(stop.id)}, headers=headers
+    ).json()["capture_id"]
+
+    key = "op-abc-123"
+    body = {"prompt": "seals"}
+    keyed = {**headers, "Idempotency-Key": key}
+
+    first = client.post(f"/protection/condition/{capture_id}/photo", json=body, headers=keyed)
+    assert first.status_code == 201
+    assert first.json()["applied"] is True
+    assert first.json()["photo_count"] == 1
+
+    # the offline client replays the SAME key -> deduped, no second photo in the chain
+    replay = client.post(f"/protection/condition/{capture_id}/photo", json=body, headers=keyed)
+    assert replay.status_code == 201
+    assert replay.json()["applied"] is False
+    assert replay.json()["photo_count"] == 1  # still one — exactly-once

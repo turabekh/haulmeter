@@ -119,10 +119,13 @@ async function apiGet(path, cacheKey) {
 }
 
 // AI-CONTEXT: F12 write-queue — field captures (status reports, reviews, Q&A)
-// must work offline (§15.1: "everything saves to your phone"). A queuedPost that
-// hits a dead zone is stored to localStorage and replayed on reconnect; queued
-// items were never sent, so at-least-once replay is effectively once. Sync is
-// silent (no toast parade); a subtle count on the status strip is the only tell.
+// AND transactional evidence (condition photos, incidents) must work offline
+// (§15.1). A queuedPost that hits a dead zone is stored to localStorage and
+// replayed on reconnect. Each queued write carries a STABLE idempotency key,
+// generated once and re-sent on every replay: the F12 backend (offline.ingest)
+// dedupes by (account, key), so even a write that reached the server before the
+// dead zone applies exactly once — no duplicate evidence chain. Sync is silent;
+// a subtle count on the status strip is the only tell.
 const QUEUE_KEY = "longhaul.write_queue";
 function readQueue() {
   try {
@@ -140,20 +143,37 @@ function saveQueue(q) {
   }
   pendingWrites.value = q.length;
 }
-function enqueue(path, body) {
+function newOpId() {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `op-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+function postHeaders(opId) {
+  const h = headers();
+  if (opId) h["Idempotency-Key"] = opId; // honored by F12-wired endpoints (§15.1)
+  return h;
+}
+function enqueue(path, body, opId) {
   const q = readQueue();
-  q.push({ path, body });
+  q.push({ path, body, opId });
   saveQueue(q);
 }
 
 async function queuedPost(path, body) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const opId = newOpId(); // stable across replays -> exactly-once at the server
   let resp;
   try {
-    resp = await fetch(`${API_BASE}${path}`, { method: "POST", headers: headers(), body: JSON.stringify(body) });
+    resp = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: postHeaders(opId),
+      body: JSON.stringify(body),
+    });
   } catch {
     online.value = false; // dead zone — save it to the phone
-    enqueue(path, body);
+    enqueue(path, body, opId);
     return { queued: true };
   }
   if (!resp.ok) throw new Error(`${path} ${resp.status}`); // server rejected — caller handles
@@ -173,7 +193,7 @@ export async function flushQueue() {
       try {
         await fetch(`${API_BASE}${item.path}`, {
           method: "POST",
-          headers: headers(),
+          headers: postHeaders(item.opId), // same key -> the server dedupes the replay
           body: JSON.stringify(item.body),
         });
       } catch {
@@ -568,13 +588,12 @@ export async function startConditionCapture(stopId, phase = "delivery") {
 }
 
 export async function addConditionPhoto(captureId, prompt, contentB64 = null) {
-  const resp = await fetch(`${API_BASE}/protection/condition/${captureId}/photo`, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({ prompt, content_b64: contentB64 }),
+  // F12: a photo taken in a dead zone queues with an idempotency key and appends
+  // to the hash-chain exactly once on reconnect (offline.ingest dedupes replays)
+  return queuedPost(`/protection/condition/${captureId}/photo`, {
+    prompt,
+    content_b64: contentB64,
   });
-  if (!resp.ok) throw new Error(`condition photo failed: ${resp.status}`);
-  return resp.json();
 }
 
 export async function fileIncident(kind, note) {
