@@ -6,6 +6,7 @@ a hash-chain-valid evidence pack offline, syncs it idempotently, and triggers a
 templated (English) counterparty email with a ledger receivable opened. If this
 stays green, the Common Ground holds together as a product, not just as parts.
 """
+
 from datetime import UTC, datetime, timedelta
 
 from app.foundation.f01_identity import public as identity
@@ -42,8 +43,12 @@ def test_common_ground_synthetic_end_to_end(db):
     # F6 — store the rate con document
     storage = documents.InMemoryObjectStorage()
     rate_con = documents.store_document(
-        db, account.id, documents.DocType.rate_con, b"%PDF rate confirmation",
-        filename="ratecon.pdf", storage=storage,
+        db,
+        account.id,
+        documents.DocType.rate_con,
+        b"%PDF rate confirmation",
+        filename="ratecon.pdf",
+        storage=storage,
     )
 
     # F9 — parse the rate con through the AI gateway (fake provider -> structured terms)
@@ -57,7 +62,11 @@ def test_common_ground_synthetic_end_to_end(db):
         }
     )
     parsed = ai.parse_structured(
-        db, provider, "m03", "rate_con_parse", {"doc": rate_con.content_hash},
+        db,
+        provider,
+        "m03",
+        "rate_con_parse",
+        {"doc": rate_con.content_hash},
         required_keys=["rate_cents", "detention_rate_cents_per_hour"],
     )
     documents.apply_extraction(db, rate_con, parsed)
@@ -86,8 +95,11 @@ def test_common_ground_synthetic_end_to_end(db):
     # F4 — accrue the geofence events + a BOL photo into the hash-chained log, anchor, compose
     for event in enter + leave:
         evidence.append_record(
-            db, log, evidence.RecordType.GEOFENCE,
-            {"event": event.event_type.value}, occurred_at=event.occurred_at,
+            db,
+            log,
+            evidence.RecordType.GEOFENCE,
+            {"event": event.event_type.value},
+            occurred_at=event.occurred_at,
         )
     evidence.attach_artifact(
         db, log, evidence.ArtifactType.photo, content=b"bol-photo-bytes", captured_at=T0
@@ -99,8 +111,12 @@ def test_common_ground_synthetic_end_to_end(db):
 
     # F12 — the claim pack is captured offline and synced idempotently (once)
     key = f"claim-pack-{stop.id}"
-    first = offline.ingest(db, account.id, key, "claim_pack", {"log_id": str(log.id)}, occurred_at=T0)
-    retry = offline.ingest(db, account.id, key, "claim_pack", {"log_id": str(log.id)}, occurred_at=T0)
+    first = offline.ingest(
+        db, account.id, key, "claim_pack", {"log_id": str(log.id)}, occurred_at=T0
+    )
+    retry = offline.ingest(
+        db, account.id, key, "claim_pack", {"log_id": str(log.id)}, occurred_at=T0
+    )
     assert first.applied is True
     assert retry.applied is False
 
@@ -114,8 +130,12 @@ def test_common_ground_synthetic_end_to_end(db):
 
     # F8 + F15 — templated counterparty email, ALWAYS English, on a tracked thread
     notify.register_template(
-        db, "detention_invoice", "Detention owed on load {ref}: {amount}",
-        notify.TemplateAudience.counterparty, notify.NotificationChannel.email, locale="en",
+        db,
+        "detention_invoice",
+        "Detention owed on load {ref}: {amount}",
+        notify.TemplateAudience.counterparty,
+        notify.NotificationChannel.email,
+        locale="en",
     )
     template = notify.get_active_template(db, "detention_invoice")
     _, body = notify.render_template(template, {"ref": load.reference_number, "amount": "$150.00"})

@@ -1,6 +1,37 @@
 """AI-CONTEXT: Public interface for M1 Road Intelligence Map.
 
-Empty bounded context. May import foundation.*.public and the public
-interfaces of EARLIER modules only (import-linter enforced). No lateral
-imports, no reach-ins. Built in module order after the Common Ground DoD.
+The ONLY import surface other packages may use to reach M1 (import-linter
+enforced). The daily-open map surface, composed from F1/F2/F10/F11/F12; runs
+behind the F13 flag `m01_map`. Consumed by later modules and the UI layer.
 """
+
+from .domain.enums import NavProvider, Preset
+from .domain.service import (
+    FLAG_KEY,
+    MODULE,
+    ParkingPrediction,
+    corridor_view,
+    map_overlay,
+    nav_deeplink,
+    predict_parking_fill,
+    queue_status_offline,
+    record_map_open,
+    register_module,
+    submit_status,
+)
+
+__all__ = [
+    "NavProvider",
+    "Preset",
+    "FLAG_KEY",
+    "MODULE",
+    "ParkingPrediction",
+    "corridor_view",
+    "map_overlay",
+    "nav_deeplink",
+    "predict_parking_fill",
+    "queue_status_offline",
+    "record_map_open",
+    "register_module",
+    "submit_status",
+]
