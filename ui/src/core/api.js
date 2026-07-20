@@ -47,6 +47,7 @@ export function logout() {
   account.value = null;
   email.value = null;
   persist();
+  clearCache(); // a new driver never sees the last one's cached reads
 }
 
 function _adopt(data, userEmail) {
@@ -61,6 +62,59 @@ function headers() {
   const h = { "Content-Type": "application/json" };
   if (token.value) h.Authorization = `Bearer ${token.value}`;
   return h;
+}
+
+// AI-CONTEXT: F12 read-cache — the driver app's defining constraint is dead
+// zones (design-prd §15.1: offline is a MODE, not an error). A successful GET is
+// cached to localStorage; when the network drops, the last-known REAL data is
+// served (not a generic fixture) and `online` flips so the status strip tells
+// the honest truth. A server error (4xx/5xx) is NOT offline — it rethrows so the
+// caller can fall back. Writes/queuing are the F12 backend seam (later pass).
+export const online = ref(true);
+const CACHE_PREFIX = "longhaul.cache.";
+
+function writeCache(key, data) {
+  try {
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(data));
+  } catch {
+    /* storage full / private mode — cache is best-effort */
+  }
+}
+function readCache(key) {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + key);
+    return raw == null ? undefined : JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+function clearCache() {
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith(CACHE_PREFIX)) localStorage.removeItem(k);
+    }
+  } catch {
+    /* nothing to clear */
+  }
+}
+
+async function apiGet(path, cacheKey) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  let resp;
+  try {
+    resp = await fetch(`${API_BASE}${path}`, { headers: headers() });
+  } catch (netErr) {
+    // a genuine network failure — go offline, serve the cache if we have it
+    online.value = false;
+    const cached = cacheKey && readCache(cacheKey);
+    if (cached !== undefined && cached !== false) return cached;
+    throw netErr;
+  }
+  if (!resp.ok) throw new Error(`${path} ${resp.status}`); // server error, not offline
+  const data = await resp.json();
+  online.value = true;
+  if (cacheKey) writeCache(cacheKey, data);
+  return data;
 }
 
 // AI-CONTEXT: the driver's active stop (behind The Meter) persists across
@@ -106,10 +160,7 @@ export async function arriveAtStop(stopId) {
 }
 
 export async function fetchMeter(stopId) {
-  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
-  const resp = await fetch(`${API_BASE}/load/${stopId}/meter`, { headers: headers() });
-  if (!resp.ok) throw new Error(`meter failed: ${resp.status}`);
-  return resp.json();
+  return apiGet(`/load/${stopId}/meter`, `meter:${stopId}`);
 }
 
 export async function sendDetentionNotice(stopId) {
@@ -152,11 +203,8 @@ export async function register(email, password) {
 }
 
 export async function fetchOverlay({ lat, lon, radiusM = 8000, preset = "drive" }) {
-  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const q = new URLSearchParams({ lat, lon, radius_m: radiusM, preset });
-  const resp = await fetch(`${API_BASE}/map/overlay?${q}`, { headers: headers() });
-  if (!resp.ok) throw new Error(`overlay failed: ${resp.status}`);
-  return resp.json();
+  return apiGet(`/map/overlay?${q}`, `overlay:${preset}`);
 }
 
 export async function report(facilityId, signalType, value) {
@@ -170,24 +218,15 @@ export async function report(facilityId, signalType, value) {
 }
 
 export async function fetchProfile(facilityId) {
-  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
-  const resp = await fetch(`${API_BASE}/facility/${facilityId}/profile`, { headers: headers() });
-  if (!resp.ok) throw new Error(`profile failed: ${resp.status}`);
-  return resp.json();
+  return apiGet(`/facility/${facilityId}/profile`, `profile:${facilityId}`);
 }
 
 export async function fetchWallet() {
-  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
-  const resp = await fetch(`${API_BASE}/protection/wallet`, { headers: headers() });
-  if (!resp.ok) throw new Error(`wallet failed: ${resp.status}`);
-  return resp.json();
+  return apiGet(`/protection/wallet`, `wallet`);
 }
 
 export async function fetchOwed() {
-  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
-  const resp = await fetch(`${API_BASE}/accessorial/owed`, { headers: headers() });
-  if (!resp.ok) throw new Error(`owed failed: ${resp.status}`);
-  return resp.json();
+  return apiGet(`/accessorial/owed`, `owed`);
 }
 
 export async function fetchBookable({ lat, lon, radiusM = 8000 }) {
@@ -275,10 +314,7 @@ export async function fetchFleetClaims(fleetId) {
 }
 
 export async function fetchEarnings() {
-  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
-  const resp = await fetch(`${API_BASE}/money/earnings`, { headers: headers() });
-  if (!resp.ok) throw new Error(`earnings failed: ${resp.status}`);
-  return resp.json();
+  return apiGet(`/money/earnings`, `earnings`);
 }
 
 export async function fetchFuelAnalytics() {
@@ -328,10 +364,7 @@ export async function fetchAppointmentHours(facilityId) {
 }
 
 export async function fetchPoints() {
-  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
-  const resp = await fetch(`${API_BASE}/community/points`, { headers: headers() });
-  if (!resp.ok) throw new Error(`points failed: ${resp.status}`);
-  return resp.json();
+  return apiGet(`/community/points`, `points`);
 }
 
 export async function fetchQuestions(facilityId) {

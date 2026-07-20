@@ -1,7 +1,8 @@
 // AI-CONTEXT: Core UI logic tests (framework-agnostic modules) — driver state
 // machine (SM-4), presentation helpers (§11), and the i18n resolver (F15).
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useDriverState, DriverState } from "../src/core/state.js";
+import { setToken, logout, online, fetchOwed } from "../src/core/api.js";
 import {
   statusPresentation,
   freshnessLabel,
@@ -99,5 +100,38 @@ describe("i18n (F15)", () => {
     expect(t("nav.map")).toBe("Mapa");
     setLocale("en");
     expect(t("does.not.exist")).toBe("does.not.exist");
+  });
+});
+
+describe("F12 read-cache (design-prd §15.1: offline is a mode)", () => {
+  it("caches a successful read and serves last-known data offline", async () => {
+    logout(); // clears any prior cache
+    setToken("tok-cache");
+    const okStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([{ receivable_id: "r1", amount_cents: 15000 }]),
+    });
+    vi.stubGlobal("fetch", okStub);
+    const fresh = await fetchOwed();
+    expect(fresh[0].amount_cents).toBe(15000);
+    expect(online.value).toBe(true);
+
+    // the network drops mid-trip
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
+    const cached = await fetchOwed();
+    expect(cached[0].amount_cents).toBe(15000); // the real last-known data, not a fixture
+    expect(online.value).toBe(false);
+
+    vi.unstubAllGlobals();
+    logout();
+  });
+
+  it("rethrows when offline with no cache (caller falls back to fixture)", async () => {
+    logout();
+    setToken("tok-nocache");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
+    await expect(fetchOwed()).rejects.toThrow();
+    vi.unstubAllGlobals();
+    logout();
   });
 });
