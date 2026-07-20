@@ -454,6 +454,13 @@ export async function fetchScorecard(facilityId) {
   return resp.json();
 }
 
+// AI-CONTEXT: Property-Owner portal read (M6-FR5, the supply side). Session
+// required; the owner's listings + bookings + accrued payable (F7 owner_payable).
+// Payout SETTLEMENT is the deferred Stripe/Connect seam — this is the view only.
+export async function fetchOwnerDashboard() {
+  return apiGet(`/owner/dashboard`, `owner-dashboard`);
+}
+
 export async function fetchEarnings() {
   return apiGet(`/money/earnings`, `earnings`);
 }

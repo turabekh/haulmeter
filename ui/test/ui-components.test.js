@@ -25,6 +25,7 @@ import AuditSurface from "../src/surfaces/AuditSurface.vue";
 import ConditionSurface from "../src/surfaces/ConditionSurface.vue";
 import AdminConsoleSurface from "../src/surfaces/AdminConsoleSurface.vue";
 import PublicScorecardSurface from "../src/surfaces/PublicScorecardSurface.vue";
+import OwnerPortalSurface from "../src/surfaces/OwnerPortalSurface.vue";
 import GhostwriterSheet from "../src/core/components/GhostwriterSheet.vue";
 import SleepSheet from "../src/core/components/SleepSheet.vue";
 import HandoffSheet from "../src/core/components/HandoffSheet.vue";
@@ -756,6 +757,50 @@ describe("PublicScorecardSurface — public portal (design-prd §18)", () => {
       expect(w.text()).toContain("Not enough tracked stops"); // suppressed, never a small-n figure
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("OwnerPortalSurface — Property-Owner portal (M6-FR5, design-prd §18)", () => {
+  it("falls back to the fixture demo when unauthenticated", async () => {
+    logout(); // no session -> apiGet throws -> demo
+    const w = mount(OwnerPortalSurface);
+    await flushPromises();
+    expect(w.text()).toContain("Property Owner");
+    expect(w.find(".payout__figure").text()).toBe("$396.00"); // demo payable
+    expect(w.text()).toContain("Yardline Secured Parking");
+    w.unmount();
+  });
+
+  it("shows live listings, bookings, and accrued payout", async () => {
+    setToken("tok-owner");
+    const fetchStub = vi.fn().mockImplementation((url) => {
+      const u = String(url);
+      if (u.endsWith("/owner/dashboard")) {
+        return jsonOk({
+          payout_cents: 3960,
+          properties: [
+            { id: "p1", name: "Depot Lot", vetted: true, spots: [{ label: "A1", price_cents_per_night: 2400, active: true }] },
+          ],
+          bookings: [
+            { id: "b1", nights: 2, price_cents: 4800, owner_payout_cents: 3960, state: "checked_out" },
+          ],
+        });
+      }
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(OwnerPortalSurface);
+      await flushPromises();
+      expect(w.find(".payout__figure").text()).toBe("$39.60");
+      expect(w.text()).toContain("Depot Lot");
+      expect(w.find(".spot__price").text()).toBe("$24.00/night");
+      expect(w.findAll("tbody tr").length).toBe(1);
+      expect(w.find("tbody tr").text()).toContain("Checked out"); // friendly state label
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
     }
   });
 });

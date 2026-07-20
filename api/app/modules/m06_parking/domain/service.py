@@ -218,6 +218,48 @@ def cancel(db: Session, booking: Booking, now: datetime) -> Booking:
     return booking
 
 
+# --- Property-owner views (M6-FR5, the supply side) ---
+def owner_properties(db: Session, owner_account_id) -> list[ParkingProperty]:
+    return list(
+        db.scalars(
+            select(ParkingProperty).where(ParkingProperty.owner_account_id == owner_account_id)
+        )
+    )
+
+
+def property_spots(db: Session, property_id) -> list[ParkingSpot]:
+    return list(db.scalars(select(ParkingSpot).where(ParkingSpot.property_id == property_id)))
+
+
+def owner_bookings(db: Session, owner_account_id) -> list[Booking]:
+    prop_ids = [p.id for p in owner_properties(db, owner_account_id)]
+    if not prop_ids:
+        return []
+    spot_ids = [
+        s.id for s in db.scalars(select(ParkingSpot).where(ParkingSpot.property_id.in_(prop_ids)))
+    ]
+    if not spot_ids:
+        return []
+    return list(
+        db.scalars(
+            select(Booking).where(Booking.spot_id.in_(spot_ids)).order_by(Booking.created_at.desc())
+        )
+    )
+
+
+def owner_payable_cents(db: Session, owner_account_id) -> int:
+    # what the platform owes this owner (F7 owner_payable is credited on booking;
+    # a credit balance is negative, so owed-to-owner is its negation)
+    account = ledger.get_or_create_account(
+        db,
+        ledger.LedgerAccountKind.owner_payable,
+        f"owner:{owner_account_id}",
+        ledger.Currency.usd,
+        owner_ref=owner_account_id,
+    )
+    return -int(ledger.balance(db, account))
+
+
 # --- Bookable inventory + the closing loop (M6-FR3) ---
 def bookable_near(db: Session, lat: float, lon: float, radius_m: float) -> list[BookableSpot]:
     facilities = facility_registry.nearest(

@@ -17,6 +17,7 @@ from app.api import (
     m10_community,
     m11_voice,
     m12_fleet,
+    owner,
     public,
 )
 from app.core.config import get_settings
@@ -41,6 +42,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(public.router)
+app.include_router(owner.router)
 app.include_router(load.router)
 app.include_router(m01_map.router)
 app.include_router(m02_facility_intel.router)

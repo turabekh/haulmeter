@@ -18,6 +18,7 @@ import MoreSurface from "./surfaces/MoreSurface.vue";
 import FleetWorkspaceSurface from "./surfaces/FleetWorkspaceSurface.vue";
 import AdminConsoleSurface from "./surfaces/AdminConsoleSurface.vue";
 import PublicScorecardSurface from "./surfaces/PublicScorecardSurface.vue";
+import OwnerPortalSurface from "./surfaces/OwnerPortalSurface.vue";
 import { isAuthenticated } from "./core/api.js";
 
 export const routes = [
@@ -39,6 +40,7 @@ export const routes = [
   // §18 web-first portal — no tab chrome, wider frame; auth required (fleet owner)
   { path: "/fleet", name: "fleet", component: FleetWorkspaceSurface, meta: { chrome: false, portal: true } },
   { path: "/admin", name: "admin", component: AdminConsoleSurface, meta: { chrome: false, portal: true } },
+  { path: "/owner", name: "owner", component: OwnerPortalSurface, meta: { chrome: false, portal: true } },
   // §18 PUBLIC portal — no login (meta.public bypasses the auth guard)
   { path: "/scorecard", name: "scorecard", component: PublicScorecardSurface, meta: { public: true, chrome: false, portal: true } },
 ];

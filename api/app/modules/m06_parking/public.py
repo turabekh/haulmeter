@@ -24,6 +24,10 @@ from .domain.service import (
     closing_loop,
     create_property,
     is_overstay,
+    owner_bookings,
+    owner_payable_cents,
+    owner_properties,
+    property_spots,
     register_module,
 )
 
@@ -47,5 +51,9 @@ __all__ = [
     "closing_loop",
     "create_property",
     "is_overstay",
+    "owner_bookings",
+    "owner_payable_cents",
+    "owner_properties",
+    "property_spots",
     "register_module",
 ]

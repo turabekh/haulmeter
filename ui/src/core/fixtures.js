@@ -87,6 +87,36 @@ export function sampleScorecard(id) {
   };
 }
 
+// AI-CONTEXT: fixture Property-Owner dashboard (M6-FR5, the supply side), the
+// web-first portal (§18): listings + spots, bookings, accrued owner_payable.
+// Payout SETTLEMENT is the deferred Stripe/Connect seam — figures are the view.
+export const SAMPLE_OWNER = {
+  payout_cents: 39600,
+  properties: [
+    {
+      id: "prop-1",
+      name: "Yardline Secured Parking",
+      vetted: true,
+      spots: [
+        { label: "A1", price_cents_per_night: 2400, active: true },
+        { label: "A2", price_cents_per_night: 2400, active: true },
+        { label: "B1", price_cents_per_night: 2800, active: false },
+      ],
+    },
+    {
+      id: "prop-2",
+      name: "Depot Overnight Lot",
+      vetted: false,
+      spots: [{ label: "1", price_cents_per_night: 2000, active: true }],
+    },
+  ],
+  bookings: [
+    { id: "bk-1", nights: 2, price_cents: 4800, owner_payout_cents: 3960, state: "checked_out" },
+    { id: "bk-2", nights: 1, price_cents: 2400, owner_payout_cents: 1980, state: "booked" },
+    { id: "bk-3", nights: 3, price_cents: 8400, owner_payout_cents: 6930, state: "refunded" },
+  ],
+};
+
 // AI-CONTEXT: fixture Fleet Workspace data (M12), pending live /fleet/*. The
 // web-first portal (§18); recovered/owed/fuel + per-member + counterparty rates.
 export const SAMPLE_FLEET = {
