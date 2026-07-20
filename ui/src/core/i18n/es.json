@@ -146,5 +146,12 @@
   "sleep.find": "Buscar paradas",
   "sleep.guaranteed": "Lugar garantizado",
   "sleep.fuel": "Combustible en ruta",
-  "sleep.empty": "No hay paradas en rango aún."
+  "sleep.empty": "No hay paradas en rango aún.",
+  "load.start": "Iniciar una carga",
+  "load.arrive": "He llegado",
+  "load.waiting": "Esperando llegar",
+  "load.end": "Terminar carga",
+  "load.facility": "Instalación",
+  "load.broker": "Bróker",
+  "load.create": "Iniciar"
 }

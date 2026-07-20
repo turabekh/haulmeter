@@ -146,5 +146,12 @@
   "sleep.find": "Найти стоянки",
   "sleep.guaranteed": "Гарантированное место",
   "sleep.fuel": "Топливо по пути",
-  "sleep.empty": "Пока нет стоянок в радиусе."
+  "sleep.empty": "Пока нет стоянок в радиусе.",
+  "load.start": "Начать груз",
+  "load.arrive": "Я прибыл",
+  "load.waiting": "Ожидание прибытия",
+  "load.end": "Завершить груз",
+  "load.facility": "Объект",
+  "load.broker": "Брокер",
+  "load.create": "Начать"
 }

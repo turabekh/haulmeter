@@ -63,6 +63,55 @@ function headers() {
   return h;
 }
 
+// AI-CONTEXT: the driver's active stop (behind The Meter) persists across
+// reloads so the Load tab reopens on the running clock.
+const ACTIVE_STOP_KEY = "longhaul.active_stop";
+function loadActiveStop() {
+  try {
+    return localStorage.getItem(ACTIVE_STOP_KEY);
+  } catch {
+    return null;
+  }
+}
+export const activeStopId = ref(loadActiveStop());
+export function setActiveStop(id) {
+  activeStopId.value = id;
+  try {
+    if (id) localStorage.setItem(ACTIVE_STOP_KEY, id);
+    else localStorage.removeItem(ACTIVE_STOP_KEY);
+  } catch {
+    /* private mode — active stop stays in memory */
+  }
+}
+
+export async function createActiveLoad(payload) {
+  const resp = await fetch(`${API_BASE}/load`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) throw new Error(`create load failed: ${resp.status}`);
+  const data = await resp.json();
+  setActiveStop(data.stop_id);
+  return data;
+}
+
+export async function arriveAtStop(stopId) {
+  const resp = await fetch(`${API_BASE}/load/${stopId}/arrive`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`arrive failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchMeter(stopId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/load/${stopId}/meter`, { headers: headers() });
+  if (!resp.ok) throw new Error(`meter failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function login(email, password) {
   const resp = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",

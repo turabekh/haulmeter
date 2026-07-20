@@ -25,7 +25,7 @@ import AuditSurface from "../src/surfaces/AuditSurface.vue";
 import GhostwriterSheet from "../src/core/components/GhostwriterSheet.vue";
 import SleepSheet from "../src/core/components/SleepSheet.vue";
 import { routes, installAuthGuard } from "../src/router.js";
-import { setToken, logout, isAuthenticated } from "../src/core/api.js";
+import { setToken, logout, isAuthenticated, setActiveStop } from "../src/core/api.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 
 const routerStub = { global: { stubs: { "router-link": { template: "<a class='rl'><slot/></a>" } } } };
@@ -540,12 +540,51 @@ describe("The Meter (design-prd §9)", () => {
 });
 
 describe("LoadSurface / Meter card (design-prd §10.2)", () => {
-  it("shows the live Meter (fixture stop is accruing)", () => {
+  it("shows the fixture-demo Meter when there's no active load (accruing)", () => {
+    logout();
+    setActiveStop(null);
     const router = testRouter();
     const w = mount(LoadSurface, { global: { plugins: [router] } });
     expect(w.find(".meter__figure").exists()).toBe(true);
     expect(w.text()).toContain("Detention"); // accruing label
     w.unmount();
+  });
+
+  it("goes live for an active pre-arrival stop with an 'I've arrived' CTA (M3 clock)", async () => {
+    setToken("tok-live");
+    setActiveStop("stop-live-1");
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          stop_id: "stop-live-1",
+          facility_name: "Live Receiver",
+          counterparty: "Acme Brokerage",
+          appointment: null,
+          arrived: false,
+          free_time_minutes: 120,
+          rate_cents_per_hour: 7500,
+          phase: "not_arrived",
+          free_time_remaining_seconds: null,
+          detention_seconds: 0,
+          detention_cents: 0,
+          notice_sent: false,
+        }),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      const w = mount(LoadSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      expect(w.text()).toContain("Live Receiver"); // live stop context, not the fixture
+      expect(w.find(".cta").text()).toContain("I've arrived"); // pre-arrival CTA
+      expect(fetchStub.mock.calls[0][0]).toContain("/load/stop-live-1/meter");
+      w.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
   });
 });
 

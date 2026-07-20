@@ -146,5 +146,12 @@
   "sleep.find": "Find stops",
   "sleep.guaranteed": "Guaranteed spot",
   "sleep.fuel": "Fuel on the way",
-  "sleep.empty": "No stops in range yet."
+  "sleep.empty": "No stops in range yet.",
+  "load.start": "Start a load",
+  "load.arrive": "I've arrived",
+  "load.waiting": "Waiting to arrive",
+  "load.end": "End load",
+  "load.facility": "Facility",
+  "load.broker": "Broker",
+  "load.create": "Start"
 }

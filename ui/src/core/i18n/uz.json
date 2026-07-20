@@ -146,5 +146,12 @@
   "sleep.find": "To'xtash joylarini topish",
   "sleep.guaranteed": "Kafolatlangan joy",
   "sleep.fuel": "Yo'ldagi yoqilg'i",
-  "sleep.empty": "Hali radiusda to'xtash joylari yo'q."
+  "sleep.empty": "Hali radiusda to'xtash joylari yo'q.",
+  "load.start": "Yukni boshlash",
+  "load.arrive": "Yetib keldim",
+  "load.waiting": "Kelishni kutish",
+  "load.end": "Yukni tugatish",
+  "load.facility": "Obyekt",
+  "load.broker": "Broker",
+  "load.create": "Boshlash"
 }

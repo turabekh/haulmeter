@@ -146,5 +146,12 @@
   "sleep.find": "ਸਟਾਪ ਲੱਭੋ",
   "sleep.guaranteed": "ਗਾਰੰਟੀਸ਼ੁਦਾ ਥਾਂ",
   "sleep.fuel": "ਰਾਹ ਵਿੱਚ ਤੇਲ",
-  "sleep.empty": "ਹਾਲੇ ਰੇਂਜ ਵਿੱਚ ਕੋਈ ਸਟਾਪ ਨਹੀਂ।"
+  "sleep.empty": "ਹਾਲੇ ਰੇਂਜ ਵਿੱਚ ਕੋਈ ਸਟਾਪ ਨਹੀਂ।",
+  "load.start": "ਲੋਡ ਸ਼ੁਰੂ ਕਰੋ",
+  "load.arrive": "ਮੈਂ ਪਹੁੰਚ ਗਿਆ",
+  "load.waiting": "ਪਹੁੰਚਣ ਦੀ ਉਡੀਕ",
+  "load.end": "ਲੋਡ ਖਤਮ ਕਰੋ",
+  "load.facility": "ਸਹੂਲਤ",
+  "load.broker": "ਬ੍ਰੋਕਰ",
+  "load.create": "ਸ਼ੁਰੂ ਕਰੋ"
 }

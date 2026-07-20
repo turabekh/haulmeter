@@ -1,46 +1,138 @@
 <!-- AI-CONTEXT: Load tab (design-prd §10.2) — the current stop and its money/
-     evidence state. Anatomy at 360 dp: The Meter card (state-dependent) → stop
-     context row → evidence checklist → state-dependent single CTA. DRIVING:
-     collapses to a Meter-only glance (§10.2 / §5). Fixture-backed pending the
-     active-load API. S2 dock-task session. -->
+     evidence state, built around The Meter (§9, the signature element). Now
+     LIVE: an active stop (api.js activeStopId) drives the Meter off the M3
+     detention clock (GET /load/{stop}/meter); the client reconstructs arrival
+     and ticks locally. Pre-arrival shows an "I've arrived" CTA; arrived ticks
+     free-time down then money up. No active load -> a fixture demo Meter + a
+     "Start a load" sheet. DRIVING collapses to a Meter-only glance. S2 dock. -->
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, reactive, onMounted, onUnmounted } from "vue";
 import { Check, Camera, Send } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
+import BottomSheet from "../core/components/BottomSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { computeDetentionState, meterVariant, formatClock, formatMoney } from "../core/meter.js";
-import { SAMPLE_STOP as stop } from "../core/fixtures.js";
+import { SAMPLE_STOP } from "../core/fixtures.js";
+import {
+  activeStopId,
+  setActiveStop,
+  createActiveLoad,
+  arriveAtStop,
+  fetchMeter,
+} from "../core/api.js";
 
 const { isDriving } = useDriverState();
 const { t } = useI18n();
 const router = useRouter();
 
-const arrivalMs = ref(0);
+const live = ref(null); // live meter response, or null (fixture demo)
+const arrivalMs = ref(0); // null while a live load is pre-arrival
 const now = ref(Date.now());
+const starting = ref(false);
+const form = reactive({ facility: "", broker: "", freeMin: 120, rateHr: 75 });
 let timer = null;
-onMounted(() => {
-  arrivalMs.value = Date.now() - stop.arrival_offset_min * 60000;
+
+function setupDemo() {
+  live.value = null;
+  arrivalMs.value = Date.now() - SAMPLE_STOP.arrival_offset_min * 60000;
+}
+
+function deriveArrival(m) {
+  const base = Date.now();
+  if (m.phase === "within_free_time") {
+    return base - (m.free_time_minutes * 60 - m.free_time_remaining_seconds) * 1000;
+  }
+  if (m.phase === "accruing") {
+    return base - (m.free_time_minutes * 60 + m.detention_seconds) * 1000;
+  }
+  return null; // not arrived
+}
+
+async function loadMeter() {
+  try {
+    const m = await fetchMeter(activeStopId.value);
+    live.value = m;
+    arrivalMs.value = deriveArrival(m);
+  } catch {
+    setActiveStop(null); // stale/offline -> fall back to the demo
+    setupDemo();
+  }
+}
+
+onMounted(async () => {
+  if (activeStopId.value) await loadMeter();
+  else setupDemo();
   timer = setInterval(() => (now.value = Date.now()), 1000);
 });
 onUnmounted(() => timer && clearInterval(timer));
 
+const freeMin = computed(() => live.value?.free_time_minutes ?? SAMPLE_STOP.free_time_minutes);
+const rateCents = computed(() => live.value?.rate_cents_per_hour ?? SAMPLE_STOP.rate_cents_per_hour);
+const preArrival = computed(() => !!live.value && live.value.phase === "not_arrived");
+
+const stopName = computed(() => live.value?.facility_name ?? SAMPLE_STOP.facility_name);
+const stopMeta = computed(() => {
+  const cp = live.value?.counterparty ?? SAMPLE_STOP.counterparty;
+  const appt = live.value ? (live.value.appointment ?? "") : SAMPLE_STOP.appointment;
+  return appt ? `${appt} · ${cp}` : cp;
+});
+const noticeSent = computed(() => (live.value ? live.value.notice_sent : false));
+
 const state = computed(() =>
-  computeDetentionState(arrivalMs.value, stop.free_time_minutes, stop.rate_cents_per_hour, now.value),
+  computeDetentionState(arrivalMs.value ?? now.value, freeMin.value, rateCents.value, now.value),
 );
 const withinFree = computed(() => state.value.phase === "within_free_time");
-const meterLabel = computed(() => (withinFree.value ? t("load.free_time") : t("load.detention")));
-const meterFigure = computed(() =>
-  withinFree.value
+
+const meterLabel = computed(() =>
+  preArrival.value ? t("load.waiting") : withinFree.value ? t("load.free_time") : t("load.detention"),
+);
+const meterFigure = computed(() => {
+  if (preArrival.value) return live.value.appointment ? live.value.appointment.slice(11, 16) : "—";
+  return withinFree.value
     ? formatClock(state.value.freeTimeRemainingSeconds)
-    : formatMoney(state.value.amountCents),
-);
+    : formatMoney(state.value.amountCents);
+});
 const meterStatus = computed(() =>
-  withinFree.value ? "" : `${formatClock(state.value.detentionSeconds)} · $75/h`,
+  preArrival.value || withinFree.value
+    ? ""
+    : `${formatClock(state.value.detentionSeconds)} · $${Math.round(rateCents.value / 100)}/h`,
 );
-const variant = computed(() => meterVariant(state.value));
-const primaryCta = computed(() => (withinFree.value ? t("load.cta.notice") : t("load.cta.claim")));
+const variant = computed(() => (preArrival.value ? "countdown" : meterVariant(state.value)));
+const primaryCta = computed(() =>
+  preArrival.value ? t("load.arrive") : withinFree.value ? t("load.cta.notice") : t("load.cta.claim"),
+);
+
+async function onPrimary() {
+  if (preArrival.value) {
+    await arriveAtStop(activeStopId.value);
+    await loadMeter();
+  }
+  // send-notice / generate-claim wire to M3 in a follow-up
+}
+
+async function startLoad() {
+  starting.value = false;
+  try {
+    await createActiveLoad({
+      facility_name: form.facility || "Receiver",
+      lat: 32.7767,
+      lon: -96.797,
+      counterparty: form.broker || "Broker",
+      free_time_minutes: Number(form.freeMin) || 120,
+      rate_cents_per_hour: Math.round(Number(form.rateHr) || 75) * 100,
+    });
+    await loadMeter();
+  } catch {
+    /* offline: the demo Meter stays; queued in a later F12 pass */
+  }
+}
+
+function endLoad() {
+  setActiveStop(null);
+  setupDemo();
+}
 </script>
 
 <template>
@@ -51,8 +143,8 @@ const primaryCta = computed(() => (withinFree.value ? t("load.cta.notice") : t("
 
     <template v-if="!isDriving">
       <div class="context">
-        <span class="context__name">{{ stop.facility_name }}</span>
-        <span class="context__meta">{{ stop.appointment }} · {{ stop.counterparty }}</span>
+        <span class="context__name">{{ stopName }}</span>
+        <span class="context__meta">{{ stopMeta }}</span>
       </div>
 
       <section class="card">
@@ -64,20 +156,48 @@ const primaryCta = computed(() => (withinFree.value ? t("load.cta.notice") : t("
           </li>
           <li class="checklist__item">
             <Camera :size="20" :stroke-width="2" aria-hidden="true" />
-            {{ t("load.photos") }} {{ stop.evidence.photos_taken }}/{{ stop.evidence.photos_total }}
+            {{ t("load.photos") }}
           </li>
           <li class="checklist__item">
-            <Send :size="20" :stroke-width="2" aria-hidden="true" />
+            <Send :size="20" :stroke-width="2" :class="{ ok: noticeSent }" aria-hidden="true" />
             {{ t("load.notice_sent") }}
           </li>
         </ul>
       </section>
 
-      <button class="cta" type="button">{{ primaryCta }}</button>
+      <button class="cta" type="button" @click="onPrimary">{{ primaryCta }}</button>
+
+      <button v-if="!live" class="cta cta--outline" type="button" @click="starting = true">
+        {{ t("load.start") }}
+      </button>
+      <button v-else class="cta cta--text" type="button" @click="endLoad">{{ t("load.end") }}</button>
+
       <!-- M8: pre-acceptance decision — cross-link to the true-profit calculator (NAV-5) -->
       <button class="cta cta--text" type="button" @click="router.push('/load/calc')">
         {{ t("load.check_profit") }}
       </button>
+
+      <BottomSheet :open="starting" :title="t('load.start')" @close="starting = false">
+        <form class="start" @submit.prevent="startLoad">
+          <label class="field">
+            <span class="field__label">{{ t("load.facility") }}</span>
+            <input v-model="form.facility" class="field__input" type="text" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t("load.broker") }}</span>
+            <input v-model="form.broker" class="field__input" type="text" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t("calc.free_min") }}</span>
+            <input v-model="form.freeMin" class="field__input" type="number" inputmode="numeric" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t("calc.rate_hr") }}</span>
+            <input v-model="form.rateHr" class="field__input" type="number" inputmode="decimal" />
+          </label>
+          <button class="cta" type="submit">{{ t("load.create") }}</button>
+        </form>
+      </BottomSheet>
     </template>
   </div>
 </template>
@@ -143,11 +263,40 @@ const primaryCta = computed(() => (withinFree.value ? t("load.cta.notice") : t("
   font-size: var(--type-label-size);
   font-weight: 500;
 }
-/* text button (§8) — the secondary cross-link verb to the profit calculator */
+.cta--outline {
+  margin-top: var(--s-2);
+  background: transparent;
+  border: 1px solid var(--line-1);
+  color: var(--text-1);
+}
+/* text button (§8) — secondary cross-links (end load, profit calculator) */
 .cta--text {
   margin-top: var(--s-2);
   min-height: 48px;
   background: transparent;
   color: var(--shield-500);
+}
+.start {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.field__label {
+  font-size: var(--type-label-size);
+  color: var(--text-2);
+}
+.field__input {
+  min-height: 56px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-control);
+  border: 1px solid var(--line-1);
+  background: var(--ink-1);
+  color: var(--text-1);
+  font-size: var(--type-body-size);
 }
 </style>

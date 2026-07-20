@@ -146,5 +146,12 @@
   "sleep.find": "Raadi joogsiyo",
   "sleep.guaranteed": "Goob la damaanad qaaday",
   "sleep.fuel": "Shidaal jidka ku yaal",
-  "sleep.empty": "Weli joogsiyo kuma jiraan xadka."
+  "sleep.empty": "Weli joogsiyo kuma jiraan xadka.",
+  "load.start": "Bilow xamuul",
+  "load.arrive": "Waan imaaday",
+  "load.waiting": "Sugaya imaanshaha",
+  "load.end": "Dhammee xamuulka",
+  "load.facility": "Goobta",
+  "load.broker": "Dilaal",
+  "load.create": "Bilow"
 }
