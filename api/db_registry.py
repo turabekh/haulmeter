@@ -21,6 +21,7 @@ MODEL_MODULES = [
     "app.foundation.f10_crowd.domain.models",
     "app.foundation.f12_offline.domain.models",
     "app.foundation.f13_flags.domain.models",
+    "app.foundation.f14_admin.domain.models",
 ]
 
 
