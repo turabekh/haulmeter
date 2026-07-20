@@ -86,5 +86,17 @@
   "profile.risk": "Khatarta daahitaanka",
   "profile.best_hour": "Saacadda ugu dhaqso badan",
   "profile.stops_basis": "joogsiyada la diiwaangeliyay",
-  "profile.risk_none": "Weli joogsiyo kuma filna"
+  "profile.risk_none": "Weli joogsiyo kuma filna",
+  "auth.tagline": "Baabuur-dhigasho, shidaal iyo lacag — hal app.",
+  "auth.email": "Iimayl",
+  "auth.password": "Furaha sirta",
+  "auth.login": "Gal",
+  "auth.register": "Samee akoon",
+  "auth.to_register": "Cusub? Samee akoon",
+  "auth.to_login": "Akoon ma leedahay? Gal",
+  "auth.error_invalid": "Iimaylka ama furaha waa qaldan yahay. Isku day mar kale.",
+  "auth.error_taken": "Iimaylkaas akoon ayuu leeyahay. Fadlan gal.",
+  "auth.error_network": "Xiriir ma jiro. Hubi calaamadda oo isku day.",
+  "auth.logout": "Ka bax",
+  "more.account": "Akoon"
 }

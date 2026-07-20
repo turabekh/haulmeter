@@ -1,14 +1,60 @@
-// AI-CONTEXT: HTTP client for the M1 API. Base URL is the LOCKED api port 8008.
-// Auth is an F1 session bearer token held in memory (a login surface lands with
-// F1 UI; until then callers fall back to fixtures when there's no token). This
-// module is the ONLY place the UI talks to the backend — swap-friendly (§19).
-import { ref } from "vue";
+// AI-CONTEXT: HTTP client for the LONGHAUL API. Base URL is the LOCKED api port
+// 8008. Auth is an F1 session bearer token; it persists to localStorage so a
+// session survives reload (a phone app the driver doesn't re-log every trip).
+// isAuthenticated gates the app (router guard); callers still fall back to
+// fixtures when a request fails offline. This module is the ONLY place the UI
+// talks to the backend — swap-friendly (§19).
+import { ref, computed } from "vue";
 
 export const API_BASE = "http://localhost:8008";
-const token = ref(null);
+const SESSION_KEY = "longhaul.session";
+
+function loadSession() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+const _stored = loadSession();
+const token = ref(_stored.token || null);
+export const account = ref(_stored.account_id || null);
+export const email = ref(_stored.email || null);
+export const isAuthenticated = computed(() => !!token.value);
+
+function persist() {
+  try {
+    if (token.value) {
+      localStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify({ token: token.value, account_id: account.value, email: email.value }),
+      );
+    } else {
+      localStorage.removeItem(SESSION_KEY);
+    }
+  } catch {
+    /* private mode / no storage — session stays in memory */
+  }
+}
 
 export function setToken(value) {
   token.value = value;
+  persist();
+}
+
+export function logout() {
+  token.value = null;
+  account.value = null;
+  email.value = null;
+  persist();
+}
+
+function _adopt(data, userEmail) {
+  token.value = data.token;
+  account.value = data.account_id;
+  email.value = userEmail ?? email.value;
+  persist();
+  return data;
 }
 
 function headers() {
@@ -24,9 +70,18 @@ export async function login(email, password) {
     body: JSON.stringify({ email, password }),
   });
   if (!resp.ok) throw new Error(`login failed: ${resp.status}`);
-  const data = await resp.json();
-  setToken(data.token);
-  return data;
+  return _adopt(await resp.json(), email);
+}
+
+export async function register(email, password) {
+  const resp = await fetch(`${API_BASE}/auth/register`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ email, password }),
+  });
+  if (resp.status === 409) throw new Error("email_taken");
+  if (!resp.ok) throw new Error(`register failed: ${resp.status}`);
+  return _adopt(await resp.json(), email);
 }
 
 export async function fetchOverlay({ lat, lon, radiusM = 8000, preset = "drive" }) {

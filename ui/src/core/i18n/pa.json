@@ -86,5 +86,17 @@
   "profile.risk": "ਡਿਟੈਂਸ਼ਨ ਖ਼ਤਰਾ",
   "profile.best_hour": "ਸਭ ਤੋਂ ਤੇਜ਼ ਘੰਟਾ",
   "profile.stops_basis": "ਦਰਜ ਸਟਾਪ",
-  "profile.risk_none": "ਹਾਲੇ ਕਾਫ਼ੀ ਸਟਾਪ ਨਹੀਂ"
+  "profile.risk_none": "ਹਾਲੇ ਕਾਫ਼ੀ ਸਟਾਪ ਨਹੀਂ",
+  "auth.tagline": "ਪਾਰਕਿੰਗ, ਤੇਲ ਅਤੇ ਭੁਗਤਾਨ — ਇੱਕ ਐਪ।",
+  "auth.email": "ਈਮੇਲ",
+  "auth.password": "ਪਾਸਵਰਡ",
+  "auth.login": "ਲੌਗ ਇਨ",
+  "auth.register": "ਖਾਤਾ ਬਣਾਓ",
+  "auth.to_register": "ਨਵੇਂ ਹੋ? ਖਾਤਾ ਬਣਾਓ",
+  "auth.to_login": "ਖਾਤਾ ਹੈ? ਲੌਗ ਇਨ ਕਰੋ",
+  "auth.error_invalid": "ਈਮੇਲ ਜਾਂ ਪਾਸਵਰਡ ਗਲਤ ਹੈ। ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  "auth.error_taken": "ਇਸ ਈਮੇਲ ਦਾ ਖਾਤਾ ਪਹਿਲਾਂ ਹੈ। ਲੌਗ ਇਨ ਕਰੋ।",
+  "auth.error_network": "ਕੋਈ ਕਨੈਕਸ਼ਨ ਨਹੀਂ। ਸਿਗਨਲ ਚੈੱਕ ਕਰੋ।",
+  "auth.logout": "ਲੌਗ ਆਊਟ",
+  "more.account": "ਖਾਤਾ"
 }

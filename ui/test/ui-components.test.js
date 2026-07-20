@@ -17,7 +17,10 @@ import DocsSurface from "../src/surfaces/DocsSurface.vue";
 import BookingSurface from "../src/surfaces/BookingSurface.vue";
 import FuelSurface from "../src/surfaces/FuelSurface.vue";
 import LoadCalcSurface from "../src/surfaces/LoadCalcSurface.vue";
-import { routes } from "../src/router.js";
+import AuthSurface from "../src/surfaces/AuthSurface.vue";
+import MoreSurface from "../src/surfaces/MoreSurface.vue";
+import { routes, installAuthGuard } from "../src/router.js";
+import { setToken, logout, isAuthenticated } from "../src/core/api.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 
 const routerStub = { global: { stubs: { "router-link": { template: "<a class='rl'><slot/></a>" } } } };
@@ -258,6 +261,97 @@ describe("FacilityProfileSurface — M8 intel (FR6 risk + FR2 fastest hour)", ()
     expect(text).toContain("Fastest hour");
     expect(w.find(".best-hour__figure").text()).toBe("06:00");
     w.unmount();
+  });
+});
+
+describe("AuthSurface + auth guard (F1, PRD §7.1)", () => {
+  beforeEach(() => logout());
+
+  it("logs in and routes to the map; token persists", async () => {
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ token: "tok-123", account_id: "acc-1" }),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      router.push("/login");
+      await router.isReady();
+      const w = mount(AuthSurface, { global: { plugins: [router] } });
+      await w.findAll(".field__input").at(0).setValue("driver@example.com");
+      await w.findAll(".field__input").at(1).setValue("pw-123456");
+      await w.find("form").trigger("submit");
+      await flushPromises();
+      expect(isAuthenticated.value).toBe(true);
+      expect(router.currentRoute.value.name).toBe("map");
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+
+  it("shows an unblaming error on bad credentials (§12.4)", async () => {
+    const fetchStub = vi.fn().mockResolvedValue({ ok: false, status: 401 });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      const w = mount(AuthSurface, { global: { plugins: [router] } });
+      await w.findAll(".field__input").at(0).setValue("driver@example.com");
+      await w.findAll(".field__input").at(1).setValue("wrong");
+      await w.find("form").trigger("submit");
+      await flushPromises();
+      expect(w.find(".auth__error").text()).toContain("wrong");
+      expect(isAuthenticated.value).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("toggles between Log in and Create account", async () => {
+    const router = testRouter();
+    const w = mount(AuthSurface, { global: { plugins: [router] } });
+    expect(w.find(".cta").text()).toContain("Log in");
+    await w.find(".auth__toggle").trigger("click");
+    expect(w.find(".cta").text()).toContain("Create account");
+  });
+
+  it("redirects an unauthenticated visit to a tab into /login", async () => {
+    logout();
+    const router = createRouter({ history: createMemoryHistory(), routes });
+    installAuthGuard(router);
+    await router.push("/money");
+    await router.isReady();
+    expect(router.currentRoute.value.name).toBe("login");
+  });
+
+  it("lets an authenticated driver reach a tab", async () => {
+    setToken("tok-abc");
+    try {
+      const router = createRouter({ history: createMemoryHistory(), routes });
+      installAuthGuard(router);
+      await router.push("/money");
+      await router.isReady();
+      expect(router.currentRoute.value.name).toBe("money");
+    } finally {
+      logout();
+    }
+  });
+});
+
+describe("MoreSurface — account + logout (F1)", () => {
+  it("logs out and returns to /login", async () => {
+    setToken("tok-xyz");
+    const router = createRouter({ history: createMemoryHistory(), routes });
+    installAuthGuard(router);
+    await router.push("/more");
+    await router.isReady();
+    const w = mount(MoreSurface, { global: { plugins: [router] } });
+    expect(w.find(".cta--danger").text()).toContain("Log out");
+    await w.find(".cta--danger").trigger("click");
+    await flushPromises();
+    expect(isAuthenticated.value).toBe(false);
+    expect(router.currentRoute.value.name).toBe("login");
   });
 });
 

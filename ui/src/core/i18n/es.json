@@ -86,5 +86,17 @@
   "profile.risk": "Riesgo de detención",
   "profile.best_hour": "Hora más rápida",
   "profile.stops_basis": "paradas registradas",
-  "profile.risk_none": "Aún no hay suficientes paradas"
+  "profile.risk_none": "Aún no hay suficientes paradas",
+  "auth.tagline": "Estacionamiento, combustible y cobrar — una app.",
+  "auth.email": "Correo",
+  "auth.password": "Contraseña",
+  "auth.login": "Iniciar sesión",
+  "auth.register": "Crear cuenta",
+  "auth.to_register": "¿Nuevo? Crea una cuenta",
+  "auth.to_login": "¿Ya tienes cuenta? Inicia sesión",
+  "auth.error_invalid": "Correo o contraseña incorrectos. Inténtalo de nuevo.",
+  "auth.error_taken": "Ese correo ya tiene cuenta. Inicia sesión.",
+  "auth.error_network": "Sin conexión. Revisa la señal e inténtalo.",
+  "auth.logout": "Cerrar sesión",
+  "more.account": "Cuenta"
 }

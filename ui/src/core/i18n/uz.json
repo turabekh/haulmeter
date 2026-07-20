@@ -86,5 +86,17 @@
   "profile.risk": "Kutish xavfi",
   "profile.best_hour": "Eng tez soat",
   "profile.stops_basis": "qayd etilgan to'xtashlar",
-  "profile.risk_none": "Hali to'xtashlar yetarli emas"
+  "profile.risk_none": "Hali to'xtashlar yetarli emas",
+  "auth.tagline": "Parkovka, yoqilg'i va to'lov — bitta ilova.",
+  "auth.email": "Email",
+  "auth.password": "Parol",
+  "auth.login": "Kirish",
+  "auth.register": "Hisob yaratish",
+  "auth.to_register": "Yangimisiz? Hisob yarating",
+  "auth.to_login": "Hisobingiz bormi? Kiring",
+  "auth.error_invalid": "Email yoki parol noto'g'ri. Qayta urinib ko'ring.",
+  "auth.error_taken": "Bu email allaqachon ro'yxatdan o'tgan. Kiring.",
+  "auth.error_network": "Aloqa yo'q. Signalni tekshiring.",
+  "auth.logout": "Chiqish",
+  "more.account": "Hisob"
 }

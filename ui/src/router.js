@@ -1,6 +1,7 @@
 // AI-CONTEXT: Five-tab routing (design-prd §4). Each tab root is ≤2 taps to any
-// feature (NAV-2); secondary tasks are sheets, not routes (NAV-3). Load/Money/
-// Docs/More are placeholders until their modules land.
+// feature (NAV-2); secondary tasks are sheets, not routes (NAV-3). The app is
+// gated behind F1 auth: routes require a session except /login (meta.public +
+// meta.chrome:false hides the tab shell for the full-screen onboarding flow).
 import { createRouter, createWebHistory } from "vue-router";
 import MapSurface from "./surfaces/MapSurface.vue";
 import FacilityProfileSurface from "./surfaces/FacilityProfileSurface.vue";
@@ -10,10 +11,14 @@ import DocsSurface from "./surfaces/DocsSurface.vue";
 import BookingSurface from "./surfaces/BookingSurface.vue";
 import FuelSurface from "./surfaces/FuelSurface.vue";
 import LoadCalcSurface from "./surfaces/LoadCalcSurface.vue";
-import PlaceholderSurface from "./surfaces/PlaceholderSurface.vue";
+import AuthSurface from "./surfaces/AuthSurface.vue";
+import MoreSurface from "./surfaces/MoreSurface.vue";
+import { isAuthenticated } from "./core/api.js";
 
 export const routes = [
   { path: "/", redirect: "/map" },
+  // full-screen onboarding flow — no tab chrome, no auth required
+  { path: "/login", name: "login", component: AuthSurface, meta: { public: true, chrome: false } },
   { path: "/map", name: "map", component: MapSurface },
   { path: "/facility/:id", name: "facility", component: FacilityProfileSurface },
   // full-screen linear flows (NAV-3); reached from the map card CTAs (NAV-5)
@@ -23,9 +28,21 @@ export const routes = [
   { path: "/load/calc", name: "load-calc", component: LoadCalcSurface },
   { path: "/money", name: "money", component: MoneySurface },
   { path: "/docs", name: "docs", component: DocsSurface },
-  { path: "/more", name: "more", component: PlaceholderSurface, props: { titleKey: "nav.more" } },
+  { path: "/more", name: "more", component: MoreSurface },
 ];
 
+// AI-CONTEXT: the auth gate. No session -> the login flow; already signed in ->
+// never sit on /login. Public routes (login) bypass the check.
+export function installAuthGuard(router) {
+  router.beforeEach((to) => {
+    if (!to.meta.public && !isAuthenticated.value) return { name: "login" };
+    if (to.name === "login" && isAuthenticated.value) return { name: "map" };
+    return true;
+  });
+}
+
 export function createAppRouter() {
-  return createRouter({ history: createWebHistory(), routes });
+  const router = createRouter({ history: createWebHistory(), routes });
+  installAuthGuard(router);
+  return router;
 }
