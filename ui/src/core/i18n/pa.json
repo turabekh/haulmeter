@@ -140,5 +140,11 @@
   "ghost.draft": "ਲਿਖੋ",
   "ghost.english": "ਅੰਗਰੇਜ਼ੀ — ਭੇਜਣ ਲਈ ਤਿਆਰ",
   "ghost.approve": "ਮਨਜ਼ੂਰ ਕਰੋ ਤੇ ਭੇਜੋ",
-  "ghost.sent": "ਭੇਜਿਆ"
+  "ghost.sent": "ਭੇਜਿਆ",
+  "sleep.title": "ਮੈਂ ਕਿੱਥੇ ਸੌਂਵਾਂ?",
+  "sleep.hours": "ਬਚੇ ਘੰਟੇ",
+  "sleep.find": "ਸਟਾਪ ਲੱਭੋ",
+  "sleep.guaranteed": "ਗਾਰੰਟੀਸ਼ੁਦਾ ਥਾਂ",
+  "sleep.fuel": "ਰਾਹ ਵਿੱਚ ਤੇਲ",
+  "sleep.empty": "ਹਾਲੇ ਰੇਂਜ ਵਿੱਚ ਕੋਈ ਸਟਾਪ ਨਹੀਂ।"
 }

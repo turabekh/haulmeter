@@ -267,6 +267,19 @@ export async function draftMessage({ kind, facts, tone }) {
   return resp.json();
 }
 
+export async function fetchSleepPlan({ lat, lon, hosMinutesRemaining, headingDeg = 0 }) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const q = new URLSearchParams({
+    lat,
+    lon,
+    hos_minutes_remaining: hosMinutesRemaining,
+    heading_deg: headingDeg,
+  });
+  const resp = await fetch(`${API_BASE}/intel/sleep?${q}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`sleep failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function submitReview(facilityId, ratings, text) {
   const resp = await fetch(`${API_BASE}/facility/${facilityId}/review`, {
     method: "POST",

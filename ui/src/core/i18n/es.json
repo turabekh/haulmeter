@@ -140,5 +140,11 @@
   "ghost.draft": "Redactarlo",
   "ghost.english": "Inglés — listo para enviar",
   "ghost.approve": "Aprobar y enviar",
-  "ghost.sent": "Enviado"
+  "ghost.sent": "Enviado",
+  "sleep.title": "¿Dónde duermo?",
+  "sleep.hours": "Horas restantes",
+  "sleep.find": "Buscar paradas",
+  "sleep.guaranteed": "Lugar garantizado",
+  "sleep.fuel": "Combustible en ruta",
+  "sleep.empty": "No hay paradas en rango aún."
 }

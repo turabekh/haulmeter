@@ -140,5 +140,11 @@
   "ghost.draft": "Yozish",
   "ghost.english": "Ingliz tili — yuborishga tayyor",
   "ghost.approve": "Tasdiqlab yuborish",
-  "ghost.sent": "Yuborildi"
+  "ghost.sent": "Yuborildi",
+  "sleep.title": "Qayerda uxlayman?",
+  "sleep.hours": "Qolgan soatlar",
+  "sleep.find": "To'xtash joylarini topish",
+  "sleep.guaranteed": "Kafolatlangan joy",
+  "sleep.fuel": "Yo'ldagi yoqilg'i",
+  "sleep.empty": "Hali radiusda to'xtash joylari yo'q."
 }

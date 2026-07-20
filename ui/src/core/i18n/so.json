@@ -140,5 +140,11 @@
   "ghost.draft": "Qor",
   "ghost.english": "Ingiriisi — diyaar u ah dirista",
   "ghost.approve": "Ansixi oo dir",
-  "ghost.sent": "La diray"
+  "ghost.sent": "La diray",
+  "sleep.title": "Xaggee baan seexdaa?",
+  "sleep.hours": "Saacadaha hadhay",
+  "sleep.find": "Raadi joogsiyo",
+  "sleep.guaranteed": "Goob la damaanad qaaday",
+  "sleep.fuel": "Shidaal jidka ku yaal",
+  "sleep.empty": "Weli joogsiyo kuma jiraan xadka."
 }

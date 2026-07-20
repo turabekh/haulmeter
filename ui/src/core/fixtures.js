@@ -119,6 +119,21 @@ export function sampleQuestions() {
   ];
 }
 
+// AI-CONTEXT: fixture "where do I sleep tonight" plan (M8-FR3), pending live
+// /intel/sleep. Guaranteed-bookable first, then predicted availability, nearest.
+export function sampleSleepPlan() {
+  return {
+    range_m: 177000,
+    stops: [
+      { facility_id: "f-3", name: "Yardline Secured Parking", distance_m: 9200, predicted_status: null, guaranteed_bookable: true },
+      { facility_id: "f-1", name: "Loves Travel Stop #212", distance_m: 5400, predicted_status: "some", guaranteed_bookable: false },
+      { facility_id: "f-2", name: "Pilot #77", distance_m: 12800, predicted_status: "full", guaranteed_bookable: false },
+    ],
+    guaranteed: { spot_id: "spot-f3-a1", property_name: "Yardline Secured Parking", price_cents_per_night: 2400 },
+    fuel: { facility_id: "f-5", name: "TA Travel Center", net_cents_per_gal: 394 },
+  };
+}
+
 // AI-CONTEXT: fixture settlement-audit result (M9-FR1), pending live
 // /money/settlements/audit. A flagged discrepancy = evidence-backed pay the
 // carrier didn't pay; "review with your carrier", never legal advice.

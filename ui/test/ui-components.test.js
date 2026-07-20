@@ -23,6 +23,7 @@ import VoiceSheet from "../src/core/components/VoiceSheet.vue";
 import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
 import AuditSurface from "../src/surfaces/AuditSurface.vue";
 import GhostwriterSheet from "../src/core/components/GhostwriterSheet.vue";
+import SleepSheet from "../src/core/components/SleepSheet.vue";
 import { routes, installAuthGuard } from "../src/router.js";
 import { setToken, logout, isAuthenticated } from "../src/core/api.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
@@ -508,6 +509,22 @@ describe("GhostwriterSheet — comms drafting (M11-FR3)", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("SleepSheet — where-do-I-sleep solver (M8-FR3)", () => {
+  it("ranks stops with the guaranteed-bookable starred (offline fixture)", async () => {
+    logout(); // no session -> fixture plan (no network)
+    const w = mount(SleepSheet);
+    await w.find(".cta").trigger("click");
+    await flushPromises();
+    const stops = w.findAll(".stop");
+    expect(stops.length).toBe(3);
+    // the guaranteed-bookable spot leads and carries the star
+    expect(stops.at(0).find(".stop__star").exists()).toBe(true);
+    expect(w.text()).toContain("Guaranteed spot");
+    expect(w.text()).toContain("Fuel on the way");
+    w.unmount();
   });
 });
 

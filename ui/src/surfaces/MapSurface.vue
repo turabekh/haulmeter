@@ -14,6 +14,7 @@ import FacilityCard from "../core/components/FacilityCard.vue";
 import CorridorStack from "../core/components/CorridorStack.vue";
 import ReportSheet from "../core/components/ReportSheet.vue";
 import VoiceSheet from "../core/components/VoiceSheet.vue";
+import SleepSheet from "../core/components/SleepSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { SAMPLE_PINS, SAMPLE_CORRIDOR } from "../core/fixtures.js";
@@ -58,6 +59,7 @@ const pins = computed(() => {
 const selected = ref(null);
 const reporting = ref(false);
 const listening = ref(false);
+const solving = ref(false);
 
 function navigate(pin) {
   const url = `https://www.google.com/maps/dir/?api=1&destination=${pin.lat},${pin.lon}`;
@@ -103,6 +105,10 @@ function submitReport() {
     </template>
     <template v-else>
       <PresetChips v-model="preset" />
+      <!-- M8-FR3: the "where do I sleep tonight" solver, surfaced in Tonight -->
+      <button v-if="preset === 'tonight'" class="sleep-cta" type="button" @click="solving = true">
+        {{ t("sleep.title") }}
+      </button>
       <div class="map__canvas">
         <MapCanvas :pins="pins" @pin-tap="selected = $event" />
         <button class="report-chip" type="button" :aria-label="t('map.report')" @click="reporting = true">
@@ -142,6 +148,10 @@ function submitReport() {
     <BottomSheet :open="listening" :title="t('voice.title')" @close="listening = false">
       <VoiceSheet :driving="isDriving" />
     </BottomSheet>
+
+    <BottomSheet :open="solving" :title="t('sleep.title')" @close="solving = false">
+      <SleepSheet />
+    </BottomSheet>
   </div>
 </template>
 
@@ -174,6 +184,16 @@ function submitReport() {
   transform: translateX(-50%);
   width: 72px;
   height: 72px;
+}
+.sleep-cta {
+  margin: var(--s-2) var(--s-4) 0;
+  min-height: 44px;
+  border-radius: var(--r-control);
+  background: var(--ink-1);
+  border: 1px solid var(--line-1);
+  color: var(--text-1);
+  font-size: var(--type-label-size);
+  font-weight: 500;
 }
 .map__canvas {
   position: relative;
