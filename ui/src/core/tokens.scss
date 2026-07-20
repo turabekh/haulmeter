@@ -149,3 +149,34 @@ $icon-lg: 28px;
   --type-title-size: #{$type-title-driving};
   --type-meter-size: #{$type-meter-driving};
 }
+
+// AI-CONTEXT: §6.1 C-3 light theme — dark is primary; light DERIVES by inverting
+// the surface/text ramps around the same accents (accents darkened one step for
+// contrast on light). Only the 12 color tokens change; type/space/radius/motion/
+// touch are theme-invariant. Values derived + owner-approved 2026-07-20
+// (design-prd §23 Decision Log); every ratio verified against §16 in
+// ui/test/contrast.test.js. Toggled by system setting AND manual override.
+@mixin longhaul-light {
+  --ink-0: #EDF1F5;
+  --ink-1: #F7F9FB;
+  --ink-2: #FFFFFF;
+  --line-1: #CFD8E1;
+  --text-1: #10161C;
+  --text-2: #47535F;
+  --text-3: #5C6B77;
+  --shield-500: #2C5FC4;
+  --shield-600: #22509E;
+  --ledger-500: #2E8A4B;
+  --marker-500: #A85D00;
+  --flare-500: #C5343A;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    @include longhaul-light;
+  }
+}
+
+:root[data-theme="light"] {
+  @include longhaul-light;
+}

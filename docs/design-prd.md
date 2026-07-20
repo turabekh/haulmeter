@@ -372,6 +372,7 @@ Property-Owner Portal, Fleet Workspace, Public Scorecard: desktop-web-first (the
 Format: `DATE · AREA · DECISION · RATIONALE · STATUS(proposed/approved)`
 
 - 2026-07-20 · Foundation · Adopted this document v1.0 as the binding design constitution; The Meter designated the sole signature element; IBM Plex Sans/Mono + Noto Sans Gurmukhi locked as the only type families; five-tab IA locked. · Baseline decisions of record. · approved
+- 2026-07-20 · Tokens (§6.1/C-3) · Derived the **light theme** surface/text ramps (dark stays primary; §6.1 gave only qualitative "invert the ramps around the same accents, accents darken one step"). Locked light values — surfaces `--ink-0 #EDF1F5 / --ink-1 #F7F9FB / --ink-2 #FFFFFF`, hairline `--line-1 #CFD8E1`; text `--text-1 #10161C / --text-2 #47535F / --text-3 #5C6B77`; accents one step darker `--shield-500 #2C5FC4 / --shield-600 #22509E / --ledger-500 #2E8A4B / --marker-500 #A85D00 / --flare-500 #C5343A`. Only the 12 color tokens change; type/space/radius/motion/touch are theme-invariant. Toggled by system setting + manual override (`prefers-color-scheme` + `[data-theme]`). · Blue-cast near-white bg mirrors the dark "never pure #000" anchor (never pure #FFF); every ratio verified against §16 (text-1 ≥7:1 AAA, text-2 ≥4.5:1, text-3 ≥3:1, shield ≥3:1) in both themes by `ui/test/contrast.test.js` in CI. Owner-approved to derive. · approved
 
 ---
 
