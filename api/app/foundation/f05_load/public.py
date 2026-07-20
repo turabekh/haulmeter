@@ -5,6 +5,7 @@ enforced). The Stop is the unit around which F3 geofencing arms and F4 evidence
 accrues; arm_stop wires both. Claims are worthless without this contractual
 context. Consumed by M3, M4, M5, M8, M9, M11, M12.
 """
+
 from .domain.enums import (
     CounterpartyKind,
     LoadSource,
@@ -22,7 +23,9 @@ from .domain.service import (
     create_load_from_parsed_terms,
     disarm_stop,
     effective_detention_terms,
+    get_counterparty,
     get_load,
+    get_stop,
     list_stops,
     record_claim,
     record_payment_observation,
@@ -46,7 +49,9 @@ __all__ = [
     "create_load_from_parsed_terms",
     "disarm_stop",
     "effective_detention_terms",
+    "get_counterparty",
     "get_load",
+    "get_stop",
     "list_stops",
     "record_claim",
     "record_payment_observation",

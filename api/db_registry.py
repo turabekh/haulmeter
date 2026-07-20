@@ -24,6 +24,7 @@ MODEL_MODULES = [
     "app.foundation.f14_admin.domain.models",
     "app.foundation.f15_localization.domain.models",
     "app.modules.m02_facility_intel.domain.models",
+    "app.modules.m03_detention.domain.models",
 ]
 
 

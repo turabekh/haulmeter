@@ -1,0 +1,262 @@
+"""AI-CONTEXT: M3 Detention Tracker & Recovery (PRD §8.3) — the differentiator.
+Zero-effort GPS-verified detention: the driver drives to the stop and does
+nothing; the app proves arrival, runs the clock, warns the broker, invoices the
+moment detention accrues, and opens a receivable. Composes foundation publics
+only: F1 (invoicing gate), F3 (geofence events), F4 (hash-chained evidence +
+pack), F5 (stop/load/counterparty), F7 (receivable), F8 (counterparty notices),
+F13/F14 (flags/gates/admin). The clock math is the money core — exact, integer
+cents. Runs behind the F13 flag m03_detention, gated on legal + collection-partner
+validation gates.
+"""
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.foundation.f01_identity import public as identity
+from app.foundation.f03_location import public as location
+from app.foundation.f04_evidence import public as evidence
+from app.foundation.f05_load import public as loads
+from app.foundation.f07_ledger import public as ledger
+from app.foundation.f08_notifications import public as notify
+
+from .enums import ClaimMode, ClaimState, DetentionPhase, DetentionTrigger
+from .models import DetentionClaim
+
+FLAG_KEY = "m03_detention"
+MODULE = "m03"
+PRE_DETENTION_THRESHOLD = timedelta(minutes=30)  # M3-FR3 default (-> F13 config)
+DUNNING_DAYS = [3, 10, 21]  # M3-FR6 (-> F13 config)
+GATES = ["legal_signoff", "collection_partner_agreement"]
+
+
+@dataclass
+class DetentionState:
+    phase: DetentionPhase
+    free_time_remaining_seconds: int
+    detention_seconds: int
+    amount_cents: int
+
+
+# --- Detention clock math (the money core) ---
+def compute_detention(
+    trigger_time: datetime,
+    free_time_minutes: int | None,
+    rate_cents_per_hour: int | None,
+    now: datetime,
+    departed_at: datetime | None = None,
+) -> DetentionState:
+    free = (free_time_minutes or 0) * 60
+    detention_start = trigger_time + timedelta(seconds=free)
+    if departed_at is None and now < detention_start:
+        remaining = (detention_start - now).total_seconds()
+        return DetentionState(DetentionPhase.within_free_time, int(remaining), 0, 0)
+    end = departed_at or now
+    accrued = max(0.0, (end - detention_start).total_seconds())
+    amount = round(accrued / 3600 * (rate_cents_per_hour or 0))
+    phase = DetentionPhase.ended if departed_at is not None else DetentionPhase.accruing
+    return DetentionState(phase, 0, int(accrued), int(amount))
+
+
+def register_module(db: Session) -> None:
+    from app.foundation.f13_flags import public as flags
+
+    flags.register_flag(db, FLAG_KEY, description="M3 Detention Tracker & Recovery")
+    for gate in GATES:
+        flags.add_gate(db, FLAG_KEY, gate)
+    from app.foundation.f14_admin import public as admin
+
+    admin.register_admin_view(db, "m03.claims", MODULE, "Claims Pipeline", "/admin/m03/claims")
+
+
+def _default_mode(db: Session, account_id) -> ClaimMode:
+    profile = db.get(identity.DriverProfile, account_id)
+    return ClaimMode.invoice if identity.can_invoice(profile) else ClaimMode.evidence_only
+
+
+def start_claim(
+    db: Session,
+    stop,
+    mode: ClaimMode | None = None,
+    trigger: DetentionTrigger = DetentionTrigger.arrival,
+) -> DetentionClaim:
+    load = loads.get_load(db, stop.load_id)
+    if not stop.geofence_armed:
+        loads.arm_stop(db, stop)  # opens the F4 evidence log + arms the F3 geofence
+    free_time, rate = loads.effective_detention_terms(db, stop)
+    claim = DetentionClaim(
+        stop_ref=stop.id,
+        facility_ref=stop.facility_id,
+        account_id=load.account_id,
+        counterparty_ref=load.counterparty_id,
+        mode=mode or _default_mode(db, load.account_id),
+        trigger=trigger,
+        free_time_minutes=free_time,
+        detention_rate_cents_per_hour=rate,
+        evidence_log_ref=stop.evidence_log_id,
+    )
+    db.add(claim)
+    db.flush()
+    return claim
+
+
+# --- Evidence accrual (fills the F5->F4 seam; F3 events -> hash-chained log) ---
+def accrue_events(db: Session, claim: DetentionClaim) -> int:
+    log = db.get(evidence.EvidenceLog, claim.evidence_log_ref)
+    accrued = {r.payload.get("event_id") for r in log.records if r.payload}
+    added = 0
+    for event in location.list_events(db, claim.account_id, claim.facility_ref):
+        if str(event.id) in accrued:
+            continue
+        evidence.append_record(
+            db,
+            log,
+            evidence.RecordType.GEOFENCE,
+            {"event": event.event_type.value, "event_id": str(event.id)},
+            occurred_at=event.occurred_at,
+        )
+        added += 1
+    return added
+
+
+def _arrival_departure(db: Session, claim: DetentionClaim):
+    arrival = departure = None
+    for event in location.list_events(db, claim.account_id, claim.facility_ref):
+        if event.event_type == location.GeofenceEventType.ENTER and arrival is None:
+            arrival = event.occurred_at
+        elif event.event_type == location.GeofenceEventType.EXIT:
+            departure = event.occurred_at
+    return arrival, departure
+
+
+def clock(db: Session, claim: DetentionClaim, now: datetime) -> DetentionState:
+    stop = loads.get_stop(db, claim.stop_ref)
+    arrival, departure = _arrival_departure(db, claim)
+    if claim.trigger == DetentionTrigger.appointment and stop.appointment_start is not None:
+        trigger_time = stop.appointment_start
+    else:
+        trigger_time = arrival or now
+    return compute_detention(
+        trigger_time, claim.free_time_minutes, claim.detention_rate_cents_per_hour, now, departure
+    )
+
+
+# --- Counterparty notices (F8, contract-citing) ---
+def _counterparty_email(db: Session, claim: DetentionClaim) -> str | None:
+    if claim.counterparty_ref is None:
+        return None
+    cp = loads.get_counterparty(db, claim.counterparty_ref)
+    return cp.contact_email if cp is not None else None
+
+
+def send_pre_detention_notice(
+    db: Session, claim: DetentionClaim, gateway, now: datetime
+) -> notify.OutboundMessage | None:
+    state = clock(db, claim, now)
+    if state.phase != DetentionPhase.within_free_time:
+        return None
+    if state.free_time_remaining_seconds > PRE_DETENTION_THRESHOLD.total_seconds():
+        return None
+    return _send_counterparty(
+        db,
+        claim,
+        gateway,
+        now,
+        subject="Free time expiring — detention will begin",
+        body="Per the rate confirmation, free time is nearly used at this stop. "
+        "Detention will begin accruing shortly.",
+    )
+
+
+def send_detention_start_notice(
+    db: Session, claim: DetentionClaim, gateway, now: datetime
+) -> notify.OutboundMessage | None:
+    state = clock(db, claim, now)
+    if state.phase == DetentionPhase.within_free_time:
+        return None
+    return _send_counterparty(
+        db,
+        claim,
+        gateway,
+        now,
+        subject="Detention now accruing",
+        body="Per the rate confirmation, free time has been exceeded at this stop; "
+        "detention is now accruing at the contracted rate.",
+    )
+
+
+def _send_counterparty(db, claim, gateway, now, subject, body):
+    to_ref = _counterparty_email(db, claim) or "counterparty@unknown"
+    thread = notify.create_thread(
+        db, claim.account_id, subject=subject, counterparty_ref=claim.counterparty_ref
+    )
+    return notify.send_counterparty_message(db, thread, body, gateway, to_ref, now=now)
+
+
+# --- Claim pack on EXIT (M3-FR5 / FR9) ---
+def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=None) -> dict:
+    accrue_events(db, claim)
+    state = clock(db, claim, now)
+    claim.detention_seconds = state.detention_seconds
+    claim.amount_cents = state.amount_cents
+
+    log = db.get(evidence.EvidenceLog, claim.evidence_log_ref)
+    evidence.anchor_chain(db, log)
+    pack = evidence.compose_pack(db, log, evidence.PackTemplate.detention_claim)
+
+    receivable = None
+    if claim.mode == ClaimMode.invoice and claim.amount_cents > 0:
+        receivable = ledger.create_receivable(
+            db,
+            claim.account_id,
+            ledger.ReceivableKind.detention,
+            claim.amount_cents,
+            counterparty_ref=claim.counterparty_ref,
+        )
+        claim.receivable_ref = receivable.id
+        claim.state = ClaimState.invoiced
+        if claim.counterparty_ref is not None:
+            cp = loads.get_counterparty(db, claim.counterparty_ref)
+            if cp is not None:
+                loads.record_claim(db, cp)
+        if gateway is not None:
+            _send_counterparty(
+                db,
+                claim,
+                gateway,
+                now,
+                subject="Detention invoice",
+                body="Please find attached the GPS-verified detention evidence and invoice "
+                "per the rate confirmation.",
+            )
+    else:
+        claim.state = ClaimState.exported  # company-driver: pack for carrier, no invoice
+    db.flush()
+    return {"pack": pack, "claim": claim, "receivable": receivable}
+
+
+# --- Dunning cadence (M3-FR6) ---
+def dunning_schedule(invoiced_at: datetime) -> list[dict]:
+    actions = ["nudge", "firm", "escalation_offer"]
+    return [
+        {"day": day, "action": action, "at": invoiced_at + timedelta(days=day)}
+        for day, action in zip(DUNNING_DAYS, actions, strict=True)
+    ]
+
+
+def escalate(db: Session, claim: DetentionClaim, external_ref: str | None = None) -> DetentionClaim:
+    # AI-CONTEXT: M3-FR7 hand-off to the licensed collection partner — seam.
+    # The partner integration + fee tier are wired at activation (F13 gate).
+    claim.state = ClaimState.escalated
+    db.flush()
+    return claim
+
+
+def get_claim(db: Session, claim_id) -> DetentionClaim | None:
+    return db.get(DetentionClaim, claim_id)
+
+
+def claim_for_stop(db: Session, stop_ref) -> DetentionClaim | None:
+    return db.scalar(select(DetentionClaim).where(DetentionClaim.stop_ref == stop_ref))

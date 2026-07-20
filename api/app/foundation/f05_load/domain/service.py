@@ -107,6 +107,14 @@ def get_load(db: Session, load_id) -> Load | None:
     return db.get(Load, load_id)
 
 
+def get_stop(db: Session, stop_id) -> Stop | None:
+    return db.get(Stop, stop_id)
+
+
+def get_counterparty(db: Session, counterparty_id) -> Counterparty | None:
+    return db.get(Counterparty, counterparty_id)
+
+
 # --- Stops ---
 def add_stop(
     db: Session,
@@ -122,9 +130,7 @@ def add_stop(
     if facility_registry.get_facility(db, facility_id) is None:
         raise FacilityNotFound(str(facility_id))
     if sequence is None:
-        current_max = db.scalar(
-            select(func.max(Stop.sequence)).where(Stop.load_id == load.id)
-        )
+        current_max = db.scalar(select(func.max(Stop.sequence)).where(Stop.load_id == load.id))
         sequence = 0 if current_max is None else current_max + 1
     stop = Stop(
         load_id=load.id,
@@ -177,6 +183,4 @@ def disarm_stop(db: Session, stop: Stop, occurred_at: datetime | None = None) ->
 
 
 def list_stops(db: Session, load: Load) -> list[Stop]:
-    return list(
-        db.scalars(select(Stop).where(Stop.load_id == load.id).order_by(Stop.sequence))
-    )
+    return list(db.scalars(select(Stop).where(Stop.load_id == load.id).order_by(Stop.sequence)))
