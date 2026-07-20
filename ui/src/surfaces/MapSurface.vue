@@ -4,7 +4,7 @@
      DRIVING (§5/§11.4): Corridor mode replaces free-pan; taps deferred-safe.
      Data is fixture-backed pending the M1 HTTP API (see core/fixtures.js). -->
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { CircleDot } from "lucide-vue-next";
 import MapCanvas from "../core/components/MapCanvas.vue";
 import PresetChips from "../core/components/PresetChips.vue";
@@ -15,6 +15,7 @@ import ReportSheet from "../core/components/ReportSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { SAMPLE_PINS, SAMPLE_CORRIDOR } from "../core/fixtures.js";
+import { fetchOverlay } from "../core/api.js";
 
 const { isDriving } = useDriverState();
 const { t } = useI18n();
@@ -28,13 +29,25 @@ const PRESET_TYPES = {
 };
 const PARKING_RANK = { empty: 0, some: 1, null: 2, full: 3 };
 
+// live pins from the M1 API when a session exists; otherwise fixtures (§ api.js)
+const livePins = ref(null);
+async function loadOverlay() {
+  try {
+    // AI-CONTEXT: a real map centers on the driver's GPS; fixed center pending geolocation wiring
+    livePins.value = await fetchOverlay({ lat: 32.78, lon: -96.8, preset: preset.value });
+  } catch {
+    livePins.value = null; // fall back to fixtures (unauthenticated / offline)
+  }
+}
+onMounted(loadOverlay);
+watch(preset, loadOverlay);
+
 const pins = computed(() => {
+  if (livePins.value) return livePins.value; // API already preset-filtered
   const types = PRESET_TYPES[preset.value];
   let list = SAMPLE_PINS.filter((p) => types.includes(p.facility_type));
   if (preset.value === "tonight") {
-    list = [...list].sort(
-      (a, b) => (PARKING_RANK[a.status] ?? 2) - (PARKING_RANK[b.status] ?? 2),
-    );
+    list = [...list].sort((a, b) => (PARKING_RANK[a.status] ?? 2) - (PARKING_RANK[b.status] ?? 2));
   }
   return list;
 });

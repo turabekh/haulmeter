@@ -89,11 +89,13 @@ $icon-lg: 28px;
   --ledger-500: #{$ledger-500};
   --marker-500: #{$marker-500};
   --flare-500: #{$flare-500};
-  // AI-CONTEXT: label color on a filled interactive-accent (shield) button.
-  // NOT in design-prd §6 — added as the smallest reversible choice (§0.3) and
-  // logged PROPOSED in §23, pending owner confirmation. Dark = ink-0 (highest
-  // available contrast on the light-ish dark shield, 4.24:1); light = white.
-  --on-accent: #{$ink-0};
+  // AI-CONTEXT: label color on a filled interactive-accent button. Added token
+  // (design-prd §23, owner deferred to best judgment). Filled primary buttons use
+  // the shield-600 step as fill (--accent-fill) so a white label meets AA/AAA in
+  // both themes (dark 5.93:1, light 7.75:1); shield-500 stays the accent for
+  // links/active/focus. --on-accent is theme-invariant white.
+  --on-accent: #FFFFFF;
+  --accent-fill: #{$shield-600};
 
   --font-sans: #{$font-sans};
   --font-mono: #{$font-mono};
@@ -175,6 +177,7 @@ $icon-lg: 28px;
   --marker-500: #A85D00;
   --flare-500: #C5343A;
   --on-accent: #FFFFFF;
+  --accent-fill: #22509E;
 }
 
 @media (prefers-color-scheme: light) {

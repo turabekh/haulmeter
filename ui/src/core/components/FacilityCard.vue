@@ -83,7 +83,7 @@ const fuel = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_price
   min-height: 56px;
   margin-top: var(--s-4);
   border-radius: var(--r-control);
-  background: var(--shield-500);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-size: var(--type-label-size);
   font-weight: 500;

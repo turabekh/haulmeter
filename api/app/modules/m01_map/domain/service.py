@@ -122,7 +122,13 @@ def submit_status(
     submitted_at: datetime,
 ):
     # geofence-presence proof + points are enforced inside F10 (PRD M1-FR7)
-    return crowd.submit(db, account_id, facility_id, signal_type, value, submitted_at=submitted_at)
+    submission = crowd.submit(
+        db, account_id, facility_id, signal_type, value, submitted_at=submitted_at
+    )
+    # refresh the aggregated belief so the pin reflects it immediately
+    # (M1 DoD: report -> aggregate -> pin badge under 60s)
+    crowd.update_belief(db, facility_id, signal_type, as_of=submitted_at)
+    return submission
 
 
 def queue_status_offline(

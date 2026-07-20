@@ -77,11 +77,11 @@ describe("token contrast (design-prd §16, both themes)", () => {
       expect(ratio(p.shield, p.ink[0])).toBeGreaterThanOrEqual(3);
     });
 
-    // PROPOSED --on-accent (design-prd §23): dark = ink-0, light = white.
-    // Dark lands at 4.24:1 (just under AA) pending owner resolution; assert ≥4.
-    it(`${theme}: on-accent label on shield ≥4:1`, () => {
-      const onAccent = theme === "dark" ? darkVar("ink-0") : lightVar("on-accent");
-      expect(ratio(onAccent, p.shield)).toBeGreaterThanOrEqual(4);
+    // --on-accent (white) on the primary-button fill (--accent-fill = shield-600)
+    // meets AA in both themes (dark 5.93:1, light 7.75:1). design-prd §23.
+    it(`${theme}: white on-accent on accent-fill ≥4.5:1 (AA)`, () => {
+      const accentFill = theme === "dark" ? darkVar("shield-600") : lightVar("accent-fill");
+      expect(ratio("#FFFFFF", accentFill)).toBeGreaterThanOrEqual(4.5);
     });
   }
 });
