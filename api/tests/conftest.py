@@ -6,7 +6,7 @@ from app.core.config import get_settings
 from app.core.db import Base
 from db_registry import import_all_models
 
-SCHEMAS = ["f01", "f02", "f03", "f04", "f05", "f06"]
+SCHEMAS = ["f01", "f02", "f03", "f04", "f05", "f06", "f07"]
 TEST_DB = "longhaul_test"
 
 
