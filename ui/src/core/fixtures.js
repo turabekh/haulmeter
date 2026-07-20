@@ -52,7 +52,30 @@ export const SAMPLE_PINS = [
     badges: [],
     freshness: null,
   },
+  {
+    // M7: a fuel-network station — the badge carries gross/net/savings (cents)
+    facility_id: "f-5",
+    name: "TA Travel Center",
+    facility_type: "fuel_station",
+    shape: "circle",
+    lat: 32.82,
+    lon: -96.81,
+    status: null,
+    badges: [
+      { kind: "fuel_net", gross: 419, net: 394, savings: 25, is_network: true, station_ref: "station-f5" },
+    ],
+    freshness: { reported_at: minsAgo(20), sample_size: 4 },
+  },
 ];
+
+// AI-CONTEXT: fixture fuel savings-to-date (M7-FR4), pending live /fuel/analytics.
+// Shape matches driver_analytics() exactly (gallons in thousandths, money cents).
+export const SAMPLE_FUEL_ANALYTICS = {
+  gallons_milli: 1450000,
+  spend_cents: 571300,
+  savings_cents: 36250,
+  txn_count: 9,
+};
 
 // AI-CONTEXT: fixture facility profile (M2) for the profile surface pending auth.
 // Shape matches GET /facility/{id}/profile exactly.

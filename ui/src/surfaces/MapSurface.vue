@@ -77,6 +77,17 @@ function book(pin) {
     query: { name: pin.name, nightly: badge?.value ?? 0 },
   });
 }
+function fuel(pin) {
+  // NAV-5 cross-link into the full-screen fuel flow; net/gross/savings (cents)
+  // ride on the fuel_net badge (M7 net-price layer).
+  const badge = pin.badges?.find((b) => b.kind === "fuel_net");
+  selected.value = null;
+  router.push({
+    name: "fuel",
+    params: { stationId: badge?.station_ref ?? pin.facility_id },
+    query: { name: pin.name, gross: badge?.gross ?? 0, net: badge?.net ?? 0, savings: badge?.savings ?? 0 },
+  });
+}
 function submitReport() {
   // AI-CONTEXT: server enforces geofence-presence proof + points (F10/M1). API seam.
   reporting.value = false;
@@ -105,6 +116,7 @@ function submitReport() {
         @navigate="navigate"
         @report="report"
         @book="book"
+        @fuel="fuel"
       />
     </BottomSheet>
 

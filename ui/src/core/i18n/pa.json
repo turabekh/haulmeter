@@ -60,5 +60,15 @@
   "booking.total": "ਤੁਸੀਂ ਦਿਓਗੇ",
   "booking.booked": "ਬੁੱਕ ਹੋ ਗਿਆ",
   "booking.confirmation": "ਤੁਹਾਡੀ ਥਾਂ ਰਾਖਵੀਂ ਹੈ। ਪਹੁੰਚਣ 'ਤੇ ਇਹ ਦਿਖਾਓ।",
-  "booking.done": "ਹੋ ਗਿਆ"
+  "booking.done": "ਹੋ ਗਿਆ",
+  "facility.fuel_here": "ਇੱਥੇ ਤੇਲ ਭਰੋ",
+  "fuel.net": "ਨੈੱਟ",
+  "fuel.save": "ਬਚਾਓ",
+  "fuel.title": "ਤੇਲ",
+  "fuel.gallons": "ਗੈਲਨ",
+  "fuel.you_save": "ਤੁਸੀਂ ਬਚਾਉਂਦੇ ਹੋ",
+  "fuel.get_code": "ਪੰਪ ਕੋਡ ਲਓ",
+  "fuel.show_pump": "ਇਹ ਪੰਪ 'ਤੇ ਦਿਖਾਓ",
+  "fuel.code": "ਪੰਪ ਕੋਡ",
+  "fuel.saved": "ਤੇਲ ਬਚਾਇਆ"
 }

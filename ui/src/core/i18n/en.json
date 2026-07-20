@@ -60,5 +60,15 @@
   "booking.total": "You pay",
   "booking.booked": "Booked",
   "booking.confirmation": "Your spot is reserved. Show this on arrival.",
-  "booking.done": "Done"
+  "booking.done": "Done",
+  "facility.fuel_here": "Fuel here",
+  "fuel.net": "net",
+  "fuel.save": "save",
+  "fuel.title": "Fuel",
+  "fuel.gallons": "Gallons",
+  "fuel.you_save": "You save",
+  "fuel.get_code": "Get pump code",
+  "fuel.show_pump": "Show this at the pump",
+  "fuel.code": "Pump code",
+  "fuel.saved": "Fuel saved"
 }

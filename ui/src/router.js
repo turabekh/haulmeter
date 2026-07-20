@@ -8,14 +8,16 @@ import LoadSurface from "./surfaces/LoadSurface.vue";
 import MoneySurface from "./surfaces/MoneySurface.vue";
 import DocsSurface from "./surfaces/DocsSurface.vue";
 import BookingSurface from "./surfaces/BookingSurface.vue";
+import FuelSurface from "./surfaces/FuelSurface.vue";
 import PlaceholderSurface from "./surfaces/PlaceholderSurface.vue";
 
 export const routes = [
   { path: "/", redirect: "/map" },
   { path: "/map", name: "map", component: MapSurface },
   { path: "/facility/:id", name: "facility", component: FacilityProfileSurface },
-  // full-screen linear checkout (NAV-3); reached from the map Book CTA (NAV-5)
+  // full-screen linear flows (NAV-3); reached from the map card CTAs (NAV-5)
   { path: "/book/:spotId", name: "book", component: BookingSurface },
+  { path: "/fuel/:stationId", name: "fuel", component: FuelSurface },
   { path: "/load", name: "load", component: LoadSurface },
   { path: "/money", name: "money", component: MoneySurface },
   { path: "/docs", name: "docs", component: DocsSurface },

@@ -86,6 +86,37 @@ export async function bookSpot({ spotId, startAt, endAt }) {
   return resp.json();
 }
 
+export async function fetchFuelCorridor({ lat, lon, headingDeg = 0, maxDistanceM = 40000, gallons = 100 }) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const q = new URLSearchParams({
+    lat,
+    lon,
+    heading_deg: headingDeg,
+    max_distance_m: maxDistanceM,
+    gallons,
+  });
+  const resp = await fetch(`${API_BASE}/fuel/corridor?${q}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`fuel corridor failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchFuelAnalytics() {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/fuel/analytics`, { headers: headers() });
+  if (!resp.ok) throw new Error(`fuel analytics failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function issuePumpCode({ stationId, gallons }) {
+  const resp = await fetch(`${API_BASE}/fuel/pump-code`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ station_id: stationId, gallons }),
+  });
+  if (!resp.ok) throw new Error(`pump-code failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function submitReview(facilityId, ratings, text) {
   const resp = await fetch(`${API_BASE}/facility/${facilityId}/review`, {
     method: "POST",

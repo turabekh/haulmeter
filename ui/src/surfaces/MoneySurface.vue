@@ -10,17 +10,23 @@ import TheMeter from "../core/components/TheMeter.vue";
 import { useI18n } from "../core/i18n.js";
 import { formatMoney } from "../core/meter.js";
 import { receivableStatusToken } from "../core/presentation.js";
-import { fetchOwed } from "../core/api.js";
-import { SAMPLE_OWED } from "../core/fixtures.js";
+import { fetchOwed, fetchFuelAnalytics } from "../core/api.js";
+import { SAMPLE_OWED, SAMPLE_FUEL_ANALYTICS } from "../core/fixtures.js";
 
 const { t } = useI18n();
 const rows = ref(SAMPLE_OWED);
+const fuel = ref(SAMPLE_FUEL_ANALYTICS);
 
 onMounted(async () => {
   try {
     rows.value = await fetchOwed();
   } catch {
     rows.value = SAMPLE_OWED; // unauthenticated / offline
+  }
+  try {
+    fuel.value = await fetchFuelAnalytics();
+  } catch {
+    fuel.value = SAMPLE_FUEL_ANALYTICS; // unauthenticated / offline
   }
 });
 
@@ -64,6 +70,15 @@ function stateLabel(state) {
         </div>
       </li>
     </ul>
+
+    <!-- fuel savings-to-date (design-prd §238 savings row; M7-FR4) -->
+    <div v-if="fuel.txn_count > 0" class="savings">
+      <div class="savings__main">
+        <span class="row__kind">{{ t("fuel.saved") }}</span>
+        <span class="savings__gallons">{{ Math.round(fuel.gallons_milli / 1000) }} {{ t("fuel.gallons") }}</span>
+      </div>
+      <span class="savings__amount">{{ formatMoney(fuel.savings_cents) }}</span>
+    </div>
   </div>
 </template>
 
@@ -134,5 +149,35 @@ function stateLabel(state) {
   font-family: var(--font-mono);
   font-size: var(--type-caption-size);
   color: var(--text-3);
+}
+.savings {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  background: var(--ink-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
+}
+.savings__main {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.savings__gallons {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--type-caption-size);
+  color: var(--text-3);
+}
+.savings__amount {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--type-title-size);
+  color: var(--ledger-500);
 }
 </style>

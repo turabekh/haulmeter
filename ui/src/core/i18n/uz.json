@@ -60,5 +60,15 @@
   "booking.total": "To'laysiz",
   "booking.booked": "Band qilindi",
   "booking.confirmation": "Joyingiz band qilindi. Yetib borganda buni ko'rsating.",
-  "booking.done": "Tayyor"
+  "booking.done": "Tayyor",
+  "facility.fuel_here": "Shu yerda yoqilg'i",
+  "fuel.net": "sof",
+  "fuel.save": "tejang",
+  "fuel.title": "Yoqilg'i",
+  "fuel.gallons": "Gallon",
+  "fuel.you_save": "Siz tejaysiz",
+  "fuel.get_code": "Nasos kodini olish",
+  "fuel.show_pump": "Buni nasosda ko'rsating",
+  "fuel.code": "Nasos kodi",
+  "fuel.saved": "Yoqilg'i tejaldi"
 }

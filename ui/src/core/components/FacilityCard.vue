@@ -1,14 +1,15 @@
 <!-- AI-CONTEXT: Facility card content (design-prd §10.1) shown inside the pin
-     bottom sheet. Glanceable: name + status pill + freshness (§11.7) + fuel
-     figure (Mono, §6.2 T-2) + ONE primary action (§Principle 4 / §227: the
-     parking sheet's single CTA is contextual — Book / Navigate). A bookable
-     parking_property (M6) leads with "Book spot — $XX" (§12.2: the button says
-     exactly what happens; ONE final price, §Anti-pattern 8 no hidden fees) and
-     deep-links to the full-screen booking checkout (NAV-3/NAV-5). Otherwise the
-     lead is Navigate, the external-nav deep-link handoff (M1-FR8). -->
+     bottom sheet. Glanceable: name + status pill + freshness (§11.7) + a money
+     figure (Mono, §6.2 T-2) + ONE contextual primary action (§Principle 4 /
+     §227). The lead action is contextual by facility:
+       · bookable parking_property (M6) -> "Book spot — $XX" (§12.2, one price)
+       · fuel-network station (M7)       -> "Fuel here" with the NET price shown
+       · everything else                 -> Navigate (external-nav handoff, M1-FR8)
+     Each deep-links (NAV-5) to its full-screen flow; Navigate always stays
+     reachable as the secondary. -->
 <script setup>
 import { computed } from "vue";
-import { Navigation, SquareParking } from "lucide-vue-next";
+import { Navigation, SquareParking, Fuel } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import StatusPill from "./StatusPill.vue";
 import { freshnessLabel, isStale } from "../presentation.js";
@@ -18,7 +19,7 @@ import { useI18n } from "../i18n.js";
 const props = defineProps({
   pin: { type: Object, required: true },
 });
-const emit = defineEmits(["navigate", "report", "book"]);
+const emit = defineEmits(["navigate", "report", "book", "fuel"]);
 const { t } = useI18n();
 const router = useRouter();
 
@@ -29,11 +30,14 @@ function viewFacility() {
 const now = Date.now();
 const fresh = computed(() => freshnessLabel(props.pin.freshness, now));
 const stale = computed(() => isStale(props.pin.freshness, now));
-const fuel = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_price")?.value ?? null);
+const grossFuel = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_price")?.value ?? null);
 // M6: a bookable badge carries the take-inclusive nightly price in cents.
 const nightlyCents = computed(() => props.pin.badges?.find((b) => b.kind === "bookable")?.value ?? null);
 const bookable = computed(() => nightlyCents.value !== null);
 const bookLabel = computed(() => `${t("facility.book")} — ${formatMoney(nightlyCents.value)}`);
+// M7: a fuel_net badge carries {gross, net, savings, is_network} in cents.
+const fuelNet = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_net") ?? null);
+const fuelable = computed(() => !!fuelNet.value?.is_network);
 </script>
 
 <template>
@@ -43,23 +47,35 @@ const bookLabel = computed(() => `${t("facility.book")} — ${formatMoney(nightl
       <StatusPill v-if="pin.status" :status="pin.status" :hollow="stale" />
       <span v-if="fresh" class="fac__fresh">{{ fresh }}</span>
     </div>
-    <div v-if="fuel !== null" class="fac__fuel">
-      <span class="fac__fuel-figure">${{ fuel.toFixed(2) }}</span>
+
+    <!-- M7: NET price leads for a fuel-network station; savings called out (§12.2) -->
+    <div v-if="fuelNet" class="fac__fuel">
+      <span class="fac__fuel-figure">{{ formatMoney(fuelNet.net) }}</span>
+      <span class="fac__fuel-label">{{ t("fuel.net") }}/gal</span>
+      <span v-if="fuelNet.savings > 0" class="fac__save">{{ t("fuel.save") }} {{ fuelNet.savings }}¢</span>
+    </div>
+    <div v-else-if="grossFuel !== null" class="fac__fuel">
+      <span class="fac__fuel-figure">${{ grossFuel.toFixed(2) }}</span>
       <span class="fac__fuel-label">{{ t("facility.fuel") }}</span>
     </div>
 
-    <!-- bookable parking leads with Book; everyone else leads with Navigate -->
+    <!-- contextual lead action -->
     <button v-if="bookable" class="cta" type="button" @click="emit('book', pin)">
       <SquareParking :size="20" :stroke-width="2" aria-hidden="true" />
       {{ bookLabel }}
+    </button>
+    <button v-else-if="fuelable" class="cta" type="button" @click="emit('fuel', pin)">
+      <Fuel :size="20" :stroke-width="2" aria-hidden="true" />
+      {{ t("facility.fuel_here") }}
     </button>
     <button v-else class="cta" type="button" @click="emit('navigate', pin)">
       <Navigation :size="20" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.navigate") }}
     </button>
 
+    <!-- Navigate stays reachable as secondary whenever it isn't the lead -->
     <button
-      v-if="bookable"
+      v-if="bookable || fuelable"
       class="cta cta--secondary"
       type="button"
       @click="emit('navigate', pin)"
@@ -106,6 +122,15 @@ const bookLabel = computed(() => `${t("facility.book")} — ${formatMoney(nightl
 .fac__fuel-label {
   color: var(--text-2);
   font-size: var(--type-caption-size);
+}
+.fac__save {
+  margin-left: auto;
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--ledger-500);
+  color: var(--on-accent);
+  font-size: var(--type-caption-size);
+  font-weight: 500;
 }
 .cta {
   display: flex;

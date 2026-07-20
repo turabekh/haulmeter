@@ -60,5 +60,15 @@
   "booking.total": "К оплате",
   "booking.booked": "Забронировано",
   "booking.confirmation": "Место забронировано. Покажите это по прибытии.",
-  "booking.done": "Готово"
+  "booking.done": "Готово",
+  "facility.fuel_here": "Заправка здесь",
+  "fuel.net": "нетто",
+  "fuel.save": "экономия",
+  "fuel.title": "Топливо",
+  "fuel.gallons": "Галлоны",
+  "fuel.you_save": "Вы экономите",
+  "fuel.get_code": "Получить код",
+  "fuel.show_pump": "Покажите это на колонке",
+  "fuel.code": "Код колонки",
+  "fuel.saved": "Сэкономлено на топливе"
 }

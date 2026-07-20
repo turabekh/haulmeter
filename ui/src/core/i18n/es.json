@@ -60,5 +60,15 @@
   "booking.total": "Pagas",
   "booking.booked": "Reservado",
   "booking.confirmation": "Tu lugar está reservado. Muéstralo al llegar.",
-  "booking.done": "Listo"
+  "booking.done": "Listo",
+  "facility.fuel_here": "Cargar aquí",
+  "fuel.net": "neto",
+  "fuel.save": "ahorra",
+  "fuel.title": "Combustible",
+  "fuel.gallons": "Galones",
+  "fuel.you_save": "Ahorras",
+  "fuel.get_code": "Obtener código",
+  "fuel.show_pump": "Muestra esto en el surtidor",
+  "fuel.code": "Código de bomba",
+  "fuel.saved": "Combustible ahorrado"
 }

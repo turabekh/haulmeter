@@ -15,6 +15,7 @@ import LoadSurface from "../src/surfaces/LoadSurface.vue";
 import MoneySurface from "../src/surfaces/MoneySurface.vue";
 import DocsSurface from "../src/surfaces/DocsSurface.vue";
 import BookingSurface from "../src/surfaces/BookingSurface.vue";
+import FuelSurface from "../src/surfaces/FuelSurface.vue";
 import { routes } from "../src/router.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 
@@ -125,6 +126,76 @@ describe("BookingSurface — checkout (M6, NAV-3 / one final price)", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("FacilityCard — fuel-network station (M7, §11.2 / §12.2)", () => {
+  it("shows the NET price + savings and leads with Fuel here, emits fuel", async () => {
+    const pin = {
+      facility_id: "f-5",
+      name: "TA Travel Center",
+      facility_type: "fuel_station",
+      status: null,
+      badges: [
+        { kind: "fuel_net", gross: 419, net: 394, savings: 25, is_network: true, station_ref: "station-f5" },
+      ],
+      freshness: { reported_at: new Date().toISOString(), sample_size: 4 },
+    };
+    const router = testRouter();
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [router] } });
+    expect(w.find(".fac__fuel-figure").text()).toBe("$3.94"); // net, Mono
+    expect(w.find(".fac__save").text()).toContain("25"); // savings called out
+    expect(w.find(".cta").text()).toContain("Fuel here");
+    await w.find(".cta").trigger("click");
+    expect(w.emitted().fuel).toBeTruthy();
+    expect(w.emitted().fuel[0][0].facility_id).toBe("f-5");
+    expect(w.text()).toContain("Navigate"); // stays as secondary
+  });
+});
+
+describe("FuelSurface — pump-code flow (M7, NAV-3 / §8.7 one net price)", () => {
+  async function mountAt(query) {
+    const router = testRouter();
+    router.push({ path: "/fuel/station-f5", query });
+    await router.isReady();
+    const w = mount(FuelSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    return w;
+  }
+
+  it("shows net price, savings that track gallons, and issues a code", async () => {
+    const fetchStub = vi.fn().mockRejectedValue(new Error("no session"));
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = await mountAt({ name: "TA Travel Center", gross: "419", net: "394", savings: "25" });
+      expect(w.find(".price__figure").text()).toBe("$3.94"); // net, ledger-green Mono
+      expect(w.find(".totals__save").text()).toBe("$12.50"); // 25c * 50 gal default
+      expect(w.find(".totals__figure").text()).toBe("$197.00"); // 394c * 50 gal
+      // +10 gallons -> savings + total track
+      await w.findAll(".stepper__btn").at(1).trigger("click");
+      expect(w.find(".stepper__value").text()).toBe("60");
+      expect(w.find(".totals__save").text()).toBe("$15.00");
+      // get a code (offline -> station-derived fallback)
+      await w.find(".cta").trigger("click");
+      await flushPromises();
+      expect(w.find(".done__code").exists()).toBe(true);
+      expect(w.text()).toContain("Show this at the pump");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("MoneySurface — fuel savings row (M7-FR4, design-prd §238)", () => {
+  it("surfaces savings-to-date in ledger-green Mono (fixture)", async () => {
+    const w = mount(MoneySurface);
+    await flushPromises();
+    expect(w.find(".savings").exists()).toBe(true);
+    expect(w.find(".savings__amount").text()).toBe("$362.50"); // 36250c saved
+    expect(w.find(".savings").text()).toContain("1450"); // gallons in Mono
+    // the receivables list is unchanged — still exactly three rows
+    expect(w.findAll(".row")).toHaveLength(3);
+    w.unmount();
   });
 });
 

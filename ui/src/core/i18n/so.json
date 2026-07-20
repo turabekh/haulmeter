@@ -60,5 +60,15 @@
   "booking.total": "Waxaad bixinaysaa",
   "booking.booked": "La ballansaday",
   "booking.confirmation": "Goobtaadu way ballansan tahay. Tan tus markaad timaado.",
-  "booking.done": "Diyaar"
+  "booking.done": "Diyaar",
+  "facility.fuel_here": "Halkan shubo",
+  "fuel.net": "saafi",
+  "fuel.save": "badbaadi",
+  "fuel.title": "Shidaal",
+  "fuel.gallons": "Galaan",
+  "fuel.you_save": "Waxaad badbaadinaysaa",
+  "fuel.get_code": "Hel koodhka bamka",
+  "fuel.show_pump": "Kan tus bamka",
+  "fuel.code": "Koodhka bamka",
+  "fuel.saved": "Shidaal la badbaadiyay"
 }
