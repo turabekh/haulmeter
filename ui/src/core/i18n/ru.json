@@ -197,5 +197,14 @@
   "admin.mod_empty": "Нечего модерировать.",
   "admin.approve": "Одобрить",
   "admin.reject": "Отклонить",
-  "admin.module": "Модуль"
+  "admin.module": "Модуль",
+  "score.title": "Карта объекта",
+  "score.search": "Поиск объектов",
+  "score.dock": "Время на доке",
+  "score.rating": "Рейтинг",
+  "score.reviews": "отзывов",
+  "score.stops": "остановок",
+  "score.no_dwell": "Пока мало остановок",
+  "score.search_hint": "Найдите объект по названию.",
+  "score.median": "медиана"
 }

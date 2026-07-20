@@ -197,5 +197,14 @@
   "admin.mod_empty": "Nada que moderar.",
   "admin.approve": "Aprobar",
   "admin.reject": "Rechazar",
-  "admin.module": "Módulo"
+  "admin.module": "Módulo",
+  "score.title": "Tarjeta de instalaciones",
+  "score.search": "Buscar instalaciones",
+  "score.dock": "Tiempo en muelle",
+  "score.rating": "Calificación",
+  "score.reviews": "reseñas",
+  "score.stops": "paradas",
+  "score.no_dwell": "Aún no hay suficientes paradas",
+  "score.search_hint": "Busca un receptor, cargador o parada por nombre.",
+  "score.median": "mediana"
 }

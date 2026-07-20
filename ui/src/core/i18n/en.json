@@ -197,5 +197,14 @@
   "admin.mod_empty": "Nothing to moderate.",
   "admin.approve": "Approve",
   "admin.reject": "Reject",
-  "admin.module": "Module"
+  "admin.module": "Module",
+  "score.title": "Facility Scorecard",
+  "score.search": "Search facilities",
+  "score.dock": "Dock time",
+  "score.rating": "Driver rating",
+  "score.reviews": "reviews",
+  "score.stops": "stops",
+  "score.no_dwell": "Not enough tracked stops yet",
+  "score.search_hint": "Search a receiver, shipper, or truck stop by name.",
+  "score.median": "median"
 }

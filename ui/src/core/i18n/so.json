@@ -197,5 +197,14 @@
   "admin.mod_empty": "Waxba ma jiraan.",
   "admin.approve": "Ansixi",
   "admin.reject": "Diid",
-  "admin.module": "Modul"
+  "admin.module": "Modul",
+  "score.title": "Kaadhka Goobta",
+  "score.search": "Raadi goobo",
+  "score.dock": "Waqtiga dekedda",
+  "score.rating": "Qiimaynta",
+  "score.reviews": "faallooyin",
+  "score.stops": "joogsiyo",
+  "score.no_dwell": "Weli joogsiyo kuma filna",
+  "score.search_hint": "Magaca ku raadi.",
+  "score.median": "dhexdhexaad"
 }

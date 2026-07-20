@@ -197,5 +197,14 @@
   "admin.mod_empty": "Moderatsiya uchun hech narsa yo'q.",
   "admin.approve": "Tasdiqlash",
   "admin.reject": "Rad etish",
-  "admin.module": "Modul"
+  "admin.module": "Modul",
+  "score.title": "Obyekt kartasi",
+  "score.search": "Obyektlarni qidirish",
+  "score.dock": "Dok vaqti",
+  "score.rating": "Reyting",
+  "score.reviews": "sharhlar",
+  "score.stops": "to'xtashlar",
+  "score.no_dwell": "Hali to'xtashlar yetarli emas",
+  "score.search_hint": "Nom bo'yicha qidiring.",
+  "score.median": "mediana"
 }

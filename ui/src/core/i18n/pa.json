@@ -197,5 +197,14 @@
   "admin.mod_empty": "ਸੰਚਾਲਨ ਲਈ ਕੁਝ ਨਹੀਂ।",
   "admin.approve": "ਮਨਜ਼ੂਰ",
   "admin.reject": "ਰੱਦ",
-  "admin.module": "ਮੋਡੀਊਲ"
+  "admin.module": "ਮੋਡੀਊਲ",
+  "score.title": "ਸਹੂਲਤ ਸਕੋਰਕਾਰਡ",
+  "score.search": "ਸਹੂਲਤਾਂ ਖੋਜੋ",
+  "score.dock": "ਡੌਕ ਸਮਾਂ",
+  "score.rating": "ਡਰਾਈਵਰ ਰੇਟਿੰਗ",
+  "score.reviews": "ਸਮੀਖਿਆਵਾਂ",
+  "score.stops": "ਸਟਾਪ",
+  "score.no_dwell": "ਹਾਲੇ ਕਾਫ਼ੀ ਸਟਾਪ ਨਹੀਂ",
+  "score.search_hint": "ਨਾਮ ਨਾਲ ਖੋਜੋ।",
+  "score.median": "ਮੱਧਮਾਨ"
 }

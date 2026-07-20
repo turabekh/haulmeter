@@ -24,6 +24,7 @@ import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
 import AuditSurface from "../src/surfaces/AuditSurface.vue";
 import ConditionSurface from "../src/surfaces/ConditionSurface.vue";
 import AdminConsoleSurface from "../src/surfaces/AdminConsoleSurface.vue";
+import PublicScorecardSurface from "../src/surfaces/PublicScorecardSurface.vue";
 import GhostwriterSheet from "../src/core/components/GhostwriterSheet.vue";
 import SleepSheet from "../src/core/components/SleepSheet.vue";
 import HandoffSheet from "../src/core/components/HandoffSheet.vue";
@@ -700,6 +701,61 @@ describe("AdminConsoleSurface — F14 operator portal (design-prd §18)", () => 
     } finally {
       vi.unstubAllGlobals();
       logout();
+    }
+  });
+});
+
+describe("PublicScorecardSurface — public portal (design-prd §18)", () => {
+  it("searches facilities and shows an aggregate scorecard (no auth)", async () => {
+    logout(); // a public visitor, no session
+    const fetchStub = vi.fn().mockImplementation((url) => {
+      const u = String(url);
+      if (u.includes("/public/facilities")) {
+        return jsonOk([{ id: "rcv-1", name: "Dallas Receiver", facility_type: "shipper_receiver" }]);
+      }
+      if (u.includes("/public/facility/")) {
+        return jsonOk({
+          id: "rcv-1",
+          name: "Dallas Receiver",
+          facility_type: "shipper_receiver",
+          dwell: { median_seconds: 8100, p90_seconds: 15300, sample_size: 12 },
+          rating: { overall: 3.8, review_count: 6 },
+        });
+      }
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(PublicScorecardSurface);
+      await flushPromises();
+      expect(w.text()).toContain("Facility Scorecard");
+      const row = w.find(".list__row");
+      expect(row.text()).toContain("Dallas Receiver");
+      await row.trigger("click");
+      await flushPromises();
+      expect(w.find(".stat__figure").text()).toBe("2h 15m"); // dwell median, Mono
+      expect(w.text()).toContain("12 stops"); // sample size always shown (§11.7)
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("suppresses dwell below the sample floor (§13)", async () => {
+    logout();
+    const fetchStub = vi.fn().mockImplementation((url) => {
+      const u = String(url);
+      if (u.includes("/public/facilities")) return jsonOk([{ id: "x", name: "Sparse Stop", facility_type: "truck_stop" }]);
+      return jsonOk({ id: "x", name: "Sparse Stop", facility_type: "truck_stop", dwell: null, rating: { overall: null, review_count: 0 } });
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(PublicScorecardSurface);
+      await flushPromises();
+      await w.find(".list__row").trigger("click");
+      await flushPromises();
+      expect(w.text()).toContain("Not enough tracked stops"); // suppressed, never a small-n figure
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 });

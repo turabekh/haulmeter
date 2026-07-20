@@ -436,6 +436,24 @@ export async function decideModeration(itemId, approve) {
   return resp.json();
 }
 
+// AI-CONTEXT: Public Scorecard reads — the ONLY unauthenticated fetchers (no
+// token required; aggregate/min-sample data only, §13). Backs the public portal.
+export async function searchFacilities(q = "") {
+  const query = new URLSearchParams({ q, limit: 25 });
+  const resp = await fetch(`${API_BASE}/public/facilities?${query}`, {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!resp.ok) throw new Error(`facilities ${resp.status}`);
+  return resp.json();
+}
+export async function fetchScorecard(facilityId) {
+  const resp = await fetch(`${API_BASE}/public/facility/${facilityId}`, {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!resp.ok) throw new Error(`scorecard ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchEarnings() {
   return apiGet(`/money/earnings`, `earnings`);
 }

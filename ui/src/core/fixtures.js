@@ -68,6 +68,25 @@ export const SAMPLE_PINS = [
   },
 ];
 
+// AI-CONTEXT: fixture Public Scorecard data (§18), pending live /public/*.
+// Aggregate-only; dwell carries its sample size (§11.7).
+export function sampleFacilities() {
+  return [
+    { id: "rcv-1", name: "Dallas Receiver", facility_type: "shipper_receiver" },
+    { id: "f-1", name: "Loves Travel Stop #212", facility_type: "truck_stop" },
+    { id: "f-3", name: "Yardline Secured Parking", facility_type: "parking_property" },
+  ];
+}
+export function sampleScorecard(id) {
+  return {
+    id,
+    name: "Dallas Receiver",
+    facility_type: "shipper_receiver",
+    dwell: { median_seconds: 8100, p90_seconds: 15300, sample_size: 12 },
+    rating: { overall: 3.8, review_count: 6 },
+  };
+}
+
 // AI-CONTEXT: fixture Fleet Workspace data (M12), pending live /fleet/*. The
 // web-first portal (§18); recovered/owed/fuel + per-member + counterparty rates.
 export const SAMPLE_FLEET = {
