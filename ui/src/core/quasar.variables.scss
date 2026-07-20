@@ -1,0 +1,18 @@
+// AI-CONTEXT: Q-1 token supremacy (design-prd §19). Quasar SCSS brand variables
+// are assigned FROM tokens.scss — never the reverse. No Quasar default color
+// reaches the screen. Consumed by quasar.config when the app shell is
+// scaffolded (next session); lives here now as the mapping seam. Material look
+// is turned OFF separately (Q-2): ripple disabled, elevation via §6.3 borders.
+@import "./tokens.scss";
+
+$primary: $shield-500;
+$secondary: $shield-600;
+$accent: $shield-500;
+
+$dark: $ink-0;
+$dark-page: $ink-0;
+
+$positive: $ledger-500;
+$negative: $flare-500;
+$warning: $marker-500;
+$info: $shield-500;

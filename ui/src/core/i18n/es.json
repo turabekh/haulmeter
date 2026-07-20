@@ -1,0 +1,10 @@
+{
+  "nav.map": "Mapa",
+  "nav.load": "Carga",
+  "nav.money": "Dinero",
+  "nav.docs": "Docs",
+  "nav.more": "Más",
+  "system.offline": "Sin conexión — todo se guarda en tu teléfono",
+  "system.loading": "Cargando",
+  "money.empty": "El dinero recuperado y ahorrado aparece aquí. Agrega tu primera carga para iniciar el medidor."
+}

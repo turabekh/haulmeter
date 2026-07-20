@@ -41,7 +41,7 @@ test-ui:
 	$(COMPOSE) run --rm --no-deps ui npm test --silent
 
 lint: env
-	$(COMPOSE) run --rm --no-deps api sh -c "ruff check . && lint-imports"
+	$(COMPOSE) run --rm --no-deps api sh -c "ruff check . && lint-imports --config importlinter.ini"
 
 fmt:
 	$(COMPOSE) run --rm --no-deps api ruff format .

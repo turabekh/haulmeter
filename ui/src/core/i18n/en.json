@@ -1,0 +1,10 @@
+{
+  "nav.map": "Map",
+  "nav.load": "Load",
+  "nav.money": "Money",
+  "nav.docs": "Docs",
+  "nav.more": "More",
+  "system.offline": "Offline — everything saves to your phone",
+  "system.loading": "Loading",
+  "money.empty": "Recovered and saved money shows up here. Add your first load to start the meter."
+}

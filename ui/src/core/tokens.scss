@@ -1,0 +1,151 @@
+// AI-CONTEXT: The ONLY source of visual truth (design-prd §6). Every value is
+// transcribed verbatim from the design constitution — nothing invented. No
+// component may hardcode a hex, px, duration, radius, or shadow: use these
+// SCSS vars or the mirrored CSS custom properties. Quasar brand variables map
+// FROM these (§19), never the reverse. Dark is the primary theme (§6.1). The
+// light theme's derived surface/text ramps are NOT yet specified numerically
+// in §6 and are intentionally absent (pending a §23 Decision Log entry) rather
+// than guessed.
+
+// AI-CONTEXT: §6.1 Color — dark-first surfaces
+$ink-0: #0E1319;
+$ink-1: #151C24;
+$ink-2: #1C2530;
+$line-1: #2A3644;
+// AI-CONTEXT: §6.1 Color — text (dark)
+$text-1: #EEF3F7;
+$text-2: #A3B0BC;
+$text-3: #66737F;
+// AI-CONTEXT: §6.1 Color — semantic accents (identical roles in both themes)
+$shield-500: #3D74E0;
+$shield-600: #2C5FC4;
+$ledger-500: #3BA55D;
+$marker-500: #F0A72E;
+$flare-500: #E5484D;
+
+// AI-CONTEXT: §6.2 Typography — families (self-hosted variable + system fallback)
+$font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+$font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+$font-gurmukhi: "Noto Sans Gurmukhi", $font-sans;
+
+// AI-CONTEXT: §6.2 Typography — type scale (mobile baseline: size / line-height / weight)
+$type-meter-size: 44px;    $type-meter-line: 48px;    $type-meter-weight: 600;
+$type-display-size: 28px;  $type-display-line: 34px;  $type-display-weight: 600;
+$type-title-size: 20px;    $type-title-line: 26px;    $type-title-weight: 600;
+$type-body-size: 16px;     $type-body-line: 24px;     $type-body-weight: 400;
+$type-label-size: 14px;    $type-label-line: 20px;    $type-label-weight: 500;
+$type-caption-size: 13px;  $type-caption-line: 18px;  $type-caption-weight: 400;
+// AI-CONTEXT: §6.2 T-1 — DRIVING bumps only these three steps, via one state attr
+$type-body-driving: 18px;
+$type-title-driving: 22px;
+$type-meter-driving: 52px;
+
+// AI-CONTEXT: §6.3 Space — 8dp grid; $s-4 is the screen gutter
+$s-1: 4px;
+$s-2: 8px;
+$s-3: 12px;
+$s-4: 16px;
+$s-5: 24px;
+$s-6: 32px;
+$s-7: 48px;
+// AI-CONTEXT: §6.3 Shape — radii (nothing else exists)
+$r-card: 12px;
+$r-control: 10px;
+$r-sheet: 16px;
+$r-pill: 999px;
+// AI-CONTEXT: §6.3 Elevation — surface-step + hairline; this is the ONLY shadow
+$shadow-float: 0 4px 16px rgba(0, 0, 0, 0.35);
+
+// AI-CONTEXT: §6.4 Motion — durations + standard easing
+$t-fast: 120ms;
+$t-base: 200ms;
+$t-slow: 320ms;
+$ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+// AI-CONTEXT: §6.5 Touch — the glove spec
+$touch-min: 48px;
+$touch-primary: 56px;
+$touch-driving-card: 64px;
+$touch-gap-min: 8px;
+$row-min: 64px;
+$grab-handle-min: 32px;
+
+// AI-CONTEXT: §6.6 Iconography — Lucide sizes only
+$icon-sm: 20px;
+$icon-md: 24px;
+$icon-lg: 28px;
+
+// AI-CONTEXT: Mirror every token to a CSS custom property (dark-first :root)
+:root {
+  --ink-0: #{$ink-0};
+  --ink-1: #{$ink-1};
+  --ink-2: #{$ink-2};
+  --line-1: #{$line-1};
+  --text-1: #{$text-1};
+  --text-2: #{$text-2};
+  --text-3: #{$text-3};
+  --shield-500: #{$shield-500};
+  --shield-600: #{$shield-600};
+  --ledger-500: #{$ledger-500};
+  --marker-500: #{$marker-500};
+  --flare-500: #{$flare-500};
+
+  --font-sans: #{$font-sans};
+  --font-mono: #{$font-mono};
+  --font-gurmukhi: #{$font-gurmukhi};
+
+  --type-meter-size: #{$type-meter-size};
+  --type-meter-line: #{$type-meter-line};
+  --type-meter-weight: #{$type-meter-weight};
+  --type-display-size: #{$type-display-size};
+  --type-display-line: #{$type-display-line};
+  --type-display-weight: #{$type-display-weight};
+  --type-title-size: #{$type-title-size};
+  --type-title-line: #{$type-title-line};
+  --type-title-weight: #{$type-title-weight};
+  --type-body-size: #{$type-body-size};
+  --type-body-line: #{$type-body-line};
+  --type-body-weight: #{$type-body-weight};
+  --type-label-size: #{$type-label-size};
+  --type-label-line: #{$type-label-line};
+  --type-label-weight: #{$type-label-weight};
+  --type-caption-size: #{$type-caption-size};
+  --type-caption-line: #{$type-caption-line};
+  --type-caption-weight: #{$type-caption-weight};
+
+  --s-1: #{$s-1};
+  --s-2: #{$s-2};
+  --s-3: #{$s-3};
+  --s-4: #{$s-4};
+  --s-5: #{$s-5};
+  --s-6: #{$s-6};
+  --s-7: #{$s-7};
+  --r-card: #{$r-card};
+  --r-control: #{$r-control};
+  --r-sheet: #{$r-sheet};
+  --r-pill: #{$r-pill};
+  --shadow-float: #{$shadow-float};
+
+  --t-fast: #{$t-fast};
+  --t-base: #{$t-base};
+  --t-slow: #{$t-slow};
+  --ease-standard: #{$ease-standard};
+
+  --touch-min: #{$touch-min};
+  --touch-primary: #{$touch-primary};
+  --touch-driving-card: #{$touch-driving-card};
+  --touch-gap-min: #{$touch-gap-min};
+  --row-min: #{$row-min};
+  --grab-handle-min: #{$grab-handle-min};
+
+  --icon-sm: #{$icon-sm};
+  --icon-md: #{$icon-md};
+  --icon-lg: #{$icon-lg};
+}
+
+// AI-CONTEXT: §6.2 T-1 — DRIVING state bumps the three specified type steps
+:root[data-state="driving"] {
+  --type-body-size: #{$type-body-driving};
+  --type-title-size: #{$type-title-driving};
+  --type-meter-size: #{$type-meter-driving};
+}

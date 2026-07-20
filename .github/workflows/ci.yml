@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  compose-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create env
+        run: cp infra/.env.example infra/.env
+
+      - name: Port preflight (fails loud with conflicting PID)
+        run: bash scripts/check_ports.sh
+
+      - name: Build stack
+        run: docker compose -f infra/docker-compose.yml build
+
+      - name: Start database
+        run: docker compose -f infra/docker-compose.yml up -d postgres redis
+
+      - name: Run migrations
+        run: docker compose -f infra/docker-compose.yml run --rm api alembic upgrade head
+
+      - name: Lint (ruff + import-linter contracts)
+        run: docker compose -f infra/docker-compose.yml run --rm --no-deps api sh -c "ruff check . && lint-imports --config importlinter.ini"
+
+      - name: API tests (pytest)
+        run: docker compose -f infra/docker-compose.yml run --rm api pytest -q
+
+      - name: UI tests (vitest + locale + pseudo-locale stubs)
+        run: docker compose -f infra/docker-compose.yml run --rm --no-deps ui npm test --silent
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down -v
