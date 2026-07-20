@@ -7,8 +7,25 @@ from app.core.db import Base
 from db_registry import import_all_models
 
 SCHEMAS = [
-    "f01", "f02", "f03", "f04", "f05", "f06", "f07",
-    "f08", "f09", "f10", "f12", "f13", "f14", "f15", "m02", "m03", "m04", "m05",
+    "f01",
+    "f02",
+    "f03",
+    "f04",
+    "f05",
+    "f06",
+    "f07",
+    "f08",
+    "f09",
+    "f10",
+    "f12",
+    "f13",
+    "f14",
+    "f15",
+    "m02",
+    "m03",
+    "m04",
+    "m05",
+    "m06",
 ]
 TEST_DB = "longhaul_test"
 

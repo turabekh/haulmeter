@@ -6,6 +6,7 @@ contract forbids `app.core` from doing. Foundation/module components own
 their own Postgres schema (schema-per-module, PRD 10). Register new model
 modules here as they land.
 """
+
 import importlib
 
 MODEL_MODULES = [
@@ -27,6 +28,7 @@ MODEL_MODULES = [
     "app.modules.m03_detention.domain.models",
     "app.modules.m04_accessorial.domain.models",
     "app.modules.m05_protection.domain.models",
+    "app.modules.m06_parking.domain.models",
 ]
 
 
