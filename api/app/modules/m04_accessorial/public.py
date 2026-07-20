@@ -1,6 +1,37 @@
 """AI-CONTEXT: Public interface for M4 Accessorial Recovery Suite.
 
-Empty bounded context. May import foundation.*.public and the public
-interfaces of EARLIER modules only (import-linter enforced). No lateral
-imports, no reach-ins. Built in module order after the Common Ground DoD.
+The ONLY import surface other packages may use to reach M4 (import-linter
+enforced). TONU / layover / lumper recovery on the shared M3 invoice rail, terms
+check, and the unified "Money Owed" view. Runs behind the F13 flag m04_accessorial.
 """
+
+from .domain.enums import AccessorialKind, AccessorialState
+from .domain.models import AccessorialClaim
+from .domain.service import (
+    FLAG_KEY,
+    MODULE,
+    MissingLumperAmount,
+    NoLayover,
+    check_accessorial_terms,
+    file_layover,
+    file_lumper,
+    file_tonu,
+    money_owed,
+    register_module,
+)
+
+__all__ = [
+    "AccessorialKind",
+    "AccessorialState",
+    "AccessorialClaim",
+    "FLAG_KEY",
+    "MODULE",
+    "MissingLumperAmount",
+    "NoLayover",
+    "check_accessorial_terms",
+    "file_layover",
+    "file_lumper",
+    "file_tonu",
+    "money_owed",
+    "register_module",
+]

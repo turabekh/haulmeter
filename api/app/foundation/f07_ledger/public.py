@@ -5,6 +5,7 @@ enforced). One double-entry ledger for all value flows; every entry balances.
 Points are a closed-loop currency (no cash-out). Consumed by M3, M4, M6, M7,
 M10, M12.
 """
+
 from .domain.enums import (
     Currency,
     Direction,
@@ -25,6 +26,7 @@ from .domain.service import (
     create_account,
     create_receivable,
     get_or_create_account,
+    list_receivables,
     post_entry,
     record_recovery,
     transition_receivable,
@@ -52,6 +54,7 @@ __all__ = [
     "create_account",
     "create_receivable",
     "get_or_create_account",
+    "list_receivables",
     "post_entry",
     "record_recovery",
     "transition_receivable",

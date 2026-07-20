@@ -195,6 +195,36 @@ def _send_counterparty(db, claim, gateway, now, subject, body):
     return notify.send_counterparty_message(db, thread, body, gateway, to_ref, now=now)
 
 
+# --- Shared invoice rail (reused by M4 accessorial claims) ---
+def open_receivable(
+    db: Session,
+    account_id,
+    kind,
+    amount_cents: int,
+    counterparty_ref=None,
+    gateway=None,
+    now: datetime | None = None,
+    notice_subject: str = "Invoice",
+    notice_body: str = "Please find attached the GPS-verified evidence and invoice "
+    "per the rate confirmation.",
+):
+    receivable = ledger.create_receivable(
+        db, account_id, kind, amount_cents, counterparty_ref=counterparty_ref
+    )
+    cp = None
+    if counterparty_ref is not None:
+        cp = loads.get_counterparty(db, counterparty_ref)
+        if cp is not None:
+            loads.record_claim(db, cp)
+    if gateway is not None and counterparty_ref is not None:
+        to_ref = (cp.contact_email if cp is not None else None) or "counterparty@unknown"
+        thread = notify.create_thread(
+            db, account_id, subject=notice_subject, counterparty_ref=counterparty_ref
+        )
+        notify.send_counterparty_message(db, thread, notice_body, gateway, to_ref, now=now)
+    return receivable
+
+
 # --- Claim pack on EXIT (M3-FR5 / FR9) ---
 def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=None) -> dict:
     accrue_events(db, claim)
@@ -208,29 +238,20 @@ def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=Non
 
     receivable = None
     if claim.mode == ClaimMode.invoice and claim.amount_cents > 0:
-        receivable = ledger.create_receivable(
+        receivable = open_receivable(
             db,
             claim.account_id,
             ledger.ReceivableKind.detention,
             claim.amount_cents,
             counterparty_ref=claim.counterparty_ref,
+            gateway=gateway,
+            now=now,
+            notice_subject="Detention invoice",
+            notice_body="Please find attached the GPS-verified detention evidence and invoice "
+            "per the rate confirmation.",
         )
         claim.receivable_ref = receivable.id
         claim.state = ClaimState.invoiced
-        if claim.counterparty_ref is not None:
-            cp = loads.get_counterparty(db, claim.counterparty_ref)
-            if cp is not None:
-                loads.record_claim(db, cp)
-        if gateway is not None:
-            _send_counterparty(
-                db,
-                claim,
-                gateway,
-                now,
-                subject="Detention invoice",
-                body="Please find attached the GPS-verified detention evidence and invoice "
-                "per the rate confirmation.",
-            )
     else:
         claim.state = ClaimState.exported  # company-driver: pack for carrier, no invoice
     db.flush()

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, m01_map, m02_facility_intel, m03_detention
+from app.api import auth, m01_map, m02_facility_intel, m03_detention, m04_accessorial
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -25,6 +25,7 @@ app.include_router(auth.router)
 app.include_router(m01_map.router)
 app.include_router(m02_facility_intel.router)
 app.include_router(m03_detention.router)
+app.include_router(m04_accessorial.router)
 
 
 @app.get("/health")

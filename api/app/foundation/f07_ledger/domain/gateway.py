@@ -7,6 +7,7 @@ truth and is fully functional without a live gateway; this protocol is where
 the real Stripe adapter plugs in (wired at M6/M7 activation). StubPaymentGateway
 fails loudly so nothing silently pretends to move real money.
 """
+
 from typing import Protocol
 
 

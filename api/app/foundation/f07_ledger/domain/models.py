@@ -37,9 +37,7 @@ class LedgerAccount(Base):
         Enum(LedgerAccountKind, name="ledger_account_kind", schema=SCHEMA)
     )
     name: Mapped[str] = mapped_column(String(200))
-    currency: Mapped[Currency] = mapped_column(
-        CURRENCY_ENUM, default=Currency.usd
-    )
+    currency: Mapped[Currency] = mapped_column(CURRENCY_ENUM, default=Currency.usd)
     owner_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -90,9 +88,7 @@ class Receivable(Base):
         Enum(ReceivableKind, name="receivable_kind", schema=SCHEMA)
     )
     amount_cents: Mapped[int] = mapped_column(BigInteger)
-    currency: Mapped[Currency] = mapped_column(
-        CURRENCY_ENUM, default=Currency.usd
-    )
+    currency: Mapped[Currency] = mapped_column(CURRENCY_ENUM, default=Currency.usd)
     state: Mapped[ReceivableState] = mapped_column(
         Enum(ReceivableState, name="receivable_state", schema=SCHEMA),
         default=ReceivableState.invoiced,

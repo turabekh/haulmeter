@@ -107,8 +107,7 @@ def post_entry(
 
     account_ids = {p.account_id for p in postings}
     accounts = {
-        a.id: a
-        for a in db.scalars(select(LedgerAccount).where(LedgerAccount.id.in_(account_ids)))
+        a.id: a for a in db.scalars(select(LedgerAccount).where(LedgerAccount.id.in_(account_ids)))
     }
     for posting in postings:
         account = accounts.get(posting.account_id)
@@ -177,6 +176,16 @@ def create_receivable(
     db.add(receivable)
     db.flush()
     return receivable
+
+
+def list_receivables(db: Session, account_id) -> list[Receivable]:
+    return list(
+        db.scalars(
+            select(Receivable)
+            .where(Receivable.account_id == account_id)
+            .order_by(Receivable.created_at.desc())
+        )
+    )
 
 
 def transition_receivable(
