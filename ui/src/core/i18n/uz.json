@@ -31,5 +31,13 @@
   "review.overall": "Bu to'xtashni baholang",
   "review.placeholder": "Boshqa haydovchilar nimani bilishi kerak?",
   "review.pending": "Sharhlar chiqishdan oldin tekshiriladi.",
-  "review.submit": "Sharh yuborish"
+  "review.submit": "Sharh yuborish",
+  "load.free_time": "Bepul vaqt",
+  "load.detention": "Ushlab turish",
+  "load.evidence": "Dalil",
+  "load.bol": "BOL olindi",
+  "load.photos": "Rasmlar",
+  "load.notice_sent": "Ogohlantirish yuborilmadi",
+  "load.cta.notice": "Ogohlantirish yuborish",
+  "load.cta.claim": "Da'vo yaratish"
 }

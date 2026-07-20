@@ -31,5 +31,13 @@
   "review.overall": "ਇਸ ਸਟਾਪ ਨੂੰ ਰੇਟ ਕਰੋ",
   "review.placeholder": "ਹੋਰ ਡਰਾਈਵਰਾਂ ਨੂੰ ਕੀ ਪਤਾ ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ?",
   "review.pending": "ਸਮੀਖਿਆਵਾਂ ਦਿਖਣ ਤੋਂ ਪਹਿਲਾਂ ਜਾਂਚੀਆਂ ਜਾਂਦੀਆਂ ਹਨ।",
-  "review.submit": "ਸਮੀਖਿਆ ਭੇਜੋ"
+  "review.submit": "ਸਮੀਖਿਆ ਭੇਜੋ",
+  "load.free_time": "ਫ੍ਰੀ ਸਮਾਂ",
+  "load.detention": "ਡਿਟੈਨਸ਼ਨ",
+  "load.evidence": "ਸਬੂਤ",
+  "load.bol": "BOL ਲਿਆ ਗਿਆ",
+  "load.photos": "ਫੋਟੋਆਂ",
+  "load.notice_sent": "ਨੋਟਿਸ ਨਹੀਂ ਭੇਜਿਆ",
+  "load.cta.notice": "ਨੋਟਿਸ ਭੇਜੋ",
+  "load.cta.claim": "ਦਾਅਵਾ ਬਣਾਓ"
 }

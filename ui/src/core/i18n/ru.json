@@ -31,5 +31,13 @@
   "review.overall": "Оцените эту остановку",
   "review.placeholder": "Что стоит знать другим водителям?",
   "review.pending": "Отзывы проверяются перед публикацией.",
-  "review.submit": "Отправить отзыв"
+  "review.submit": "Отправить отзыв",
+  "load.free_time": "Свободное время",
+  "load.detention": "Простой",
+  "load.evidence": "Доказательства",
+  "load.bol": "BOL получен",
+  "load.photos": "Фото",
+  "load.notice_sent": "Уведомление не отправлено",
+  "load.cta.notice": "Отправить уведомление",
+  "load.cta.claim": "Создать претензию"
 }

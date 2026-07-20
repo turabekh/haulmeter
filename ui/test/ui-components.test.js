@@ -10,6 +10,8 @@ import PresetChips from "../src/core/components/PresetChips.vue";
 import FacilityCard from "../src/core/components/FacilityCard.vue";
 import MapSurface from "../src/surfaces/MapSurface.vue";
 import FacilityProfileSurface from "../src/surfaces/FacilityProfileSurface.vue";
+import TheMeter from "../src/core/components/TheMeter.vue";
+import LoadSurface from "../src/surfaces/LoadSurface.vue";
 import { routes } from "../src/router.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 
@@ -58,6 +60,26 @@ describe("FacilityCard (design-prd §10.1)", () => {
     expect(w.text()).toContain("$4.19");
     await w.find(".cta").trigger("click");
     expect(w.emitted().navigate).toBeTruthy();
+  });
+});
+
+describe("The Meter (design-prd §9)", () => {
+  it("renders label, Mono figure, and status with the variant color", () => {
+    const w = mount(TheMeter, {
+      props: { label: "Detention", figure: "$150.00", variant: "accruing", status: "2:00:00 · $75/h" },
+    });
+    expect(w.find(".meter__label").text()).toBe("Detention");
+    expect(w.find(".meter__figure").text()).toBe("$150.00");
+    expect(w.find(".meter__figure").attributes("style")).toContain("--ledger-500");
+  });
+});
+
+describe("LoadSurface / Meter card (design-prd §10.2)", () => {
+  it("shows the live Meter (fixture stop is accruing)", () => {
+    const w = mount(LoadSurface);
+    expect(w.find(".meter__figure").exists()).toBe(true);
+    expect(w.text()).toContain("Detention"); // accruing label
+    w.unmount();
   });
 });
 

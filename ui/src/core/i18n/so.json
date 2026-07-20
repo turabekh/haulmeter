@@ -31,5 +31,13 @@
   "review.overall": "Qiimee joogsigan",
   "review.placeholder": "Maxay tabayaal kale ogaan lahaayeen?",
   "review.pending": "Faallooyinka waa la hubiyaa ka hor inta aan la muujin.",
-  "review.submit": "Dir faallo"
+  "review.submit": "Dir faallo",
+  "load.free_time": "Wakhti bilaash",
+  "load.detention": "Hakinta",
+  "load.evidence": "Caddayn",
+  "load.bol": "BOL la qaaday",
+  "load.photos": "Sawirro",
+  "load.notice_sent": "Ogeysiis lama dirin",
+  "load.cta.notice": "Dir ogeysiis",
+  "load.cta.claim": "Samee sheegasho"
 }

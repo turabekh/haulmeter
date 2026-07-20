@@ -9,6 +9,12 @@ import {
   formatDwell,
 } from "../src/core/presentation.js";
 import { useI18n } from "../src/core/i18n.js";
+import {
+  formatClock,
+  formatMoney,
+  computeDetentionState,
+  meterVariant,
+} from "../src/core/meter.js";
 
 describe("driver state machine (design-prd §5, SM-4)", () => {
   beforeEach(() => useDriverState().setState(DriverState.IDLE));
@@ -44,6 +50,36 @@ describe("presentation (design-prd §11)", () => {
     expect(formatDwell(8100)).toBe("2h 15m");
     expect(formatDwell(1800)).toBe("30m");
     expect(formatDwell(null)).toBe(null);
+  });
+});
+
+describe("The Meter logic (design-prd §9)", () => {
+  it("formats time and money tabular", () => {
+    expect(formatClock(3661)).toBe("1:01:01");
+    expect(formatClock(-5)).toBe("0:00:00");
+    expect(formatMoney(15000)).toBe("$150.00");
+    expect(formatMoney(123456)).toBe("$1,234.56");
+  });
+
+  it("computes detention state (mirrors backend clock)", () => {
+    const t0 = 1_000_000_000_000;
+    const within = computeDetentionState(t0, 120, 7500, t0 + 60 * 60000);
+    expect(within.phase).toBe("within_free_time");
+    expect(Math.round(within.freeTimeRemainingSeconds)).toBe(3600);
+
+    const accruing = computeDetentionState(t0, 120, 7500, t0 + 180 * 60000);
+    expect(accruing.phase).toBe("accruing");
+    expect(accruing.amountCents).toBe(7500); // 1h * $75
+  });
+
+  it("picks the variant per §9 color logic", () => {
+    expect(meterVariant({ phase: "within_free_time", freeTimeRemainingSeconds: 3600 })).toBe(
+      "countdown",
+    );
+    expect(meterVariant({ phase: "within_free_time", freeTimeRemainingSeconds: 600 })).toBe(
+      "warning",
+    );
+    expect(meterVariant({ phase: "accruing" })).toBe("accruing");
   });
 });
 

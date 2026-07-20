@@ -31,5 +31,13 @@
   "review.overall": "Rate this stop",
   "review.placeholder": "What should other drivers know?",
   "review.pending": "Reviews are checked before they appear.",
-  "review.submit": "Submit review"
+  "review.submit": "Submit review",
+  "load.free_time": "Free time",
+  "load.detention": "Detention",
+  "load.evidence": "Evidence",
+  "load.bol": "BOL captured",
+  "load.photos": "Photos",
+  "load.notice_sent": "Notice not sent",
+  "load.cta.notice": "Send notice",
+  "load.cta.claim": "Generate claim"
 }

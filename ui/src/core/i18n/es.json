@@ -31,5 +31,13 @@
   "review.overall": "Califica esta parada",
   "review.placeholder": "¿Qué deben saber otros conductores?",
   "review.pending": "Las reseñas se revisan antes de aparecer.",
-  "review.submit": "Enviar reseña"
+  "review.submit": "Enviar reseña",
+  "load.free_time": "Tiempo libre",
+  "load.detention": "Detención",
+  "load.evidence": "Evidencia",
+  "load.bol": "BOL capturado",
+  "load.photos": "Fotos",
+  "load.notice_sent": "Aviso no enviado",
+  "load.cta.notice": "Enviar aviso",
+  "load.cta.claim": "Generar reclamo"
 }

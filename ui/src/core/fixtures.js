@@ -77,6 +77,19 @@ export function sampleProfile(facilityId) {
   };
 }
 
+// AI-CONTEXT: fixture ACTIVE stop for the Load tab / The Meter, pending the
+// active-load API. Arrived 150 min ago with 120 min free time -> detention is
+// accruing (the signature "money ticking up" moment).
+export const SAMPLE_STOP = {
+  facility_name: "Dallas Receiver",
+  counterparty: "Acme Brokerage",
+  appointment: "07:00",
+  arrival_offset_min: 150,
+  free_time_minutes: 120,
+  rate_cents_per_hour: 7500,
+  evidence: { bol: true, photos_taken: 2, photos_total: 4, notice_sent: false },
+};
+
 export const SAMPLE_CORRIDOR = [
   { facility_id: "f-2", name: "Pilot #77", facility_type: "truck_stop", distance_m: 5400, status: "full" },
   { facility_id: "f-3", name: "Yardline Secured Parking", facility_type: "parking_property", distance_m: 9200, status: "empty" },
