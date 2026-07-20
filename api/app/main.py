@@ -10,6 +10,7 @@ from app.api import (
     m05_protection,
     m06_parking,
     m07_fuel,
+    m08_intelligence,
 )
 from app.core.config import get_settings
 
@@ -38,6 +39,7 @@ app.include_router(m04_accessorial.router)
 app.include_router(m05_protection.router)
 app.include_router(m06_parking.router)
 app.include_router(m07_fuel.router)
+app.include_router(m08_intelligence.router)
 
 
 @app.get("/health")
