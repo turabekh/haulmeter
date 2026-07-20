@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     auth,
+    load,
     m01_map,
     m02_facility_intel,
     m03_detention,
@@ -36,6 +37,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(load.router)
 app.include_router(m01_map.router)
 app.include_router(m02_facility_intel.router)
 app.include_router(m03_detention.router)
