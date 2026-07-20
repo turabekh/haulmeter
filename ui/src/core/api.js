@@ -48,6 +48,7 @@ export function logout() {
   email.value = null;
   persist();
   clearCache(); // a new driver never sees the last one's cached reads
+  saveQueue([]); // ...nor inherits their unsynced writes
 }
 
 function _adopt(data, userEmail) {
@@ -115,6 +116,77 @@ async function apiGet(path, cacheKey) {
   online.value = true;
   if (cacheKey) writeCache(cacheKey, data);
   return data;
+}
+
+// AI-CONTEXT: F12 write-queue — field captures (status reports, reviews, Q&A)
+// must work offline (§15.1: "everything saves to your phone"). A queuedPost that
+// hits a dead zone is stored to localStorage and replayed on reconnect; queued
+// items were never sent, so at-least-once replay is effectively once. Sync is
+// silent (no toast parade); a subtle count on the status strip is the only tell.
+const QUEUE_KEY = "longhaul.write_queue";
+function readQueue() {
+  try {
+    return JSON.parse(localStorage.getItem(QUEUE_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+export const pendingWrites = ref(readQueue().length);
+function saveQueue(q) {
+  try {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+  } catch {
+    /* best-effort */
+  }
+  pendingWrites.value = q.length;
+}
+function enqueue(path, body) {
+  const q = readQueue();
+  q.push({ path, body });
+  saveQueue(q);
+}
+
+async function queuedPost(path, body) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  let resp;
+  try {
+    resp = await fetch(`${API_BASE}${path}`, { method: "POST", headers: headers(), body: JSON.stringify(body) });
+  } catch {
+    online.value = false; // dead zone — save it to the phone
+    enqueue(path, body);
+    return { queued: true };
+  }
+  if (!resp.ok) throw new Error(`${path} ${resp.status}`); // server rejected — caller handles
+  online.value = true;
+  flushQueue(); // opportunistic: we're back online, drain anything waiting
+  return resp.json();
+}
+
+let _flushing = false;
+export async function flushQueue() {
+  if (_flushing || typeof fetch === "undefined" || !token.value) return;
+  _flushing = true;
+  try {
+    const q = readQueue();
+    while (q.length) {
+      const item = q[0];
+      try {
+        await fetch(`${API_BASE}${item.path}`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify(item.body),
+        });
+      } catch {
+        online.value = false; // still offline — stop, keep the rest queued
+        break;
+      }
+      online.value = true;
+      q.shift(); // drop on success OR server-rejection (don't retry a bad write forever)
+      saveQueue(q);
+    }
+  } finally {
+    _flushing = false;
+  }
 }
 
 // AI-CONTEXT: the driver's active stop (behind The Meter) persists across
@@ -208,13 +280,8 @@ export async function fetchOverlay({ lat, lon, radiusM = 8000, preset = "drive" 
 }
 
 export async function report(facilityId, signalType, value) {
-  const resp = await fetch(`${API_BASE}/map/report`, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({ facility_id: facilityId, signal_type: signalType, value }),
-  });
-  if (!resp.ok) throw new Error(`report failed: ${resp.status}`);
-  return resp.json();
+  // F12: a status report in a dead zone queues to the phone and syncs later
+  return queuedPost("/map/report", { facility_id: facilityId, signal_type: signalType, value });
 }
 
 export async function fetchProfile(facilityId) {
@@ -402,13 +469,8 @@ export async function claimHandoff(handoffId) {
 }
 
 export async function askQuestion(facilityId, text) {
-  const resp = await fetch(`${API_BASE}/community/questions`, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({ facility_id: facilityId, text }),
-  });
-  if (!resp.ok) throw new Error(`ask failed: ${resp.status}`);
-  return resp.json();
+  // F12: a facility question posted offline queues and syncs on reconnect
+  return queuedPost("/community/questions", { facility_id: facilityId, text });
 }
 
 export async function askVoice(text, driving = false) {
@@ -460,11 +522,6 @@ export async function fetchSleepPlan({ lat, lon, hosMinutesRemaining, headingDeg
 }
 
 export async function submitReview(facilityId, ratings, text) {
-  const resp = await fetch(`${API_BASE}/facility/${facilityId}/review`, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({ ratings, text }),
-  });
-  if (!resp.ok) throw new Error(`review failed: ${resp.status}`);
-  return resp.json();
+  // F12: a review written offline queues and syncs on reconnect
+  return queuedPost(`/facility/${facilityId}/review`, { ratings, text });
 }

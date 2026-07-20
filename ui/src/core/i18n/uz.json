@@ -169,5 +169,6 @@
   "fleet.your_fleets": "Sizning avtoparklaringiz",
   "fleet.open": "Ochish",
   "fleet.none": "Sizda hali avtopark yo'q.",
-  "fleet.create_go": "Yaratish"
+  "fleet.create_go": "Yaratish",
+  "system.pending": "Telefoningizga saqlandi"
 }

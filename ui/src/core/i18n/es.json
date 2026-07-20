@@ -169,5 +169,6 @@
   "fleet.your_fleets": "Tus flotas",
   "fleet.open": "Abrir",
   "fleet.none": "Aún no gestionas una flota.",
-  "fleet.create_go": "Crear"
+  "fleet.create_go": "Crear",
+  "system.pending": "Guardado en tu teléfono"
 }

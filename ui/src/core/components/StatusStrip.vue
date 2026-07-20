@@ -3,12 +3,13 @@
      top zone (§7.3). Offline is a calm banner, never red (§15.1). -->
 <script setup>
 import { computed } from "vue";
-import { Mic, WifiOff } from "lucide-vue-next";
+import { Mic, WifiOff, CloudOff } from "lucide-vue-next";
 import { useDriverState } from "../state.js";
 import { useI18n } from "../i18n.js";
 
 const props = defineProps({
   online: { type: Boolean, default: true },
+  pending: { type: Number, default: 0 },
 });
 const { state } = useDriverState();
 const { t } = useI18n();
@@ -21,6 +22,11 @@ const stateLabel = computed(() => state.value);
     <span v-if="!online" class="strip__offline">
       <WifiOff :size="16" :stroke-width="2" aria-hidden="true" />
       {{ t("system.offline") }}
+    </span>
+    <!-- F12: queued captures show a subtle pending glyph (§15.1) -->
+    <span v-if="pending > 0" class="strip__pending" :aria-label="t('system.pending')">
+      <CloudOff :size="14" :stroke-width="2" aria-hidden="true" />
+      {{ pending }}
     </span>
     <button class="strip__mic" type="button" aria-label="Voice">
       <Mic :size="20" :stroke-width="2" aria-hidden="true" />
@@ -46,6 +52,13 @@ const stateLabel = computed(() => state.value);
   align-items: center;
   gap: var(--s-1);
   color: var(--text-2);
+}
+.strip__pending {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
 }
 .strip__mic {
   margin-left: auto;

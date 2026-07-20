@@ -169,5 +169,6 @@
   "fleet.your_fleets": "ਤੁਹਾਡੀਆਂ ਫਲੀਟਾਂ",
   "fleet.open": "ਖੋਲ੍ਹੋ",
   "fleet.none": "ਤੁਸੀਂ ਹਾਲੇ ਕੋਈ ਫਲੀਟ ਨਹੀਂ ਚਲਾਉਂਦੇ।",
-  "fleet.create_go": "ਬਣਾਓ"
+  "fleet.create_go": "ਬਣਾਓ",
+  "system.pending": "ਤੁਹਾਡੇ ਫ਼ੋਨ 'ਤੇ ਸੰਭਾਲਿਆ"
 }

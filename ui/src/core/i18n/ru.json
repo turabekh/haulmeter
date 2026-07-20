@@ -169,5 +169,6 @@
   "fleet.your_fleets": "Ваши автопарки",
   "fleet.open": "Открыть",
   "fleet.none": "У вас пока нет автопарка.",
-  "fleet.create_go": "Создать"
+  "fleet.create_go": "Создать",
+  "system.pending": "Сохранено на телефоне"
 }

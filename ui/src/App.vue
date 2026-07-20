@@ -8,15 +8,16 @@ import { computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import StatusStrip from "./core/components/StatusStrip.vue";
 import TabBar from "./core/components/TabBar.vue";
-import { online } from "./core/api.js";
+import { online, pendingWrites, flushQueue } from "./core/api.js";
 
 const route = useRoute();
 const chrome = computed(() => route.meta.chrome !== false);
 const portal = computed(() => route.meta.portal === true);
 
-// F12: reflect the browser's own connectivity too, not just fetch outcomes
+// F12: reflect the browser's own connectivity, and drain the write-queue on reconnect
 function setOnline() {
   online.value = true;
+  flushQueue();
 }
 function setOffline() {
   online.value = false;
@@ -27,6 +28,7 @@ onMounted(() => {
     window.addEventListener("online", setOnline);
     window.addEventListener("offline", setOffline);
   }
+  flushQueue(); // sync anything queued from a previous offline session
 });
 onUnmounted(() => {
   if (typeof window !== "undefined") {
@@ -38,7 +40,7 @@ onUnmounted(() => {
 
 <template>
   <div class="app-frame" :class="{ 'app-frame--wide': portal }">
-    <StatusStrip v-if="chrome" :online="online" />
+    <StatusStrip v-if="chrome" :online="online" :pending="pendingWrites" />
     <main class="app-content">
       <router-view />
     </main>

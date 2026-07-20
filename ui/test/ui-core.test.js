@@ -2,7 +2,7 @@
 // machine (SM-4), presentation helpers (§11), and the i18n resolver (F15).
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useDriverState, DriverState } from "../src/core/state.js";
-import { setToken, logout, online, fetchOwed } from "../src/core/api.js";
+import { setToken, logout, online, fetchOwed, report, pendingWrites, flushQueue } from "../src/core/api.js";
 import {
   statusPresentation,
   freshnessLabel,
@@ -131,6 +131,29 @@ describe("F12 read-cache (design-prd §15.1: offline is a mode)", () => {
     setToken("tok-nocache");
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
     await expect(fetchOwed()).rejects.toThrow();
+    vi.unstubAllGlobals();
+    logout();
+  });
+});
+
+describe("F12 write-queue (design-prd §15.1: everything saves to your phone)", () => {
+  it("queues a capture offline and replays it on reconnect", async () => {
+    logout(); // clears any prior queue
+    setToken("tok-queue");
+    // dead zone: the report can't be sent
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
+    const res = await report("fac-1", "parking_fullness", { status: "full" });
+    expect(res.queued).toBe(true); // saved to the phone, not lost
+    expect(pendingWrites.value).toBe(1);
+    expect(online.value).toBe(false);
+
+    // signal returns: flushing replays the queued write and clears the badge
+    const okStub = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal("fetch", okStub);
+    await flushQueue();
+    expect(pendingWrites.value).toBe(0);
+    expect(okStub.mock.calls[0][0]).toContain("/map/report"); // the real endpoint was replayed
+
     vi.unstubAllGlobals();
     logout();
   });

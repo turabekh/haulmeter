@@ -169,5 +169,6 @@
   "fleet.your_fleets": "Your fleets",
   "fleet.open": "Open",
   "fleet.none": "You don't run a fleet yet.",
-  "fleet.create_go": "Create"
+  "fleet.create_go": "Create",
+  "system.pending": "Saved on your phone"
 }
