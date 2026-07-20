@@ -185,5 +185,17 @@
   "incident.kind": "ਕੀ ਹੋਇਆ?",
   "incident.note": "ਨੋਟ ਜੋੜੋ",
   "incident.file": "ਘਟਨਾ ਦਰਜ ਕਰੋ",
-  "incident.filed": "ਘਟਨਾ ਦਰਜ ਹੋ ਗਈ"
+  "incident.filed": "ਘਟਨਾ ਦਰਜ ਹੋ ਗਈ",
+  "admin.title": "ਐਡਮਿਨ ਕੰਸੋਲ",
+  "admin.flags": "ਫੀਚਰ ਫਲੈਗ",
+  "admin.views": "ਮੋਡੀਊਲ ਦ੍ਰਿਸ਼",
+  "admin.moderation": "ਸੰਚਾਲਨ ਕਤਾਰ",
+  "admin.enable": "ਚਾਲੂ ਕਰੋ",
+  "admin.disable": "ਬੰਦ ਕਰੋ",
+  "admin.gates": "ਸ਼ਰਤਾਂ",
+  "admin.no_access": "ਸਿਰਫ਼ ਐਡਮਿਨ।",
+  "admin.mod_empty": "ਸੰਚਾਲਨ ਲਈ ਕੁਝ ਨਹੀਂ।",
+  "admin.approve": "ਮਨਜ਼ੂਰ",
+  "admin.reject": "ਰੱਦ",
+  "admin.module": "ਮੋਡੀਊਲ"
 }

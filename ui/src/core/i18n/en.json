@@ -185,5 +185,17 @@
   "incident.kind": "What happened?",
   "incident.note": "Add a note",
   "incident.file": "File incident",
-  "incident.filed": "Incident documented"
+  "incident.filed": "Incident documented",
+  "admin.title": "Admin Console",
+  "admin.flags": "Feature flags",
+  "admin.views": "Module views",
+  "admin.moderation": "Moderation queue",
+  "admin.enable": "Enable",
+  "admin.disable": "Disable",
+  "admin.gates": "gates",
+  "admin.no_access": "Platform admins only.",
+  "admin.mod_empty": "Nothing to moderate.",
+  "admin.approve": "Approve",
+  "admin.reject": "Reject",
+  "admin.module": "Module"
 }

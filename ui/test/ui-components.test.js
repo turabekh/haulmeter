@@ -23,6 +23,7 @@ import VoiceSheet from "../src/core/components/VoiceSheet.vue";
 import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
 import AuditSurface from "../src/surfaces/AuditSurface.vue";
 import ConditionSurface from "../src/surfaces/ConditionSurface.vue";
+import AdminConsoleSurface from "../src/surfaces/AdminConsoleSurface.vue";
 import GhostwriterSheet from "../src/core/components/GhostwriterSheet.vue";
 import SleepSheet from "../src/core/components/SleepSheet.vue";
 import HandoffSheet from "../src/core/components/HandoffSheet.vue";
@@ -648,6 +649,58 @@ describe("ConditionSurface — cargo-condition capture (M5-FR2)", () => {
     await flushPromises();
     expect(w.text()).toContain("Start a load");
     w.unmount();
+  });
+});
+
+describe("AdminConsoleSurface — F14 operator portal (design-prd §18)", () => {
+  it("lists flags with gates and toggles one; denies non-admins", async () => {
+    setToken("tok-admin");
+    const fetchStub = vi.fn().mockImplementation((url, opts) => {
+      const u = String(url);
+      if (u.endsWith("/admin/flags")) {
+        return jsonOk([
+          { key: "m06_parking", description: "", enabled: false, kill_switch: false, can_activate: false, gates: [{ name: "refund_policy", satisfied: false }] },
+          { key: "free_flag", description: "", enabled: false, kill_switch: false, can_activate: true, gates: [] },
+        ]);
+      }
+      if (u.endsWith("/admin/views")) return jsonOk([{ key: "m03.claims", module: "m03", title: "Detention Claims", path: "/x" }]);
+      if (u.endsWith("/admin/moderation")) return jsonOk([]);
+      if (u.includes("/enable")) return jsonOk({ key: "free_flag", enabled: true });
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(AdminConsoleSurface);
+      await flushPromises();
+      expect(w.text()).toContain("Admin Console");
+      expect(w.text()).toContain("m06_parking");
+      expect(w.text()).toContain("Detention Claims"); // module admin view listed
+      // a gated flag that can't activate has a disabled toggle
+      const toggles = w.findAll(".toggle");
+      const gated = toggles.find((b) => b.attributes("disabled") !== undefined);
+      expect(gated).toBeTruthy();
+      // the gate-free flag toggles on
+      const free = toggles.find((b) => b.attributes("disabled") === undefined);
+      await free.trigger("click");
+      await flushPromises();
+      expect(fetchStub.mock.calls.some((c) => String(c[0]).includes("/enable"))).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+
+  it("shows the no-access notice on 403", async () => {
+    setToken("tok-driver");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 403 }));
+    try {
+      const w = mount(AdminConsoleSurface);
+      await flushPromises();
+      expect(w.text()).toContain("Platform admins only");
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
   });
 });
 

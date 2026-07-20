@@ -185,5 +185,17 @@
   "incident.kind": "Что случилось?",
   "incident.note": "Добавить примечание",
   "incident.file": "Зарегистрировать инцидент",
-  "incident.filed": "Инцидент задокументирован"
+  "incident.filed": "Инцидент задокументирован",
+  "admin.title": "Консоль администратора",
+  "admin.flags": "Флаги функций",
+  "admin.views": "Представления модулей",
+  "admin.moderation": "Очередь модерации",
+  "admin.enable": "Включить",
+  "admin.disable": "Выключить",
+  "admin.gates": "условия",
+  "admin.no_access": "Только для администраторов.",
+  "admin.mod_empty": "Нечего модерировать.",
+  "admin.approve": "Одобрить",
+  "admin.reject": "Отклонить",
+  "admin.module": "Модуль"
 }

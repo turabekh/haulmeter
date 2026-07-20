@@ -185,5 +185,17 @@
   "incident.kind": "¿Qué pasó?",
   "incident.note": "Agregar nota",
   "incident.file": "Registrar incidente",
-  "incident.filed": "Incidente documentado"
+  "incident.filed": "Incidente documentado",
+  "admin.title": "Consola de administración",
+  "admin.flags": "Indicadores",
+  "admin.views": "Vistas de módulo",
+  "admin.moderation": "Cola de moderación",
+  "admin.enable": "Activar",
+  "admin.disable": "Desactivar",
+  "admin.gates": "requisitos",
+  "admin.no_access": "Solo administradores.",
+  "admin.mod_empty": "Nada que moderar.",
+  "admin.approve": "Aprobar",
+  "admin.reject": "Rechazar",
+  "admin.module": "Módulo"
 }

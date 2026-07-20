@@ -185,5 +185,17 @@
   "incident.kind": "Nima bo'ldi?",
   "incident.note": "Izoh qo'shish",
   "incident.file": "Hodisani qayd etish",
-  "incident.filed": "Hodisa hujjatlashtirildi"
+  "incident.filed": "Hodisa hujjatlashtirildi",
+  "admin.title": "Admin konsoli",
+  "admin.flags": "Funksiya bayroqlari",
+  "admin.views": "Modul ko'rinishlari",
+  "admin.moderation": "Moderatsiya navbati",
+  "admin.enable": "Yoqish",
+  "admin.disable": "O'chirish",
+  "admin.gates": "shartlar",
+  "admin.no_access": "Faqat adminlar.",
+  "admin.mod_empty": "Moderatsiya uchun hech narsa yo'q.",
+  "admin.approve": "Tasdiqlash",
+  "admin.reject": "Rad etish",
+  "admin.module": "Modul"
 }

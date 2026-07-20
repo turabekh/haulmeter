@@ -185,5 +185,17 @@
   "incident.kind": "Maxaa dhacay?",
   "incident.note": "Ku dar qoraal",
   "incident.file": "Diiwaangeli dhacdada",
-  "incident.filed": "Dhacdada waa la diiwaangeliyay"
+  "incident.filed": "Dhacdada waa la diiwaangeliyay",
+  "admin.title": "Konsole Maamul",
+  "admin.flags": "Calaamadaha",
+  "admin.views": "Muuqaalada modul",
+  "admin.moderation": "Safka hufnaanta",
+  "admin.enable": "Shid",
+  "admin.disable": "Dami",
+  "admin.gates": "shuruudo",
+  "admin.no_access": "Maamulayaasha oo kaliya.",
+  "admin.mod_empty": "Waxba ma jiraan.",
+  "admin.approve": "Ansixi",
+  "admin.reject": "Diid",
+  "admin.module": "Modul"
 }

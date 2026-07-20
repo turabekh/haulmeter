@@ -380,6 +380,42 @@ export async function fetchFleetClaims(fleetId) {
   return resp.json();
 }
 
+// AI-CONTEXT: F14 admin console reads/toggles (platform_admin gated server-side;
+// a 403 surfaces as "no access"). Not part of the driver app.
+export async function fetchAdminFlags() {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/admin/flags`, { headers: headers() });
+  if (!resp.ok) throw new Error(`admin flags ${resp.status}`);
+  return resp.json();
+}
+export async function fetchAdminViews() {
+  const resp = await fetch(`${API_BASE}/admin/views`, { headers: headers() });
+  if (!resp.ok) throw new Error(`admin views ${resp.status}`);
+  return resp.json();
+}
+export async function fetchModeration() {
+  const resp = await fetch(`${API_BASE}/admin/moderation`, { headers: headers() });
+  if (!resp.ok) throw new Error(`moderation ${resp.status}`);
+  return resp.json();
+}
+export async function toggleFlag(key, enable) {
+  const resp = await fetch(`${API_BASE}/admin/flags/${key}/${enable ? "enable" : "disable"}`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`toggle ${resp.status}`);
+  return resp.json();
+}
+export async function decideModeration(itemId, approve) {
+  const resp = await fetch(`${API_BASE}/admin/moderation/${itemId}/decide`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ approve }),
+  });
+  if (!resp.ok) throw new Error(`decide ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchEarnings() {
   return apiGet(`/money/earnings`, `earnings`);
 }

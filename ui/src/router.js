@@ -16,6 +16,7 @@ import ConditionSurface from "./surfaces/ConditionSurface.vue";
 import AuthSurface from "./surfaces/AuthSurface.vue";
 import MoreSurface from "./surfaces/MoreSurface.vue";
 import FleetWorkspaceSurface from "./surfaces/FleetWorkspaceSurface.vue";
+import AdminConsoleSurface from "./surfaces/AdminConsoleSurface.vue";
 import { isAuthenticated } from "./core/api.js";
 
 export const routes = [
@@ -36,6 +37,7 @@ export const routes = [
   { path: "/more", name: "more", component: MoreSurface },
   // §18 web-first portal — no tab chrome, wider frame; auth required (fleet owner)
   { path: "/fleet", name: "fleet", component: FleetWorkspaceSurface, meta: { chrome: false, portal: true } },
+  { path: "/admin", name: "admin", component: AdminConsoleSurface, meta: { chrome: false, portal: true } },
 ];
 
 // AI-CONTEXT: the auth gate. No session -> the login flow; already signed in ->
