@@ -70,5 +70,21 @@
   "fuel.get_code": "ਪੰਪ ਕੋਡ ਲਓ",
   "fuel.show_pump": "ਇਹ ਪੰਪ 'ਤੇ ਦਿਖਾਓ",
   "fuel.code": "ਪੰਪ ਕੋਡ",
-  "fuel.saved": "ਤੇਲ ਬਚਾਇਆ"
+  "fuel.saved": "ਤੇਲ ਬਚਾਇਆ",
+  "load.check_profit": "ਮੁਨਾਫ਼ਾ ਹਿਸਾਬ ਕਰੋ",
+  "calc.title": "ਲੋਡ ਮੁਨਾਫ਼ਾ",
+  "calc.revenue": "ਰੇਟ",
+  "calc.miles": "ਲੱਦੇ ਮੀਲ",
+  "calc.tolls": "ਟੋਲ",
+  "calc.rate_hr": "ਡਿਟੈਂਸ਼ਨ $/ਘੰਟਾ",
+  "calc.free_min": "ਖਾਲੀ ਸਮਾਂ (ਮਿੰਟ)",
+  "calc.calculate": "ਹਿਸਾਬ ਕਰੋ",
+  "calc.net": "ਅਸਲੀ ਮੁਨਾਫ਼ਾ",
+  "calc.rpm": "ਪ੍ਰਤੀ ਮੀਲ",
+  "calc.fuel": "ਰੂਟ ਤੇਲ",
+  "calc.detention": "ਸੰਭਾਵਿਤ ਡਿਟੈਂਸ਼ਨ",
+  "profile.risk": "ਡਿਟੈਂਸ਼ਨ ਖ਼ਤਰਾ",
+  "profile.best_hour": "ਸਭ ਤੋਂ ਤੇਜ਼ ਘੰਟਾ",
+  "profile.stops_basis": "ਦਰਜ ਸਟਾਪ",
+  "profile.risk_none": "ਹਾਲੇ ਕਾਫ਼ੀ ਸਟਾਪ ਨਹੀਂ"
 }

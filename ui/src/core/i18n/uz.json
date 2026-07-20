@@ -70,5 +70,21 @@
   "fuel.get_code": "Nasos kodini olish",
   "fuel.show_pump": "Buni nasosda ko'rsating",
   "fuel.code": "Nasos kodi",
-  "fuel.saved": "Yoqilg'i tejaldi"
+  "fuel.saved": "Yoqilg'i tejaldi",
+  "load.check_profit": "Foydani hisoblash",
+  "calc.title": "Yuk foydasi",
+  "calc.revenue": "Stavka",
+  "calc.miles": "Yuklangan mil",
+  "calc.tolls": "Yo'l haqi",
+  "calc.rate_hr": "Kutish $/soat",
+  "calc.free_min": "Bepul vaqt (daq)",
+  "calc.calculate": "Hisoblash",
+  "calc.net": "Haqiqiy foyda",
+  "calc.rpm": "har mil uchun",
+  "calc.fuel": "Yo'l yoqilg'isi",
+  "calc.detention": "Kutilayotgan kutish",
+  "profile.risk": "Kutish xavfi",
+  "profile.best_hour": "Eng tez soat",
+  "profile.stops_basis": "qayd etilgan to'xtashlar",
+  "profile.risk_none": "Hali to'xtashlar yetarli emas"
 }

@@ -16,6 +16,7 @@ import MoneySurface from "../src/surfaces/MoneySurface.vue";
 import DocsSurface from "../src/surfaces/DocsSurface.vue";
 import BookingSurface from "../src/surfaces/BookingSurface.vue";
 import FuelSurface from "../src/surfaces/FuelSurface.vue";
+import LoadCalcSurface from "../src/surfaces/LoadCalcSurface.vue";
 import { routes } from "../src/router.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 
@@ -199,6 +200,67 @@ describe("MoneySurface — fuel savings row (M7-FR4, design-prd §238)", () => {
   });
 });
 
+describe("LoadCalcSurface — true-profit calculator (M8-FR1, §11.7 basis)", () => {
+  async function mountCalc() {
+    const router = testRouter();
+    router.push("/load/calc");
+    await router.isReady();
+    const w = mount(LoadCalcSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    return w;
+  }
+
+  it("computes an honest offline net (revenue − tolls) with basis shown", async () => {
+    const fetchStub = vi.fn().mockRejectedValue(new Error("no session"));
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = await mountCalc();
+      // defaults: revenue $2000, miles 500, tolls $30
+      await w.find("form").trigger("submit");
+      await flushPromises();
+      expect(w.find(".result__figure").text()).toBe("$1,970.00"); // 2000 − 30 offline
+      expect(w.find(".result__figure").classes()).toContain("pos"); // clears -> ledger-green
+      expect(w.find(".result__rpm").text()).toContain("$3.94"); // 197000c / 500 mi
+      expect(w.text()).toContain("tracked stops"); // basis line always present
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("flags a load that does not clear in flare", async () => {
+    const fetchStub = vi.fn().mockRejectedValue(new Error("no session"));
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = await mountCalc();
+      const inputs = w.findAll(".field__input");
+      await inputs.at(0).setValue(20); // revenue $20
+      await inputs.at(2).setValue(30); // tolls $30 -> net negative
+      await w.find("form").trigger("submit");
+      await flushPromises();
+      expect(w.find(".result__figure").classes()).toContain("neg");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("FacilityProfileSurface — M8 intel (FR6 risk + FR2 fastest hour)", () => {
+  it("shows the detention-risk % and fastest hour with basis (fixture)", async () => {
+    const router = testRouter();
+    router.push("/facility/f-1");
+    await router.isReady();
+    const w = mount(FacilityProfileSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    const text = w.text();
+    expect(text).toContain("Detention risk");
+    expect(w.find(".risk__figure").text()).toBe("43%");
+    expect(w.find(".risk__figure").classes()).toContain("hot"); // >=40% -> flare
+    expect(text).toContain("Fastest hour");
+    expect(w.find(".best-hour__figure").text()).toBe("06:00");
+    w.unmount();
+  });
+});
+
 describe("The Meter (design-prd §9)", () => {
   it("renders label, Mono figure, and status with the variant color", () => {
     const w = mount(TheMeter, {
@@ -212,7 +274,8 @@ describe("The Meter (design-prd §9)", () => {
 
 describe("LoadSurface / Meter card (design-prd §10.2)", () => {
   it("shows the live Meter (fixture stop is accruing)", () => {
-    const w = mount(LoadSurface);
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
     expect(w.find(".meter__figure").exists()).toBe(true);
     expect(w.text()).toContain("Detention"); // accruing label
     w.unmount();

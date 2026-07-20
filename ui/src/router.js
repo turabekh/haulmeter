@@ -9,6 +9,7 @@ import MoneySurface from "./surfaces/MoneySurface.vue";
 import DocsSurface from "./surfaces/DocsSurface.vue";
 import BookingSurface from "./surfaces/BookingSurface.vue";
 import FuelSurface from "./surfaces/FuelSurface.vue";
+import LoadCalcSurface from "./surfaces/LoadCalcSurface.vue";
 import PlaceholderSurface from "./surfaces/PlaceholderSurface.vue";
 
 export const routes = [
@@ -19,6 +20,7 @@ export const routes = [
   { path: "/book/:spotId", name: "book", component: BookingSurface },
   { path: "/fuel/:stationId", name: "fuel", component: FuelSurface },
   { path: "/load", name: "load", component: LoadSurface },
+  { path: "/load/calc", name: "load-calc", component: LoadCalcSurface },
   { path: "/money", name: "money", component: MoneySurface },
   { path: "/docs", name: "docs", component: DocsSurface },
   { path: "/more", name: "more", component: PlaceholderSurface, props: { titleKey: "nav.more" } },

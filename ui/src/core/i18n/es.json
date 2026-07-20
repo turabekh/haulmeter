@@ -70,5 +70,21 @@
   "fuel.get_code": "Obtener código",
   "fuel.show_pump": "Muestra esto en el surtidor",
   "fuel.code": "Código de bomba",
-  "fuel.saved": "Combustible ahorrado"
+  "fuel.saved": "Combustible ahorrado",
+  "load.check_profit": "Calcular ganancia",
+  "calc.title": "Ganancia de carga",
+  "calc.revenue": "Tarifa",
+  "calc.miles": "Millas cargadas",
+  "calc.tolls": "Peajes",
+  "calc.rate_hr": "Detención $/h",
+  "calc.free_min": "Tiempo libre (min)",
+  "calc.calculate": "Calcular",
+  "calc.net": "Ganancia real",
+  "calc.rpm": "por milla",
+  "calc.fuel": "Combustible de ruta",
+  "calc.detention": "Detención esperada",
+  "profile.risk": "Riesgo de detención",
+  "profile.best_hour": "Hora más rápida",
+  "profile.stops_basis": "paradas registradas",
+  "profile.risk_none": "Aún no hay suficientes paradas"
 }

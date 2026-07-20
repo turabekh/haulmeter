@@ -117,6 +117,35 @@ export async function issuePumpCode({ stationId, gallons }) {
   return resp.json();
 }
 
+export async function calcTrueProfit(payload) {
+  const resp = await fetch(`${API_BASE}/intel/true-profit`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) throw new Error(`true-profit failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchDetentionRisk(facilityId, freeTimeMinutes = 120) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const q = new URLSearchParams({ free_time_minutes: freeTimeMinutes });
+  const resp = await fetch(`${API_BASE}/intel/detention-risk/${facilityId}?${q}`, {
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`detention-risk failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchAppointmentHours(facilityId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/intel/appointment-hours/${facilityId}`, {
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`appointment-hours failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function submitReview(facilityId, ratings, text) {
   const resp = await fetch(`${API_BASE}/facility/${facilityId}/review`, {
     method: "POST",

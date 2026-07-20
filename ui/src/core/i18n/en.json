@@ -70,5 +70,21 @@
   "fuel.get_code": "Get pump code",
   "fuel.show_pump": "Show this at the pump",
   "fuel.code": "Pump code",
-  "fuel.saved": "Fuel saved"
+  "fuel.saved": "Fuel saved",
+  "load.check_profit": "Check load profit",
+  "calc.title": "Load profit",
+  "calc.revenue": "Rate",
+  "calc.miles": "Loaded miles",
+  "calc.tolls": "Tolls",
+  "calc.rate_hr": "Detention $/hr",
+  "calc.free_min": "Free time (min)",
+  "calc.calculate": "Calculate",
+  "calc.net": "True profit",
+  "calc.rpm": "per mile",
+  "calc.fuel": "Route fuel",
+  "calc.detention": "Expected detention",
+  "profile.risk": "Detention risk",
+  "profile.best_hour": "Fastest hour",
+  "profile.stops_basis": "tracked stops",
+  "profile.risk_none": "Not enough tracked stops yet"
 }

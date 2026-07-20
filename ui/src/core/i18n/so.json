@@ -70,5 +70,21 @@
   "fuel.get_code": "Hel koodhka bamka",
   "fuel.show_pump": "Kan tus bamka",
   "fuel.code": "Koodhka bamka",
-  "fuel.saved": "Shidaal la badbaadiyay"
+  "fuel.saved": "Shidaal la badbaadiyay",
+  "load.check_profit": "Xisaabi faa'iidada",
+  "calc.title": "Faa'iidada xamuulka",
+  "calc.revenue": "Qiimaha",
+  "calc.miles": "Mayaysha rarran",
+  "calc.tolls": "Cashuuraha waddada",
+  "calc.rate_hr": "Daahitaan $/saac",
+  "calc.free_min": "Waqti xor ah (daq)",
+  "calc.calculate": "Xisaabi",
+  "calc.net": "Faa'iidada dhabta ah",
+  "calc.rpm": "mayl kasta",
+  "calc.fuel": "Shidaalka waddada",
+  "calc.detention": "Daahitaanka la filayo",
+  "profile.risk": "Khatarta daahitaanka",
+  "profile.best_hour": "Saacadda ugu dhaqso badan",
+  "profile.stops_basis": "joogsiyada la diiwaangeliyay",
+  "profile.risk_none": "Weli joogsiyo kuma filna"
 }

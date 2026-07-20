@@ -70,5 +70,21 @@
   "fuel.get_code": "Получить код",
   "fuel.show_pump": "Покажите это на колонке",
   "fuel.code": "Код колонки",
-  "fuel.saved": "Сэкономлено на топливе"
+  "fuel.saved": "Сэкономлено на топливе",
+  "load.check_profit": "Рассчитать прибыль",
+  "calc.title": "Прибыль по грузу",
+  "calc.revenue": "Ставка",
+  "calc.miles": "Гружёные мили",
+  "calc.tolls": "Платные дороги",
+  "calc.rate_hr": "Простой $/ч",
+  "calc.free_min": "Свободное время (мин)",
+  "calc.calculate": "Рассчитать",
+  "calc.net": "Чистая прибыль",
+  "calc.rpm": "за милю",
+  "calc.fuel": "Топливо в пути",
+  "calc.detention": "Ожидаемый простой",
+  "profile.risk": "Риск простоя",
+  "profile.best_hour": "Самый быстрый час",
+  "profile.stops_basis": "учтённых остановок",
+  "profile.risk_none": "Пока мало остановок"
 }

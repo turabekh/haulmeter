@@ -100,6 +100,16 @@ export function sampleProfile(facilityId) {
   };
 }
 
+// AI-CONTEXT: fixture M8 decision-intel for the facility scorecard, pending live
+// /intel/detention-risk + /intel/appointment-hours. Basis (sample size) always
+// present so the UI can show it and never fake precision (M8-FR5).
+export function sampleFacilityIntel() {
+  return {
+    risk: { exceed_rate: 0.43, sample_size: 14, confidence: "high", basis: "tracked_stops" },
+    best_hour: { hour: 6, median_seconds: 2400, sample_size: 9, confidence: "medium" },
+  };
+}
+
 // AI-CONTEXT: fixture ACTIVE stop for the Load tab / The Meter, pending the
 // active-load API. Arrived 150 min ago with 120 min free time -> detention is
 // accruing (the signature "money ticking up" moment).

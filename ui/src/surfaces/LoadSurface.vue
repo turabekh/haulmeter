@@ -6,6 +6,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { Check, Camera, Send } from "lucide-vue-next";
+import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
@@ -14,6 +15,7 @@ import { SAMPLE_STOP as stop } from "../core/fixtures.js";
 
 const { isDriving } = useDriverState();
 const { t } = useI18n();
+const router = useRouter();
 
 const arrivalMs = ref(0);
 const now = ref(Date.now());
@@ -72,6 +74,10 @@ const primaryCta = computed(() => (withinFree.value ? t("load.cta.notice") : t("
       </section>
 
       <button class="cta" type="button">{{ primaryCta }}</button>
+      <!-- M8: pre-acceptance decision — cross-link to the true-profit calculator (NAV-5) -->
+      <button class="cta cta--text" type="button" @click="router.push('/load/calc')">
+        {{ t("load.check_profit") }}
+      </button>
     </template>
   </div>
 </template>
@@ -136,5 +142,12 @@ const primaryCta = computed(() => (withinFree.value ? t("load.cta.notice") : t("
   color: var(--on-accent);
   font-size: var(--type-label-size);
   font-weight: 500;
+}
+/* text button (§8) — the secondary cross-link verb to the profit calculator */
+.cta--text {
+  margin-top: var(--s-2);
+  min-height: 48px;
+  background: transparent;
+  color: var(--shield-500);
 }
 </style>

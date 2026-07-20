@@ -4,21 +4,27 @@
      and a quick-review action. Reached from a map pin (cross-link, NAV-5).
      Fixture-backed pending auth; swaps to the live M2 API behind api.js. -->
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { ArrowLeft, Star } from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import ReviewSheet from "../core/components/ReviewSheet.vue";
 import { useI18n } from "../core/i18n.js";
 import { formatDwell } from "../core/presentation.js";
-import { fetchProfile, submitReview } from "../core/api.js";
-import { sampleProfile } from "../core/fixtures.js";
+import {
+  fetchProfile,
+  submitReview,
+  fetchDetentionRisk,
+  fetchAppointmentHours,
+} from "../core/api.js";
+import { sampleProfile, sampleFacilityIntel } from "../core/fixtures.js";
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 
 const profile = ref(null);
+const intel = ref(null);
 const reviewing = ref(false);
 
 async function load() {
@@ -27,8 +33,25 @@ async function load() {
   } catch {
     profile.value = sampleProfile(route.params.id); // unauthenticated / offline
   }
+  try {
+    const [risk, hours] = await Promise.all([
+      fetchDetentionRisk(route.params.id),
+      fetchAppointmentHours(route.params.id),
+    ]);
+    intel.value = { risk, best_hour: hours[0] ?? null };
+  } catch {
+    intel.value = sampleFacilityIntel(); // unauthenticated / offline
+  }
 }
 onMounted(load);
+
+// M8-FR6/FR2 presentation: percentage + a readable "06:00" hour label
+const riskPct = computed(() =>
+  intel.value?.risk?.exceed_rate != null ? Math.round(intel.value.risk.exceed_rate * 100) : null,
+);
+function hourLabel(h) {
+  return `${String(h).padStart(2, "0")}:00`;
+}
 
 async function onReview(payload) {
   reviewing.value = false;
@@ -59,6 +82,24 @@ async function onReview(payload) {
         </span>
       </div>
       <p v-else class="muted">{{ t("profile.no_dwell") }}</p>
+    </section>
+
+    <!-- M8 decision intel: detention-risk pre-acceptance flag + fastest hour -->
+    <section v-if="intel" class="card">
+      <h2 class="card__title">{{ t("profile.risk") }}</h2>
+      <p v-if="riskPct !== null" class="risk">
+        <span class="risk__figure" :class="{ hot: riskPct >= 40 }">{{ riskPct }}%</span>
+        <span class="dwell__meta">· {{ intel.risk.sample_size }} {{ t("profile.stops_basis") }}</span>
+      </p>
+      <p v-else class="muted">{{ t("profile.risk_none") }}</p>
+      <p v-if="intel.best_hour" class="best-hour">
+        <span class="best-hour__label">{{ t("profile.best_hour") }}</span>
+        <span class="best-hour__figure">{{ hourLabel(intel.best_hour.hour) }}</span>
+        <span class="dwell__meta">
+          · {{ formatDwell(intel.best_hour.median_seconds) }} · {{ intel.best_hour.sample_size }}
+          {{ t("profile.stops_basis") }}
+        </span>
+      </p>
     </section>
 
     <section class="card">
@@ -149,6 +190,36 @@ async function onReview(payload) {
 }
 .rating__figure {
   font-family: var(--font-mono);
+  font-size: var(--type-title-size);
+}
+.risk {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 0;
+}
+.risk__figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--type-display-size);
+  color: var(--text-1);
+}
+.risk__figure.hot {
+  color: var(--flare-500);
+}
+.best-hour {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
+}
+.best-hour__label {
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+}
+.best-hour__figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--type-title-size);
 }
 .reviews {
