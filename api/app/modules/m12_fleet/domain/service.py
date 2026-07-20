@@ -130,6 +130,22 @@ def remove_member(db: Session, membership: FleetMembership) -> FleetMembership:
     return membership
 
 
+def list_fleets_for(db: Session, account_id) -> list[dict]:
+    # the fleets this account belongs to (owner/dispatcher/driver), with F1 names
+    out = []
+    for m in db.scalars(
+        select(FleetMembership).where(
+            FleetMembership.driver_account_id == account_id,
+            FleetMembership.state == MembershipState.active,
+        )
+    ):
+        org = db.get(identity.Organization, m.fleet_org_id)
+        out.append(
+            {"fleet_id": m.fleet_org_id, "name": org.name if org else None, "role": m.role.value}
+        )
+    return out
+
+
 def list_members(db: Session, fleet_org_id, consented_only: bool = True) -> list[FleetMembership]:
     stmt = select(FleetMembership).where(FleetMembership.fleet_org_id == fleet_org_id)
     if consented_only:

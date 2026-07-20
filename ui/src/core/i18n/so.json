@@ -163,5 +163,11 @@
   "handoff.mine": "Kaaga",
   "handoff.leaving_in": "baxaya",
   "handoff.empty": "Hadda goob furmaysa ma jirto",
-  "handoff.broadcast_done": "La faafiyay — darawal dhow ayaa helaya goobtaada"
+  "handoff.broadcast_done": "La faafiyay — darawal dhow ayaa helaya goobtaada",
+  "fleet.create": "Samee ganacsi",
+  "fleet.name": "Magaca ganacsiga",
+  "fleet.your_fleets": "Ganacsiyadaada",
+  "fleet.open": "Fur",
+  "fleet.none": "Weli ganacsi ma maamusho.",
+  "fleet.create_go": "Samee"
 }

@@ -26,7 +26,7 @@ import GhostwriterSheet from "../src/core/components/GhostwriterSheet.vue";
 import SleepSheet from "../src/core/components/SleepSheet.vue";
 import HandoffSheet from "../src/core/components/HandoffSheet.vue";
 import { routes, installAuthGuard } from "../src/router.js";
-import { setToken, logout, isAuthenticated, setActiveStop } from "../src/core/api.js";
+import { setToken, logout, isAuthenticated, setActiveStop, setActiveFleet } from "../src/core/api.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 
 const routerStub = { global: { stubs: { "router-link": { template: "<a class='rl'><slot/></a>" } } } };
@@ -442,20 +442,57 @@ describe("MapSurface — voice wake affordance (M11-FR5)", () => {
 });
 
 describe("FleetWorkspaceSurface — web-first portal (M12, design-prd §18)", () => {
-  it("shows fleet KPIs, members table, and broker recovery rates (fixture)", async () => {
+  it("falls back to the fixture demo when unauthenticated", async () => {
+    logout();
     const w = mount(FleetWorkspaceSurface);
     await flushPromises();
     expect(w.text()).toContain("Fleet Workspace");
-    // recovered KPI in Mono ($1,840.00 = 184000c)
-    expect(w.find(".kpi__figure").text()).toBe("$1,840.00");
-    // members table has a row per driver
-    expect(w.findAll("tbody tr").length).toBeGreaterThanOrEqual(4);
-    // a broker that pays well is flagged good, a laggard bad
+    expect(w.find(".kpi__figure").text()).toBe("$1,840.00"); // demo recovered
     expect(w.find(".good").exists()).toBe(true);
     expect(w.find(".bad").exists()).toBe(true);
     w.unmount();
   });
+
+  it("creates a fleet then goes live (no fleets yet -> create -> workspace)", async () => {
+    setToken("tok-fleet");
+    setActiveFleet(null);
+    const fetchStub = vi.fn().mockImplementation((url, opts) => {
+      const u = String(url);
+      if (u.endsWith("/fleet/mine")) return jsonOk([]);
+      if (u.endsWith("/fleet") && opts?.method === "POST") return jsonOk({ fleet_id: "fl-1", role: "owner" });
+      if (u.includes("/report")) {
+        return jsonOk({
+          driver_count: 1,
+          recovered_cents: 0,
+          owed_cents: 0,
+          fuel_saved_cents: 0,
+          members: [{ driver_account_id: "acc-owner-1234", recovered_cents: 0, owed_cents: 0, fuel_saved_cents: 0 }],
+        });
+      }
+      if (u.includes("/claims")) return jsonOk({ owed_cents: 0, recovered_cents: 0, by_counterparty: {} });
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(FleetWorkspaceSurface);
+      await flushPromises();
+      expect(w.text()).toContain("You don't run a fleet yet"); // create view
+      await w.find(".field__input").setValue("Acme Fleet");
+      await w.find(".cta").trigger("click");
+      await flushPromises();
+      expect(w.find(".kpi").exists()).toBe(true); // live workspace rendered
+      expect(w.findAll("tbody tr").length).toBe(1); // the owner, consented
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveFleet(null);
+      logout();
+    }
+  });
 });
+
+function jsonOk(body) {
+  return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+}
 
 describe("AuditSurface — settlement auditor (M9-FR1)", () => {
   it("flags missed pay in flare with a review note", async () => {

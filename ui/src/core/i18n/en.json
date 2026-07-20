@@ -163,5 +163,11 @@
   "handoff.mine": "Yours",
   "handoff.leaving_in": "leaving in",
   "handoff.empty": "No spots opening right now",
-  "handoff.broadcast_done": "Broadcast — a nearby driver gets your spot"
+  "handoff.broadcast_done": "Broadcast — a nearby driver gets your spot",
+  "fleet.create": "Create a fleet",
+  "fleet.name": "Fleet name",
+  "fleet.your_fleets": "Your fleets",
+  "fleet.open": "Open",
+  "fleet.none": "You don't run a fleet yet.",
+  "fleet.create_go": "Create"
 }

@@ -163,5 +163,11 @@
   "handoff.mine": "ਤੁਹਾਡਾ",
   "handoff.leaving_in": "ਜਾ ਰਿਹਾ",
   "handoff.empty": "ਹੁਣ ਕੋਈ ਥਾਂ ਨਹੀਂ ਖੁੱਲ੍ਹ ਰਹੀ",
-  "handoff.broadcast_done": "ਪ੍ਰਸਾਰਿਤ — ਨੇੜਲੇ ਡਰਾਈਵਰ ਨੂੰ ਤੁਹਾਡੀ ਥਾਂ ਮਿਲੇਗੀ"
+  "handoff.broadcast_done": "ਪ੍ਰਸਾਰਿਤ — ਨੇੜਲੇ ਡਰਾਈਵਰ ਨੂੰ ਤੁਹਾਡੀ ਥਾਂ ਮਿਲੇਗੀ",
+  "fleet.create": "ਫਲੀਟ ਬਣਾਓ",
+  "fleet.name": "ਫਲੀਟ ਦਾ ਨਾਮ",
+  "fleet.your_fleets": "ਤੁਹਾਡੀਆਂ ਫਲੀਟਾਂ",
+  "fleet.open": "ਖੋਲ੍ਹੋ",
+  "fleet.none": "ਤੁਸੀਂ ਹਾਲੇ ਕੋਈ ਫਲੀਟ ਨਹੀਂ ਚਲਾਉਂਦੇ।",
+  "fleet.create_go": "ਬਣਾਓ"
 }

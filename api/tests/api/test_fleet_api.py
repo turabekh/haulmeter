@@ -55,6 +55,21 @@ def test_create_fleet_and_report(client, db):
     assert body["owed_cents"] == 15000
 
 
+def test_my_fleets_lists_created_fleet(client, db):
+    _, headers = _auth(client)
+    assert client.get("/fleet/mine", headers=headers).json() == []  # none yet
+    created = client.post("/fleet", json={"name": "Acme Fleet"}, headers=headers)
+    fleet_id = created.json()["fleet_id"]
+
+    mine = client.get("/fleet/mine", headers=headers)
+    assert mine.status_code == 200
+    rows = mine.json()
+    assert len(rows) == 1
+    assert rows[0]["fleet_id"] == fleet_id
+    assert rows[0]["name"] == "Acme Fleet"
+    assert rows[0]["role"] == "owner"
+
+
 def test_benchmark_requires_subscription(client, db):
     _, headers = _auth(client)
     fac = facility.create_facility(db, facility.FacilityType.shipper_receiver, "Receiver", *DALLAS)

@@ -36,6 +36,17 @@ def create_fleet(
     return {"fleet_id": str(org.id), "role": membership.role.value}
 
 
+@router.get("/mine")
+def my_fleets(
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    return [
+        {"fleet_id": str(f["fleet_id"]), "name": f["name"], "role": f["role"]}
+        for f in m12.list_fleets_for(db, account.id)
+    ]
+
+
 @router.post("/{fleet_id}/invite", status_code=201)
 def invite(
     fleet_id: uuid.UUID,

@@ -163,5 +163,11 @@
   "handoff.mine": "Sizniki",
   "handoff.leaving_in": "ketadi",
   "handoff.empty": "Hozir joy ochilmayapti",
-  "handoff.broadcast_done": "Yuborildi — yaqindagi haydovchi joyingizni oladi"
+  "handoff.broadcast_done": "Yuborildi — yaqindagi haydovchi joyingizni oladi",
+  "fleet.create": "Avtopark yaratish",
+  "fleet.name": "Avtopark nomi",
+  "fleet.your_fleets": "Sizning avtoparklaringiz",
+  "fleet.open": "Ochish",
+  "fleet.none": "Sizda hali avtopark yo'q.",
+  "fleet.create_go": "Yaratish"
 }

@@ -222,6 +222,58 @@ export async function fetchFuelCorridor({ lat, lon, headingDeg = 0, maxDistanceM
   return resp.json();
 }
 
+// AI-CONTEXT: the fleet-portal's selected fleet persists across reloads.
+const ACTIVE_FLEET_KEY = "longhaul.active_fleet";
+export const activeFleetId = ref((() => {
+  try {
+    return localStorage.getItem(ACTIVE_FLEET_KEY);
+  } catch {
+    return null;
+  }
+})());
+export function setActiveFleet(id) {
+  activeFleetId.value = id;
+  try {
+    if (id) localStorage.setItem(ACTIVE_FLEET_KEY, id);
+    else localStorage.removeItem(ACTIVE_FLEET_KEY);
+  } catch {
+    /* private mode — active fleet stays in memory */
+  }
+}
+
+export async function fetchMyFleets() {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/fleet/mine`, { headers: headers() });
+  if (!resp.ok) throw new Error(`my fleets failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function createFleet(name) {
+  const resp = await fetch(`${API_BASE}/fleet`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ name }),
+  });
+  if (!resp.ok) throw new Error(`create fleet failed: ${resp.status}`);
+  const data = await resp.json();
+  setActiveFleet(data.fleet_id);
+  return data;
+}
+
+export async function fetchFleetReport(fleetId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/fleet/${fleetId}/report`, { headers: headers() });
+  if (!resp.ok) throw new Error(`fleet report failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchFleetClaims(fleetId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/fleet/${fleetId}/claims`, { headers: headers() });
+  if (!resp.ok) throw new Error(`fleet claims failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchEarnings() {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const resp = await fetch(`${API_BASE}/money/earnings`, { headers: headers() });
