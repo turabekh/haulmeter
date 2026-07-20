@@ -16,6 +16,7 @@ MODEL_MODULES = [
     "app.foundation.f05_load.domain.models",
     "app.foundation.f06_documents.domain.models",
     "app.foundation.f07_ledger.domain.models",
+    "app.foundation.f08_notifications.domain.models",
 ]
 
 
