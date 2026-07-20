@@ -112,6 +112,24 @@ export async function fetchMeter(stopId) {
   return resp.json();
 }
 
+export async function sendDetentionNotice(stopId) {
+  const resp = await fetch(`${API_BASE}/load/${stopId}/notice`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`notice failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function generateClaim(stopId) {
+  const resp = await fetch(`${API_BASE}/load/${stopId}/claim`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`claim failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function login(email, password) {
   const resp = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",

@@ -21,6 +21,8 @@ import {
   createActiveLoad,
   arriveAtStop,
   fetchMeter,
+  sendDetentionNotice,
+  generateClaim,
 } from "../core/api.js";
 
 const { isDriving } = useDriverState();
@@ -31,6 +33,7 @@ const live = ref(null); // live meter response, or null (fixture demo)
 const arrivalMs = ref(0); // null while a live load is pre-arrival
 const now = ref(Date.now());
 const starting = ref(false);
+const filed = ref(null); // the generated claim result, once filed
 const form = reactive({ facility: "", broker: "", freeMin: 120, rateHr: 75 });
 let timer = null;
 
@@ -105,11 +108,19 @@ const primaryCta = computed(() =>
 );
 
 async function onPrimary() {
-  if (preArrival.value) {
-    await arriveAtStop(activeStopId.value);
+  if (!activeStopId.value) return; // demo Meter has no live actions
+  try {
+    if (preArrival.value) {
+      await arriveAtStop(activeStopId.value);
+    } else if (withinFree.value) {
+      await sendDetentionNotice(activeStopId.value); // M3 counterparty notice
+    } else {
+      filed.value = await generateClaim(activeStopId.value); // arrive->accrue->FILE
+    }
     await loadMeter();
+  } catch {
+    /* offline / queued in a later F12 pass */
   }
-  // send-notice / generate-claim wire to M3 in a follow-up
 }
 
 async function startLoad() {
@@ -131,6 +142,7 @@ async function startLoad() {
 
 function endLoad() {
   setActiveStop(null);
+  filed.value = null;
   setupDemo();
 }
 </script>
@@ -164,6 +176,15 @@ function endLoad() {
           </li>
         </ul>
       </section>
+
+      <!-- arrive -> accrue -> FILE: the loop closes into a GPS-backed claim -->
+      <div v-if="filed" class="filed">
+        <Check :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
+        <span>{{ t("load.filed") }} · {{ formatMoney(filed.amount_cents) }}</span>
+        <button class="filed__link" type="button" @click="router.push('/money')">
+          {{ t("money.title") }}
+        </button>
+      </div>
 
       <button class="cta" type="button" @click="onPrimary">{{ primaryCta }}</button>
 
@@ -253,6 +274,25 @@ function endLoad() {
 }
 .ok {
   color: var(--ledger-500);
+}
+.filed {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-card);
+  border: 1px solid var(--line-1);
+  background: var(--ink-1);
+  font-size: var(--type-body-size);
+  color: var(--text-1);
+}
+.filed__link {
+  margin-left: auto;
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+  font-weight: 500;
 }
 .cta {
   width: 100%;

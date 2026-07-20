@@ -83,3 +83,28 @@ def test_meter_404_for_unknown_stop(client):
     headers = _auth(client)
     resp = client.get("/load/00000000-0000-0000-0000-000000000000/meter", headers=headers)
     assert resp.status_code == 404
+
+
+def test_notice_and_claim_require_arrival(client, db):
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+    # before arrival there is no claim -> 409
+    assert client.post(f"/load/{stop_id}/notice", headers=headers).status_code == 409
+    assert client.post(f"/load/{stop_id}/claim", headers=headers).status_code == 409
+
+
+def test_generate_claim_closes_the_loop(client, db):
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+    client.post(f"/load/{stop_id}/arrive", headers=headers)
+
+    # within free time: nothing to notify yet, but a pack still files (amount 0)
+    notice = client.post(f"/load/{stop_id}/notice", headers=headers)
+    assert notice.status_code == 201
+    assert notice.json()["sent"] is False
+
+    claim = client.post(f"/load/{stop_id}/claim", headers=headers)
+    assert claim.status_code == 201
+    body = claim.json()
+    assert body["chain_valid"] is True  # GPS-backed evidence chain
+    assert body["state"] in ("packaged", "invoiced", "exported")  # a pack was filed

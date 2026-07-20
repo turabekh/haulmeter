@@ -153,5 +153,6 @@
   "load.end": "Yukni tugatish",
   "load.facility": "Obyekt",
   "load.broker": "Broker",
-  "load.create": "Boshlash"
+  "load.create": "Boshlash",
+  "load.filed": "Da'vo topshirildi"
 }

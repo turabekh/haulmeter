@@ -586,6 +586,50 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       logout();
     }
   });
+
+  it("files a GPS-backed claim from an accruing stop (arrive->accrue->file)", async () => {
+    setToken("tok-live");
+    setActiveStop("stop-acc");
+    const accruing = {
+      stop_id: "stop-acc",
+      claim_id: "claim-1",
+      facility_name: "Accruing Receiver",
+      counterparty: "Acme",
+      appointment: null,
+      arrived: true,
+      free_time_minutes: 120,
+      rate_cents_per_hour: 7500,
+      phase: "accruing",
+      free_time_remaining_seconds: 0,
+      detention_seconds: 1800,
+      detention_cents: 3750,
+      notice_sent: false,
+    };
+    const fetchStub = vi.fn().mockImplementation((url) => {
+      if (String(url).endsWith("/claim")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ amount_cents: 3750, state: "invoiced", chain_valid: true }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(accruing) });
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      const w = mount(LoadSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      expect(w.find(".cta").text()).toContain("Generate claim"); // accruing CTA
+      await w.find(".cta").trigger("click");
+      await flushPromises();
+      expect(w.find(".filed").exists()).toBe(true);
+      expect(w.find(".filed").text()).toContain("$37.50"); // filed claim amount
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
 });
 
 describe("MoneySurface (M4 Money tab, design-prd §10.3)", () => {

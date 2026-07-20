@@ -153,5 +153,6 @@
   "load.end": "Завершить груз",
   "load.facility": "Объект",
   "load.broker": "Брокер",
-  "load.create": "Начать"
+  "load.create": "Начать",
+  "load.filed": "Претензия подана"
 }

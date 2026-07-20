@@ -18,9 +18,12 @@ from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
 from app.foundation.f05_load import public as loads
+from app.foundation.f08_notifications import public as notify
 from app.modules.m03_detention import public as m3
 
 router = APIRouter(prefix="/load", tags=["load"])
+
+_GATEWAY = notify.RecordingNotificationGateway()  # F8 seam (dev)
 
 
 class CreateLoadIn(BaseModel):
@@ -111,6 +114,7 @@ def meter(
         detention_cents = state.amount_cents
     return {
         "stop_id": str(stop.id),
+        "claim_id": str(claim.id) if claim else None,
         "facility_name": fac.name,
         "counterparty": cp.name if cp else None,
         "appointment": stop.appointment_start.isoformat() if stop.appointment_start else None,
@@ -121,5 +125,42 @@ def meter(
         "free_time_remaining_seconds": free_remaining,
         "detention_seconds": detention_seconds,
         "detention_cents": detention_cents,
-        "notice_sent": bool(claim is not None and claim.state.value != "invoiced"),
+        "notice_sent": bool(claim is not None and claim.state.value != "open"),
+    }
+
+
+def _claim_or_409(db: Session, stop) -> m3.DetentionClaim:
+    claim = m3.claim_for_stop(db, stop.id)
+    if claim is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "arrive first — no active claim")
+    return claim
+
+
+@router.post("/{stop_id}/notice", status_code=201)
+def send_notice(
+    stop_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    # M3 counterparty notice — no-ops while still within free time (nothing owed yet)
+    claim = _claim_or_409(db, _stop_or_404(db, stop_id))
+    message = m3.send_detention_start_notice(db, claim, _GATEWAY, datetime.now(UTC))
+    return {"sent": message is not None}
+
+
+@router.post("/{stop_id}/claim", status_code=201)
+def generate_claim(
+    stop_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    # close the loop: the running clock -> a GPS-backed, filed detention claim
+    claim = _claim_or_409(db, _stop_or_404(db, stop_id))
+    result = m3.generate_pack(db, claim, now=datetime.now(UTC), gateway=_GATEWAY)
+    return {
+        "claim_id": str(claim.id),
+        "amount_cents": claim.amount_cents,
+        "state": claim.state.value,
+        "chain_valid": result["pack"].verification["chain_valid"],
+        "receivable_ref": str(claim.receivable_ref) if claim.receivable_ref else None,
     }

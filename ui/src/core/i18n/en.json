@@ -153,5 +153,6 @@
   "load.end": "End load",
   "load.facility": "Facility",
   "load.broker": "Broker",
-  "load.create": "Start"
+  "load.create": "Start",
+  "load.filed": "Claim filed"
 }
