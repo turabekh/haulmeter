@@ -130,5 +130,15 @@
   "audit.run": "Yetmagan to'lovni topish",
   "audit.missed": "Yetmagan to'lov",
   "audit.none": "Yetmagan to'lov yo'q — hisob-kitob dalillaringizga mos.",
-  "audit.review": "Tashuvchingiz bilan ko'rib chiqing. Bu yuridik maslahat emas."
+  "audit.review": "Tashuvchingiz bilan ko'rib chiqing. Bu yuridik maslahat emas.",
+  "ghost.title": "Xabar yozish",
+  "ghost.tone.relationship": "Do'stona",
+  "ghost.tone.neutral": "Neytral",
+  "ghost.tone.firm": "Qat'iy",
+  "ghost.facts": "Nima bo'ldi?",
+  "ghost.facts_placeholder": "masalan bepul vaqtdan 3 soat oshib ketdi",
+  "ghost.draft": "Yozish",
+  "ghost.english": "Ingliz tili — yuborishga tayyor",
+  "ghost.approve": "Tasdiqlab yuborish",
+  "ghost.sent": "Yuborildi"
 }

@@ -130,5 +130,15 @@
   "audit.run": "ਖੁੰਝਿਆ ਭੁਗਤਾਨ ਲੱਭੋ",
   "audit.missed": "ਖੁੰਝਿਆ ਭੁਗਤਾਨ",
   "audit.none": "ਕੋਈ ਖੁੰਝਿਆ ਭੁਗਤਾਨ ਨਹੀਂ — ਤੁਹਾਡਾ ਸੈਟਲਮੈਂਟ ਤੁਹਾਡੇ ਸਬੂਤ ਨਾਲ ਮੇਲ ਖਾਂਦਾ ਹੈ।",
-  "audit.review": "ਆਪਣੇ ਕੈਰੀਅਰ ਨਾਲ ਸਮੀਖਿਆ ਕਰੋ। ਇਹ ਕਾਨੂੰਨੀ ਸਲਾਹ ਨਹੀਂ।"
+  "audit.review": "ਆਪਣੇ ਕੈਰੀਅਰ ਨਾਲ ਸਮੀਖਿਆ ਕਰੋ। ਇਹ ਕਾਨੂੰਨੀ ਸਲਾਹ ਨਹੀਂ।",
+  "ghost.title": "ਸੁਨੇਹਾ ਲਿਖੋ",
+  "ghost.tone.relationship": "ਦੋਸਤਾਨਾ",
+  "ghost.tone.neutral": "ਨਿਰਪੱਖ",
+  "ghost.tone.firm": "ਸਖ਼ਤ",
+  "ghost.facts": "ਕੀ ਹੋਇਆ?",
+  "ghost.facts_placeholder": "ਜਿਵੇਂ 3 ਘੰਟੇ ਖਾਲੀ ਸਮੇਂ ਤੋਂ ਵੱਧ",
+  "ghost.draft": "ਲਿਖੋ",
+  "ghost.english": "ਅੰਗਰੇਜ਼ੀ — ਭੇਜਣ ਲਈ ਤਿਆਰ",
+  "ghost.approve": "ਮਨਜ਼ੂਰ ਕਰੋ ਤੇ ਭੇਜੋ",
+  "ghost.sent": "ਭੇਜਿਆ"
 }

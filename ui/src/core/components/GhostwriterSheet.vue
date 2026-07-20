@@ -1,0 +1,168 @@
+<!-- AI-CONTEXT: Comms ghostwriter (M11-FR3, PRD §8.11). Removes the tone problem
+     that suppresses claims: the driver picks a tone (relationship -> firm) and
+     says what happened; the app writes a firm, professional, English message and
+     the driver ALWAYS approves before it goes (F8). Tone is a segmented control
+     (§202 over a dropdown). Outbound is English regardless of input language
+     (F15/M11-FR6). Live via api.js -> /voice/draft; offline shows a local draft. -->
+<script setup>
+import { ref } from "vue";
+import { useI18n } from "../i18n.js";
+import { draftMessage } from "../api.js";
+
+const { t } = useI18n();
+
+const TONES = ["relationship", "neutral", "firm"];
+const tone = ref("neutral");
+const facts = ref("");
+const draft = ref(null);
+const sent = ref(false);
+const busy = ref(false);
+
+async function write() {
+  const f = facts.value.trim();
+  if (!f) return;
+  busy.value = true;
+  try {
+    const res = await draftMessage({ kind: "detention notice", facts: f, tone: tone.value });
+    draft.value = res.draft;
+  } catch {
+    // offline: a local English stub so the flow still demonstrates (F9 seam)
+    draft.value = `[draft] A ${tone.value} detention notice, in English. Facts: ${f}`;
+  }
+  busy.value = false;
+}
+
+function approve() {
+  // driver approval is the gate; the actual send is the F8 counterparty seam
+  sent.value = true;
+}
+</script>
+
+<template>
+  <div class="ghost">
+    <template v-if="!sent">
+      <div class="ghost__tones" role="group" :aria-label="t('ghost.title')">
+        <button
+          v-for="tn in TONES"
+          :key="tn"
+          class="tone"
+          :class="{ 'tone--on': tone === tn }"
+          type="button"
+          @click="tone = tn"
+        >
+          {{ t(`ghost.tone.${tn}`) }}
+        </button>
+      </div>
+
+      <label class="field">
+        <span class="field__label">{{ t("ghost.facts") }}</span>
+        <textarea
+          v-model="facts"
+          class="field__input"
+          rows="3"
+          :placeholder="t('ghost.facts_placeholder')"
+        ></textarea>
+      </label>
+
+      <p v-if="draft" class="draft">
+        <span class="draft__badge">{{ t("ghost.english") }}</span>
+        <span class="draft__body">{{ draft }}</span>
+      </p>
+
+      <button v-if="!draft" class="cta" type="button" :disabled="busy" @click="write">
+        {{ t("ghost.draft") }}
+      </button>
+      <button v-else class="cta" type="button" @click="approve">{{ t("ghost.approve") }}</button>
+    </template>
+
+    <p v-else class="sent">{{ t("ghost.sent") }}</p>
+  </div>
+</template>
+
+<style scoped>
+.ghost {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.ghost__tones {
+  display: flex;
+  gap: var(--s-2);
+}
+.tone {
+  flex: 1 1 0;
+  min-height: 48px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--line-1);
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+}
+.tone--on {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  border-color: var(--accent-fill);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.field__label {
+  font-size: var(--type-label-size);
+  color: var(--text-2);
+}
+.field__input {
+  width: 100%;
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  border: 1px solid var(--line-1);
+  background: var(--ink-1);
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+  font-family: inherit;
+  resize: vertical;
+}
+.draft {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-card);
+  background: var(--ink-1);
+  border: 1px solid var(--line-1);
+}
+.draft__badge {
+  align-self: flex-start;
+  padding: 1px var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--ledger-500);
+  color: var(--on-accent);
+  font-size: var(--type-caption-size);
+}
+.draft__body {
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+}
+.cta {
+  width: 100%;
+  min-height: 56px;
+  border-radius: var(--r-control);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.cta:disabled {
+  opacity: 0.6;
+}
+.sent {
+  margin: 0;
+  padding: var(--s-4) 0;
+  text-align: center;
+  color: var(--ledger-500);
+  font-size: var(--type-title-size);
+  font-weight: 500;
+}
+</style>

@@ -22,6 +22,7 @@ import MoreSurface from "../src/surfaces/MoreSurface.vue";
 import VoiceSheet from "../src/core/components/VoiceSheet.vue";
 import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
 import AuditSurface from "../src/surfaces/AuditSurface.vue";
+import GhostwriterSheet from "../src/core/components/GhostwriterSheet.vue";
 import { routes, installAuthGuard } from "../src/router.js";
 import { setToken, logout, isAuthenticated } from "../src/core/api.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
@@ -478,6 +479,32 @@ describe("AuditSurface — settlement auditor (M9-FR1)", () => {
       expect(w.find(".result__figure").classes()).toContain("result__figure"); // flare hero
       expect(w.text()).toContain("Review with your carrier"); // never legal advice
       expect(fetchStub.mock.calls[0][0]).toContain("/money/settlements/audit");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("GhostwriterSheet — comms drafting (M11-FR3)", () => {
+  it("drafts an English message and requires driver approval before sending", async () => {
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ draft: "Dear broker, per the rate confirmation...", outbound_language: "en" }),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(GhostwriterSheet);
+      // pick the firm tone, say what happened
+      await w.findAll(".tone").at(2).trigger("click");
+      await w.find("textarea").setValue("3h past free time");
+      await w.find(".cta").trigger("click"); // write it
+      await flushPromises();
+      expect(w.find(".draft__body").text()).toContain("Dear broker");
+      expect(w.text()).toContain("English"); // outbound is English (F15)
+      // nothing sent until the driver approves
+      await w.find(".cta").trigger("click"); // approve & send
+      await flushPromises();
+      expect(w.find(".sent").exists()).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }

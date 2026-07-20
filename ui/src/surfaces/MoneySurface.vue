@@ -8,6 +8,8 @@
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
+import BottomSheet from "../core/components/BottomSheet.vue";
+import GhostwriterSheet from "../core/components/GhostwriterSheet.vue";
 import { useI18n } from "../core/i18n.js";
 import { formatMoney } from "../core/meter.js";
 import { receivableStatusToken } from "../core/presentation.js";
@@ -18,6 +20,7 @@ const { t } = useI18n();
 const router = useRouter();
 const rows = ref(SAMPLE_OWED);
 const earnings = ref(SAMPLE_EARNINGS);
+const drafting = ref(false);
 
 onMounted(async () => {
   try {
@@ -89,6 +92,14 @@ function stateLabel(state) {
     <button class="audit-cta" type="button" @click="router.push('/money/audit')">
       {{ t("audit.title") }}
     </button>
+    <!-- M11-FR3: the comms ghostwriter — draft the firm message that unsticks pay -->
+    <button class="audit-cta" type="button" @click="drafting = true">
+      {{ t("ghost.title") }}
+    </button>
+
+    <BottomSheet :open="drafting" :title="t('ghost.title')" @close="drafting = false">
+      <GhostwriterSheet />
+    </BottomSheet>
   </div>
 </template>
 

@@ -130,5 +130,15 @@
   "audit.run": "Buscar pago faltante",
   "audit.missed": "Pago faltante",
   "audit.none": "Sin pagos faltantes: tu acuerdo coincide con tu evidencia.",
-  "audit.review": "Revísalo con tu transportista. Esto no es asesoría legal."
+  "audit.review": "Revísalo con tu transportista. Esto no es asesoría legal.",
+  "ghost.title": "Redactar un mensaje",
+  "ghost.tone.relationship": "Amable",
+  "ghost.tone.neutral": "Neutral",
+  "ghost.tone.firm": "Firme",
+  "ghost.facts": "¿Qué pasó?",
+  "ghost.facts_placeholder": "ej. 3 horas pasadas del tiempo libre en Dallas Receiver",
+  "ghost.draft": "Redactarlo",
+  "ghost.english": "Inglés — listo para enviar",
+  "ghost.approve": "Aprobar y enviar",
+  "ghost.sent": "Enviado"
 }

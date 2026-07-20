@@ -257,6 +257,16 @@ export async function auditSettlement({ carrier, periodStart, periodEnd, lines }
   return resp.json();
 }
 
+export async function draftMessage({ kind, facts, tone }) {
+  const resp = await fetch(`${API_BASE}/voice/draft`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ kind, facts, tone }),
+  });
+  if (!resp.ok) throw new Error(`draft failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function submitReview(facilityId, ratings, text) {
   const resp = await fetch(`${API_BASE}/facility/${facilityId}/review`, {
     method: "POST",

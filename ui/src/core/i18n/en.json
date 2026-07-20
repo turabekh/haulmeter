@@ -130,5 +130,15 @@
   "audit.run": "Find missed pay",
   "audit.missed": "Missed pay",
   "audit.none": "No missed pay — your settlement matches your evidence.",
-  "audit.review": "Review with your carrier. This isn't legal advice."
+  "audit.review": "Review with your carrier. This isn't legal advice.",
+  "ghost.title": "Draft a message",
+  "ghost.tone.relationship": "Friendly",
+  "ghost.tone.neutral": "Neutral",
+  "ghost.tone.firm": "Firm",
+  "ghost.facts": "What happened?",
+  "ghost.facts_placeholder": "e.g. 3 hours past free time at Dallas Receiver",
+  "ghost.draft": "Write it",
+  "ghost.english": "English — ready to send",
+  "ghost.approve": "Approve & send",
+  "ghost.sent": "Sent"
 }

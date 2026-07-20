@@ -130,5 +130,15 @@
   "audit.run": "Hel lacag la seegay",
   "audit.missed": "Lacag la seegay",
   "audit.none": "Lacag la seegay ma jirto — xisaabintaadu waxay la mid tahay caddaymahaaga.",
-  "audit.review": "La eeg xamuulkaaga. Kanu maaha talo sharci."
+  "audit.review": "La eeg xamuulkaaga. Kanu maaha talo sharci.",
+  "ghost.title": "Qor fariin",
+  "ghost.tone.relationship": "Saaxiibtinimo",
+  "ghost.tone.neutral": "Dhexdhexaad",
+  "ghost.tone.firm": "Adag",
+  "ghost.facts": "Maxaa dhacay?",
+  "ghost.facts_placeholder": "tusaale 3 saacadood oo ka badan waqtiga xor ah",
+  "ghost.draft": "Qor",
+  "ghost.english": "Ingiriisi — diyaar u ah dirista",
+  "ghost.approve": "Ansixi oo dir",
+  "ghost.sent": "La diray"
 }
