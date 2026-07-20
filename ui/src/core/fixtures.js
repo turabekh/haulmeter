@@ -38,7 +38,7 @@ export const SAMPLE_PINS = [
     lat: 32.86,
     lon: -96.79,
     status: "empty",
-    badges: [{ kind: "bookable", value: 2400 }],
+    badges: [{ kind: "bookable", value: 2400, spot_id: "spot-f3-a1" }],
     freshness: { reported_at: minsAgo(3), sample_size: 1 },
   },
   {

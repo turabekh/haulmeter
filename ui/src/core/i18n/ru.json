@@ -52,5 +52,13 @@
   "docs.inspection": "Режим проверки",
   "docs.add": "Добавить документ",
   "docs.status.expiring": "истекает",
-  "docs.status.expired": "истёк"
+  "docs.status.expired": "истёк",
+  "facility.book": "Забронировать место",
+  "booking.title": "Бронь парковки",
+  "booking.nights": "Ночей",
+  "booking.per_night": "за ночь",
+  "booking.total": "К оплате",
+  "booking.booked": "Забронировано",
+  "booking.confirmation": "Место забронировано. Покажите это по прибытии.",
+  "booking.done": "Готово"
 }

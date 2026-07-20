@@ -2,7 +2,7 @@
 // laws that are testable in jsdom: exactly 5 labeled tabs & no hamburger
 // (NAV-1), preset chips (§11.3), facility card single primary CTA + report, and
 // DRIVING → Corridor mode (§11.4).
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import TabBar from "../src/core/components/TabBar.vue";
@@ -14,6 +14,7 @@ import TheMeter from "../src/core/components/TheMeter.vue";
 import LoadSurface from "../src/surfaces/LoadSurface.vue";
 import MoneySurface from "../src/surfaces/MoneySurface.vue";
 import DocsSurface from "../src/surfaces/DocsSurface.vue";
+import BookingSurface from "../src/surfaces/BookingSurface.vue";
 import { routes } from "../src/router.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 
@@ -62,6 +63,68 @@ describe("FacilityCard (design-prd §10.1)", () => {
     expect(w.text()).toContain("$4.19");
     await w.find(".cta").trigger("click");
     expect(w.emitted().navigate).toBeTruthy();
+  });
+});
+
+describe("FacilityCard — bookable parking (M6, §227 / §12.2)", () => {
+  it("leads with a Book CTA that names the price and emits book", async () => {
+    const pin = {
+      facility_id: "f-3",
+      name: "Yardline Secured Parking",
+      facility_type: "parking_property",
+      status: "empty",
+      badges: [{ kind: "bookable", value: 2400, spot_id: "spot-f3-a1" }],
+      freshness: { reported_at: new Date().toISOString(), sample_size: 1 },
+    };
+    const router = testRouter();
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [router] } });
+    // §12.2: the primary button says exactly what happens, with the one price
+    expect(w.find(".cta").text()).toContain("Book spot");
+    expect(w.find(".cta").text()).toContain("$24.00");
+    await w.find(".cta").trigger("click");
+    expect(w.emitted().book).toBeTruthy();
+    expect(w.emitted().book[0][0].facility_id).toBe("f-3");
+    // Navigate stays available, demoted to secondary
+    expect(w.text()).toContain("Navigate");
+  });
+});
+
+describe("BookingSurface — checkout (M6, NAV-3 / one final price)", () => {
+  async function mountAt(query) {
+    const router = testRouter();
+    router.push({ path: "/book/spot-f3-a1", query });
+    await router.isReady();
+    const w = mount(BookingSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    return w;
+  }
+
+  it("shows ONE final price = nightly × nights, verb persists into confirm", async () => {
+    const w = await mountAt({ name: "Yardline Secured Parking", nightly: "2400" });
+    expect(w.find(".total__figure").text()).toBe("$24.00"); // 1 night default
+    // add a night -> the single total tracks; no fees appear (line 344)
+    const plus = w.findAll(".stepper__btn").at(1);
+    await plus.trigger("click");
+    expect(w.find(".stepper__value").text()).toBe("2");
+    expect(w.find(".total__figure").text()).toBe("$48.00");
+    expect(w.find(".cta").text()).toContain("Book spot");
+    expect(w.find(".cta").text()).toContain("$48.00");
+  });
+
+  it("confirm resolves to a Booked confirmation carrying the same figure", async () => {
+    // no session/offline: the POST is rejected; the checkout still resolves
+    const fetchStub = vi.fn().mockRejectedValue(new Error("no session"));
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = await mountAt({ name: "Yardline Secured Parking", nightly: "2400" });
+      await w.find(".cta").trigger("click");
+      await flushPromises();
+      expect(w.text()).toContain("Booked");
+      expect(w.find(".done__figure").text()).toBe("$24.00");
+      expect(w.text()).toContain("1 Nights"); // nights + property summary
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -127,7 +190,8 @@ describe("MapSurface (design-prd §10.1 / §11.4)", () => {
   beforeEach(() => useDriverState().setState(DriverState.IDLE));
 
   it("shows the report chip in IDLE and Corridor mode in DRIVING", async () => {
-    const w = mount(MapSurface);
+    const router = testRouter();
+    const w = mount(MapSurface, { global: { plugins: [router] } });
     expect(w.find(".report-chip").exists()).toBe(true);
     expect(w.find(".corridor").exists()).toBe(false);
 

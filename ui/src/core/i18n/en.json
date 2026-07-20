@@ -52,5 +52,13 @@
   "docs.inspection": "Inspection mode",
   "docs.add": "Add document",
   "docs.status.expiring": "expiring",
-  "docs.status.expired": "expired"
+  "docs.status.expired": "expired",
+  "facility.book": "Book spot",
+  "booking.title": "Book parking",
+  "booking.nights": "Nights",
+  "booking.per_night": "per night",
+  "booking.total": "You pay",
+  "booking.booked": "Booked",
+  "booking.confirmation": "Your spot is reserved. Show this on arrival.",
+  "booking.done": "Done"
 }

@@ -52,5 +52,13 @@
   "docs.inspection": "Habka kormeerka",
   "docs.add": "Ku dar dukumenti",
   "docs.status.expiring": "dhacaya",
-  "docs.status.expired": "dhacay"
+  "docs.status.expired": "dhacay",
+  "facility.book": "Ballan qabso goobta",
+  "booking.title": "Ballan qabso goob dhigasho",
+  "booking.nights": "Habeenno",
+  "booking.per_night": "habeenkii",
+  "booking.total": "Waxaad bixinaysaa",
+  "booking.booked": "La ballansaday",
+  "booking.confirmation": "Goobtaadu way ballansan tahay. Tan tus markaad timaado.",
+  "booking.done": "Diyaar"
 }

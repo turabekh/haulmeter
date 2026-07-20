@@ -52,5 +52,13 @@
   "docs.inspection": "Modo inspección",
   "docs.add": "Agregar documento",
   "docs.status.expiring": "por vencer",
-  "docs.status.expired": "vencido"
+  "docs.status.expired": "vencido",
+  "facility.book": "Reservar lugar",
+  "booking.title": "Reservar estacionamiento",
+  "booking.nights": "Noches",
+  "booking.per_night": "por noche",
+  "booking.total": "Pagas",
+  "booking.booked": "Reservado",
+  "booking.confirmation": "Tu lugar está reservado. Muéstralo al llegar.",
+  "booking.done": "Listo"
 }

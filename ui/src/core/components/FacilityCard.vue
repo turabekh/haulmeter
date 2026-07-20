@@ -1,19 +1,24 @@
 <!-- AI-CONTEXT: Facility card content (design-prd §10.1) shown inside the pin
      bottom sheet. Glanceable: name + status pill + freshness (§11.7) + fuel
-     figure (Mono, §6.2 T-2) + ONE primary action (§Principle 4) — Navigate,
-     the external-nav deep-link handoff (M1-FR8, no in-house routing). -->
+     figure (Mono, §6.2 T-2) + ONE primary action (§Principle 4 / §227: the
+     parking sheet's single CTA is contextual — Book / Navigate). A bookable
+     parking_property (M6) leads with "Book spot — $XX" (§12.2: the button says
+     exactly what happens; ONE final price, §Anti-pattern 8 no hidden fees) and
+     deep-links to the full-screen booking checkout (NAV-3/NAV-5). Otherwise the
+     lead is Navigate, the external-nav deep-link handoff (M1-FR8). -->
 <script setup>
 import { computed } from "vue";
-import { Navigation } from "lucide-vue-next";
+import { Navigation, SquareParking } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import StatusPill from "./StatusPill.vue";
 import { freshnessLabel, isStale } from "../presentation.js";
+import { formatMoney } from "../meter.js";
 import { useI18n } from "../i18n.js";
 
 const props = defineProps({
   pin: { type: Object, required: true },
 });
-const emit = defineEmits(["navigate", "report"]);
+const emit = defineEmits(["navigate", "report", "book"]);
 const { t } = useI18n();
 const router = useRouter();
 
@@ -25,6 +30,10 @@ const now = Date.now();
 const fresh = computed(() => freshnessLabel(props.pin.freshness, now));
 const stale = computed(() => isStale(props.pin.freshness, now));
 const fuel = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_price")?.value ?? null);
+// M6: a bookable badge carries the take-inclusive nightly price in cents.
+const nightlyCents = computed(() => props.pin.badges?.find((b) => b.kind === "bookable")?.value ?? null);
+const bookable = computed(() => nightlyCents.value !== null);
+const bookLabel = computed(() => `${t("facility.book")} — ${formatMoney(nightlyCents.value)}`);
 </script>
 
 <template>
@@ -38,11 +47,26 @@ const fuel = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_price
       <span class="fac__fuel-figure">${{ fuel.toFixed(2) }}</span>
       <span class="fac__fuel-label">{{ t("facility.fuel") }}</span>
     </div>
-    <button class="cta" type="button" @click="emit('navigate', pin)">
+
+    <!-- bookable parking leads with Book; everyone else leads with Navigate -->
+    <button v-if="bookable" class="cta" type="button" @click="emit('book', pin)">
+      <SquareParking :size="20" :stroke-width="2" aria-hidden="true" />
+      {{ bookLabel }}
+    </button>
+    <button v-else class="cta" type="button" @click="emit('navigate', pin)">
       <Navigation :size="20" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.navigate") }}
     </button>
-    <button class="cta cta--secondary" type="button" @click="emit('report', pin)">
+
+    <button
+      v-if="bookable"
+      class="cta cta--secondary"
+      type="button"
+      @click="emit('navigate', pin)"
+    >
+      {{ t("facility.navigate") }}
+    </button>
+    <button v-else class="cta cta--secondary" type="button" @click="emit('report', pin)">
       {{ t("map.report") }}
     </button>
     <button class="cta cta--tertiary" type="button" @click="viewFacility">

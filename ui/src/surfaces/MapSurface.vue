@@ -5,6 +5,7 @@
      Data is fixture-backed pending the M1 HTTP API (see core/fixtures.js). -->
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
+import { useRouter } from "vue-router";
 import { CircleDot } from "lucide-vue-next";
 import MapCanvas from "../core/components/MapCanvas.vue";
 import PresetChips from "../core/components/PresetChips.vue";
@@ -19,6 +20,7 @@ import { fetchOverlay } from "../core/api.js";
 
 const { isDriving } = useDriverState();
 const { t } = useI18n();
+const router = useRouter();
 
 const preset = ref("drive");
 const PRESET_TYPES = {
@@ -64,6 +66,17 @@ function report() {
   selected.value = null;
   reporting.value = true;
 }
+function book(pin) {
+  // NAV-5 cross-link: deep-link into the full-screen booking checkout. The spot
+  // id + take-inclusive nightly ride on the bookable badge (M6 inventory).
+  const badge = pin.badges?.find((b) => b.kind === "bookable");
+  selected.value = null;
+  router.push({
+    name: "book",
+    params: { spotId: badge?.spot_id ?? pin.facility_id },
+    query: { name: pin.name, nightly: badge?.value ?? 0 },
+  });
+}
 function submitReport() {
   // AI-CONTEXT: server enforces geofence-presence proof + points (F10/M1). API seam.
   reporting.value = false;
@@ -86,7 +99,13 @@ function submitReport() {
     </template>
 
     <BottomSheet :open="!!selected" :title="selected?.name || ''" @close="selected = null">
-      <FacilityCard v-if="selected" :pin="selected" @navigate="navigate" @report="report" />
+      <FacilityCard
+        v-if="selected"
+        :pin="selected"
+        @navigate="navigate"
+        @report="report"
+        @book="book"
+      />
     </BottomSheet>
 
     <BottomSheet :open="reporting" :title="t('map.report')" @close="reporting = false">

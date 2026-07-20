@@ -68,6 +68,24 @@ export async function fetchOwed() {
   return resp.json();
 }
 
+export async function fetchBookable({ lat, lon, radiusM = 8000 }) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const q = new URLSearchParams({ lat, lon, radius_m: radiusM });
+  const resp = await fetch(`${API_BASE}/parking/bookable?${q}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`bookable failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function bookSpot({ spotId, startAt, endAt }) {
+  const resp = await fetch(`${API_BASE}/parking/book`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ spot_id: spotId, start_at: startAt, end_at: endAt }),
+  });
+  if (!resp.ok) throw new Error(`book failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function submitReview(facilityId, ratings, text) {
   const resp = await fetch(`${API_BASE}/facility/${facilityId}/review`, {
     method: "POST",

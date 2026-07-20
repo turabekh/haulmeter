@@ -52,5 +52,13 @@
   "docs.inspection": "ਇੰਸਪੈਕਸ਼ਨ ਮੋਡ",
   "docs.add": "ਦਸਤਾਵੇਜ਼ ਸ਼ਾਮਲ ਕਰੋ",
   "docs.status.expiring": "ਮਿਆਦ ਖਤਮ ਹੋ ਰਹੀ",
-  "docs.status.expired": "ਮਿਆਦ ਖਤਮ"
+  "docs.status.expired": "ਮਿਆਦ ਖਤਮ",
+  "facility.book": "ਥਾਂ ਬੁੱਕ ਕਰੋ",
+  "booking.title": "ਪਾਰਕਿੰਗ ਬੁੱਕ ਕਰੋ",
+  "booking.nights": "ਰਾਤਾਂ",
+  "booking.per_night": "ਪ੍ਰਤੀ ਰਾਤ",
+  "booking.total": "ਤੁਸੀਂ ਦਿਓਗੇ",
+  "booking.booked": "ਬੁੱਕ ਹੋ ਗਿਆ",
+  "booking.confirmation": "ਤੁਹਾਡੀ ਥਾਂ ਰਾਖਵੀਂ ਹੈ। ਪਹੁੰਚਣ 'ਤੇ ਇਹ ਦਿਖਾਓ।",
+  "booking.done": "ਹੋ ਗਿਆ"
 }

@@ -52,5 +52,13 @@
   "docs.inspection": "Tekshiruv rejimi",
   "docs.add": "Hujjat qo'shish",
   "docs.status.expiring": "muddati tugayapti",
-  "docs.status.expired": "muddati tugagan"
+  "docs.status.expired": "muddati tugagan",
+  "facility.book": "Joyni band qilish",
+  "booking.title": "Parkovka band qilish",
+  "booking.nights": "Kechalar",
+  "booking.per_night": "har kecha uchun",
+  "booking.total": "To'laysiz",
+  "booking.booked": "Band qilindi",
+  "booking.confirmation": "Joyingiz band qilindi. Yetib borganda buni ko'rsating.",
+  "booking.done": "Tayyor"
 }
