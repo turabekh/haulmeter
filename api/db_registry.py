@@ -31,6 +31,7 @@ MODEL_MODULES = [
     "app.modules.m06_parking.domain.models",
     "app.modules.m07_fuel.domain.models",
     "app.modules.m09_money.domain.models",
+    "app.modules.m10_community.domain.models",
 ]
 
 

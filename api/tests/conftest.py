@@ -28,6 +28,7 @@ SCHEMAS = [
     "m06",
     "m07",
     "m09",
+    "m10",
 ]
 TEST_DB = "longhaul_test"
 
