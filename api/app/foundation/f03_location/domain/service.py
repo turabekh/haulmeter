@@ -226,6 +226,37 @@ def is_present(db: Session, account_id, facility_id) -> bool:
     return _active_presence(db, account_id, facility_id) is not None
 
 
+def dwell_samples(db: Session, facility_id) -> list[dict]:
+    # AI-CONTEXT: pair ENTER->EXIT per account at a facility into dwell samples
+    # (seconds + arrival hour). The objective, evidence-grade dwell data M2/M8
+    # build stats on. Ordered per account by time; an ENTER without a following
+    # EXIT is an open stop and is skipped.
+    events = db.scalars(
+        select(GeofenceEvent)
+        .where(GeofenceEvent.facility_id == facility_id)
+        .order_by(GeofenceEvent.account_id, GeofenceEvent.occurred_at)
+    )
+    samples: list[dict] = []
+    open_enter: dict = {}
+    for event in events:
+        if event.event_type == GeofenceEventType.ENTER:
+            open_enter[event.account_id] = event.occurred_at
+        elif event.event_type == GeofenceEventType.EXIT:
+            entered = open_enter.pop(event.account_id, None)
+            if entered is not None:
+                seconds = (_as_utc(event.occurred_at) - _as_utc(entered)).total_seconds()
+                if seconds >= 0:
+                    samples.append(
+                        {
+                            "enter_at": entered,
+                            "exit_at": event.occurred_at,
+                            "seconds": seconds,
+                            "arrival_hour": _as_utc(entered).hour,
+                        }
+                    )
+    return samples
+
+
 def list_events(db: Session, account_id, facility_id=None) -> list[GeofenceEvent]:
     stmt = select(GeofenceEvent).where(GeofenceEvent.account_id == account_id)
     if facility_id is not None:

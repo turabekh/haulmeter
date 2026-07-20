@@ -44,3 +44,13 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+# AI-CONTEXT: FastAPI's Depends/Query/Header/Path in argument defaults is the
+# framework's intended pattern; mark them immutable so B008 stops flagging it.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Header",
+    "fastapi.Path",
+]
