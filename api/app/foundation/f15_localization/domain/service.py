@@ -9,6 +9,7 @@ documents), and units are ALWAYS imperial in every language (US trucking).
 Recognized trucking jargon (detention, lumper, rate con, BOL, TONU) stays in
 English via the glossary. Per-user locale lives on the F1 profile (PRD §7.15).
 """
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -54,9 +55,7 @@ def get_user_locale(db: Session, account) -> str:
 # --- Message catalog registry ---
 def register_message(db: Session, key: str, locale: str, text: str) -> MessageCatalog:
     existing = db.scalar(
-        select(MessageCatalog).where(
-            MessageCatalog.key == key, MessageCatalog.locale == locale
-        )
+        select(MessageCatalog).where(MessageCatalog.key == key, MessageCatalog.locale == locale)
     )
     if existing is not None:
         existing.text = text
@@ -70,9 +69,7 @@ def register_message(db: Session, key: str, locale: str, text: str) -> MessageCa
 
 def get_message(db: Session, key: str, locale: str, fallback_to_default: bool = True) -> str | None:
     entry = db.scalar(
-        select(MessageCatalog).where(
-            MessageCatalog.key == key, MessageCatalog.locale == locale
-        )
+        select(MessageCatalog).where(MessageCatalog.key == key, MessageCatalog.locale == locale)
     )
     if entry is not None:
         return entry.text
@@ -82,9 +79,7 @@ def get_message(db: Session, key: str, locale: str, fallback_to_default: bool = 
 
 
 def present_locales(db: Session, key: str) -> list[str]:
-    return sorted(
-        db.scalars(select(MessageCatalog.locale).where(MessageCatalog.key == key))
-    )
+    return sorted(db.scalars(select(MessageCatalog.locale).where(MessageCatalog.key == key)))
 
 
 def missing_locales(db: Session, key: str) -> list[str]:

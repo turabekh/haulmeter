@@ -7,6 +7,7 @@ facility merge, refund, moderation), the content-moderation queue (reviews),
 and the admin-view registry every module registers into. The ops console UI is
 a web-first surface (design-prd §18) built later; this is its data spine.
 """
+
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
@@ -44,8 +45,10 @@ def count_events(
     until: datetime | None = None,
     module: str | None = None,
 ) -> int:
-    stmt = select(func.count()).select_from(AnalyticsEvent).where(
-        AnalyticsEvent.event_name == event_name
+    stmt = (
+        select(func.count())
+        .select_from(AnalyticsEvent)
+        .where(AnalyticsEvent.event_name == event_name)
     )
     if module is not None:
         stmt = stmt.where(AnalyticsEvent.module == module)
@@ -148,9 +151,7 @@ def list_pending_moderation(db: Session, content_kind: str | None = None) -> lis
 
 
 # --- Admin view registry ---
-def register_admin_view(
-    db: Session, key: str, module: str, title: str, path: str
-) -> AdminView:
+def register_admin_view(db: Session, key: str, module: str, title: str, path: str) -> AdminView:
     existing = db.scalar(select(AdminView).where(AdminView.key == key))
     if existing is not None:
         existing.module = module

@@ -5,6 +5,7 @@ enforced). Event instrumentation standard, per-module KPI aggregation, admin
 audit log, content-moderation queue, and the admin-view registry. Consumed by
 platform operations; every module registers its admin views here.
 """
+
 from .domain.enums import ModerationStatus
 from .domain.models import AdminAction, AdminView, AnalyticsEvent, ModerationItem
 from .domain.service import (

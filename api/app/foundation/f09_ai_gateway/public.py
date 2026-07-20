@@ -5,6 +5,7 @@ enforced). Single wrapper for ALL model calls — no module calls a model API
 directly. Prompt/version registry, per-module cost budgets, embeddings, and
 structured-output enforcement. Consumed by M2, M3, M4, M5, M8, M9, M11, M12.
 """
+
 from .domain.enums import AiTask
 from .domain.models import AiCall, Embedding, ModuleBudget, Prompt, PromptFixture
 from .domain.provider import (

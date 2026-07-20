@@ -5,6 +5,7 @@ enforced). Flags with kill-switch semantics gate module ACTIVATION (not scope);
 validation gates are activation preconditions; the config registry holds runtime
 tables. Consumed by every module.
 """
+
 from .domain.models import ConfigEntry, FeatureFlag, ValidationGate
 from .domain.service import (
     FlagNotFound,

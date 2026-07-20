@@ -5,6 +5,7 @@ enforced). Geofence-presence-gated submissions, trust scoring, per-signal time
 decay, trust+decay-weighted "current best belief" aggregation, and points
 issuance into the F7 closed-loop ledger. Consumed by M1, M2, M7, M10.
 """
+
 from .domain.enums import SignalType
 from .domain.models import Belief, ContributorTrust, Submission
 from .domain.service import (

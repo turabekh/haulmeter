@@ -16,9 +16,7 @@ def test_create_and_read_facility(db):
 
 
 def test_polygon_and_point_round_trip_via_radius(db):
-    facility.create_facility(
-        db, facility.FacilityType.parking_property, "Lot A", *DALLAS
-    )
+    facility.create_facility(db, facility.FacilityType.parking_property, "Lot A", *DALLAS)
     near = facility.nearest(db, DALLAS[0], DALLAS[1], radius_m=1000)
     assert len(near) == 1
     far = facility.nearest(db, 40.7128, -74.0060, radius_m=1000)
@@ -27,9 +25,7 @@ def test_polygon_and_point_round_trip_via_radius(db):
 
 def test_radius_query_filters_by_type(db):
     facility.create_facility(db, facility.FacilityType.fuel_station, "Fuel 1", *DALLAS)
-    facility.create_facility(
-        db, facility.FacilityType.truck_stop, "Stop 1", 32.7770, -96.7975
-    )
+    facility.create_facility(db, facility.FacilityType.truck_stop, "Stop 1", 32.7770, -96.7975)
     fuel_only = facility.nearest(
         db, DALLAS[0], DALLAS[1], radius_m=2000, facility_type=facility.FacilityType.fuel_station
     )
@@ -55,25 +51,19 @@ def test_second_independent_signal_confirms_candidate(db):
 
 
 def test_dedup_blocks_near_duplicate_by_geohash_and_name(db):
-    facility.create_facility(
-        db, facility.FacilityType.truck_stop, "Loves Travel Stop", *DALLAS
-    )
+    facility.create_facility(db, facility.FacilityType.truck_stop, "Loves Travel Stop", *DALLAS)
     dupes = facility.find_duplicate_candidates(db, "Loves Travel Stop", 32.7768, -96.7971)
     assert len(dupes) >= 1
 
 
 def test_dedup_ignores_far_or_dissimilar(db):
-    facility.create_facility(
-        db, facility.FacilityType.truck_stop, "Loves Travel Stop", *DALLAS
-    )
+    facility.create_facility(db, facility.FacilityType.truck_stop, "Loves Travel Stop", *DALLAS)
     far = facility.find_duplicate_candidates(db, "Loves Travel Stop", 40.7128, -74.0060)
     assert far == []
 
 
 def test_contains_point_by_radius(db):
-    fac = facility.create_facility(
-        db, facility.FacilityType.truck_stop, "Radius Stop", *DALLAS
-    )
+    fac = facility.create_facility(db, facility.FacilityType.truck_stop, "Radius Stop", *DALLAS)
     assert facility.contains_point(db, fac, DALLAS[0], DALLAS[1], radius_m=150) is True
     assert facility.contains_point(db, fac, 32.7900, -96.7970, radius_m=150) is False
 

@@ -65,9 +65,7 @@ def append_record(
     else:
         seq = last.seq + 1
         prev = last.record_hash
-    record_hash = hashing.compute_record_hash(
-        prev, seq, record_type.value, payload, occurred_at
-    )
+    record_hash = hashing.compute_record_hash(prev, seq, record_type.value, payload, occurred_at)
     record = EvidenceRecord(
         log_id=log.id,
         seq=seq,

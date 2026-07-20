@@ -90,9 +90,7 @@ def test_effective_terms_stop_override_beats_load(db):
         db, account.id, detention_rate_cents_per_hour=7500, free_time_minutes=120
     )
     fac = _facility(db)
-    stop = loads.add_stop(
-        db, load, fac.id, loads.StopType.delivery, free_time_minutes=60
-    )
+    stop = loads.add_stop(db, load, fac.id, loads.StopType.delivery, free_time_minutes=60)
     free_time, rate = loads.effective_detention_terms(db, stop)
     assert free_time == 60
     assert rate == 7500
@@ -102,9 +100,7 @@ def test_arm_stop_wires_geofence_and_evidence_log(db):
     account = _account(db)
     load = loads.create_load(db, account.id)
     fac = _facility(db)
-    stop = loads.add_stop(
-        db, load, fac.id, loads.StopType.delivery, appointment_start=T0
-    )
+    stop = loads.add_stop(db, load, fac.id, loads.StopType.delivery, appointment_start=T0)
 
     loads.arm_stop(db, stop)
     assert stop.geofence_armed is True
@@ -129,9 +125,7 @@ def test_disarm_stop_stops_evaluation(db):
 
     loads.disarm_stop(db, stop, occurred_at=T0 + timedelta(minutes=5))
     assert stop.geofence_armed is False
-    after = location.evaluate_ping(
-        db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=30)
-    )
+    after = location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=30))
     assert after == []
 
 

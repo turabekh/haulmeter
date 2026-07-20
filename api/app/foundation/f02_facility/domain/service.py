@@ -94,9 +94,7 @@ def confirm_with_second_signal(
     return facility
 
 
-def find_duplicate_candidates(
-    db: Session, name: str, lat: float, lon: float
-) -> list[Facility]:
+def find_duplicate_candidates(db: Session, name: str, lat: float, lon: float) -> list[Facility]:
     block = geohash_util.encode(lat, lon, DEDUP_GEOHASH_PRECISION)
     stmt = (
         select(Facility)
@@ -143,11 +141,7 @@ def nearest(
     stmt = (
         select(Facility)
         .where(Facility.status != FacilityStatus.merged)
-        .where(
-            func.ST_DWithin(
-                cast(Facility.geom, Geography), cast(point, Geography), radius_m
-            )
-        )
+        .where(func.ST_DWithin(cast(Facility.geom, Geography), cast(point, Geography), radius_m))
         .order_by(func.ST_Distance(cast(Facility.geom, Geography), cast(point, Geography)))
     )
     if facility_type is not None:
@@ -168,9 +162,7 @@ def contains_point(
     stmt = select(
         func.coalesce(
             func.ST_Contains(Facility.lot_polygon, point),
-            func.ST_DWithin(
-                cast(Facility.geom, Geography), cast(point, Geography), radius_m
-            ),
+            func.ST_DWithin(cast(Facility.geom, Geography), cast(point, Geography), radius_m),
         )
     ).where(Facility.id == facility.id)
     return bool(db.execute(stmt).scalar())
@@ -178,8 +170,6 @@ def contains_point(
 
 def coordinates(db: Session, facility: Facility) -> tuple[float, float]:
     lon, lat = db.execute(
-        select(func.ST_X(Facility.geom), func.ST_Y(Facility.geom)).where(
-            Facility.id == facility.id
-        )
+        select(func.ST_X(Facility.geom), func.ST_Y(Facility.geom)).where(Facility.id == facility.id)
     ).one()
     return lat, lon

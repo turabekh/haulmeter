@@ -13,8 +13,13 @@ def _account(db, email="driver@example.com"):
 def test_first_ingest_applies_and_records_times(db):
     account = _account(db)
     receipt = offline.ingest(
-        db, account.id, "evt-1", "status_report", {"status": "full"},
-        occurred_at=T0, client_skew_ms=300,
+        db,
+        account.id,
+        "evt-1",
+        "status_report",
+        {"status": "full"},
+        occurred_at=T0,
+        client_skew_ms=300,
     )
     assert receipt.applied is True
     assert receipt.envelope.occurred_at == T0
@@ -44,9 +49,7 @@ def test_duplicate_key_is_not_reapplied(db):
 def test_different_keys_apply_independently(db):
     account = _account(db)
     r1 = offline.ingest(db, account.id, "evt-1", "photo", {}, occurred_at=T0)
-    r2 = offline.ingest(
-        db, account.id, "evt-2", "photo", {}, occurred_at=T0 + timedelta(minutes=1)
-    )
+    r2 = offline.ingest(db, account.id, "evt-2", "photo", {}, occurred_at=T0 + timedelta(minutes=1))
     assert r1.applied and r2.applied
     assert r1.envelope.id != r2.envelope.id
 

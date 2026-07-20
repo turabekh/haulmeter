@@ -10,6 +10,7 @@ points economy, fee percentages) that other components read instead of
 hardcoding — the eventual home for the placeholder constants scattered in
 F3/F8/F9/F10/F11.
 """
+
 from datetime import UTC, datetime
 
 from sqlalchemy import select

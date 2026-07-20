@@ -8,6 +8,7 @@ round-trips. Chain heads are periodically anchored to an external
 timestamping service (adapter seam) — that binds the chain to wall-clock time
 a third party attests, but the intra-chain integrity here stands on its own.
 """
+
 import hashlib
 import json
 from datetime import UTC, datetime

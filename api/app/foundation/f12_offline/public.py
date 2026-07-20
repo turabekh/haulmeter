@@ -5,6 +5,7 @@ enforced). The generic idempotent-ingest primitive: same (account,
 idempotency_key) applied twice = one effect; server-authoritative received_at,
 client occurred_at preserved. Consumed by every module.
 """
+
 from .domain.models import SyncEnvelope
 from .domain.service import SyncReceipt, get_receipt, ingest, list_for_account
 

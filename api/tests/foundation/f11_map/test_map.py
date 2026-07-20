@@ -82,9 +82,7 @@ def test_corridor_returns_only_facilities_ahead_sorted(db):
     _facility(db, facility.FacilityType.truck_stop, "Ahead-near", (32.8200, -96.7970))
     _facility(db, facility.FacilityType.truck_stop, "Ahead-far", NORTH)
     _facility(db, facility.FacilityType.truck_stop, "Behind", SOUTH)
-    entries = mapsvc.corridor(
-        db, *ORIGIN, heading_deg=0.0, max_distance_m=40000, half_angle_deg=45
-    )
+    entries = mapsvc.corridor(db, *ORIGIN, heading_deg=0.0, max_distance_m=40000, half_angle_deg=45)
     names = [e.name for e in entries]
     assert "Behind" not in names
     assert names == ["Ahead-near", "Ahead-far"]
@@ -93,7 +91,5 @@ def test_corridor_returns_only_facilities_ahead_sorted(db):
 
 def test_corridor_excludes_off_heading(db):
     _facility(db, facility.FacilityType.truck_stop, "East", (32.7767, -96.6500))
-    entries = mapsvc.corridor(
-        db, *ORIGIN, heading_deg=0.0, max_distance_m=40000, half_angle_deg=45
-    )
+    entries = mapsvc.corridor(db, *ORIGIN, heading_deg=0.0, max_distance_m=40000, half_angle_deg=45)
     assert [e.name for e in entries] == []

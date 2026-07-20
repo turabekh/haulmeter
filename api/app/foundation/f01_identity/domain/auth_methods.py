@@ -7,6 +7,7 @@ AuthMethod rows, each dispatched to a handler here. Only PasswordHandler is
 implemented now; the other method types are registered as NotImplemented seams
 so the shape is fixed and callers fail cleanly rather than silently.
 """
+
 from typing import Protocol
 
 from .enums import MethodType

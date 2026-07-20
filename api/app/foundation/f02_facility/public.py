@@ -4,6 +4,7 @@ The ONLY import surface other packages may use to reach F2 (import-linter
 enforced). Every module keys off facility_id; one physical location = one
 canonical record forever. Consumed by every module.
 """
+
 from .domain.enums import FacilityStatus, FacilityType, SourceKind
 from .domain.models import Facility, FacilitySource
 from .domain.service import (

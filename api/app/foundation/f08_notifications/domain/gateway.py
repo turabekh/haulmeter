@@ -7,6 +7,7 @@ tested without any live provider; the concrete FCM/Twilio/email adapters plug in
 at activation. RecordingNotificationGateway captures sends for tests;
 StubNotificationGateway fails loudly so nothing silently pretends to notify.
 """
+
 from dataclasses import dataclass
 from typing import Protocol
 

@@ -56,9 +56,7 @@ def test_budget_isolated_per_module(db):
 
 def test_structured_output_enforced(db):
     ai.register_prompt(db, "rate_con", ai.AiTask.document_parse, "parse {doc}")
-    good = ai.FakeModelProvider(
-        structured_output={"rate_cents": 250000, "free_time_minutes": 120}
-    )
+    good = ai.FakeModelProvider(structured_output={"rate_cents": 250000, "free_time_minutes": 120})
     parsed = ai.parse_structured(
         db, good, "m03", "rate_con", {"doc": "..."}, required_keys=["rate_cents"]
     )
@@ -76,15 +74,28 @@ def test_embeddings_stored_and_similarity_search(db):
     fac_a = uuid.uuid4()
     fac_b = uuid.uuid4()
     ai.embed_and_store(
-        db, provider, "m02", "facility_review", fac_a,
+        db,
+        provider,
+        "m02",
+        "facility_review",
+        fac_a,
         "receiver unloads overnight, quick turnaround",
     )
     ai.embed_and_store(
-        db, provider, "m02", "facility_review", fac_b, "slow dock, long detention",
+        db,
+        provider,
+        "m02",
+        "facility_review",
+        fac_b,
+        "slow dock, long detention",
     )
     results = ai.search_similar(
-        db, provider, "m02", "facility_review",
-        "receiver unloads overnight, quick turnaround", limit=2,
+        db,
+        provider,
+        "m02",
+        "facility_review",
+        "receiver unloads overnight, quick turnaround",
+        limit=2,
     )
     assert len(results) == 2
     # the exact-text match is the nearest (smallest cosine distance)

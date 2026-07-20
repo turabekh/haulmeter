@@ -6,6 +6,7 @@ on any concrete client, so tests run against InMemoryObjectStorage with zero
 infra and dev/prod swap in MinioObjectStorage. Keep the metadata (typed row,
 extraction, expiry) in Postgres; only the bytes live here.
 """
+
 from typing import Protocol
 
 

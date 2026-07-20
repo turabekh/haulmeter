@@ -9,6 +9,7 @@ is preserved. The `handler` runs only on first apply, never on a duplicate —
 that is what makes sync at-least-once delivery safe. Read-side offline caches
 (last map region, active load, document wallet) are a client concern.
 """
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime

@@ -19,10 +19,10 @@ UNPROVEN_WEIGHT_FACTOR = 0.3
 AGGREGATION_WINDOW_HALFLIVES = 10
 
 HALF_LIFE_SECONDS: dict[SignalType, float] = {
-    SignalType.parking_fullness: 3600,          # 1 hour
-    SignalType.weigh_station_status: 7200,       # 2 hours
-    SignalType.fuel_price: 86400,                # 24 hours
-    SignalType.facility_attribute: 2592000,      # 30 days
+    SignalType.parking_fullness: 3600,  # 1 hour
+    SignalType.weigh_station_status: 7200,  # 2 hours
+    SignalType.fuel_price: 86400,  # 24 hours
+    SignalType.facility_attribute: 2592000,  # 30 days
 }
 
 POINTS_PER_SIGNAL: dict[SignalType, int] = {
@@ -72,11 +72,16 @@ def issue_points(db: Session, account_id, amount: int):
     if amount <= 0:
         return None
     balance = ledger.get_or_create_account(
-        db, ledger.LedgerAccountKind.points_balance, f"points:{account_id}",
-        currency=ledger.Currency.points, owner_ref=account_id,
+        db,
+        ledger.LedgerAccountKind.points_balance,
+        f"points:{account_id}",
+        currency=ledger.Currency.points,
+        owner_ref=account_id,
     )
     pool = ledger.get_or_create_account(
-        db, ledger.LedgerAccountKind.points_pool, "points:pool",
+        db,
+        ledger.LedgerAccountKind.points_pool,
+        "points:pool",
         currency=ledger.Currency.points,
     )
     return ledger.post_entry(
@@ -183,9 +188,7 @@ def update_belief(
     if result is None:
         return None
     belief = db.scalar(
-        select(Belief).where(
-            Belief.facility_id == facility_id, Belief.signal_type == signal_type
-        )
+        select(Belief).where(Belief.facility_id == facility_id, Belief.signal_type == signal_type)
     )
     if belief is None:
         belief = Belief(facility_id=facility_id, signal_type=signal_type)
@@ -201,7 +204,5 @@ def update_belief(
 
 def get_belief(db: Session, facility_id, signal_type: SignalType) -> Belief | None:
     return db.scalar(
-        select(Belief).where(
-            Belief.facility_id == facility_id, Belief.signal_type == signal_type
-        )
+        select(Belief).where(Belief.facility_id == facility_id, Belief.signal_type == signal_type)
     )

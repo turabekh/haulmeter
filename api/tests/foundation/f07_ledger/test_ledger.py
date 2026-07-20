@@ -85,9 +85,7 @@ def test_cannot_mix_currencies_in_one_entry(db):
 
 def test_receivable_valid_transitions(db):
     account = _account(db)
-    r = ledger.create_receivable(
-        db, account.id, ledger.ReceivableKind.detention, 15000
-    )
+    r = ledger.create_receivable(db, account.id, ledger.ReceivableKind.detention, 15000)
     assert r.state == ledger.ReceivableState.invoiced
     ledger.transition_receivable(db, r, ledger.ReceivableState.disputed)
     ledger.transition_receivable(db, r, ledger.ReceivableState.escalated)
@@ -132,9 +130,7 @@ def test_record_recovery_zero_fee(db):
     cash = _usd(db, ledger.LedgerAccountKind.cash_clearing, "cash")
     driver_payable = _usd(db, ledger.LedgerAccountKind.driver_payable, "driver payable")
     contingency = _usd(db, ledger.LedgerAccountKind.contingency_revenue, "contingency")
-    ledger.record_recovery(
-        db, r, 8000, 0, cash, driver_payable, contingency
-    )
+    ledger.record_recovery(db, r, 8000, 0, cash, driver_payable, contingency)
     assert ledger.balance(db, driver_payable) == -8000
     assert ledger.balance(db, contingency) == 0
 
@@ -142,20 +138,30 @@ def test_record_recovery_zero_fee(db):
 def test_get_or_create_account_is_idempotent_per_owner(db):
     account = _account(db)
     a1 = ledger.get_or_create_account(
-        db, ledger.LedgerAccountKind.points_balance, f"points:{account.id}",
-        currency=ledger.Currency.points, owner_ref=account.id,
+        db,
+        ledger.LedgerAccountKind.points_balance,
+        f"points:{account.id}",
+        currency=ledger.Currency.points,
+        owner_ref=account.id,
     )
     a2 = ledger.get_or_create_account(
-        db, ledger.LedgerAccountKind.points_balance, f"points:{account.id}",
-        currency=ledger.Currency.points, owner_ref=account.id,
+        db,
+        ledger.LedgerAccountKind.points_balance,
+        f"points:{account.id}",
+        currency=ledger.Currency.points,
+        owner_ref=account.id,
     )
     assert a1.id == a2.id
     pool1 = ledger.get_or_create_account(
-        db, ledger.LedgerAccountKind.points_pool, "points:pool",
+        db,
+        ledger.LedgerAccountKind.points_pool,
+        "points:pool",
         currency=ledger.Currency.points,
     )
     pool2 = ledger.get_or_create_account(
-        db, ledger.LedgerAccountKind.points_pool, "points:pool",
+        db,
+        ledger.LedgerAccountKind.points_pool,
+        "points:pool",
         currency=ledger.Currency.points,
     )
     assert pool1.id == pool2.id

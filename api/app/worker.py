@@ -5,6 +5,7 @@ Placeholder loop for the compose `worker` service (dev/CI parity). Real jobs
 ML batch (M8) — register here as their foundations land. Kept alive so the
 service is healthy in the topology from session 1.
 """
+
 import signal
 import sys
 import time

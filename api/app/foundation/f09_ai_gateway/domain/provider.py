@@ -8,6 +8,7 @@ deterministic (no randomness). The real adapter targets the latest Claude
 models; when wiring it, consult the `claude-api` skill for current model ids and
 params rather than hardcoding — StubModelProvider fails loudly until then.
 """
+
 import hashlib
 from dataclasses import dataclass
 from typing import Protocol

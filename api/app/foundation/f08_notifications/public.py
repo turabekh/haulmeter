@@ -5,6 +5,7 @@ enforced). Enforces the design-prd §13 interruption budget (P0/P1/P2, 2/day,
 quiet hours, DRIVING/RESTING safety). Counterparty templates are always English
 (F15). Consumed by every module.
 """
+
 from .domain.enums import (
     DriverState,
     MessageDirection,

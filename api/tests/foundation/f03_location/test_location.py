@@ -45,9 +45,7 @@ def test_enter_emitted_once_then_suppressed(db):
     first = location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0)
     assert [e.event_type for e in first] == [location.GeofenceEventType.ENTER]
 
-    again = location.evaluate_ping(
-        db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=1)
-    )
+    again = location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=1))
     assert again == []
 
 
@@ -57,9 +55,7 @@ def test_dwell_tick_after_interval(db):
     location.arm_geofence(db, account.id, fac.id)
     location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0)
 
-    tick = location.evaluate_ping(
-        db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=16)
-    )
+    tick = location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=16))
     assert [e.event_type for e in tick] == [location.GeofenceEventType.DWELL_TICK]
 
 
@@ -69,9 +65,7 @@ def test_exit_emitted_when_leaving(db):
     location.arm_geofence(db, account.id, fac.id)
     location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0)
 
-    out = location.evaluate_ping(
-        db, account.id, *FAR, occurred_at=T0 + timedelta(minutes=20)
-    )
+    out = location.evaluate_ping(db, account.id, *FAR, occurred_at=T0 + timedelta(minutes=20))
     assert [e.event_type for e in out] == [location.GeofenceEventType.EXIT]
 
 
@@ -106,9 +100,7 @@ def test_disarm_stops_evaluation_and_closes_presence(db):
     location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0)
 
     location.disarm_geofence(db, account.id, fac.id, occurred_at=T0 + timedelta(minutes=5))
-    after = location.evaluate_ping(
-        db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=30)
-    )
+    after = location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=30))
     assert after == []
 
 

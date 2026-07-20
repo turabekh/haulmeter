@@ -8,6 +8,7 @@ design-prd §11.2 (unspecified POI types fall back to the generic circle, which
 composes existing shapes rather than inventing one). Mapbox tiles + night/day
 styling are a client concern; no tile secret lives server-side.
 """
+
 import math
 from dataclasses import dataclass, field
 
@@ -190,9 +191,7 @@ def corridor(
     facility_types=None,
     half_angle_deg: float = 45.0,
 ) -> list[CorridorEntry]:
-    facilities = _facilities_in_area(
-        db, origin_lat, origin_lon, max_distance_m, facility_types
-    )
+    facilities = _facilities_in_area(db, origin_lat, origin_lon, max_distance_m, facility_types)
     entries: list[CorridorEntry] = []
     for fac in facilities:
         lat, lon = facility_registry.coordinates(db, fac)

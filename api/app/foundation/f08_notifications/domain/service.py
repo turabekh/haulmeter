@@ -165,9 +165,7 @@ def register_template(
     active: bool = True,
 ) -> NotificationTemplate:
     if audience == TemplateAudience.counterparty and locale != "en":
-        raise CounterpartyMustBeEnglish(
-            "counterparty-facing templates are always English (F15)"
-        )
+        raise CounterpartyMustBeEnglish("counterparty-facing templates are always English (F15)")
     template = NotificationTemplate(
         key=key,
         locale=locale,
@@ -183,9 +181,7 @@ def register_template(
     return template
 
 
-def get_active_template(
-    db: Session, key: str, locale: str = "en"
-) -> NotificationTemplate | None:
+def get_active_template(db: Session, key: str, locale: str = "en") -> NotificationTemplate | None:
     return db.scalar(
         select(NotificationTemplate)
         .where(
@@ -198,9 +194,7 @@ def get_active_template(
     )
 
 
-def render_template(
-    template: NotificationTemplate, context: dict
-) -> tuple[str | None, str]:
+def render_template(template: NotificationTemplate, context: dict) -> tuple[str | None, str]:
     def _sub(text: str | None) -> str | None:
         if text is None:
             return None
@@ -263,9 +257,7 @@ def mark_opened(
 
 
 def record_inbound_reply(db: Session, thread: OutboundThread, body: str) -> OutboundMessage:
-    message = OutboundMessage(
-        thread_id=thread.id, direction=MessageDirection.inbound, body=body
-    )
+    message = OutboundMessage(thread_id=thread.id, direction=MessageDirection.inbound, body=body)
     db.add(message)
     db.flush()
     return message

@@ -6,6 +6,7 @@ English; units are always imperial; trucking jargon stays English via the
 glossary. Hard dependency for F8 templates, F9 prompts, M11. Consumed by every
 module.
 """
+
 from .domain.enums import LocaleAudience
 from .domain.models import GlossaryTerm, MessageCatalog
 from .domain.service import (

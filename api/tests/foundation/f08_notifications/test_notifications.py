@@ -78,7 +78,11 @@ def test_p1_suppressed_while_resting(db):
     account = _account(db)
     gw = notify.RecordingNotificationGateway()
     n = _dispatch(
-        db, account, gw, notify.NotificationTier.P1, now=NOON,
+        db,
+        account,
+        gw,
+        notify.NotificationTier.P1,
+        now=NOON,
         driver_state=notify.DriverState.resting,
     )
     assert n.suppress_reason == notify.SuppressReason.resting
@@ -88,7 +92,11 @@ def test_driving_delivers_audio_not_interactive(db):
     account = _account(db)
     gw = notify.RecordingNotificationGateway()
     n = _dispatch(
-        db, account, gw, notify.NotificationTier.P0, now=NOON,
+        db,
+        account,
+        gw,
+        notify.NotificationTier.P0,
+        now=NOON,
         driver_state=notify.DriverState.driving,
     )
     assert n.status == notify.NotificationStatus.sent
@@ -104,12 +112,20 @@ def test_deep_link_required(db):
 
 def test_template_registry_returns_latest_active_version(db):
     notify.register_template(
-        db, "detention_notice", "v1 body", notify.TemplateAudience.driver,
-        notify.NotificationChannel.push, version=1,
+        db,
+        "detention_notice",
+        "v1 body",
+        notify.TemplateAudience.driver,
+        notify.NotificationChannel.push,
+        version=1,
     )
     notify.register_template(
-        db, "detention_notice", "v2 body {rate}", notify.TemplateAudience.driver,
-        notify.NotificationChannel.push, version=2,
+        db,
+        "detention_notice",
+        "v2 body {rate}",
+        notify.TemplateAudience.driver,
+        notify.NotificationChannel.push,
+        version=2,
     )
     active = notify.get_active_template(db, "detention_notice")
     assert active.version == 2
@@ -119,13 +135,21 @@ def test_template_registry_returns_latest_active_version(db):
 
 def test_counterparty_template_must_be_english(db):
     notify.register_template(
-        db, "detention_invoice", "Detention owed: {amount}",
-        notify.TemplateAudience.counterparty, notify.NotificationChannel.email, locale="en",
+        db,
+        "detention_invoice",
+        "Detention owed: {amount}",
+        notify.TemplateAudience.counterparty,
+        notify.NotificationChannel.email,
+        locale="en",
     )
     with pytest.raises(notify.CounterpartyMustBeEnglish):
         notify.register_template(
-            db, "detention_invoice", "Detención: {amount}",
-            notify.TemplateAudience.counterparty, notify.NotificationChannel.email, locale="es",
+            db,
+            "detention_invoice",
+            "Detención: {amount}",
+            notify.TemplateAudience.counterparty,
+            notify.NotificationChannel.email,
+            locale="es",
         )
 
 

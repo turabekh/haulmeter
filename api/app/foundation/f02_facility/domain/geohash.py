@@ -4,6 +4,7 @@ Standard geohash base-32 encoding. Facilities sharing a geohash prefix are in
 the same spatial block and become dedup candidates for fuzzy name matching. No
 external dependency — the algorithm is small and stable.
 """
+
 _BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
 
 

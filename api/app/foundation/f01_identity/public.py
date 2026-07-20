@@ -4,6 +4,7 @@ The ONLY import surface other packages may use to reach F1 (import-linter
 enforced). Launch auth is email/password with no activation step; the auth
 method registry is the seam for future OAuth/OTP. Consumed by every module.
 """
+
 from .domain.auth_methods import get_handler, is_implemented
 from .domain.enums import AuthorityType, MethodType, OrgType, Role
 from .domain.models import (

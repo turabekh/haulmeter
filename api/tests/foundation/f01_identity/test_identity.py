@@ -72,9 +72,7 @@ def test_adding_unimplemented_method_with_credential_fails_cleanly(db):
 
 def test_second_auth_method_links_to_same_account(db):
     account = identity.register_account(db, "linked@example.com", "pw-123456")
-    method = identity.add_auth_method(
-        db, account, identity.MethodType.oauth, "google:subject-123"
-    )
+    method = identity.add_auth_method(db, account, identity.MethodType.oauth, "google:subject-123")
     assert method.account_id == account.id
     assert method.secret_ref is None
 

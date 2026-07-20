@@ -129,9 +129,7 @@ def resolve_session(db: Session, token: str) -> Account | None:
     return db.get(Account, session.account_id)
 
 
-def attach_role(
-    db: Session, account: Account, role: Role, org_id=None
-) -> RoleAttachment:
+def attach_role(db: Session, account: Account, role: Role, org_id=None) -> RoleAttachment:
     attachment = RoleAttachment(account_id=account.id, role=role, org_id=org_id)
     db.add(attachment)
     db.flush()
