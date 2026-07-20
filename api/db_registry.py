@@ -14,6 +14,7 @@ MODEL_MODULES = [
     "app.foundation.f03_location.domain.models",
     "app.foundation.f04_evidence.domain.models",
     "app.foundation.f05_load.domain.models",
+    "app.foundation.f06_documents.domain.models",
 ]
 
 
