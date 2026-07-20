@@ -154,5 +154,14 @@
   "load.facility": "Facility",
   "load.broker": "Broker",
   "load.create": "Start",
-  "load.filed": "Claim filed"
+  "load.filed": "Claim filed",
+  "handoff.leaving": "Leaving soon",
+  "handoff.title": "Spot handoffs",
+  "handoff.nearby": "opening nearby",
+  "handoff.claim": "Claim",
+  "handoff.claimed": "Claimed",
+  "handoff.mine": "Yours",
+  "handoff.leaving_in": "leaving in",
+  "handoff.empty": "No spots opening right now",
+  "handoff.broadcast_done": "Broadcast — a nearby driver gets your spot"
 }

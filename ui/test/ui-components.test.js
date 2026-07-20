@@ -24,6 +24,7 @@ import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
 import AuditSurface from "../src/surfaces/AuditSurface.vue";
 import GhostwriterSheet from "../src/core/components/GhostwriterSheet.vue";
 import SleepSheet from "../src/core/components/SleepSheet.vue";
+import HandoffSheet from "../src/core/components/HandoffSheet.vue";
 import { routes, installAuthGuard } from "../src/router.js";
 import { setToken, logout, isAuthenticated, setActiveStop } from "../src/core/api.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
@@ -525,6 +526,49 @@ describe("SleepSheet — where-do-I-sleep solver (M8-FR3)", () => {
     expect(w.text()).toContain("Guaranteed spot");
     expect(w.text()).toContain("Fuel on the way");
     w.unmount();
+  });
+});
+
+describe("HandoffSheet — spot relay (M10-FR2)", () => {
+  it("lists nearby handoffs and claims one over the API", async () => {
+    const fetchStub = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ state: "claimed" }) });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const handoffs = [
+        { handoff_id: "h-1", facility_name: "Loves #212", leaving_at: new Date(Date.now() + 720000).toISOString(), mine: false },
+        { handoff_id: "h-2", facility_name: "My Lot", leaving_at: new Date(Date.now() + 600000).toISOString(), mine: true },
+      ];
+      const w = mount(HandoffSheet, { props: { handoffs } });
+      expect(w.text()).toContain("Loves #212");
+      expect(w.text()).toContain("Yours"); // my own broadcast isn't claimable
+      const claimBtn = w.findAll(".claim").find((b) => b.text() === "Claim");
+      await claimBtn.trigger("click");
+      await flushPromises();
+      expect(fetchStub.mock.calls[0][0]).toContain("/community/handoff/h-1/claim");
+      expect(w.text()).toContain("Claimed");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("FacilityCard — free-lot handoff (M10-FR2)", () => {
+  it("offers 'Leaving soon' on a free public lot and emits handoff", async () => {
+    const pin = {
+      facility_id: "f-1",
+      name: "Loves #212",
+      facility_type: "truck_stop",
+      status: "full",
+      badges: [],
+      freshness: { reported_at: new Date().toISOString(), sample_size: 3 },
+    };
+    const router = testRouter();
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [router] } });
+    const btn = w.findAll(".cta").find((b) => b.text() === "Leaving soon");
+    expect(btn).toBeTruthy();
+    await btn.trigger("click");
+    expect(w.emitted().handoff).toBeTruthy();
+    expect(w.emitted().handoff[0][0].facility_id).toBe("f-1");
   });
 });
 

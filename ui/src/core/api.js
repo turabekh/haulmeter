@@ -289,6 +289,33 @@ export async function fetchQuestions(facilityId) {
   return resp.json();
 }
 
+export async function fetchNearbyHandoffs({ lat, lon, radiusM = 8000 }) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const q = new URLSearchParams({ lat, lon, radius_m: radiusM });
+  const resp = await fetch(`${API_BASE}/community/handoff/nearby?${q}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`handoffs failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function broadcastHandoff(facilityId, leavingInMinutes = 15) {
+  const resp = await fetch(`${API_BASE}/community/handoff`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ facility_id: facilityId, leaving_in_minutes: leavingInMinutes }),
+  });
+  if (!resp.ok) throw new Error(`broadcast failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function claimHandoff(handoffId) {
+  const resp = await fetch(`${API_BASE}/community/handoff/${handoffId}/claim`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`claim failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function askQuestion(facilityId, text) {
   const resp = await fetch(`${API_BASE}/community/questions`, {
     method: "POST",

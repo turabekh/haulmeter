@@ -154,5 +154,14 @@
   "load.facility": "Объект",
   "load.broker": "Брокер",
   "load.create": "Начать",
-  "load.filed": "Претензия подана"
+  "load.filed": "Претензия подана",
+  "handoff.leaving": "Скоро уезжаю",
+  "handoff.title": "Передача мест",
+  "handoff.nearby": "открываются рядом",
+  "handoff.claim": "Занять",
+  "handoff.claimed": "Занято",
+  "handoff.mine": "Ваше",
+  "handoff.leaving_in": "уезжает через",
+  "handoff.empty": "Сейчас мест не открывается",
+  "handoff.broadcast_done": "Отправлено — место получит ближайший водитель"
 }

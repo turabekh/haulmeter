@@ -154,5 +154,14 @@
   "load.facility": "Goobta",
   "load.broker": "Dilaal",
   "load.create": "Bilow",
-  "load.filed": "Sheegasho la gudbiyay"
+  "load.filed": "Sheegasho la gudbiyay",
+  "handoff.leaving": "Dhawaan baxaya",
+  "handoff.title": "Wareejinta goobta",
+  "handoff.nearby": "furmaya meel dhow",
+  "handoff.claim": "Qaado",
+  "handoff.claimed": "La qaatay",
+  "handoff.mine": "Kaaga",
+  "handoff.leaving_in": "baxaya",
+  "handoff.empty": "Hadda goob furmaysa ma jirto",
+  "handoff.broadcast_done": "La faafiyay — darawal dhow ayaa helaya goobtaada"
 }

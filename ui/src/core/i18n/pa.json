@@ -154,5 +154,14 @@
   "load.facility": "ਸਹੂਲਤ",
   "load.broker": "ਬ੍ਰੋਕਰ",
   "load.create": "ਸ਼ੁਰੂ ਕਰੋ",
-  "load.filed": "ਦਾਅਵਾ ਦਾਇਰ ਕੀਤਾ"
+  "load.filed": "ਦਾਅਵਾ ਦਾਇਰ ਕੀਤਾ",
+  "handoff.leaving": "ਜਲਦੀ ਜਾ ਰਿਹਾ",
+  "handoff.title": "ਥਾਂ ਟ੍ਰਾਂਸਫਰ",
+  "handoff.nearby": "ਨੇੜੇ ਖੁੱਲ੍ਹ ਰਹੀਆਂ",
+  "handoff.claim": "ਲਓ",
+  "handoff.claimed": "ਲੈ ਲਿਆ",
+  "handoff.mine": "ਤੁਹਾਡਾ",
+  "handoff.leaving_in": "ਜਾ ਰਿਹਾ",
+  "handoff.empty": "ਹੁਣ ਕੋਈ ਥਾਂ ਨਹੀਂ ਖੁੱਲ੍ਹ ਰਹੀ",
+  "handoff.broadcast_done": "ਪ੍ਰਸਾਰਿਤ — ਨੇੜਲੇ ਡਰਾਈਵਰ ਨੂੰ ਤੁਹਾਡੀ ਥਾਂ ਮਿਲੇਗੀ"
 }

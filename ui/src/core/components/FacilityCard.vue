@@ -19,7 +19,7 @@ import { useI18n } from "../i18n.js";
 const props = defineProps({
   pin: { type: Object, required: true },
 });
-const emit = defineEmits(["navigate", "report", "book", "fuel"]);
+const emit = defineEmits(["navigate", "report", "book", "fuel", "handoff"]);
 const { t } = useI18n();
 const router = useRouter();
 
@@ -38,6 +38,10 @@ const bookLabel = computed(() => `${t("facility.book")} — ${formatMoney(nightl
 // M7: a fuel_net badge carries {gross, net, savings, is_network} in cents.
 const fuelNet = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_net") ?? null);
 const fuelable = computed(() => !!fuelNet.value?.is_network);
+// M10: a free public lot can relay a "leaving soon" spot handoff (never M6).
+const freeLot = computed(() =>
+  ["truck_stop", "rest_area"].includes(props.pin.facility_type),
+);
 </script>
 
 <template>
@@ -87,6 +91,10 @@ const fuelable = computed(() => !!fuelNet.value?.is_network);
     </button>
     <button class="cta cta--tertiary" type="button" @click="viewFacility">
       {{ t("facility.view") }}
+    </button>
+    <!-- M10-FR2: at a free lot you're leaving, hand your spot to a nearby driver -->
+    <button v-if="freeLot" class="cta cta--tertiary" type="button" @click="emit('handoff', pin)">
+      {{ t("handoff.leaving") }}
     </button>
   </div>
 </template>

@@ -15,10 +15,11 @@ import CorridorStack from "../core/components/CorridorStack.vue";
 import ReportSheet from "../core/components/ReportSheet.vue";
 import VoiceSheet from "../core/components/VoiceSheet.vue";
 import SleepSheet from "../core/components/SleepSheet.vue";
+import HandoffSheet from "../core/components/HandoffSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
-import { SAMPLE_PINS, SAMPLE_CORRIDOR } from "../core/fixtures.js";
-import { fetchOverlay } from "../core/api.js";
+import { SAMPLE_PINS, SAMPLE_CORRIDOR, sampleHandoffs } from "../core/fixtures.js";
+import { fetchOverlay, fetchNearbyHandoffs, broadcastHandoff } from "../core/api.js";
 
 const { isDriving } = useDriverState();
 const { t } = useI18n();
@@ -60,6 +61,23 @@ const selected = ref(null);
 const reporting = ref(false);
 const listening = ref(false);
 const solving = ref(false);
+const relaying = ref(false);
+const handoffs = ref([]);
+
+async function loadHandoffs() {
+  try {
+    handoffs.value = await fetchNearbyHandoffs({ lat: 32.78, lon: -96.8 });
+  } catch {
+    handoffs.value = sampleHandoffs(); // unauthenticated / offline
+  }
+}
+onMounted(loadHandoffs);
+
+function handoff(pin) {
+  // M10-FR2: broadcast "leaving soon" from this free lot (backend proves presence)
+  selected.value = null;
+  broadcastHandoff(pin.facility_id).catch(() => {});
+}
 
 function navigate(pin) {
   const url = `https://www.google.com/maps/dir/?api=1&destination=${pin.lat},${pin.lon}`;
@@ -109,6 +127,10 @@ function submitReport() {
       <button v-if="preset === 'tonight'" class="sleep-cta" type="button" @click="solving = true">
         {{ t("sleep.title") }}
       </button>
+      <!-- M10-FR2: spots opening nearby — the claimable relay feed -->
+      <button v-if="handoffs.length" class="relay-banner" type="button" @click="relaying = true">
+        {{ handoffs.length }} {{ t("handoff.nearby") }}
+      </button>
       <div class="map__canvas">
         <MapCanvas :pins="pins" @pin-tap="selected = $event" />
         <button class="report-chip" type="button" :aria-label="t('map.report')" @click="reporting = true">
@@ -138,6 +160,7 @@ function submitReport() {
         @report="report"
         @book="book"
         @fuel="fuel"
+        @handoff="handoff"
       />
     </BottomSheet>
 
@@ -151,6 +174,10 @@ function submitReport() {
 
     <BottomSheet :open="solving" :title="t('sleep.title')" @close="solving = false">
       <SleepSheet />
+    </BottomSheet>
+
+    <BottomSheet :open="relaying" :title="t('handoff.title')" @close="relaying = false">
+      <HandoffSheet :handoffs="handoffs" />
     </BottomSheet>
   </div>
 </template>
@@ -192,6 +219,16 @@ function submitReport() {
   background: var(--ink-1);
   border: 1px solid var(--line-1);
   color: var(--text-1);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.relay-banner {
+  margin: var(--s-2) var(--s-4) 0;
+  min-height: 44px;
+  border-radius: var(--r-control);
+  background: var(--shield-500);
+  color: var(--on-accent);
+  border: none;
   font-size: var(--type-label-size);
   font-weight: 500;
 }

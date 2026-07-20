@@ -154,5 +154,14 @@
   "load.facility": "Instalación",
   "load.broker": "Bróker",
   "load.create": "Iniciar",
-  "load.filed": "Reclamo presentado"
+  "load.filed": "Reclamo presentado",
+  "handoff.leaving": "Saliendo pronto",
+  "handoff.title": "Traspaso de lugares",
+  "handoff.nearby": "abriéndose cerca",
+  "handoff.claim": "Reclamar",
+  "handoff.claimed": "Reclamado",
+  "handoff.mine": "Tuyo",
+  "handoff.leaving_in": "sale en",
+  "handoff.empty": "No hay lugares abriéndose ahora",
+  "handoff.broadcast_done": "Enviado — un conductor cercano recibe tu lugar"
 }

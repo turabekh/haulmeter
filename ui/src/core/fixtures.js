@@ -94,6 +94,16 @@ export const SAMPLE_FLEET = {
   },
 };
 
+// AI-CONTEXT: fixture nearby spot-handoffs (M10-FR2), pending live
+// /community/handoff/nearby. "leaving in X" broadcasts at free lots to claim.
+export function sampleHandoffs() {
+  const soon = (min) => new Date(Date.now() + min * 60000).toISOString();
+  return [
+    { handoff_id: "h-1", facility_name: "Loves Travel Stop #212", leaving_at: soon(12), mine: false },
+    { handoff_id: "h-2", facility_name: "Rest Area — I-35 NB", leaving_at: soon(25), mine: false },
+  ];
+}
+
 // AI-CONTEXT: fixture points/reputation (M10), pending live /community/points.
 export const SAMPLE_POINTS = {
   balance: 340,

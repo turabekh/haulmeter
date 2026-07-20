@@ -154,5 +154,14 @@
   "load.facility": "Obyekt",
   "load.broker": "Broker",
   "load.create": "Boshlash",
-  "load.filed": "Da'vo topshirildi"
+  "load.filed": "Da'vo topshirildi",
+  "handoff.leaving": "Tez orada ketaman",
+  "handoff.title": "Joy topshirish",
+  "handoff.nearby": "yaqinda ochilmoqda",
+  "handoff.claim": "Olish",
+  "handoff.claimed": "Olindi",
+  "handoff.mine": "Sizniki",
+  "handoff.leaving_in": "ketadi",
+  "handoff.empty": "Hozir joy ochilmayapti",
+  "handoff.broadcast_done": "Yuborildi — yaqindagi haydovchi joyingizni oladi"
 }
