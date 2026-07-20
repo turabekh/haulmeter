@@ -222,6 +222,10 @@ def disarm_geofence(db: Session, account_id, facility_id, occurred_at: datetime 
     db.flush()
 
 
+def is_present(db: Session, account_id, facility_id) -> bool:
+    return _active_presence(db, account_id, facility_id) is not None
+
+
 def list_events(db: Session, account_id, facility_id=None) -> list[GeofenceEvent]:
     stmt = select(GeofenceEvent).where(GeofenceEvent.account_id == account_id)
     if facility_id is not None:

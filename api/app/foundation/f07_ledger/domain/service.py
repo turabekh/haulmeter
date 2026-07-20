@@ -72,6 +72,26 @@ def create_account(
     return account
 
 
+def get_or_create_account(
+    db: Session,
+    kind: LedgerAccountKind,
+    name: str,
+    currency: Currency = Currency.usd,
+    owner_ref=None,
+) -> LedgerAccount:
+    stmt = select(LedgerAccount).where(
+        LedgerAccount.kind == kind, LedgerAccount.currency == currency
+    )
+    if owner_ref is not None:
+        stmt = stmt.where(LedgerAccount.owner_ref == owner_ref)
+    else:
+        stmt = stmt.where(LedgerAccount.owner_ref.is_(None), LedgerAccount.name == name)
+    existing = db.scalar(stmt)
+    if existing is not None:
+        return existing
+    return create_account(db, kind, name, currency=currency, owner_ref=owner_ref)
+
+
 def post_entry(
     db: Session,
     entry_type: EntryType,

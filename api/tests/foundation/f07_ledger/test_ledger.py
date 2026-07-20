@@ -139,6 +139,29 @@ def test_record_recovery_zero_fee(db):
     assert ledger.balance(db, contingency) == 0
 
 
+def test_get_or_create_account_is_idempotent_per_owner(db):
+    account = _account(db)
+    a1 = ledger.get_or_create_account(
+        db, ledger.LedgerAccountKind.points_balance, f"points:{account.id}",
+        currency=ledger.Currency.points, owner_ref=account.id,
+    )
+    a2 = ledger.get_or_create_account(
+        db, ledger.LedgerAccountKind.points_balance, f"points:{account.id}",
+        currency=ledger.Currency.points, owner_ref=account.id,
+    )
+    assert a1.id == a2.id
+    pool1 = ledger.get_or_create_account(
+        db, ledger.LedgerAccountKind.points_pool, "points:pool",
+        currency=ledger.Currency.points,
+    )
+    pool2 = ledger.get_or_create_account(
+        db, ledger.LedgerAccountKind.points_pool, "points:pool",
+        currency=ledger.Currency.points,
+    )
+    assert pool1.id == pool2.id
+    assert pool1.id != a1.id
+
+
 def test_payment_gateway_is_a_seam(db):
     gateway = ledger.StubPaymentGateway()
     with pytest.raises(NotImplementedError):

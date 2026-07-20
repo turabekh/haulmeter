@@ -146,6 +146,17 @@ def test_purge_pings_retention(db):
     assert removed == 2
 
 
+def test_is_present_tracks_geofence_presence(db):
+    account = _account(db)
+    fac = _facility(db)
+    location.arm_geofence(db, account.id, fac.id)
+    assert location.is_present(db, account.id, fac.id) is False
+    location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0)
+    assert location.is_present(db, account.id, fac.id) is True
+    location.evaluate_ping(db, account.id, *FAR, occurred_at=T0 + timedelta(minutes=20))
+    assert location.is_present(db, account.id, fac.id) is False
+
+
 def test_arm_unknown_facility_raises(db):
     import uuid
 

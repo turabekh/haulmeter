@@ -1,0 +1,79 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.db import Base
+
+from .enums import SignalType
+
+SCHEMA = "f10"
+ACCOUNT_FK = "f01.account.id"
+FACILITY_FK = "f02.facility.id"
+
+SIGNAL_TYPE_ENUM = Enum(SignalType, name="signal_type", schema=SCHEMA)
+
+
+class Submission(Base):
+    __tablename__ = "submission"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="CASCADE"), index=True
+    )
+    facility_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(FACILITY_FK, ondelete="CASCADE"), index=True
+    )
+    signal_type: Mapped[SignalType] = mapped_column(SIGNAL_TYPE_ENUM, index=True)
+    value: Mapped[dict] = mapped_column(JSON, default=dict)
+    presence_proven: Mapped[bool] = mapped_column(default=False)
+    trust_weight: Mapped[float] = mapped_column(Float, default=1.0)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class ContributorTrust(Base):
+    __tablename__ = "contributor_trust"
+    __table_args__ = {"schema": SCHEMA}
+
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="CASCADE"), primary_key=True
+    )
+    score: Mapped[float] = mapped_column(Float, default=1.0)
+    confirmed_count: Mapped[int] = mapped_column(Integer, default=0)
+    rejected_count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Belief(Base):
+    __tablename__ = "belief"
+    __table_args__ = (
+        UniqueConstraint("facility_id", "signal_type", name="uq_belief_facility_signal"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    facility_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(FACILITY_FK, ondelete="CASCADE"), index=True
+    )
+    signal_type: Mapped[SignalType] = mapped_column(SIGNAL_TYPE_ENUM)
+    value: Mapped[dict] = mapped_column(JSON, default=dict)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    sample_size: Mapped[int] = mapped_column(Integer, default=0)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    freshest_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
