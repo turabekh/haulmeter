@@ -37,10 +37,15 @@ class CreateLoadIn(BaseModel):
     rate_cents_per_hour: int = 7500
 
 
-def _stop_or_404(db: Session, stop_id: uuid.UUID):
+def _owned_stop(db: Session, stop_id: uuid.UUID, account: identity.Account):
+    # every stop-scoped action is gated to the load's owner: 404 if it doesn't
+    # exist, 403 if it isn't the caller's (a driver only touches their own loads)
     stop = loads.get_stop(db, stop_id)
     if stop is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "stop not found")
+    load = loads.get_load(db, stop.load_id)
+    if load is None or load.account_id != account.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your load")
     return stop
 
 
@@ -93,7 +98,7 @@ def arrive(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
-    stop = _stop_or_404(db, stop_id)
+    stop = _owned_stop(db, stop_id, account)
     fac = facility.get_facility(db, stop.facility_id)
     lat, lon = facility.coordinates(db, fac)
     # a geofence ENTER at the stop is the arrival the detention clock triggers on
@@ -112,10 +117,7 @@ def end_load(
 ) -> dict:
     # durable "end this load": mark the stop departed so /load/active stops
     # resurfacing it (ownership-checked — a driver only ends their own stop)
-    stop = _stop_or_404(db, stop_id)
-    load = loads.get_load(db, stop.load_id)
-    if load is None or load.account_id != account.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your load")
+    stop = _owned_stop(db, stop_id, account)
     loads.depart_stop(db, stop, occurred_at=datetime.now(UTC))
     return {"stop_id": str(stop.id), "status": stop.status.value}
 
@@ -126,7 +128,7 @@ def meter(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
-    stop = _stop_or_404(db, stop_id)
+    stop = _owned_stop(db, stop_id, account)
     fac = facility.get_facility(db, stop.facility_id)
     cp = loads.get_counterparty(db, loads.get_load(db, stop.load_id).counterparty_id)
     free_time, rate = loads.effective_detention_terms(db, stop)
@@ -175,7 +177,7 @@ def send_notice(
     db: Session = Depends(get_db),
 ) -> dict:
     # M3 counterparty notice — no-ops while still within free time (nothing owed yet)
-    claim = _claim_or_409(db, _stop_or_404(db, stop_id))
+    claim = _claim_or_409(db, _owned_stop(db, stop_id, account))
     message = m3.send_detention_start_notice(db, claim, _GATEWAY, datetime.now(UTC))
     return {"sent": message is not None}
 
@@ -187,7 +189,7 @@ def generate_claim(
     db: Session = Depends(get_db),
 ) -> dict:
     # close the loop: the running clock -> a GPS-backed, filed detention claim
-    claim = _claim_or_409(db, _stop_or_404(db, stop_id))
+    claim = _claim_or_409(db, _owned_stop(db, stop_id, account))
     result = m3.generate_pack(db, claim, now=datetime.now(UTC), gateway=_GATEWAY)
     # F14: North Star funnel step 3 — the loop closes into a filed, GPS-backed claim
     admin.emit(db, "claim_sent", "m03", datetime.now(UTC), account_id=account.id)

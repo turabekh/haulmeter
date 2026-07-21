@@ -87,6 +87,22 @@ def test_end_load_rejects_another_owner(client, db):
     assert client.post(f"/load/{stop_id}/end", headers=b_headers).status_code == 403
 
 
+def test_stop_scoped_endpoints_reject_another_owner(client, db):
+    # every stop-scoped action is gated to the load's owner (403 for anyone else)
+    a = _auth(client)
+    stop_id = _create(client, a)
+    b = client.post(
+        "/auth/register", json={"email": "intruder@example.com", "password": "pw-123456"}
+    )
+    hb = {"Authorization": f"Bearer {b.json()['token']}"}
+    assert client.get(f"/load/{stop_id}/meter", headers=hb).status_code == 403
+    assert client.post(f"/load/{stop_id}/arrive", headers=hb).status_code == 403
+    assert client.post(f"/load/{stop_id}/notice", headers=hb).status_code == 403
+    assert client.post(f"/load/{stop_id}/claim", headers=hb).status_code == 403
+    # the real owner is still allowed through (arrive succeeds)
+    assert client.post(f"/load/{stop_id}/arrive", headers=a).status_code == 201
+
+
 def test_active_load_is_per_account(client, db):
     # one driver's armed stop is never another's active load
     a = _auth(client)
