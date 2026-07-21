@@ -33,8 +33,9 @@ class CreateLoadIn(BaseModel):
     lon: float
     counterparty: str
     appointment: datetime | None = None
-    free_time_minutes: int = 120
-    rate_cents_per_hour: int = 7500
+    # omit to use the live F13-config detention terms (default 2h free / $75/h)
+    free_time_minutes: int | None = None
+    rate_cents_per_hour: int | None = None
 
 
 def _owned_stop(db: Session, stop_id: uuid.UUID, account: identity.Account):
@@ -59,12 +60,23 @@ def create_load(
         db, facility.FacilityType.shipper_receiver, body.facility_name, body.lat, body.lon
     )
     cp = loads.create_counterparty(db, body.counterparty, loads.CounterpartyKind.broker)
+    # unset terms fall back to the live F13-config detention defaults (M3 owns them)
+    free_time = (
+        body.free_time_minutes
+        if body.free_time_minutes is not None
+        else m3.default_free_time_minutes(db)
+    )
+    rate = (
+        body.rate_cents_per_hour
+        if body.rate_cents_per_hour is not None
+        else m3.default_rate_cents_per_hour(db)
+    )
     load = loads.create_load(
         db,
         account.id,
         counterparty_id=cp.id,
-        detention_rate_cents_per_hour=body.rate_cents_per_hour,
-        free_time_minutes=body.free_time_minutes,
+        detention_rate_cents_per_hour=rate,
+        free_time_minutes=free_time,
     )
     stop = loads.add_stop(
         db,
@@ -72,8 +84,8 @@ def create_load(
         fac.id,
         loads.StopType.delivery,
         appointment_start=body.appointment,
-        free_time_minutes=body.free_time_minutes,
-        detention_rate_cents_per_hour=body.rate_cents_per_hour,
+        free_time_minutes=free_time,
+        detention_rate_cents_per_hour=rate,
     )
     loads.arm_stop(db, stop)  # opens the F4 evidence log + arms the F3 geofence
     # F14: North Star funnel step 1 — a live load exists (feeds /admin/analytics)

@@ -9,6 +9,10 @@ flag m03_detention (legal + collection-partner validation gates).
 from .domain.enums import ClaimMode, ClaimState, DetentionPhase, DetentionTrigger
 from .domain.models import DetentionClaim
 from .domain.service import (
+    CONFIG_FREE_TIME_KEY,
+    CONFIG_RATE_KEY,
+    DEFAULT_FREE_TIME_MINUTES,
+    DEFAULT_RATE_CENTS_PER_HOUR,
     DUNNING_DAYS,
     FLAG_KEY,
     GATES,
@@ -19,6 +23,8 @@ from .domain.service import (
     claim_for_stop,
     clock,
     compute_detention,
+    default_free_time_minutes,
+    default_rate_cents_per_hour,
     dunning_schedule,
     escalate,
     generate_pack,
@@ -36,6 +42,12 @@ __all__ = [
     "DetentionPhase",
     "DetentionTrigger",
     "DetentionClaim",
+    "CONFIG_FREE_TIME_KEY",
+    "CONFIG_RATE_KEY",
+    "DEFAULT_FREE_TIME_MINUTES",
+    "DEFAULT_RATE_CENTS_PER_HOUR",
+    "default_free_time_minutes",
+    "default_rate_cents_per_hour",
     "DUNNING_DAYS",
     "FLAG_KEY",
     "GATES",

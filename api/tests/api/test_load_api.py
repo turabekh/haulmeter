@@ -113,6 +113,46 @@ def test_active_load_is_per_account(client, db):
     assert client.get("/load/active", headers=b_headers).json()["stop_id"] is None
 
 
+def test_new_load_terms_read_f13_config_default(client, db):
+    from app.foundation.f13_flags import public as flags
+    from app.modules.m03_detention import public as m3
+
+    headers = _auth(client)
+    # unset -> the compiled default (2h free)
+    stop_id = client.post(
+        "/load",
+        json={"facility_name": "R", "lat": DALLAS[0], "lon": DALLAS[1], "counterparty": "Acme"},
+        headers=headers,
+    ).json()["stop_id"]
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["free_time_minutes"] == 120
+
+    # an operator lowers the platform default via F13 config -> the next load uses it
+    flags.set_config(db, m3.CONFIG_FREE_TIME_KEY, 60, scope="detention")
+    flags.set_config(db, m3.CONFIG_RATE_KEY, 9000, scope="detention")
+    stop2 = client.post(
+        "/load",
+        json={"facility_name": "R2", "lat": DALLAS[0], "lon": DALLAS[1], "counterparty": "Acme"},
+        headers=headers,
+    ).json()["stop_id"]
+    meter = client.get(f"/load/{stop2}/meter", headers=headers).json()
+    assert meter["free_time_minutes"] == 60
+    assert meter["rate_cents_per_hour"] == 9000
+
+    # an explicit value in the request still overrides the config default
+    stop3 = client.post(
+        "/load",
+        json={
+            "facility_name": "R3",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Acme",
+            "free_time_minutes": 180,
+        },
+        headers=headers,
+    ).json()["stop_id"]
+    assert client.get(f"/load/{stop3}/meter", headers=headers).json()["free_time_minutes"] == 180
+
+
 def test_meter_pre_arrival_then_live_after_arrive(client, db):
     headers = _auth(client)
     stop_id = _create(client, headers)

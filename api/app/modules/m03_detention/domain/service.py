@@ -30,6 +30,24 @@ MODULE = "m03"
 PRE_DETENTION_THRESHOLD = timedelta(minutes=30)  # M3-FR3 default (-> F13 config)
 DUNNING_DAYS = [3, 10, 21]  # M3-FR6 (-> F13 config)
 GATES = ["legal_signoff", "collection_partner_agreement"]
+# detention-term defaults for a new load (design-prd §9): 2h free / $75/h. Live
+# F13-config knobs (edited in the F14 admin console) with these as the fallback.
+DEFAULT_FREE_TIME_MINUTES = 120
+DEFAULT_RATE_CENTS_PER_HOUR = 7500
+CONFIG_FREE_TIME_KEY = "m03_free_time_minutes"
+CONFIG_RATE_KEY = "m03_rate_cents_per_hour"
+
+
+def default_free_time_minutes(db: Session) -> int:
+    from app.foundation.f13_flags import public as flags
+
+    return int(flags.get_config(db, CONFIG_FREE_TIME_KEY, DEFAULT_FREE_TIME_MINUTES))
+
+
+def default_rate_cents_per_hour(db: Session) -> int:
+    from app.foundation.f13_flags import public as flags
+
+    return int(flags.get_config(db, CONFIG_RATE_KEY, DEFAULT_RATE_CENTS_PER_HOUR))
 
 
 @dataclass
