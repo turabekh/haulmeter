@@ -232,3 +232,9 @@ def test_generate_claim_closes_the_loop(client, db):
     body = claim.json()
     assert body["chain_valid"] is True  # GPS-backed evidence chain
     assert body["state"] in ("packaged", "invoiced", "exported")  # a pack was filed
+
+    # the Meter now reports filed=True -> the UI freezes and stays frozen across
+    # tab switches (the flag is on the claim, not client state)
+    m = client.get(f"/load/{stop_id}/meter", headers=headers).json()
+    assert m["filed"] is True
+    assert m["detention_cents"] == body["amount_cents"]  # frozen at the filed amount

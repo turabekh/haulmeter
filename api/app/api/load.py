@@ -148,11 +148,19 @@ def meter(
     arrived = location.is_present(db, account.id, stop.facility_id)
     # the clock snapshot (M3) lets the client reconstruct arrival and tick the
     # Meter locally each second without polling (design-prd §9).
+    # once a pack is generated the claim leaves "open" — the Meter FREEZES at the
+    # filed amount (§9), and stays frozen across navigations (state is on the claim)
+    filed = claim is not None and claim.state.value != "open"
     phase = "not_arrived"
     free_remaining = None
     detention_seconds = 0
     detention_cents = 0
-    if claim is not None:
+    if filed:
+        phase = "accruing"
+        free_remaining = 0
+        detention_seconds = claim.detention_seconds
+        detention_cents = claim.amount_cents
+    elif claim is not None:
         state = m3.clock(db, claim, now=datetime.now(UTC))
         phase = state.phase.value
         free_remaining = state.free_time_remaining_seconds
@@ -172,6 +180,7 @@ def meter(
         "detention_seconds": detention_seconds,
         "detention_cents": detention_cents,
         "notice_sent": bool(claim is not None and claim.start_notice_sent_at is not None),
+        "filed": filed,
     }
 
 

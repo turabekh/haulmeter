@@ -104,20 +104,27 @@ const withinFree = computed(() => state.value.phase === "within_free_time");
 const accruing = computed(() => !!live.value && !preArrival.value && !withinFree.value);
 const noticeMsg = ref("");
 
+// a claim is filed once the SERVER says so (live.filed) — persists across tab
+// switches/remounts — or optimistically the moment we file it (filed ref).
+const isFiled = computed(() => !!(filed.value || live.value?.filed));
+const filedAmount = computed(
+  () => filed.value?.amount_cents ?? live.value?.detention_cents ?? 0,
+);
+
 // once a claim is filed the Meter FREEZES at the filed amount — the clock stops
 // ticking, so what you see matches the claim you filed (§9)
 const meterLabel = computed(() =>
   preArrival.value ? t("load.waiting") : withinFree.value ? t("load.free_time") : t("load.detention"),
 );
 const meterFigure = computed(() => {
-  if (filed.value) return formatMoney(filed.value.amount_cents);
+  if (isFiled.value) return formatMoney(filedAmount.value);
   if (preArrival.value) return live.value.appointment ? live.value.appointment.slice(11, 16) : "—";
   return withinFree.value
     ? formatClock(state.value.freeTimeRemainingSeconds)
     : formatMoney(state.value.amountCents);
 });
 const meterStatus = computed(() => {
-  if (filed.value) return t("load.filed_frozen");
+  if (isFiled.value) return t("load.filed_frozen");
   return preArrival.value || withinFree.value
     ? ""
     : `${formatClock(state.value.detentionSeconds)} · $${Math.round(rateCents.value / 100)}/h`;
@@ -212,9 +219,9 @@ async function endLoad() {
       </section>
 
       <!-- arrive -> accrue -> FILE: the loop closes into a GPS-backed claim -->
-      <div v-if="filed" class="filed">
+      <div v-if="isFiled" class="filed">
         <Check :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
-        <span>{{ t("load.filed") }} · {{ formatMoney(filed.amount_cents) }}</span>
+        <span>{{ t("load.filed") }} · {{ formatMoney(filedAmount) }}</span>
         <button class="filed__link" type="button" @click="router.push('/money')">
           {{ t("money.title") }}
         </button>
@@ -226,12 +233,12 @@ async function endLoad() {
       </button>
 
       <!-- accruing: FILE the GPS-backed claim (freezes the Meter) -->
-      <button v-if="accruing && !filed" class="cta" type="button" @click="onGenerateClaim">
+      <button v-if="accruing && !isFiled" class="cta" type="button" @click="onGenerateClaim">
         {{ t("load.cta.claim") }}
       </button>
       <!-- accruing: warn the broker detention started (once) -->
       <button
-        v-if="accruing && !noticeSent && !filed"
+        v-if="accruing && !noticeSent && !isFiled"
         class="cta cta--text"
         type="button"
         @click="onSendNotice"
