@@ -103,6 +103,7 @@ const stopMeta = computed(() => {
   return appt ? `${appt} · ${cp}` : cp;
 });
 const noticeSent = computed(() => (live.value ? live.value.notice_sent : false));
+const photosCaptured = computed(() => live.value?.photos_captured ?? 0);
 
 const state = computed(() =>
   computeDetentionState(arrivalMs.value ?? now.value, freeMin.value, rateCents.value, now.value),
@@ -217,8 +218,9 @@ async function endLoad() {
             {{ t("load.bol") }}
           </li>
           <li class="checklist__item">
-            <Camera :size="20" :stroke-width="2" aria-hidden="true" />
-            {{ t("load.photos") }}
+            <Check v-if="photosCaptured > 0" :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
+            <Camera v-else :size="20" :stroke-width="2" aria-hidden="true" />
+            {{ photosCaptured > 0 ? `${t("load.photos")} · ${photosCaptured}` : t("load.photos") }}
           </li>
           <li class="checklist__item">
             <Send :size="20" :stroke-width="2" :class="{ ok: noticeSent }" aria-hidden="true" />

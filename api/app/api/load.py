@@ -21,6 +21,7 @@ from app.foundation.f05_load import public as loads
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f14_admin import public as admin
 from app.modules.m03_detention import public as m3
+from app.modules.m05_protection import public as m5
 
 router = APIRouter(prefix="/load", tags=["load"])
 
@@ -181,6 +182,7 @@ def meter(
         "detention_cents": detention_cents,
         "notice_sent": bool(claim is not None and claim.start_notice_sent_at is not None),
         "filed": filed,
+        "photos_captured": m5.condition_photo_count(db, stop.id),
     }
 
 

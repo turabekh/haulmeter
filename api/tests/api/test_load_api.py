@@ -221,6 +221,20 @@ def test_claim_detail_shows_contents_and_evidence(client, db):
     assert any(e["type"] == "GEOFENCE" for e in d["timeline"])  # the arrival is in the pack
 
 
+def test_meter_reports_condition_photo_count(client, db):
+    # the Load tab's Evidence "Photos" reflects real captures, not a static label
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+    client.post(f"/load/{stop_id}/arrive", headers=headers)
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["photos_captured"] == 0
+
+    cap = client.post(
+        "/protection/condition/start", json={"stop_id": stop_id}, headers=headers
+    ).json()["capture_id"]
+    client.post(f"/protection/condition/{cap}/photo", json={"prompt": "seals"}, headers=headers)
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["photos_captured"] == 1
+
+
 def test_meter_404_for_unknown_stop(client):
     headers = _auth(client)
     resp = client.get("/load/00000000-0000-0000-0000-000000000000/meter", headers=headers)

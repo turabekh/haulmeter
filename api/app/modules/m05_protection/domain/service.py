@@ -10,7 +10,7 @@ benefit.
 
 from datetime import UTC, date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.foundation.f04_evidence import public as evidence
@@ -101,6 +101,17 @@ def start_condition_capture(db: Session, stop, account_id, phase: CapturePhase) 
     db.add(capture)
     db.flush()
     return capture
+
+
+def condition_photo_count(db: Session, stop_ref) -> int:
+    # total cargo-condition photos captured for a stop (across capture sessions) —
+    # so the Load tab can confirm "Photos captured" instead of a static label
+    total = db.scalar(
+        select(func.coalesce(func.sum(ConditionCapture.photo_count), 0)).where(
+            ConditionCapture.stop_ref == stop_ref
+        )
+    )
+    return int(total or 0)
 
 
 def add_condition_photo(
