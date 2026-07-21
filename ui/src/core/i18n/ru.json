@@ -254,5 +254,10 @@
   "owner.prop_name": "Название объекта",
   "owner.lat": "Широта",
   "owner.lon": "Долгота",
-  "owner.add_property": "Добавить объект"
+  "owner.add_property": "Добавить объект",
+  "admin.audit_title": "Журнал аудита",
+  "admin.audit_empty": "Пока нет действий оператора.",
+  "admin.audit_when": "Когда",
+  "admin.audit_who": "Оператор",
+  "admin.audit_what": "Действие"
 }

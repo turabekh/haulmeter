@@ -254,5 +254,10 @@
   "owner.prop_name": "Magaca guriga",
   "owner.lat": "Dhig",
   "owner.lon": "God",
-  "owner.add_property": "Ku dar guri"
+  "owner.add_property": "Ku dar guri",
+  "admin.audit_title": "Diiwaanka hubinta",
+  "admin.audit_empty": "Weli ma jiraan ficillo hawlwadeen.",
+  "admin.audit_when": "Goorma",
+  "admin.audit_who": "Hawlwadeen",
+  "admin.audit_what": "Ficil"
 }

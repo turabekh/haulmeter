@@ -254,5 +254,10 @@
   "owner.prop_name": "Property name",
   "owner.lat": "Lat",
   "owner.lon": "Lon",
-  "owner.add_property": "Add property"
+  "owner.add_property": "Add property",
+  "admin.audit_title": "Audit log",
+  "admin.audit_empty": "No operator actions yet.",
+  "admin.audit_when": "When",
+  "admin.audit_who": "Operator",
+  "admin.audit_what": "Action"
 }

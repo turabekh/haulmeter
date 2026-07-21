@@ -254,5 +254,10 @@
   "owner.prop_name": "ਜਾਇਦਾਦ ਦਾ ਨਾਮ",
   "owner.lat": "ਅਕਸ਼",
   "owner.lon": "ਰੇਖਾਂਸ਼",
-  "owner.add_property": "ਜਾਇਦਾਦ ਜੋੜੋ"
+  "owner.add_property": "ਜਾਇਦਾਦ ਜੋੜੋ",
+  "admin.audit_title": "ਆਡਿਟ ਲਾਗ",
+  "admin.audit_empty": "ਹਾਲੇ ਕੋਈ ਓਪਰੇਟਰ ਕਾਰਵਾਈ ਨਹੀਂ।",
+  "admin.audit_when": "ਕਦੋਂ",
+  "admin.audit_who": "ਓਪਰੇਟਰ",
+  "admin.audit_what": "ਕਾਰਵਾਈ"
 }

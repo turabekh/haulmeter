@@ -254,5 +254,10 @@
   "owner.prop_name": "Maydon nomi",
   "owner.lat": "Kenglik",
   "owner.lon": "Uzunlik",
-  "owner.add_property": "Maydon qo'shish"
+  "owner.add_property": "Maydon qo'shish",
+  "admin.audit_title": "Audit jurnali",
+  "admin.audit_empty": "Hali operator amallari yo'q.",
+  "admin.audit_when": "Qachon",
+  "admin.audit_who": "Operator",
+  "admin.audit_what": "Amal"
 }

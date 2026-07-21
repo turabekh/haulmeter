@@ -67,7 +67,7 @@ def list_flags(
 @router.post("/flags/{key}/enable")
 def enable_flag(
     key: str,
-    _admin: identity.Account = Depends(current_admin),
+    account: identity.Account = Depends(current_admin),
     db: Session = Depends(get_db),
 ) -> dict:
     try:
@@ -76,19 +76,25 @@ def enable_flag(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "flag not found") from exc
     except flags.GateNotSatisfied as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, "activation gates not satisfied") from exc
+    admin.record_action(
+        db, "flag_enable", actor_account_id=account.id, target_kind="flag", detail={"key": key}
+    )
     return {"key": key, "enabled": flags.is_enabled(db, key)}
 
 
 @router.post("/flags/{key}/disable")
 def disable_flag(
     key: str,
-    _admin: identity.Account = Depends(current_admin),
+    account: identity.Account = Depends(current_admin),
     db: Session = Depends(get_db),
 ) -> dict:
     try:
         flags.disable(db, key)
     except flags.FlagNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "flag not found") from exc
+    admin.record_action(
+        db, "flag_disable", actor_account_id=account.id, target_kind="flag", detail={"key": key}
+    )
     return {"key": key, "enabled": flags.is_enabled(db, key)}
 
 
@@ -166,6 +172,29 @@ def set_config(
         detail={"key": body.key, "scope": body.scope, "value": body.value},
     )
     return {"key": entry.key, "scope": entry.scope, "value": entry.value}
+
+
+@router.get("/audit")
+def audit_log(
+    _admin: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    # every operator mutation (flag toggle, config edit) is an F14 AdminAction;
+    # newest first, actor resolved to an email (batched — no N+1 per row)
+    actions = list(reversed(admin.list_actions(db)))
+    actor_ids = {a.actor_account_id for a in actions if a.actor_account_id}
+    emails = {aid: acct.email for aid in actor_ids if (acct := db.get(identity.Account, aid))}
+    return [
+        {
+            "id": str(a.id),
+            "action": a.action,
+            "actor": emails.get(a.actor_account_id),
+            "target_kind": a.target_kind,
+            "detail": a.detail,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in actions
+    ]
 
 
 @router.post("/moderation/{item_id}/decide")

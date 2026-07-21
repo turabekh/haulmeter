@@ -729,6 +729,11 @@ describe("AdminConsoleSurface — F14 operator portal (design-prd §18)", () => 
           totals: { map_open: 40, load_added: 10, claim_sent: 3 },
         });
       }
+      if (u.endsWith("/admin/audit")) {
+        return jsonOk([
+          { id: "a1", action: "config_set", actor: "ops@example.com", target_kind: "config", detail: { key: "m06_take_rate_bps" }, created_at: "2026-07-21T18:30:00+00:00" },
+        ]);
+      }
       if (u.includes("/admin/config")) return jsonOk({ scope: "pricing", entries: { m06_take_rate_bps: 1750 } });
       if (u.includes("/enable")) return jsonOk({ key: "free_flag", enabled: true });
       return jsonOk({});
@@ -740,6 +745,11 @@ describe("AdminConsoleSurface — F14 operator portal (design-prd §18)", () => 
       expect(w.text()).toContain("Admin Console");
       expect(w.text()).toContain("m06_parking");
       expect(w.text()).toContain("Detention Claims"); // module admin view listed
+      // the audit log shows the operator mutation, attributed and timestamped
+      expect(w.text()).toContain("Audit log");
+      expect(w.text()).toContain("config_set");
+      expect(w.text()).toContain("ops@example.com");
+      expect(w.text()).toContain("2026-07-21 18:30"); // ISO trimmed, time never localized
       // the North Star funnel renders with per-step counts and drop-off %
       expect(w.text()).toContain("Detention funnel");
       const bars = w.findAll(".bar__fill");
@@ -784,6 +794,7 @@ describe("AdminConsoleSurface — F14 operator portal (design-prd §18)", () => 
       if (u.endsWith("/admin/views")) return jsonOk([]);
       if (u.endsWith("/admin/moderation")) return jsonOk([]);
       if (u.endsWith("/admin/analytics")) return jsonOk({ funnel: { module: "m03", steps: [] }, totals: {} });
+      if (u.endsWith("/admin/audit")) return jsonOk([]);
       if (u.includes("/admin/config") && opts?.method === "POST") return jsonOk({ key: "x", scope: "pricing", value: 1500 });
       if (u.includes("/admin/config")) return jsonOk({ scope: "pricing", entries: { m06_take_rate_bps: 1750 } });
       return jsonOk({});

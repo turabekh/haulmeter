@@ -254,5 +254,10 @@
   "owner.prop_name": "Nombre de propiedad",
   "owner.lat": "Lat",
   "owner.lon": "Lon",
-  "owner.add_property": "Añadir propiedad"
+  "owner.add_property": "Añadir propiedad",
+  "admin.audit_title": "Registro de auditoría",
+  "admin.audit_empty": "Aún no hay acciones de operador.",
+  "admin.audit_when": "Cuándo",
+  "admin.audit_who": "Operador",
+  "admin.audit_what": "Acción"
 }

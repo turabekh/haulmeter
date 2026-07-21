@@ -456,6 +456,11 @@ export async function saveConfig(key, value, scope = "global") {
   if (!resp.ok) throw new Error(`save config ${resp.status}`);
   return resp.json();
 }
+export async function fetchAuditLog() {
+  const resp = await fetch(`${API_BASE}/admin/audit`, { headers: headers() });
+  if (!resp.ok) throw new Error(`audit ${resp.status}`);
+  return resp.json();
+}
 
 // AI-CONTEXT: Public Scorecard reads — the ONLY unauthenticated fetchers (no
 // token required; aggregate/min-sample data only, §13). Backs the public portal.

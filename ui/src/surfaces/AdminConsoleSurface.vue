@@ -16,6 +16,7 @@ import {
   fetchAnalytics,
   fetchConfig,
   saveConfig,
+  fetchAuditLog,
 } from "../core/api.js";
 
 const { t } = useI18n();
@@ -28,14 +29,16 @@ const configScope = ref("pricing");
 const config = ref({});
 const newKey = ref("");
 const newValue = ref("");
+const audit = ref([]);
 
 async function load() {
   try {
-    [flags.value, views.value, moderation.value, analytics.value] = await Promise.all([
+    [flags.value, views.value, moderation.value, analytics.value, audit.value] = await Promise.all([
       fetchAdminFlags(),
       fetchAdminViews(),
       fetchModeration(),
       fetchAnalytics(),
+      fetchAuditLog(),
     ]);
     await loadConfig();
   } catch {
@@ -47,6 +50,17 @@ onMounted(load);
 async function loadConfig() {
   config.value = (await fetchConfig(configScope.value)).entries;
 }
+
+async function reloadAudit() {
+  try {
+    audit.value = await fetchAuditLog(); // reflect the mutation just made
+  } catch {
+    /* offline */
+  }
+}
+
+// ISO -> "YYYY-MM-DD HH:MM" (time is never localized, F15)
+const shortTime = (iso) => (iso ? iso.slice(0, 16).replace("T", " ") : "");
 
 // the funnel drawn relative to its widest step (step 1); each step shows its
 // count and the conversion from the previous step (where drop-off happens)
@@ -70,6 +84,7 @@ async function onSaveConfig(key, raw) {
   try {
     await saveConfig(key, coerce(raw), configScope.value);
     await loadConfig();
+    await reloadAudit();
   } catch {
     /* offline / lost the admin session */
   }
@@ -86,6 +101,7 @@ async function onToggle(f) {
   try {
     const res = await toggleFlag(f.key, !f.enabled);
     f.enabled = res.enabled;
+    await reloadAudit();
   } catch {
     /* gated flag can't enable (409) — the gates column shows why */
   }
@@ -180,6 +196,31 @@ async function onDecide(item, approve) {
               <td class="num">
                 <input v-model="newValue" class="cfg__input mono" type="text" :placeholder="t('admin.new_value')" />
                 <button class="mini mini--ok" type="button" @click="onAddConfig">{{ t("admin.add") }}</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Audit log (F14): every operator mutation, newest first -->
+      <section class="panel">
+        <h2 class="panel__title">{{ t("admin.audit_title") }}</h2>
+        <p v-if="!audit.length" class="muted">{{ t("admin.audit_empty") }}</p>
+        <table v-else class="table">
+          <thead>
+            <tr>
+              <th>{{ t("admin.audit_when") }}</th>
+              <th>{{ t("admin.audit_who") }}</th>
+              <th>{{ t("admin.audit_what") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="a in audit" :key="a.id">
+              <td class="mono">{{ shortTime(a.created_at) }}</td>
+              <td>{{ a.actor || "—" }}</td>
+              <td>
+                <span class="act">{{ a.action }}</span>
+                <span v-if="a.detail && a.detail.key" class="mono act__key">{{ a.detail.key }}</span>
               </td>
             </tr>
           </tbody>
@@ -372,6 +413,14 @@ async function onDecide(item, approve) {
 .cfg__input {
   width: 100%;
   max-width: 160px;
+}
+.act {
+  font-weight: 500;
+}
+.act__key {
+  margin-left: var(--s-2);
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
 }
 .mod {
   list-style: none;

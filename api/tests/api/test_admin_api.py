@@ -156,6 +156,36 @@ def test_admin_config_set_get_and_audited(client, db):
     assert str(actions[0].actor_account_id) == account_id
 
 
+def test_admin_audit_log_records_flag_and_config_changes(client, db):
+    account_id, headers = _register(client, "ops@example.com")
+    _make_admin(db, account_id)
+    flags.register_flag(db, "free_flag", description="no gates")
+
+    # two operator mutations: a flag enable and a config edit
+    client.post("/admin/flags/free_flag/enable", headers=headers)
+    client.post(
+        "/admin/config",
+        json={"key": "m06_take_rate_bps", "value": 1500, "scope": "pricing"},
+        headers=headers,
+    )
+
+    log = client.get("/admin/audit", headers=headers)
+    assert log.status_code == 200
+    rows = log.json()
+    actions = [r["action"] for r in rows]
+    assert "flag_enable" in actions
+    assert "config_set" in actions
+    # each row is attributed to the operator's email
+    assert all(r["actor"] == "ops@example.com" for r in rows)
+    cfg_row = next(r for r in rows if r["action"] == "config_set")
+    assert cfg_row["detail"]["key"] == "m06_take_rate_bps"
+
+
+def test_admin_audit_requires_admin(client, db):
+    _, headers = _register(client, "driver@example.com")
+    assert client.get("/admin/audit", headers=headers).status_code == 403
+
+
 def test_admin_analytics_and_config_require_admin(client, db):
     _, headers = _register(client, "driver@example.com")
     assert client.get("/admin/analytics", headers=headers).status_code == 403
