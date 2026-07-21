@@ -182,10 +182,10 @@
   "cond.step.load_blocking": "Xidhitaanka xamuulka",
   "cond.step.reefer_setpoint": "Heerka qaboojiyaha",
   "incident.title": "Soo sheeg dhacdo",
-  "incident.kind": "Maxaa dhacay?",
-  "incident.note": "Ku dar qoraal",
+  "incident.kind": "Nooca",
+  "incident.note": "Qoraal (ikhtiyaari)",
   "incident.file": "Diiwaangeli dhacdada",
-  "incident.filed": "Dhacdada waa la diiwaangeliyay",
+  "incident.filed": "La diiwaangeliyay — diiwaan la ilaaliyo ayaa furan.",
   "admin.title": "Konsole Maamul",
   "admin.flags": "Calaamadaha",
   "admin.views": "Muuqaalada modul",
@@ -227,5 +227,13 @@
   "owner.st_checked_in": "La galay",
   "owner.st_checked_out": "La baxay",
   "owner.st_refunded": "La celiyay",
-  "owner.st_canceled": "La joojiyay"
+  "owner.st_canceled": "La joojiyay",
+  "incident.lead": "Qor waxa dhacay — waxay furaysaa diiwaan la ilaaliyo.",
+  "incident.k_damage": "Waxyeello",
+  "incident.k_refused": "Xamuul la diiday",
+  "incident.k_unsafe": "Goob khatar ah",
+  "incident.k_theft": "Xatooyo",
+  "incident.k_other": "Kale",
+  "incident.note_hint": "Maxaa dhacay?",
+  "incident.queued": "La keydiyay — wuu isku xirmi doonaa marka aad online noqoto."
 }

@@ -11,6 +11,7 @@ import { Check, Camera, Send } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
+import IncidentSheet from "../core/components/IncidentSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { computeDetentionState, meterVariant, formatClock, formatMoney } from "../core/meter.js";
@@ -33,6 +34,7 @@ const live = ref(null); // live meter response, or null (fixture demo)
 const arrivalMs = ref(0); // null while a live load is pre-arrival
 const now = ref(Date.now());
 const starting = ref(false);
+const reporting = ref(false); // incident sheet open
 const filed = ref(null); // the generated claim result, once filed
 const form = reactive({ facility: "", broker: "", freeMin: 120, rateHr: 75 });
 let timer = null;
@@ -193,6 +195,11 @@ function endLoad() {
         {{ t("cond.start") }}
       </button>
 
+      <!-- M5-FR4: log an incident (damage / refusal / unsafe) for the active stop -->
+      <button v-if="live" class="cta cta--text" type="button" @click="reporting = true">
+        {{ t("incident.title") }}
+      </button>
+
       <button v-if="!live" class="cta cta--outline" type="button" @click="starting = true">
         {{ t("load.start") }}
       </button>
@@ -223,6 +230,10 @@ function endLoad() {
           </label>
           <button class="cta" type="submit">{{ t("load.create") }}</button>
         </form>
+      </BottomSheet>
+
+      <BottomSheet :open="reporting" :title="t('incident.title')" @close="reporting = false">
+        <IncidentSheet />
       </BottomSheet>
     </template>
   </div>

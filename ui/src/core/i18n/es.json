@@ -182,10 +182,10 @@
   "cond.step.load_blocking": "Sujeción de carga",
   "cond.step.reefer_setpoint": "Ajuste del refrigerador",
   "incident.title": "Reportar un incidente",
-  "incident.kind": "¿Qué pasó?",
-  "incident.note": "Agregar nota",
+  "incident.kind": "Tipo",
+  "incident.note": "Nota (opcional)",
   "incident.file": "Registrar incidente",
-  "incident.filed": "Incidente documentado",
+  "incident.filed": "Registrado — hay un registro protegido.",
   "admin.title": "Consola de administración",
   "admin.flags": "Indicadores",
   "admin.views": "Vistas de módulo",
@@ -227,5 +227,13 @@
   "owner.st_checked_in": "Registrado",
   "owner.st_checked_out": "Salida",
   "owner.st_refunded": "Reembolsado",
-  "owner.st_canceled": "Cancelado"
+  "owner.st_canceled": "Cancelado",
+  "incident.lead": "Registra lo ocurrido — abre un registro protegido.",
+  "incident.k_damage": "Daño",
+  "incident.k_refused": "Carga rechazada",
+  "incident.k_unsafe": "Sitio inseguro",
+  "incident.k_theft": "Robo",
+  "incident.k_other": "Otro",
+  "incident.note_hint": "¿Qué pasó?",
+  "incident.queued": "Guardado — se sincronizará al reconectarte."
 }

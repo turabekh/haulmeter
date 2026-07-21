@@ -182,10 +182,10 @@
   "cond.step.load_blocking": "Load blocking",
   "cond.step.reefer_setpoint": "Reefer setpoint",
   "incident.title": "Report an incident",
-  "incident.kind": "What happened?",
-  "incident.note": "Add a note",
+  "incident.kind": "Type",
+  "incident.note": "Note (optional)",
   "incident.file": "File incident",
-  "incident.filed": "Incident documented",
+  "incident.filed": "Filed — a protected record is open.",
   "admin.title": "Admin Console",
   "admin.flags": "Feature flags",
   "admin.views": "Module views",
@@ -227,5 +227,13 @@
   "owner.st_checked_in": "Checked in",
   "owner.st_checked_out": "Checked out",
   "owner.st_refunded": "Refunded",
-  "owner.st_canceled": "Canceled"
+  "owner.st_canceled": "Canceled",
+  "incident.lead": "Log what happened — it opens a protected record.",
+  "incident.k_damage": "Damage",
+  "incident.k_refused": "Load refused",
+  "incident.k_unsafe": "Unsafe site",
+  "incident.k_theft": "Theft",
+  "incident.k_other": "Other",
+  "incident.note_hint": "What happened?",
+  "incident.queued": "Saved — it'll sync when you're back online."
 }

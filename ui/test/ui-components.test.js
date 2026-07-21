@@ -23,6 +23,7 @@ import VoiceSheet from "../src/core/components/VoiceSheet.vue";
 import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
 import AuditSurface from "../src/surfaces/AuditSurface.vue";
 import ConditionSurface from "../src/surfaces/ConditionSurface.vue";
+import IncidentSheet from "../src/core/components/IncidentSheet.vue";
 import AdminConsoleSurface from "../src/surfaces/AdminConsoleSurface.vue";
 import PublicScorecardSurface from "../src/surfaces/PublicScorecardSurface.vue";
 import OwnerPortalSurface from "../src/surfaces/OwnerPortalSurface.vue";
@@ -651,6 +652,57 @@ describe("ConditionSurface — cargo-condition capture (M5-FR2)", () => {
     await flushPromises();
     expect(w.text()).toContain("Start a load");
     w.unmount();
+  });
+});
+
+describe("IncidentSheet — incident capture (M5-FR4)", () => {
+  it("files a chosen kind with a note, then confirms", async () => {
+    setToken("tok-inc");
+    const fetchStub = vi.fn().mockImplementation((url, opts) =>
+      jsonOk({ incident_id: "inc-1", evidence_log_ref: "log-1", applied: true }),
+    );
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(IncidentSheet);
+      await w.findAll(".chip")[0].trigger("click"); // Damage
+      await w.find("textarea").setValue("forklift hit the trailer");
+      await w.find(".cta").trigger("click");
+      await flushPromises();
+      const [url, opts] = fetchStub.mock.calls[0];
+      expect(String(url)).toContain("/protection/incident");
+      expect(JSON.parse(opts.body)).toMatchObject({ kind: "damage", note: "forklift hit the trailer" });
+      expect(opts.headers["Idempotency-Key"]).toBeTruthy(); // F12 exactly-once
+      expect(w.text()).toContain("Filed"); // calm confirmation
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+
+  it("won't file until a kind is chosen", async () => {
+    setToken("tok-inc");
+    try {
+      const w = mount(IncidentSheet);
+      expect(w.find(".cta").attributes("disabled")).toBeDefined();
+    } finally {
+      logout();
+    }
+  });
+
+  it("saves offline (queued) when the network is dead", async () => {
+    setToken("tok-inc");
+    const fetchStub = vi.fn().mockRejectedValue(new Error("offline"));
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(IncidentSheet);
+      await w.findAll(".chip")[1].trigger("click"); // Load refused
+      await w.find(".cta").trigger("click");
+      await flushPromises();
+      expect(w.text()).toContain("sync"); // queued-offline confirmation
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
   });
 });
 
