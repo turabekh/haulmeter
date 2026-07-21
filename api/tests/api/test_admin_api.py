@@ -77,3 +77,90 @@ def test_admin_views_listed(client, db):
     resp = client.get("/admin/views", headers=headers)
     assert resp.status_code == 200
     assert any(v["title"] == "Detention Claims" for v in resp.json())
+
+
+DALLAS = (32.7767, -96.7970)
+
+
+def _create_load(client, headers):
+    resp = client.post(
+        "/load",
+        json={
+            "facility_name": "Dallas Receiver",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Acme Brokerage",
+            "free_time_minutes": 120,
+            "rate_cents_per_hour": 7500,
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 201
+    return resp.json()["stop_id"]
+
+
+def test_admin_analytics_funnel_reflects_real_lifecycle(client, db):
+    # the North Star funnel is instrumented in the load lifecycle: driving it
+    # end-to-end (create -> arrive -> claim) must show all three steps reached.
+    account_id, headers = _register(client, "ops@example.com")
+    _make_admin(db, account_id)
+
+    stop_id = _create_load(client, headers)  # load_added
+    client.post(f"/load/{stop_id}/arrive", headers=headers)  # arrived
+    client.post(f"/load/{stop_id}/claim", headers=headers)  # claim_sent
+
+    resp = client.get("/admin/analytics", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    steps = {s["event"]: s["count"] for s in body["funnel"]["steps"]}
+    assert steps == {"load_added": 1, "arrived": 1, "claim_sent": 1}
+    assert body["totals"]["load_added"] == 1
+    assert body["totals"]["claim_sent"] == 1
+
+
+def test_admin_analytics_funnel_shows_dropoff(client, db):
+    # a driver who creates a load but never arrives drops out after step 1
+    account_id, headers = _register(client, "ops@example.com")
+    _make_admin(db, account_id)
+    _create_load(client, headers)  # load_added only
+
+    body = client.get("/admin/analytics", headers=headers).json()
+    steps = {s["event"]: s["count"] for s in body["funnel"]["steps"]}
+    assert steps == {"load_added": 1, "arrived": 0, "claim_sent": 0}
+
+
+def test_admin_config_set_get_and_audited(client, db):
+    account_id, headers = _register(client, "ops@example.com")
+    _make_admin(db, account_id)
+
+    # empty scope to start
+    assert client.get("/admin/config?scope=pricing", headers=headers).json()["entries"] == {}
+
+    # set a runtime config value (e.g. the M6 take rate -> F13 config, §21.8)
+    put = client.post(
+        "/admin/config",
+        json={"key": "m06_take_rate_bps", "value": 1500, "scope": "pricing"},
+        headers=headers,
+    )
+    assert put.status_code == 200 and put.json()["value"] == 1500
+
+    got = client.get("/admin/config?scope=pricing", headers=headers).json()
+    assert got["entries"]["m06_take_rate_bps"] == 1500
+
+    # the mutation is in the F14 audit log, attributed to the operator
+    from app.foundation.f14_admin import public as admin
+
+    actions = admin.list_actions(db, action="config_set")
+    assert len(actions) == 1
+    assert actions[0].detail["key"] == "m06_take_rate_bps"
+    assert str(actions[0].actor_account_id) == account_id
+
+
+def test_admin_analytics_and_config_require_admin(client, db):
+    _, headers = _register(client, "driver@example.com")
+    assert client.get("/admin/analytics", headers=headers).status_code == 403
+    assert client.get("/admin/config", headers=headers).status_code == 403
+    assert (
+        client.post("/admin/config", json={"key": "x", "value": 1}, headers=headers).status_code
+        == 403
+    )

@@ -19,6 +19,7 @@ from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
 from app.foundation.f05_load import public as loads
 from app.foundation.f08_notifications import public as notify
+from app.foundation.f14_admin import public as admin
 from app.modules.m03_detention import public as m3
 
 router = APIRouter(prefix="/load", tags=["load"])
@@ -70,6 +71,8 @@ def create_load(
         detention_rate_cents_per_hour=body.rate_cents_per_hour,
     )
     loads.arm_stop(db, stop)  # opens the F4 evidence log + arms the F3 geofence
+    # F14: North Star funnel step 1 — a live load exists (feeds /admin/analytics)
+    admin.emit(db, "load_added", "m03", datetime.now(UTC), account_id=account.id)
     return {"load_id": str(load.id), "stop_id": str(stop.id)}
 
 
@@ -85,6 +88,8 @@ def arrive(
     # a geofence ENTER at the stop is the arrival the detention clock triggers on
     location.evaluate_ping(db, account.id, lat, lon, occurred_at=datetime.now(UTC))
     claim = m3.claim_for_stop(db, stop.id) or m3.start_claim(db, stop)
+    # F14: North Star funnel step 2 — the driver reached the dock (clock started)
+    admin.emit(db, "arrived", "m03", datetime.now(UTC), account_id=account.id)
     return {"claim_id": str(claim.id), "arrived": True}
 
 
@@ -157,6 +162,8 @@ def generate_claim(
     # close the loop: the running clock -> a GPS-backed, filed detention claim
     claim = _claim_or_409(db, _stop_or_404(db, stop_id))
     result = m3.generate_pack(db, claim, now=datetime.now(UTC), gateway=_GATEWAY)
+    # F14: North Star funnel step 3 — the loop closes into a filed, GPS-backed claim
+    admin.emit(db, "claim_sent", "m03", datetime.now(UTC), account_id=account.id)
     return {
         "claim_id": str(claim.id),
         "amount_cents": claim.amount_cents,

@@ -235,5 +235,14 @@
   "incident.k_theft": "Theft",
   "incident.k_other": "Other",
   "incident.note_hint": "What happened?",
-  "incident.queued": "Saved — it'll sync when you're back online."
+  "incident.queued": "Saved — it'll sync when you're back online.",
+  "admin.funnel_title": "Detention funnel",
+  "admin.step.load_added": "Load added",
+  "admin.step.arrived": "Arrived",
+  "admin.step.claim_sent": "Claim filed",
+  "admin.config_title": "Runtime config",
+  "admin.scope": "Scope",
+  "admin.new_key": "key",
+  "admin.new_value": "value",
+  "admin.add": "Add"
 }

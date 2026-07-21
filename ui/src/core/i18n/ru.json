@@ -235,5 +235,14 @@
   "incident.k_theft": "Кража",
   "incident.k_other": "Другое",
   "incident.note_hint": "Что случилось?",
-  "incident.queued": "Сохранено — синхронизируется при подключении."
+  "incident.queued": "Сохранено — синхронизируется при подключении.",
+  "admin.funnel_title": "Воронка простоя",
+  "admin.step.load_added": "Груз добавлен",
+  "admin.step.arrived": "Прибыл",
+  "admin.step.claim_sent": "Претензия подана",
+  "admin.config_title": "Конфигурация",
+  "admin.scope": "Область",
+  "admin.new_key": "ключ",
+  "admin.new_value": "значение",
+  "admin.add": "Добавить"
 }

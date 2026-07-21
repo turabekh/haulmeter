@@ -5,7 +5,7 @@
      Feature flags (with activation gates) toggle here; module admin views and
      the moderation queue are listed. Reached at /admin. -->
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useI18n } from "../core/i18n.js";
 import {
   fetchAdminFlags,
@@ -13,6 +13,9 @@ import {
   fetchModeration,
   toggleFlag,
   decideModeration,
+  fetchAnalytics,
+  fetchConfig,
+  saveConfig,
 } from "../core/api.js";
 
 const { t } = useI18n();
@@ -20,19 +23,64 @@ const denied = ref(false);
 const flags = ref([]);
 const views = ref([]);
 const moderation = ref([]);
+const analytics = ref(null);
+const configScope = ref("pricing");
+const config = ref({});
+const newKey = ref("");
+const newValue = ref("");
 
 async function load() {
   try {
-    [flags.value, views.value, moderation.value] = await Promise.all([
+    [flags.value, views.value, moderation.value, analytics.value] = await Promise.all([
       fetchAdminFlags(),
       fetchAdminViews(),
       fetchModeration(),
+      fetchAnalytics(),
     ]);
+    await loadConfig();
   } catch {
     denied.value = true; // 403 (not a platform admin) or offline
   }
 }
 onMounted(load);
+
+async function loadConfig() {
+  config.value = (await fetchConfig(configScope.value)).entries;
+}
+
+// the funnel drawn relative to its widest step (step 1); each step shows its
+// count and the conversion from the previous step (where drop-off happens)
+const funnel = computed(() => {
+  const steps = analytics.value?.funnel?.steps ?? [];
+  const top = steps.length ? steps[0].count : 0;
+  return steps.map((s, i) => ({
+    ...s,
+    width: top ? Math.round((s.count / top) * 100) : 0,
+    conversion: i === 0 || !steps[i - 1].count ? null : Math.round((s.count / steps[i - 1].count) * 100),
+  }));
+});
+
+// config values are JSON — a bare number stays numeric, otherwise it's text
+function coerce(raw) {
+  const n = Number(raw);
+  return raw.trim() !== "" && !Number.isNaN(n) ? n : raw;
+}
+
+async function onSaveConfig(key, raw) {
+  try {
+    await saveConfig(key, coerce(raw), configScope.value);
+    await loadConfig();
+  } catch {
+    /* offline / lost the admin session */
+  }
+}
+
+async function onAddConfig() {
+  if (!newKey.value.trim()) return;
+  await onSaveConfig(newKey.value.trim(), newValue.value);
+  newKey.value = "";
+  newValue.value = "";
+}
 
 async function onToggle(f) {
   try {
@@ -82,6 +130,56 @@ async function onDecide(item, approve) {
                 >
                   {{ f.enabled ? t("admin.disable") : t("admin.enable") }}
                 </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- North Star funnel (F14 analytics) -->
+      <section class="panel">
+        <h2 class="panel__title">{{ t("admin.funnel_title") }}</h2>
+        <ul class="funnel">
+          <li v-for="s in funnel" :key="s.event" class="fstep">
+            <div class="fstep__head">
+              <span class="fstep__label">{{ t(`admin.step.${s.event}`) }}</span>
+              <span class="fstep__count mono">{{ s.count }}</span>
+              <span v-if="s.conversion !== null" class="fstep__conv">{{ s.conversion }}%</span>
+            </div>
+            <div class="bar">
+              <div class="bar__fill" :style="{ width: s.width + '%' }" />
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <!-- Runtime config editor (F13 config registry; every change is audited) -->
+      <section class="panel">
+        <h2 class="panel__title">{{ t("admin.config_title") }}</h2>
+        <label class="scope">
+          <span class="scope__label">{{ t("admin.scope") }}</span>
+          <input v-model="configScope" class="scope__input mono" type="text" @change="loadConfig" />
+        </label>
+        <table class="table">
+          <tbody>
+            <tr v-for="(val, key) in config" :key="key">
+              <td class="mono">{{ key }}</td>
+              <td class="num">
+                <input
+                  class="cfg__input mono"
+                  type="text"
+                  :value="val"
+                  @change="onSaveConfig(key, $event.target.value)"
+                />
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <input v-model="newKey" class="cfg__input mono" type="text" :placeholder="t('admin.new_key')" />
+              </td>
+              <td class="num">
+                <input v-model="newValue" class="cfg__input mono" type="text" :placeholder="t('admin.new_value')" />
+                <button class="mini mini--ok" type="button" @click="onAddConfig">{{ t("admin.add") }}</button>
               </td>
             </tr>
           </tbody>
@@ -213,6 +311,67 @@ async function onDecide(item, approve) {
 }
 .toggle:disabled {
   opacity: 0.5;
+}
+.funnel {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.fstep__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-bottom: var(--s-1);
+}
+.fstep__label {
+  font-size: var(--type-body-size);
+}
+.fstep__count {
+  font-size: var(--type-body-size);
+}
+.fstep__conv {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+}
+.bar {
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: var(--line-1);
+  overflow: hidden;
+}
+.bar__fill {
+  height: 100%;
+  background: var(--shield-500);
+  border-radius: var(--r-pill);
+  min-width: 2px;
+}
+.scope {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+.scope__label {
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+}
+.scope__input,
+.cfg__input {
+  min-height: 40px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+  background: var(--ink-1);
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+}
+.cfg__input {
+  width: 100%;
+  max-width: 160px;
 }
 .mod {
   list-style: none;

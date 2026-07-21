@@ -235,5 +235,14 @@
   "incident.k_theft": "Robo",
   "incident.k_other": "Otro",
   "incident.note_hint": "¿Qué pasó?",
-  "incident.queued": "Guardado — se sincronizará al reconectarte."
+  "incident.queued": "Guardado — se sincronizará al reconectarte.",
+  "admin.funnel_title": "Embudo de detención",
+  "admin.step.load_added": "Carga añadida",
+  "admin.step.arrived": "Llegó",
+  "admin.step.claim_sent": "Reclamo presentado",
+  "admin.config_title": "Configuración",
+  "admin.scope": "Ámbito",
+  "admin.new_key": "clave",
+  "admin.new_value": "valor",
+  "admin.add": "Añadir"
 }

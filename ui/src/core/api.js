@@ -435,6 +435,27 @@ export async function decideModeration(itemId, approve) {
   if (!resp.ok) throw new Error(`decide ${resp.status}`);
   return resp.json();
 }
+export async function fetchAnalytics() {
+  const resp = await fetch(`${API_BASE}/admin/analytics`, { headers: headers() });
+  if (!resp.ok) throw new Error(`analytics ${resp.status}`);
+  return resp.json();
+}
+export async function fetchConfig(scope = "global") {
+  const resp = await fetch(`${API_BASE}/admin/config?scope=${encodeURIComponent(scope)}`, {
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`config ${resp.status}`);
+  return resp.json();
+}
+export async function saveConfig(key, value, scope = "global") {
+  const resp = await fetch(`${API_BASE}/admin/config`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ key, value, scope }),
+  });
+  if (!resp.ok) throw new Error(`save config ${resp.status}`);
+  return resp.json();
+}
 
 // AI-CONTEXT: Public Scorecard reads — the ONLY unauthenticated fetchers (no
 // token required; aggregate/min-sample data only, §13). Backs the public portal.

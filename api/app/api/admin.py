@@ -31,6 +31,20 @@ class DecideIn(BaseModel):
     reason: str | None = None
 
 
+class ConfigIn(BaseModel):
+    key: str
+    value: object
+    scope: str = "global"
+
+
+# AI-CONTEXT: the North Star funnel (PRD §1) — the detention value loop, from a
+# live load to a filed GPS-backed claim. Steps are analytics event names emitted
+# in app/api/load.py; the console renders per-step counts + conversion. Labels are
+# i18n'd on the frontend, so only the event keys cross the wire.
+_FUNNEL_STEPS = ["load_added", "arrived", "claim_sent"]
+_FUNNEL_MODULE = "m03"
+
+
 @router.get("/flags")
 def list_flags(
     _admin: identity.Account = Depends(current_admin),
@@ -103,6 +117,55 @@ def moderation_queue(
         }
         for i in admin.list_pending_moderation(db)
     ]
+
+
+@router.get("/analytics")
+def analytics(
+    _admin: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    counts = admin.funnel(db, _FUNNEL_STEPS, module=_FUNNEL_MODULE)
+    return {
+        "funnel": {
+            "module": _FUNNEL_MODULE,
+            "steps": [
+                {"event": step, "count": count}
+                for step, count in zip(_FUNNEL_STEPS, counts, strict=True)
+            ],
+        },
+        "totals": {
+            "map_open": admin.count_events(db, "map_open"),
+            "load_added": admin.count_events(db, "load_added"),
+            "claim_sent": admin.count_events(db, "claim_sent"),
+        },
+    }
+
+
+@router.get("/config")
+def get_config(
+    scope: str = "global",
+    _admin: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    return {"scope": scope, "entries": flags.get_scope(db, scope)}
+
+
+@router.post("/config")
+def set_config(
+    body: ConfigIn,
+    account: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    entry = flags.set_config(db, body.key, body.value, scope=body.scope)
+    # F14 audit log: every config mutation is attributed (who set what, when)
+    admin.record_action(
+        db,
+        "config_set",
+        actor_account_id=account.id,
+        target_kind="config",
+        detail={"key": body.key, "scope": body.scope, "value": body.value},
+    )
+    return {"key": entry.key, "scope": entry.scope, "value": entry.value}
 
 
 @router.post("/moderation/{item_id}/decide")

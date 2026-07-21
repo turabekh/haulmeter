@@ -235,5 +235,14 @@
   "incident.k_theft": "O'g'irlik",
   "incident.k_other": "Boshqa",
   "incident.note_hint": "Nima bo'ldi?",
-  "incident.queued": "Saqlandi — internetga ulanganda sinxronlanadi."
+  "incident.queued": "Saqlandi — internetga ulanganda sinxronlanadi.",
+  "admin.funnel_title": "Kutish varonkasi",
+  "admin.step.load_added": "Yuk qo'shildi",
+  "admin.step.arrived": "Yetib keldi",
+  "admin.step.claim_sent": "Da'vo topshirildi",
+  "admin.config_title": "Sozlamalar",
+  "admin.scope": "Ko'lam",
+  "admin.new_key": "kalit",
+  "admin.new_value": "qiymat",
+  "admin.add": "Qo'shish"
 }

@@ -235,5 +235,14 @@
   "incident.k_theft": "ਚੋਰੀ",
   "incident.k_other": "ਹੋਰ",
   "incident.note_hint": "ਕੀ ਹੋਇਆ?",
-  "incident.queued": "ਸੰਭਾਲਿਆ — ਆਨਲਾਈਨ ਹੋਣ 'ਤੇ ਸਿੰਕ ਹੋਵੇਗਾ।"
+  "incident.queued": "ਸੰਭਾਲਿਆ — ਆਨਲਾਈਨ ਹੋਣ 'ਤੇ ਸਿੰਕ ਹੋਵੇਗਾ।",
+  "admin.funnel_title": "ਰੁਕਾਵਟ ਫਨਲ",
+  "admin.step.load_added": "ਲੋਡ ਜੋੜਿਆ",
+  "admin.step.arrived": "ਪਹੁੰਚਿਆ",
+  "admin.step.claim_sent": "ਦਾਅਵਾ ਦਾਇਰ ਕੀਤਾ",
+  "admin.config_title": "ਰਨਟਾਈਮ ਸੰਰਚਨਾ",
+  "admin.scope": "ਦਾਇਰਾ",
+  "admin.new_key": "ਕੁੰਜੀ",
+  "admin.new_value": "ਮੁੱਲ",
+  "admin.add": "ਜੋੜੋ"
 }

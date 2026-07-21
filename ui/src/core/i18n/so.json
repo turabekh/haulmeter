@@ -235,5 +235,14 @@
   "incident.k_theft": "Xatooyo",
   "incident.k_other": "Kale",
   "incident.note_hint": "Maxaa dhacay?",
-  "incident.queued": "La keydiyay — wuu isku xirmi doonaa marka aad online noqoto."
+  "incident.queued": "La keydiyay — wuu isku xirmi doonaa marka aad online noqoto.",
+  "admin.funnel_title": "Marinka sugitaanka",
+  "admin.step.load_added": "Xamuul lagu daray",
+  "admin.step.arrived": "Yimid",
+  "admin.step.claim_sent": "Sheegasho la gudbiyay",
+  "admin.config_title": "Habaynta",
+  "admin.scope": "Baaxadda",
+  "admin.new_key": "fure",
+  "admin.new_value": "qiime",
+  "admin.add": "Ku dar"
 }

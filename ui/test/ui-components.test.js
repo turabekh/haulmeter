@@ -719,6 +719,17 @@ describe("AdminConsoleSurface — F14 operator portal (design-prd §18)", () => 
       }
       if (u.endsWith("/admin/views")) return jsonOk([{ key: "m03.claims", module: "m03", title: "Detention Claims", path: "/x" }]);
       if (u.endsWith("/admin/moderation")) return jsonOk([]);
+      if (u.endsWith("/admin/analytics")) {
+        return jsonOk({
+          funnel: { module: "m03", steps: [
+            { event: "load_added", count: 10 },
+            { event: "arrived", count: 6 },
+            { event: "claim_sent", count: 3 },
+          ] },
+          totals: { map_open: 40, load_added: 10, claim_sent: 3 },
+        });
+      }
+      if (u.includes("/admin/config")) return jsonOk({ scope: "pricing", entries: { m06_take_rate_bps: 1750 } });
       if (u.includes("/enable")) return jsonOk({ key: "free_flag", enabled: true });
       return jsonOk({});
     });
@@ -729,6 +740,14 @@ describe("AdminConsoleSurface — F14 operator portal (design-prd §18)", () => 
       expect(w.text()).toContain("Admin Console");
       expect(w.text()).toContain("m06_parking");
       expect(w.text()).toContain("Detention Claims"); // module admin view listed
+      // the North Star funnel renders with per-step counts and drop-off %
+      expect(w.text()).toContain("Detention funnel");
+      const bars = w.findAll(".bar__fill");
+      expect(bars.length).toBe(3);
+      expect(bars[1].attributes("style")).toContain("60%"); // 6/10 arrived
+      expect(w.text()).toContain("50%"); // 3/6 filed a claim (conversion)
+      // the config editor lists the runtime value
+      expect(w.find(".cfg__input").element.value).toBe("1750");
       // a gated flag that can't activate has a disabled toggle
       const toggles = w.findAll(".toggle");
       const gated = toggles.find((b) => b.attributes("disabled") !== undefined);
@@ -751,6 +770,36 @@ describe("AdminConsoleSurface — F14 operator portal (design-prd §18)", () => 
       const w = mount(AdminConsoleSurface);
       await flushPromises();
       expect(w.text()).toContain("Platform admins only");
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+
+  it("edits a runtime config value (POST /admin/config, numeric coercion)", async () => {
+    setToken("tok-admin");
+    const fetchStub = vi.fn().mockImplementation((url, opts) => {
+      const u = String(url);
+      if (u.endsWith("/admin/flags")) return jsonOk([]);
+      if (u.endsWith("/admin/views")) return jsonOk([]);
+      if (u.endsWith("/admin/moderation")) return jsonOk([]);
+      if (u.endsWith("/admin/analytics")) return jsonOk({ funnel: { module: "m03", steps: [] }, totals: {} });
+      if (u.includes("/admin/config") && opts?.method === "POST") return jsonOk({ key: "x", scope: "pricing", value: 1500 });
+      if (u.includes("/admin/config")) return jsonOk({ scope: "pricing", entries: { m06_take_rate_bps: 1750 } });
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(AdminConsoleSurface);
+      await flushPromises();
+      // edit the existing value -> a POST with the numeric (not string) value
+      const input = w.find(".cfg__input");
+      input.element.value = "1500";
+      await input.trigger("change");
+      await flushPromises();
+      const post = fetchStub.mock.calls.find((c) => String(c[0]).includes("/admin/config") && c[1]?.method === "POST");
+      expect(post).toBeTruthy();
+      expect(JSON.parse(post[1].body)).toMatchObject({ key: "m06_take_rate_bps", value: 1500, scope: "pricing" });
     } finally {
       vi.unstubAllGlobals();
       logout();
