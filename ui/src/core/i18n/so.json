@@ -262,5 +262,6 @@
   "admin.audit_what": "Ficil",
   "score.what_drivers_say": "Waxa ay darawalladu sheegaan",
   "book.taken": "Meeshan ayaa hadda loo buukiyay habeenadaas. Mid kale isku day.",
-  "book.failed": "Lama buukin karin — fadlan mar kale isku day."
+  "book.failed": "Lama buukin karin — fadlan mar kale isku day.",
+  "facility.fully_booked": "Caawa buuxa"
 }

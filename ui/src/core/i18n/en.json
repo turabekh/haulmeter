@@ -262,5 +262,6 @@
   "admin.audit_what": "Action",
   "score.what_drivers_say": "What drivers say",
   "book.taken": "This spot was just booked for those nights. Try another.",
-  "book.failed": "Couldn't book — please try again."
+  "book.failed": "Couldn't book — please try again.",
+  "facility.fully_booked": "Fully booked tonight"
 }

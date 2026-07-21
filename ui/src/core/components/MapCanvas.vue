@@ -2,18 +2,33 @@
      (M1 activation seam, now wired); otherwise a token-styled placeholder. The
      basemap is a desaturated built-in style — dark at night, light by day
      (design-prd §11.6) — so roads/labels stay muted and the SEMANTIC PINS are the
-     only saturated ink. Pins carry shape from facility type (§11.2), fill from
-     status, hollow when stale (§11.7); 44 dp hit areas. When live, pins are
+     only saturated ink. Pins are colored pucks: ICON encodes facility type
+     (§11.2 refine), color encodes status, hollow ring = stale (§11.7); 44 dp hit
+     areas. When live, pins are
      re-projected onto the moving map; when not, they fall back to a bounds-
      normalized layout. Mapbox GL is dynamically imported so the no-token build
      (and tests) never load the ~200 KB library. -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { Truck, TreePine, SquareParking, Fuel, Warehouse, Circle } from "lucide-vue-next";
 import { statusPresentation, isStale } from "../presentation.js";
 
 const props = defineProps({
   pins: { type: Array, default: () => [] },
 });
+
+// icon encodes facility TYPE (color still encodes status, hollow = stale) — a
+// meaningful marker instead of a bare geometric shape (owner-directed §11.2 refine)
+const ICONS = {
+  truck_stop: Truck,
+  rest_area: TreePine,
+  parking_property: SquareParking,
+  fuel_station: Fuel,
+  shipper_receiver: Warehouse,
+};
+function iconFor(pin) {
+  return ICONS[pin.facility_type] || Circle;
+}
 // `located` fires with the driver's GPS so the surface can refetch the overlay
 // around them (pins follow the driver, not a fixed center).
 const emit = defineEmits(["pinTap", "located"]);
@@ -165,11 +180,15 @@ function stale(pin) {
       :key="pin.facility_id"
       type="button"
       class="pin"
-      :class="[`pin--${pin.shape}`, { 'pin--hollow': stale(pin) }]"
+      :class="{ 'pin--stale': stale(pin) }"
       :style="pinStyle(pin)"
       :aria-label="pin.name"
       @click="emit('pinTap', pin)"
-    />
+    >
+      <span class="pin__puck">
+        <component :is="iconFor(pin)" :size="15" :stroke-width="2.5" aria-hidden="true" />
+      </span>
+    </button>
   </div>
 </template>
 
@@ -207,30 +226,35 @@ function stale(pin) {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
-.pin::before {
-  content: "";
-  width: 18px;
-  height: 18px;
-  background: var(--pin-color);
-  border: 2px solid var(--ink-0);
-}
-.pin--hollow::before {
-  background: transparent;
-  border-color: var(--pin-color);
-}
-.pin--circle::before {
+/* color encodes status, icon encodes type, hollow ring encodes stale (§11.7) */
+.pin__puck {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: var(--pin-color);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  transition: transform 0.12s ease;
 }
-.pin--square::before {
-  border-radius: 2px;
+.pin:hover .pin__puck,
+.pin:focus-visible .pin__puck {
+  transform: scale(1.12);
 }
-.pin--diamond::before {
-  transform: rotate(45deg);
+.pin:focus-visible {
+  outline: none;
 }
-.pin--small_square::before {
-  width: 12px;
-  height: 12px;
-  border-radius: 1px;
+.pin--stale .pin__puck {
+  background: #fff;
+  color: var(--pin-color);
+  border-color: var(--pin-color);
 }
 </style>

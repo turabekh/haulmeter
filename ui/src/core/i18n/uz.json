@@ -262,5 +262,6 @@
   "admin.audit_what": "Amal",
   "score.what_drivers_say": "Haydovchilar nima deydi",
   "book.taken": "Bu joy o'sha tunlarga band qilindi. Boshqasini tanlang.",
-  "book.failed": "Bron qilib bo'lmadi — qayta urinib ko'ring."
+  "book.failed": "Bron qilib bo'lmadi — qayta urinib ko'ring.",
+  "facility.fully_booked": "Bugun tunga to'la band"
 }

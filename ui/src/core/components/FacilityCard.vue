@@ -34,6 +34,11 @@ const grossFuel = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_
 // M6: a bookable badge carries the take-inclusive nightly price in cents.
 const nightlyCents = computed(() => props.pin.badges?.find((b) => b.kind === "bookable")?.value ?? null);
 const bookable = computed(() => nightlyCents.value !== null);
+// a parking property with no bookable badge is fully booked tonight — say so,
+// rather than silently dropping the Book button (M6 availability)
+const parkingFull = computed(
+  () => props.pin.facility_type === "parking_property" && !bookable.value,
+);
 const bookLabel = computed(() => `${t("facility.book")} — ${formatMoney(nightlyCents.value)}`);
 // M7: a fuel_net badge carries {gross, net, savings, is_network} in cents.
 const fuelNet = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_net") ?? null);
@@ -61,6 +66,12 @@ const freeLot = computed(() =>
     <div v-else-if="grossFuel !== null" class="fac__fuel">
       <span class="fac__fuel-figure">${{ grossFuel.toFixed(2) }}</span>
       <span class="fac__fuel-label">{{ t("facility.fuel") }}</span>
+    </div>
+
+    <!-- M6: a fully-booked lot says so (no silent missing button) -->
+    <div v-if="parkingFull" class="fac__full">
+      <SquareParking :size="16" :stroke-width="2" aria-hidden="true" />
+      {{ t("facility.fully_booked") }}
     </div>
 
     <!-- contextual lead action -->
@@ -121,6 +132,17 @@ const freeLot = computed(() =>
   align-items: baseline;
   gap: var(--s-2);
   margin-top: var(--s-3);
+}
+.fac__full {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--ink-2, var(--line-1));
+  color: var(--text-2);
+  font-size: var(--type-label-size);
 }
 .fac__fuel-figure {
   font-family: var(--font-mono);
