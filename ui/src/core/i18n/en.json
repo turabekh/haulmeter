@@ -259,5 +259,6 @@
   "admin.audit_empty": "No operator actions yet.",
   "admin.audit_when": "When",
   "admin.audit_who": "Operator",
-  "admin.audit_what": "Action"
+  "admin.audit_what": "Action",
+  "score.what_drivers_say": "What drivers say"
 }

@@ -834,6 +834,7 @@ describe("PublicScorecardSurface — public portal (design-prd §18)", () => {
           facility_type: "shipper_receiver",
           dwell: { median_seconds: 8100, p90_seconds: 15300, sample_size: 12 },
           rating: { overall: 3.8, review_count: 6 },
+          reviews: ["Quick in and out.", "Detention paid without a fight."],
         });
       }
       return jsonOk({});
@@ -849,6 +850,11 @@ describe("PublicScorecardSurface — public portal (design-prd §18)", () => {
       await flushPromises();
       expect(w.find(".stat__figure").text()).toBe("2h 15m"); // dwell median, Mono
       expect(w.text()).toContain("12 stops"); // sample size always shown (§11.7)
+      // de-identified, moderation-approved snippets render (no author/date)
+      expect(w.text()).toContain("What drivers say");
+      const snips = w.findAll(".snip").map((n) => n.text());
+      expect(snips.length).toBe(2);
+      expect(snips[0]).toContain("Quick in and out.");
     } finally {
       vi.unstubAllGlobals();
     }

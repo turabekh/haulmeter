@@ -20,6 +20,10 @@ router = APIRouter(prefix="/public", tags=["public"])
 # never publish an objective dwell figure below this — small samples could
 # expose or mislead (§11.7 no fake precision; §13 aggregate-only)
 PUBLIC_MIN_SAMPLE = 3
+# at most this many review excerpts on the public scorecard. Snippets are
+# moderation-APPROVED text only, DE-IDENTIFIED (no author/date) — §13 + the
+# §23 reversal of Decision 142 (owner-approved, HANDOFF-053).
+PUBLIC_REVIEW_SNIPPETS = 3
 
 
 @router.get("/facilities")
@@ -58,10 +62,18 @@ def scorecard(
             "p90_seconds": int(overall["p90_seconds"]),
             "sample_size": overall["sample_size"],
         }
+    # de-identified snippets: ONLY the text of moderation-approved reviews, capped;
+    # no account, no date — nothing that identifies the driver (§13)
+    snippets = [
+        r.text.strip()
+        for r in m2.list_reviews(db, facility_id, only_approved=True)
+        if r.text and r.text.strip()
+    ][:PUBLIC_REVIEW_SNIPPETS]
     return {
         "id": str(fac.id),
         "name": fac.name,
         "facility_type": fac.facility_type.value,
         "dwell": dwell,
         "rating": {"overall": ratings["overall"], "review_count": ratings["review_count"]},
+        "reviews": snippets,
     }

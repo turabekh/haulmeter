@@ -259,5 +259,6 @@
   "admin.audit_empty": "ਹਾਲੇ ਕੋਈ ਓਪਰੇਟਰ ਕਾਰਵਾਈ ਨਹੀਂ।",
   "admin.audit_when": "ਕਦੋਂ",
   "admin.audit_who": "ਓਪਰੇਟਰ",
-  "admin.audit_what": "ਕਾਰਵਾਈ"
+  "admin.audit_what": "ਕਾਰਵਾਈ",
+  "score.what_drivers_say": "ਡਰਾਈਵਰ ਕੀ ਕਹਿੰਦੇ ਹਨ"
 }

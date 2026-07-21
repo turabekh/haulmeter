@@ -84,6 +84,12 @@ export function sampleScorecard(id) {
     facility_type: "shipper_receiver",
     dwell: { median_seconds: 8100, p90_seconds: 15300, sample_size: 12 },
     rating: { overall: 3.8, review_count: 6 },
+    // moderation-approved, de-identified excerpts (no author/date), §13
+    reviews: [
+      "Quick in and out — staff waved me right to door 4.",
+      "Detention paid without a fight.",
+      "Overnight parking while you wait for a door.",
+    ],
   };
 }
 

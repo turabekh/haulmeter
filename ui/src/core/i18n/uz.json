@@ -259,5 +259,6 @@
   "admin.audit_empty": "Hali operator amallari yo'q.",
   "admin.audit_when": "Qachon",
   "admin.audit_who": "Operator",
-  "admin.audit_what": "Amal"
+  "admin.audit_what": "Amal",
+  "score.what_drivers_say": "Haydovchilar nima deydi"
 }

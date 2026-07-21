@@ -63,6 +63,46 @@ def test_dwell_suppressed_below_min_sample_then_published(client, db):
     assert body["dwell"]["median_seconds"] == 2 * 3600
 
 
+def test_scorecard_shows_only_approved_deidentified_snippets(client, db):
+    from app.modules.m02_facility_intel import public as m2
+
+    fac = facility.create_facility(db, facility.FacilityType.truck_stop, "TA #7", *DALLAS)
+    driver = identity.register_account(db, "reviewer@x.com", "pw-123456")
+
+    approved = m2.submit_review(
+        db, fac.id, driver.id, {"check_in_speed": 5}, text="Quick in and out."
+    )
+    m2.moderate_review(db, approved, approve=True)
+    pending = m2.submit_review(
+        db, fac.id, driver.id, {"check_in_speed": 2}, text="Pending, not shown."
+    )
+    rejected = m2.submit_review(
+        db, fac.id, driver.id, {"check_in_speed": 1}, text="Rejected, not shown."
+    )
+    m2.moderate_review(db, rejected, approve=False)
+
+    body = client.get(f"/public/facility/{fac.id}").json()  # no auth
+    assert body["reviews"] == ["Quick in and out."]  # approved only
+    assert "Pending, not shown." not in body["reviews"]
+    assert "Rejected, not shown." not in body["reviews"]
+    # de-identified: the payload carries text strings only, nothing identifying
+    assert all(isinstance(r, str) for r in body["reviews"])
+    assert str(driver.id) not in str(body)
+    assert str(pending.id) not in str(body)
+
+
+def test_scorecard_snippets_capped_at_three(client, db):
+    from app.modules.m02_facility_intel import public as m2
+
+    fac = facility.create_facility(db, facility.FacilityType.truck_stop, "Pilot", *DALLAS)
+    driver = identity.register_account(db, "many@x.com", "pw-123456")
+    for i in range(5):
+        r = m2.submit_review(db, fac.id, driver.id, {"check_in_speed": 4}, text=f"Review {i}")
+        m2.moderate_review(db, r, approve=True)
+
+    assert len(client.get(f"/public/facility/{fac.id}").json()["reviews"]) == 3  # capped
+
+
 def test_scorecard_404_for_unknown(client):
     resp = client.get("/public/facility/00000000-0000-0000-0000-000000000000")
     assert resp.status_code == 404

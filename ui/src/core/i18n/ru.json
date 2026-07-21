@@ -259,5 +259,6 @@
   "admin.audit_empty": "Пока нет действий оператора.",
   "admin.audit_when": "Когда",
   "admin.audit_who": "Оператор",
-  "admin.audit_what": "Действие"
+  "admin.audit_what": "Действие",
+  "score.what_drivers_say": "Что говорят водители"
 }

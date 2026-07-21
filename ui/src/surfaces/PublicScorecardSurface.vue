@@ -88,6 +88,13 @@ async function open(fac) {
             <span class="stat__meta">· {{ selected.rating.review_count }} {{ t("score.reviews") }}</span>
           </span>
         </div>
+
+        <div v-if="selected.reviews && selected.reviews.length" class="stat">
+          <span class="stat__label">{{ t("score.what_drivers_say") }}</span>
+          <ul class="snips">
+            <li v-for="(r, i) in selected.reviews" :key="i" class="snip">“{{ r }}”</li>
+          </ul>
+        </div>
       </section>
       <p v-else class="muted hint">{{ t("score.search_hint") }}</p>
     </div>
@@ -200,6 +207,20 @@ async function open(fac) {
 }
 .rating__star {
   color: var(--marker-500);
+}
+.snips {
+  list-style: none;
+  margin: var(--s-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.snip {
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  font-style: italic;
+  line-height: 1.4;
 }
 .muted {
   margin: 0;
