@@ -8,6 +8,9 @@ import { X } from "lucide-vue-next";
 const props = defineProps({
   open: { type: Boolean, default: false },
   title: { type: String, default: "" },
+  // keep `title` as the dialog's accessible name but don't render it visibly —
+  // for sheets whose content already shows the heading (e.g. FacilityCard)
+  hideTitle: { type: Boolean, default: false },
 });
 const emit = defineEmits(["close"]);
 </script>
@@ -18,7 +21,7 @@ const emit = defineEmits(["close"]);
     <section class="sheet" role="dialog" aria-modal="true" :aria-label="title">
       <div class="grab" />
       <div class="sheet__head">
-        <h2 v-if="title" class="sheet__title">{{ title }}</h2>
+        <h2 v-if="title && !hideTitle" class="sheet__title">{{ title }}</h2>
         <button class="sheet__close" type="button" aria-label="Close" @click="emit('close')">
           <X :size="24" :stroke-width="2" aria-hidden="true" />
         </button>

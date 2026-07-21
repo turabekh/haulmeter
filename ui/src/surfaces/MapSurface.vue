@@ -160,7 +160,9 @@ function submitReport() {
       <Mic :size="24" :stroke-width="2" aria-hidden="true" />
     </button>
 
-    <BottomSheet :open="!!selected" :title="selected?.name || ''" @close="selected = null">
+    <!-- hide-title: keep the name as the dialog's aria-label but let FacilityCard
+         render the one visible name header (no duplication) -->
+    <BottomSheet :open="!!selected" :title="selected?.name || ''" hide-title @close="selected = null">
       <FacilityCard
         v-if="selected"
         :pin="selected"
