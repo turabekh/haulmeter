@@ -1243,4 +1243,41 @@ describe("MapSurface (design-prd §10.1 / §11.4)", () => {
     expect(w.find(".corridor").exists()).toBe(true);
     expect(w.find(".report-chip").exists()).toBe(false);
   });
+
+  it("submits a parking report and refreshes the overlay (M1-FR7)", async () => {
+    setToken("tok-map");
+    let status = "empty";
+    const fetchStub = vi.fn().mockImplementation((url, opts) => {
+      const u = String(url);
+      if (u.includes("/map/overlay")) {
+        return jsonOk([
+          { facility_id: "f-ta", name: "TA Dallas", facility_type: "truck_stop", lat: 32.78, lon: -96.82, status, shape: "circle", freshness: { as_of: "2026-07-21T15:00:00Z", ttl_seconds: 3600 } },
+        ]);
+      }
+      if (u.endsWith("/map/report") && opts?.method === "POST") {
+        status = JSON.parse(opts.body).value.status; // server would flip the belief
+        return jsonOk({ submission_id: "s1", presence_proven: false });
+      }
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      const w = mount(MapSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      await w.find(".report-chip").trigger("click"); // opens the report sheet for the nearest lot
+      await flushPromises();
+      const full = w.findAll(".report__opt").find((b) => b.text().toLowerCase().includes("full"));
+      await full.trigger("click");
+      await flushPromises();
+      const post = fetchStub.mock.calls.find((c) => String(c[0]).endsWith("/map/report") && c[1]?.method === "POST");
+      expect(post).toBeTruthy();
+      expect(JSON.parse(post[1].body)).toMatchObject({ facility_id: "f-ta", signal_type: "parking_fullness", value: { status: "full" } });
+      // overlay was refetched after the report (so the pin recolors)
+      expect(fetchStub.mock.calls.filter((c) => String(c[0]).includes("/map/overlay")).length).toBeGreaterThanOrEqual(2);
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
 });

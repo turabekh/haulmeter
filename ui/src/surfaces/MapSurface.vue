@@ -19,7 +19,7 @@ import HandoffSheet from "../core/components/HandoffSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { SAMPLE_PINS, SAMPLE_CORRIDOR, sampleHandoffs } from "../core/fixtures.js";
-import { fetchOverlay, fetchNearbyHandoffs, broadcastHandoff } from "../core/api.js";
+import { fetchOverlay, fetchNearbyHandoffs, broadcastHandoff, report as postReport } from "../core/api.js";
 
 const { isDriving } = useDriverState();
 const { t } = useI18n();
@@ -92,8 +92,27 @@ function navigate(pin) {
   if (typeof window !== "undefined" && window.open) window.open(url, "_blank");
   selected.value = null;
 }
-function report() {
+// which facility a parking report will land on (a tapped pin, or the nearest one
+// for the floating report chip). Kept so submitReport knows the target.
+const reportTarget = ref(null);
+function report(pin) {
+  reportTarget.value = pin; // from the facility card
   selected.value = null;
+  reporting.value = true;
+}
+function nearestPin() {
+  if (!pins.value.length) return null;
+  const { lat, lon } = geo.value;
+  let best = null;
+  let bestD = Infinity;
+  for (const p of pins.value) {
+    const d = (p.lat - lat) ** 2 + (p.lon - lon) ** 2;
+    if (d < bestD) { bestD = d; best = p; }
+  }
+  return best;
+}
+function reportChip() {
+  reportTarget.value = nearestPin(); // the floating chip reports the nearest lot
   reporting.value = true;
 }
 function book(pin) {
@@ -118,9 +137,18 @@ function fuel(pin) {
     query: { name: pin.name, gross: badge?.gross ?? 0, net: badge?.net ?? 0, savings: badge?.savings ?? 0 },
   });
 }
-function submitReport() {
-  // AI-CONTEXT: server enforces geofence-presence proof + points (F10/M1). API seam.
+async function submitReport(status) {
+  // M1-FR7: post the parking status (server enforces geofence-presence proof +
+  // points, F10/M1), then refresh the overlay so the pin's color updates live.
+  const target = reportTarget.value;
   reporting.value = false;
+  if (!target) return;
+  try {
+    await postReport(target.facility_id, "parking_fullness", { status });
+    await loadOverlay();
+  } catch {
+    /* offline -> the report is queued (F12) and syncs on reconnect */
+  }
 }
 </script>
 
@@ -141,7 +169,7 @@ function submitReport() {
       </button>
       <div class="map__canvas">
         <MapCanvas :pins="pins" @pin-tap="selected = $event" @located="onLocated" />
-        <button class="report-chip" type="button" :aria-label="t('map.report')" @click="reporting = true">
+        <button class="report-chip" type="button" :aria-label="t('map.report')" @click="reportChip">
           <CircleDot :size="24" :stroke-width="2" aria-hidden="true" />
         </button>
       </div>
