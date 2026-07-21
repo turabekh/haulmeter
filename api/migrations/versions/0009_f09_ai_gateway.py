@@ -28,8 +28,14 @@ EMBED_DIM = 16
 def _tables():
     meta = sa.MetaData()
     ai_task = sa.Enum(
-        "document_parse", "drafting", "embedding", "stt", "tts", "classify",
-        name="ai_task", schema=SCHEMA,
+        "document_parse",
+        "drafting",
+        "embedding",
+        "stt",
+        "tts",
+        "classify",
+        name="ai_task",
+        schema=SCHEMA,
     )
 
     sa.Table("account", meta, sa.Column("id", sa.Uuid(), primary_key=True), schema="f01")
@@ -85,8 +91,11 @@ def _tables():
         sa.Column("cost_micros", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["f01.account.id"], ondelete="SET NULL",
-            name="fk_ai_call_account_id_account", use_alter=True,
+            ["account_id"],
+            ["f01.account.id"],
+            ondelete="SET NULL",
+            name="fk_ai_call_account_id_account",
+            use_alter=True,
         ),
         sa.Index("ix_ai_call_module", "module"),
         schema=SCHEMA,

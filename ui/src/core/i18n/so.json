@@ -265,5 +265,9 @@
   "book.failed": "Lama buukin karin — fadlan mar kale isku day.",
   "facility.fully_booked": "Caawa buuxa",
   "load.sample": "Tusaale",
-  "load.sample_hint": "Horudhac — bilow xamuul si Cabbirku u shaqeeyo dhab ahaan."
+  "load.sample_hint": "Horudhac — bilow xamuul si Cabbirku u shaqeeyo dhab ahaan.",
+  "load.filed_frozen": "Sheegasho la gudbiyay — saacaddu joogsatay",
+  "load.notice_ok": "Dilaalka la ogeysiiyay — sugitaanka waa la diiwaangeliyay.",
+  "load.notice_early": "Sugitaanku weli ma bilaaban — wax la ogeysiiyo ma jiraan.",
+  "load.notice_sent_ok": "Ogeysiis la diray"
 }

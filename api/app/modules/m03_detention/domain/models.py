@@ -41,6 +41,9 @@ class DetentionClaim(Base):
     amount_cents: Mapped[int] = mapped_column(BigInteger, default=0)
     evidence_log_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     receivable_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    start_notice_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     state: Mapped[ClaimState] = mapped_column(
         Enum(ClaimState, name="claim_state", schema=SCHEMA), default=ClaimState.open
     )

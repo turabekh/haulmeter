@@ -41,7 +41,9 @@ def upgrade() -> None:
         sa.Column("note", sa.String(300), nullable=True),
         sa.Column("satisfied_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
-            ["flag_key"], [f"{SCHEMA}.feature_flag.key"], ondelete="CASCADE",
+            ["flag_key"],
+            [f"{SCHEMA}.feature_flag.key"],
+            ondelete="CASCADE",
             name="fk_validation_gate_flag_key_feature_flag",
         ),
         sa.UniqueConstraint("flag_key", "name", name="uq_validation_gate_flag_name"),

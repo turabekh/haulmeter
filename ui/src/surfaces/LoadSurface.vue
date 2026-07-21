@@ -101,39 +101,55 @@ const state = computed(() =>
   computeDetentionState(arrivalMs.value ?? now.value, freeMin.value, rateCents.value, now.value),
 );
 const withinFree = computed(() => state.value.phase === "within_free_time");
+const accruing = computed(() => !!live.value && !preArrival.value && !withinFree.value);
+const noticeMsg = ref("");
 
+// once a claim is filed the Meter FREEZES at the filed amount — the clock stops
+// ticking, so what you see matches the claim you filed (§9)
 const meterLabel = computed(() =>
   preArrival.value ? t("load.waiting") : withinFree.value ? t("load.free_time") : t("load.detention"),
 );
 const meterFigure = computed(() => {
+  if (filed.value) return formatMoney(filed.value.amount_cents);
   if (preArrival.value) return live.value.appointment ? live.value.appointment.slice(11, 16) : "—";
   return withinFree.value
     ? formatClock(state.value.freeTimeRemainingSeconds)
     : formatMoney(state.value.amountCents);
 });
-const meterStatus = computed(() =>
-  preArrival.value || withinFree.value
+const meterStatus = computed(() => {
+  if (filed.value) return t("load.filed_frozen");
+  return preArrival.value || withinFree.value
     ? ""
-    : `${formatClock(state.value.detentionSeconds)} · $${Math.round(rateCents.value / 100)}/h`,
-);
+    : `${formatClock(state.value.detentionSeconds)} · $${Math.round(rateCents.value / 100)}/h`;
+});
 const variant = computed(() => (preArrival.value ? "countdown" : meterVariant(state.value)));
-const primaryCta = computed(() =>
-  preArrival.value ? t("load.arrive") : withinFree.value ? t("load.cta.notice") : t("load.cta.claim"),
-);
 
-async function onPrimary() {
-  if (!activeStopId.value) return; // demo Meter has no live actions
+async function onArrive() {
+  if (!activeStopId.value) return;
   try {
-    if (preArrival.value) {
-      await arriveAtStop(activeStopId.value);
-    } else if (withinFree.value) {
-      await sendDetentionNotice(activeStopId.value); // M3 counterparty notice
-    } else {
-      filed.value = await generateClaim(activeStopId.value); // arrive->accrue->FILE
-    }
+    await arriveAtStop(activeStopId.value);
     await loadMeter();
   } catch {
     /* offline / queued in a later F12 pass */
+  }
+}
+async function onGenerateClaim() {
+  if (!activeStopId.value || filed.value) return;
+  try {
+    filed.value = await generateClaim(activeStopId.value); // arrive->accrue->FILE (freezes Meter)
+    await loadMeter();
+  } catch {
+    /* offline / queued in a later F12 pass */
+  }
+}
+async function onSendNotice() {
+  if (!activeStopId.value) return;
+  try {
+    const res = await sendDetentionNotice(activeStopId.value); // M3 counterparty notice
+    noticeMsg.value = res && res.sent ? t("load.notice_ok") : t("load.notice_early");
+    await loadMeter();
+  } catch {
+    noticeMsg.value = t("load.notice_early");
   }
 }
 
@@ -190,7 +206,7 @@ async function endLoad() {
           </li>
           <li class="checklist__item">
             <Send :size="20" :stroke-width="2" :class="{ ok: noticeSent }" aria-hidden="true" />
-            {{ t("load.notice_sent") }}
+            {{ noticeSent ? t("load.notice_sent_ok") : t("load.notice_sent") }}
           </li>
         </ul>
       </section>
@@ -204,8 +220,25 @@ async function endLoad() {
         </button>
       </div>
 
-      <!-- a live load drives the real Meter actions; the sample state can't file -->
-      <button v-if="live" class="cta" type="button" @click="onPrimary">{{ primaryCta }}</button>
+      <!-- pre-arrival: mark arrival (starts the clock) -->
+      <button v-if="live && preArrival" class="cta" type="button" @click="onArrive">
+        {{ t("load.arrive") }}
+      </button>
+
+      <!-- accruing: FILE the GPS-backed claim (freezes the Meter) -->
+      <button v-if="accruing && !filed" class="cta" type="button" @click="onGenerateClaim">
+        {{ t("load.cta.claim") }}
+      </button>
+      <!-- accruing: warn the broker detention started (once) -->
+      <button
+        v-if="accruing && !noticeSent && !filed"
+        class="cta cta--text"
+        type="button"
+        @click="onSendNotice"
+      >
+        {{ t("load.cta.notice") }}
+      </button>
+      <p v-if="noticeMsg" class="notice-msg">{{ noticeMsg }}</p>
 
       <!-- M5-FR2: camera-first cargo-condition capture for the active stop -->
       <button v-if="live" class="cta cta--text" type="button" @click="router.push('/protection/condition')">
@@ -294,6 +327,15 @@ async function endLoad() {
 .sample-hint {
   margin: calc(var(--s-2) * -1) 0 0;
   color: var(--text-3);
+  font-size: var(--type-caption-size);
+  text-align: center;
+}
+.notice-msg {
+  margin: calc(var(--s-2) * -1) 0 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--ink-2, var(--line-1));
+  color: var(--text-2);
   font-size: var(--type-caption-size);
   text-align: center;
 }

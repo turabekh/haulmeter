@@ -265,5 +265,9 @@
   "book.failed": "No se pudo reservar — inténtalo de nuevo.",
   "facility.fully_booked": "Completo esta noche",
   "load.sample": "Ejemplo",
-  "load.sample_hint": "Vista previa — inicia una carga para usar el Medidor de verdad."
+  "load.sample_hint": "Vista previa — inicia una carga para usar el Medidor de verdad.",
+  "load.filed_frozen": "Reclamo presentado — reloj detenido",
+  "load.notice_ok": "Bróker notificado — detención registrada.",
+  "load.notice_early": "La detención aún no empieza — nada que notificar.",
+  "load.notice_sent_ok": "Aviso enviado"
 }

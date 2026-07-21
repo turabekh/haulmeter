@@ -31,7 +31,9 @@ def upgrade() -> None:
         sa.Column("received_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.Column("client_skew_ms", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_sync_envelope_account_id_account",
         ),
         sa.UniqueConstraint("account_id", "idempotency_key", name="uq_sync_account_idempotency"),

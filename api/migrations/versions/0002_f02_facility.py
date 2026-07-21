@@ -4,6 +4,7 @@ Revision ID: 0002_f02_facility
 Revises: 0001_f01_identity
 Create Date: 2026-07-20
 """
+
 from collections.abc import Sequence
 
 import geoalchemy2
@@ -22,16 +23,30 @@ def upgrade() -> None:
     op.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
 
     facility_type = sa.Enum(
-        "truck_stop", "rest_area", "shipper_receiver", "parking_property", "scale",
-        "weigh_station", "fuel_station", "repair", "composite",
-        name="facility_type", schema=SCHEMA,
+        "truck_stop",
+        "rest_area",
+        "shipper_receiver",
+        "parking_property",
+        "scale",
+        "weigh_station",
+        "fuel_station",
+        "repair",
+        "composite",
+        name="facility_type",
+        schema=SCHEMA,
     )
     facility_status = sa.Enum(
         "candidate", "confirmed", "merged", name="facility_status", schema=SCHEMA
     )
     source_kind = sa.Enum(
-        "osm", "fhwa", "tpims", "chain_list", "user_checkin", "admin",
-        name="source_kind", schema=SCHEMA,
+        "osm",
+        "fhwa",
+        "tpims",
+        "chain_list",
+        "user_checkin",
+        "admin",
+        name="source_kind",
+        schema=SCHEMA,
     )
 
     op.create_table(
@@ -58,7 +73,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["merged_into_id"], [f"{SCHEMA}.facility.id"], ondelete="SET NULL",
+            ["merged_into_id"],
+            [f"{SCHEMA}.facility.id"],
+            ondelete="SET NULL",
             name="fk_facility_merged_into_id_facility",
         ),
         schema=SCHEMA,
@@ -77,7 +94,9 @@ def upgrade() -> None:
         sa.Column("external_ref", sa.String(300), nullable=True),
         sa.Column("reported_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["facility_id"], [f"{SCHEMA}.facility.id"], ondelete="CASCADE",
+            ["facility_id"],
+            [f"{SCHEMA}.facility.id"],
+            ondelete="CASCADE",
             name="fk_facility_source_facility_id_facility",
         ),
         schema=SCHEMA,

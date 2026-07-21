@@ -171,7 +171,7 @@ def meter(
         "free_time_remaining_seconds": free_remaining,
         "detention_seconds": detention_seconds,
         "detention_cents": detention_cents,
-        "notice_sent": bool(claim is not None and claim.state.value != "open"),
+        "notice_sent": bool(claim is not None and claim.start_notice_sent_at is not None),
     }
 
 

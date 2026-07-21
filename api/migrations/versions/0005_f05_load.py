@@ -24,9 +24,7 @@ def upgrade() -> None:
     counterparty_kind = sa.Enum(
         "broker", "shipper", "receiver", "carrier", name="counterparty_kind", schema=SCHEMA
     )
-    load_source = sa.Enum(
-        "manual", "rate_con_parse", "tms_push", name="load_source", schema=SCHEMA
-    )
+    load_source = sa.Enum("manual", "rate_con_parse", "tms_push", name="load_source", schema=SCHEMA)
     load_status = sa.Enum(
         "draft", "active", "completed", "canceled", name="load_status", schema=SCHEMA
     )
@@ -64,11 +62,15 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_load_account_id_account",
         ),
         sa.ForeignKeyConstraint(
-            ["counterparty_id"], [f"{SCHEMA}.counterparty.id"], ondelete="SET NULL",
+            ["counterparty_id"],
+            [f"{SCHEMA}.counterparty.id"],
+            ondelete="SET NULL",
             name="fk_load_counterparty_id_counterparty",
         ),
         schema=SCHEMA,
@@ -94,11 +96,15 @@ def upgrade() -> None:
         sa.Column("departed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["load_id"], [f"{SCHEMA}.load.id"], ondelete="CASCADE",
+            ["load_id"],
+            [f"{SCHEMA}.load.id"],
+            ondelete="CASCADE",
             name="fk_stop_load_id_load",
         ),
         sa.ForeignKeyConstraint(
-            ["facility_id"], ["f02.facility.id"], ondelete="RESTRICT",
+            ["facility_id"],
+            ["f02.facility.id"],
+            ondelete="RESTRICT",
             name="fk_stop_facility_id_facility",
         ),
         sa.UniqueConstraint("load_id", "sequence", name="uq_stop_load_sequence"),
@@ -113,7 +119,11 @@ def downgrade() -> None:
     op.drop_table("load", schema=SCHEMA)
     op.drop_table("counterparty", schema=SCHEMA)
     for enum_name in (
-        "stop_status", "stop_type", "load_status", "load_source", "counterparty_kind"
+        "stop_status",
+        "stop_type",
+        "load_status",
+        "load_source",
+        "counterparty_kind",
     ):
         op.execute(f"DROP TYPE IF EXISTS {SCHEMA}.{enum_name}")
     op.execute(f"DROP SCHEMA IF EXISTS {SCHEMA}")

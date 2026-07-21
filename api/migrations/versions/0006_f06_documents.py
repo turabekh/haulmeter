@@ -22,9 +22,18 @@ def upgrade() -> None:
     op.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
 
     doc_type = sa.Enum(
-        "rate_con", "bol", "pod", "lumper_receipt", "cdl", "med_card",
-        "insurance", "permit", "settlement", "other",
-        name="doc_type", schema=SCHEMA,
+        "rate_con",
+        "bol",
+        "pod",
+        "lumper_receipt",
+        "cdl",
+        "med_card",
+        "insurance",
+        "permit",
+        "settlement",
+        "other",
+        name="doc_type",
+        schema=SCHEMA,
     )
     extraction_status = sa.Enum(
         "pending", "extracted", "failed", name="extraction_status", schema=SCHEMA
@@ -49,7 +58,9 @@ def upgrade() -> None:
         sa.Column("subject_ref", sa.Uuid(), nullable=True),
         sa.Column("uploaded_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_document_account_id_account",
         ),
         schema=SCHEMA,

@@ -37,14 +37,23 @@ def upgrade() -> None:
         sa.Column("joined_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["driver_account_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["driver_account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_fleet_membership_driver_account_id_account",
         ),
         sa.UniqueConstraint("fleet_org_id", "driver_account_id", name="uq_fleet_member"),
         schema=SCHEMA,
     )
-    op.create_index("ix_fleet_membership_fleet_org_id", "fleet_membership", ["fleet_org_id"], schema=SCHEMA)
-    op.create_index("ix_fleet_membership_driver_account_id", "fleet_membership", ["driver_account_id"], schema=SCHEMA)
+    op.create_index(
+        "ix_fleet_membership_fleet_org_id", "fleet_membership", ["fleet_org_id"], schema=SCHEMA
+    )
+    op.create_index(
+        "ix_fleet_membership_driver_account_id",
+        "fleet_membership",
+        ["driver_account_id"],
+        schema=SCHEMA,
+    )
 
     op.create_table(
         "parking_benefit",
@@ -57,8 +66,11 @@ def upgrade() -> None:
         schema=SCHEMA,
     )
     op.create_index(
-        "ix_parking_benefit_fleet_org_id", "parking_benefit", ["fleet_org_id"],
-        unique=True, schema=SCHEMA,
+        "ix_parking_benefit_fleet_org_id",
+        "parking_benefit",
+        ["fleet_org_id"],
+        unique=True,
+        schema=SCHEMA,
     )
 
     op.create_table(
@@ -69,16 +81,20 @@ def upgrade() -> None:
         sa.Column("month", sa.Date(), nullable=False),
         sa.Column("spent_cents", sa.BigInteger(), nullable=False, server_default="0"),
         sa.ForeignKeyConstraint(
-            ["driver_account_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["driver_account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_benefit_usage_driver_account_id_account",
         ),
-        sa.UniqueConstraint(
-            "fleet_org_id", "driver_account_id", "month", name="uq_benefit_usage"
-        ),
+        sa.UniqueConstraint("fleet_org_id", "driver_account_id", "month", name="uq_benefit_usage"),
         schema=SCHEMA,
     )
-    op.create_index("ix_benefit_usage_fleet_org_id", "benefit_usage", ["fleet_org_id"], schema=SCHEMA)
-    op.create_index("ix_benefit_usage_driver_account_id", "benefit_usage", ["driver_account_id"], schema=SCHEMA)
+    op.create_index(
+        "ix_benefit_usage_fleet_org_id", "benefit_usage", ["fleet_org_id"], schema=SCHEMA
+    )
+    op.create_index(
+        "ix_benefit_usage_driver_account_id", "benefit_usage", ["driver_account_id"], schema=SCHEMA
+    )
 
     op.create_table(
         "data_subscription",

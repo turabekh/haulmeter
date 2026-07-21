@@ -47,14 +47,19 @@ def upgrade() -> None:
         sa.Column("source", price_source, nullable=False, server_default="feed"),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["merchant_id"], [f"{SCHEMA}.merchant.id"], ondelete="SET NULL",
+            ["merchant_id"],
+            [f"{SCHEMA}.merchant.id"],
+            ondelete="SET NULL",
             name="fk_station_pricing_merchant_id_merchant",
         ),
         schema=SCHEMA,
     )
     op.create_index(
-        "ix_station_pricing_facility_ref", "station_pricing", ["facility_ref"],
-        unique=True, schema=SCHEMA,
+        "ix_station_pricing_facility_ref",
+        "station_pricing",
+        ["facility_ref"],
+        unique=True,
+        schema=SCHEMA,
     )
     op.create_index(
         "ix_station_pricing_merchant_id", "station_pricing", ["merchant_id"], schema=SCHEMA
@@ -79,14 +84,18 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.Column("settled_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
-            ["driver_account_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["driver_account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_fuel_transaction_driver_account_id_account",
         ),
         schema=SCHEMA,
     )
     op.create_index(
-        "ix_fuel_transaction_driver_account_id", "fuel_transaction",
-        ["driver_account_id"], schema=SCHEMA,
+        "ix_fuel_transaction_driver_account_id",
+        "fuel_transaction",
+        ["driver_account_id"],
+        schema=SCHEMA,
     )
     op.create_index(
         "ix_fuel_transaction_station_ref", "fuel_transaction", ["station_ref"], schema=SCHEMA

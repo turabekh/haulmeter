@@ -36,7 +36,9 @@ def upgrade() -> None:
         sa.Column("doc_ref", sa.Uuid(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["driver_account_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["driver_account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_settlement_driver_account_id_account",
         ),
         schema=SCHEMA,
@@ -52,7 +54,9 @@ def upgrade() -> None:
         sa.Column("kind", sa.String(40), nullable=False),
         sa.Column("amount_cents", sa.BigInteger(), nullable=False),
         sa.ForeignKeyConstraint(
-            ["settlement_id"], [f"{SCHEMA}.settlement.id"], ondelete="CASCADE",
+            ["settlement_id"],
+            [f"{SCHEMA}.settlement.id"],
+            ondelete="CASCADE",
             name="fk_settlement_line_settlement_id_settlement",
         ),
         schema=SCHEMA,
@@ -73,7 +77,9 @@ def upgrade() -> None:
         sa.Column("status", discrepancy_status, nullable=False, server_default="flagged"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["settlement_id"], [f"{SCHEMA}.settlement.id"], ondelete="CASCADE",
+            ["settlement_id"],
+            [f"{SCHEMA}.settlement.id"],
+            ondelete="CASCADE",
             name="fk_discrepancy_settlement_id_settlement",
         ),
         schema=SCHEMA,
@@ -90,13 +96,18 @@ def upgrade() -> None:
         sa.Column("doc_ref", sa.Uuid(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["driver_account_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["driver_account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_expense_receipt_driver_account_id_account",
         ),
         schema=SCHEMA,
     )
     op.create_index(
-        "ix_expense_receipt_driver_account_id", "expense_receipt", ["driver_account_id"], schema=SCHEMA
+        "ix_expense_receipt_driver_account_id",
+        "expense_receipt",
+        ["driver_account_id"],
+        schema=SCHEMA,
     )
 
 

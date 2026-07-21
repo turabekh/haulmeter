@@ -265,5 +265,9 @@
   "book.failed": "Bron qilib bo'lmadi — qayta urinib ko'ring.",
   "facility.fully_booked": "Bugun tunga to'la band",
   "load.sample": "Namuna",
-  "load.sample_hint": "Ko'rib chiqish — Hisoblagichni haqiqiy ishlatish uchun yuk boshlang."
+  "load.sample_hint": "Ko'rib chiqish — Hisoblagichni haqiqiy ishlatish uchun yuk boshlang.",
+  "load.filed_frozen": "Da'vo topshirildi — soat to'xtadi",
+  "load.notice_ok": "Broker ogohlantirildi — kutish qayd etildi.",
+  "load.notice_early": "Kutish hali boshlanmadi — xabar berishga hojat yo'q.",
+  "load.notice_sent_ok": "Xabar yuborildi"
 }

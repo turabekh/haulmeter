@@ -22,8 +22,13 @@ def upgrade() -> None:
     op.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
 
     booking_state = sa.Enum(
-        "booked", "checked_in", "checked_out", "canceled", "refunded",
-        name="booking_state", schema=SCHEMA,
+        "booked",
+        "checked_in",
+        "checked_out",
+        "canceled",
+        "refunded",
+        name="booking_state",
+        schema=SCHEMA,
     )
 
     op.create_table(
@@ -35,13 +40,22 @@ def upgrade() -> None:
         sa.Column("vetted", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["owner_account_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["owner_account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_parking_property_owner_account_id_account",
         ),
         schema=SCHEMA,
     )
-    op.create_index("ix_parking_property_owner_account_id", "parking_property", ["owner_account_id"], schema=SCHEMA)
-    op.create_index("ix_parking_property_facility_ref", "parking_property", ["facility_ref"], schema=SCHEMA)
+    op.create_index(
+        "ix_parking_property_owner_account_id",
+        "parking_property",
+        ["owner_account_id"],
+        schema=SCHEMA,
+    )
+    op.create_index(
+        "ix_parking_property_facility_ref", "parking_property", ["facility_ref"], schema=SCHEMA
+    )
 
     op.create_table(
         "parking_spot",
@@ -52,7 +66,9 @@ def upgrade() -> None:
         sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["property_id"], [f"{SCHEMA}.parking_property.id"], ondelete="CASCADE",
+            ["property_id"],
+            [f"{SCHEMA}.parking_property.id"],
+            ondelete="CASCADE",
             name="fk_parking_spot_property_id_parking_property",
         ),
         schema=SCHEMA,
@@ -77,11 +93,15 @@ def upgrade() -> None:
         sa.Column("checked_out_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["spot_id"], [f"{SCHEMA}.parking_spot.id"], ondelete="CASCADE",
+            ["spot_id"],
+            [f"{SCHEMA}.parking_spot.id"],
+            ondelete="CASCADE",
             name="fk_booking_spot_id_parking_spot",
         ),
         sa.ForeignKeyConstraint(
-            ["driver_account_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["driver_account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_booking_driver_account_id_account",
         ),
         schema=SCHEMA,

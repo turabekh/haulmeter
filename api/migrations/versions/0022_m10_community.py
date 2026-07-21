@@ -22,8 +22,13 @@ def upgrade() -> None:
     op.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
 
     handoff_state = sa.Enum(
-        "open", "claimed", "confirmed", "expired", "canceled",
-        name="handoff_state", schema=SCHEMA,
+        "open",
+        "claimed",
+        "confirmed",
+        "expired",
+        "canceled",
+        name="handoff_state",
+        schema=SCHEMA,
     )
 
     op.create_table(
@@ -34,13 +39,19 @@ def upgrade() -> None:
         sa.Column("points", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_contribution_log_account_id_account",
         ),
         schema=SCHEMA,
     )
-    op.create_index("ix_contribution_log_account_id", "contribution_log", ["account_id"], schema=SCHEMA)
-    op.create_index("ix_contribution_log_created_at", "contribution_log", ["created_at"], schema=SCHEMA)
+    op.create_index(
+        "ix_contribution_log_account_id", "contribution_log", ["account_id"], schema=SCHEMA
+    )
+    op.create_index(
+        "ix_contribution_log_created_at", "contribution_log", ["created_at"], schema=SCHEMA
+    )
 
     op.create_table(
         "handoff",
@@ -53,11 +64,15 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
-            ["broadcaster_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["broadcaster_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_handoff_broadcaster_id_account",
         ),
         sa.ForeignKeyConstraint(
-            ["claimer_id"], ["f01.account.id"], ondelete="SET NULL",
+            ["claimer_id"],
+            ["f01.account.id"],
+            ondelete="SET NULL",
             name="fk_handoff_claimer_id_account",
         ),
         schema=SCHEMA,
@@ -73,12 +88,16 @@ def upgrade() -> None:
         sa.Column("text", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["asker_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["asker_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_facility_question_asker_id_account",
         ),
         schema=SCHEMA,
     )
-    op.create_index("ix_facility_question_facility_ref", "facility_question", ["facility_ref"], schema=SCHEMA)
+    op.create_index(
+        "ix_facility_question_facility_ref", "facility_question", ["facility_ref"], schema=SCHEMA
+    )
 
     op.create_table(
         "facility_answer",
@@ -89,16 +108,22 @@ def upgrade() -> None:
         sa.Column("presence_proven", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["question_id"], [f"{SCHEMA}.facility_question.id"], ondelete="CASCADE",
+            ["question_id"],
+            [f"{SCHEMA}.facility_question.id"],
+            ondelete="CASCADE",
             name="fk_facility_answer_question_id_facility_question",
         ),
         sa.ForeignKeyConstraint(
-            ["answerer_id"], ["f01.account.id"], ondelete="CASCADE",
+            ["answerer_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
             name="fk_facility_answer_answerer_id_account",
         ),
         schema=SCHEMA,
     )
-    op.create_index("ix_facility_answer_question_id", "facility_answer", ["question_id"], schema=SCHEMA)
+    op.create_index(
+        "ix_facility_answer_question_id", "facility_answer", ["question_id"], schema=SCHEMA
+    )
 
 
 def downgrade() -> None:

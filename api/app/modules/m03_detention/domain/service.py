@@ -193,8 +193,8 @@ def send_detention_start_notice(
 ) -> notify.OutboundMessage | None:
     state = clock(db, claim, now)
     if state.phase == DetentionPhase.within_free_time:
-        return None
-    return _send_counterparty(
+        return None  # nothing owed yet — no notice to send
+    message = _send_counterparty(
         db,
         claim,
         gateway,
@@ -203,6 +203,9 @@ def send_detention_start_notice(
         body="Per the rate confirmation, free time has been exceeded at this stop; "
         "detention is now accruing at the contracted rate.",
     )
+    claim.start_notice_sent_at = now  # record it so the Meter/evidence reflect it
+    db.flush()
+    return message
 
 
 def _send_counterparty(db, claim, gateway, now, subject, body):

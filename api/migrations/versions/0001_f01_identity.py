@@ -4,6 +4,7 @@ Revision ID: 0001_f01_identity
 Revises:
 Create Date: 2026-07-20
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -51,7 +52,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
-            ["account_id"], [f"{SCHEMA}.account.id"], ondelete="CASCADE",
+            ["account_id"],
+            [f"{SCHEMA}.account.id"],
+            ondelete="CASCADE",
             name="fk_auth_method_account_id_account",
         ),
         sa.UniqueConstraint("method_type", "identifier", name="uq_auth_method_type_identifier"),
@@ -68,7 +71,9 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("client_skew_ms", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
-            ["account_id"], [f"{SCHEMA}.account.id"], ondelete="CASCADE",
+            ["account_id"],
+            [f"{SCHEMA}.account.id"],
+            ondelete="CASCADE",
             name="fk_auth_session_account_id_account",
         ),
         sa.UniqueConstraint("token", name="uq_auth_session_token"),
@@ -93,11 +98,15 @@ def upgrade() -> None:
         sa.Column("account_id", sa.Uuid(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["org_id"], [f"{SCHEMA}.organization.id"], ondelete="CASCADE",
+            ["org_id"],
+            [f"{SCHEMA}.organization.id"],
+            ondelete="CASCADE",
             name="fk_org_membership_org_id_organization",
         ),
         sa.ForeignKeyConstraint(
-            ["account_id"], [f"{SCHEMA}.account.id"], ondelete="CASCADE",
+            ["account_id"],
+            [f"{SCHEMA}.account.id"],
+            ondelete="CASCADE",
             name="fk_org_membership_account_id_account",
         ),
         sa.UniqueConstraint("org_id", "account_id", name="uq_org_membership_org_account"),
@@ -114,11 +123,15 @@ def upgrade() -> None:
         sa.Column("org_id", sa.Uuid(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["account_id"], [f"{SCHEMA}.account.id"], ondelete="CASCADE",
+            ["account_id"],
+            [f"{SCHEMA}.account.id"],
+            ondelete="CASCADE",
             name="fk_role_attachment_account_id_account",
         ),
         sa.ForeignKeyConstraint(
-            ["org_id"], [f"{SCHEMA}.organization.id"], ondelete="CASCADE",
+            ["org_id"],
+            [f"{SCHEMA}.organization.id"],
+            ondelete="CASCADE",
             name="fk_role_attachment_org_id_organization",
         ),
         sa.UniqueConstraint(
@@ -143,7 +156,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["account_id"], [f"{SCHEMA}.account.id"], ondelete="CASCADE",
+            ["account_id"],
+            [f"{SCHEMA}.account.id"],
+            ondelete="CASCADE",
             name="fk_driver_profile_account_id_account",
         ),
         schema=SCHEMA,

@@ -180,6 +180,29 @@ def test_meter_pre_arrival_then_live_after_arrive(client, db):
     assert lbody["free_time_remaining_seconds"] is not None
 
 
+def test_notice_flags_notice_sent_on_the_meter(client, db):
+    # a detention-start notice, once detention is accruing, is recorded so the
+    # Meter/evidence show "notice sent" (was a broken proxy on claim.state)
+    headers = _auth(client)
+    stop_id = client.post(
+        "/load",
+        json={
+            "facility_name": "R",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Broker",
+            "free_time_minutes": 0,  # accrues immediately
+        },
+        headers=headers,
+    ).json()["stop_id"]
+    client.post(f"/load/{stop_id}/arrive", headers=headers)
+
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["notice_sent"] is False
+    sent = client.post(f"/load/{stop_id}/notice", headers=headers)
+    assert sent.status_code == 201 and sent.json()["sent"] is True
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["notice_sent"] is True
+
+
 def test_meter_404_for_unknown_stop(client):
     headers = _auth(client)
     resp = client.get("/load/00000000-0000-0000-0000-000000000000/meter", headers=headers)

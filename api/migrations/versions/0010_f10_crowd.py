@@ -25,8 +25,12 @@ SCHEMA = "f10"
 def _tables():
     meta = sa.MetaData()
     signal_type = sa.Enum(
-        "parking_fullness", "weigh_station_status", "fuel_price", "facility_attribute",
-        name="signal_type", schema=SCHEMA,
+        "parking_fullness",
+        "weigh_station_status",
+        "fuel_price",
+        "facility_attribute",
+        name="signal_type",
+        schema=SCHEMA,
     )
 
     sa.Table("account", meta, sa.Column("id", sa.Uuid(), primary_key=True), schema="f01")
@@ -45,12 +49,18 @@ def _tables():
         sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("received_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["f01.account.id"], ondelete="CASCADE",
-            name="fk_submission_account_id_account", use_alter=True,
+            ["account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
+            name="fk_submission_account_id_account",
+            use_alter=True,
         ),
         sa.ForeignKeyConstraint(
-            ["facility_id"], ["f02.facility.id"], ondelete="CASCADE",
-            name="fk_submission_facility_id_facility", use_alter=True,
+            ["facility_id"],
+            ["f02.facility.id"],
+            ondelete="CASCADE",
+            name="fk_submission_facility_id_facility",
+            use_alter=True,
         ),
         sa.Index("ix_submission_account_id", "account_id"),
         sa.Index("ix_submission_facility_id", "facility_id"),
@@ -68,8 +78,11 @@ def _tables():
         sa.Column("rejected_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["f01.account.id"], ondelete="CASCADE",
-            name="fk_contributor_trust_account_id_account", use_alter=True,
+            ["account_id"],
+            ["f01.account.id"],
+            ondelete="CASCADE",
+            name="fk_contributor_trust_account_id_account",
+            use_alter=True,
         ),
         schema=SCHEMA,
     )
@@ -86,8 +99,11 @@ def _tables():
         sa.Column("computed_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("freshest_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
-            ["facility_id"], ["f02.facility.id"], ondelete="CASCADE",
-            name="fk_belief_facility_id_facility", use_alter=True,
+            ["facility_id"],
+            ["f02.facility.id"],
+            ondelete="CASCADE",
+            name="fk_belief_facility_id_facility",
+            use_alter=True,
         ),
         sa.UniqueConstraint("facility_id", "signal_type", name="uq_belief_facility_signal"),
         sa.Index("ix_belief_facility_id", "facility_id"),
