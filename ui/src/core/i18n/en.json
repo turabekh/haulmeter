@@ -263,5 +263,7 @@
   "score.what_drivers_say": "What drivers say",
   "book.taken": "This spot was just booked for those nights. Try another.",
   "book.failed": "Couldn't book — please try again.",
-  "facility.fully_booked": "Fully booked tonight"
+  "facility.fully_booked": "Fully booked tonight",
+  "load.sample": "Sample",
+  "load.sample_hint": "Preview — start a load to run the Meter for real."
 }

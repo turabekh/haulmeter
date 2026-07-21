@@ -165,9 +165,11 @@ async function endLoad() {
 
 <template>
   <div class="load">
-    <section class="card meter-card">
+    <section class="card meter-card" :class="{ 'meter-card--sample': !live }">
+      <span v-if="!live" class="sample-tag">{{ t("load.sample") }}</span>
       <TheMeter :label="meterLabel" :figure="meterFigure" :variant="variant" :status="meterStatus" />
     </section>
+    <p v-if="!live && !isDriving" class="sample-hint">{{ t("load.sample_hint") }}</p>
 
     <template v-if="!isDriving">
       <div class="context">
@@ -202,7 +204,8 @@ async function endLoad() {
         </button>
       </div>
 
-      <button class="cta" type="button" @click="onPrimary">{{ primaryCta }}</button>
+      <!-- a live load drives the real Meter actions; the sample state can't file -->
+      <button v-if="live" class="cta" type="button" @click="onPrimary">{{ primaryCta }}</button>
 
       <!-- M5-FR2: camera-first cargo-condition capture for the active stop -->
       <button v-if="live" class="cta cta--text" type="button" @click="router.push('/protection/condition')">
@@ -214,10 +217,12 @@ async function endLoad() {
         {{ t("incident.title") }}
       </button>
 
-      <button v-if="!live" class="cta cta--outline" type="button" @click="starting = true">
+      <button v-if="live" class="cta cta--text" type="button" @click="endLoad">{{ t("load.end") }}</button>
+
+      <!-- no active load: the Meter above is a sample; start a real one -->
+      <button v-if="!live" class="cta" type="button" @click="starting = true">
         {{ t("load.start") }}
       </button>
-      <button v-else class="cta cta--text" type="button" @click="endLoad">{{ t("load.end") }}</button>
 
       <!-- M8: pre-acceptance decision — cross-link to the true-profit calculator (NAV-5) -->
       <button class="cta cta--text" type="button" @click="router.push('/load/calc')">
@@ -266,6 +271,31 @@ async function endLoad() {
 }
 .meter-card {
   padding: 0;
+  position: relative;
+}
+.meter-card--sample {
+  border-style: dashed;
+  opacity: 0.9;
+}
+.sample-tag {
+  position: absolute;
+  top: var(--s-2);
+  right: var(--s-2);
+  z-index: 1;
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--ink-2, var(--line-1));
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: var(--type-caption-size);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sample-hint {
+  margin: calc(var(--s-2) * -1) 0 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  text-align: center;
 }
 .context {
   display: flex;

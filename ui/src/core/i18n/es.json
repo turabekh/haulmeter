@@ -263,5 +263,7 @@
   "score.what_drivers_say": "Lo que dicen los conductores",
   "book.taken": "Esta plaza acaba de reservarse para esas noches. Prueba otra.",
   "book.failed": "No se pudo reservar — inténtalo de nuevo.",
-  "facility.fully_booked": "Completo esta noche"
+  "facility.fully_booked": "Completo esta noche",
+  "load.sample": "Ejemplo",
+  "load.sample_hint": "Vista previa — inicia una carga para usar el Medidor de verdad."
 }

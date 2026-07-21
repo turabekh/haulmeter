@@ -263,5 +263,7 @@
   "score.what_drivers_say": "Haydovchilar nima deydi",
   "book.taken": "Bu joy o'sha tunlarga band qilindi. Boshqasini tanlang.",
   "book.failed": "Bron qilib bo'lmadi — qayta urinib ko'ring.",
-  "facility.fully_booked": "Bugun tunga to'la band"
+  "facility.fully_booked": "Bugun tunga to'la band",
+  "load.sample": "Namuna",
+  "load.sample_hint": "Ko'rib chiqish — Hisoblagichni haqiqiy ishlatish uchun yuk boshlang."
 }
