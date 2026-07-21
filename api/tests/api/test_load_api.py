@@ -67,6 +67,26 @@ def test_active_load_resumes_the_current_stop(client, db):
     assert active.json()["stop_id"] == stop_id  # a fresh device can resume here
 
 
+def test_end_load_departs_the_stop_and_clears_active(client, db):
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+    assert client.get("/load/active", headers=headers).json()["stop_id"] == stop_id
+
+    ended = client.post(f"/load/{stop_id}/end", headers=headers)
+    assert ended.status_code == 201
+    assert ended.json()["status"] == "departed"
+    # ending is durable: the resume query no longer surfaces it
+    assert client.get("/load/active", headers=headers).json()["stop_id"] is None
+
+
+def test_end_load_rejects_another_owner(client, db):
+    a = _auth(client)
+    stop_id = _create(client, a)
+    b = client.post("/auth/register", json={"email": "b@example.com", "password": "pw-123456"})
+    b_headers = {"Authorization": f"Bearer {b.json()['token']}"}
+    assert client.post(f"/load/{stop_id}/end", headers=b_headers).status_code == 403
+
+
 def test_active_load_is_per_account(client, db):
     # one driver's armed stop is never another's active load
     a = _auth(client)

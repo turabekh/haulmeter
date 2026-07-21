@@ -1059,6 +1059,39 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
     }
   });
 
+  it("ends a load durably (POST /load/{stop}/end, then reverts to demo)", async () => {
+    setToken("tok-end");
+    setActiveStop("stop-end");
+    const fetchStub = vi.fn().mockImplementation((url) => {
+      const u = String(url);
+      if (u.includes("/load/stop-end/meter")) {
+        return jsonOk({
+          stop_id: "stop-end", facility_name: "Ending Receiver", counterparty: "Acme",
+          appointment: null, arrived: true, free_time_minutes: 120, rate_cents_per_hour: 7500,
+          phase: "accruing", free_time_remaining_seconds: 0, detention_seconds: 600,
+          detention_cents: 1250, notice_sent: false,
+        });
+      }
+      return jsonOk({ stop_id: "stop-end", status: "departed" });
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      const w = mount(LoadSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      expect(w.text()).toContain("Ending Receiver"); // live
+      const endBtn = w.findAll(".cta").find((b) => b.text() === "End load");
+      await endBtn.trigger("click");
+      await flushPromises();
+      expect(fetchStub.mock.calls.some((c) => String(c[0]).endsWith("/load/stop-end/end"))).toBe(true);
+      expect(w.text()).not.toContain("Ending Receiver"); // reverted to the fixture demo
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
+
   it("goes live for an active pre-arrival stop with an 'I've arrived' CTA (M3 clock)", async () => {
     setToken("tok-live");
     setActiveStop("stop-live-1");

@@ -104,6 +104,22 @@ def arrive(
     return {"claim_id": str(claim.id), "arrived": True}
 
 
+@router.post("/{stop_id}/end", status_code=201)
+def end_load(
+    stop_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    # durable "end this load": mark the stop departed so /load/active stops
+    # resurfacing it (ownership-checked — a driver only ends their own stop)
+    stop = _stop_or_404(db, stop_id)
+    load = loads.get_load(db, stop.load_id)
+    if load is None or load.account_id != account.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your load")
+    loads.depart_stop(db, stop, occurred_at=datetime.now(UTC))
+    return {"stop_id": str(stop.id), "status": stop.status.value}
+
+
 @router.get("/{stop_id}/meter")
 def meter(
     stop_id: uuid.UUID,

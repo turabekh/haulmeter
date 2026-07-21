@@ -182,6 +182,16 @@ def disarm_stop(db: Session, stop: Stop, occurred_at: datetime | None = None) ->
     return stop
 
 
+def depart_stop(db: Session, stop: Stop, occurred_at: datetime | None = None) -> Stop:
+    # the driver is done here: mark departed + disarm. Drops out of the active-stop
+    # query, so ending a load is durable (not just a client-side clear).
+    disarm_stop(db, stop, occurred_at)
+    stop.status = StopStatus.departed
+    stop.departed_at = occurred_at
+    db.flush()
+    return stop
+
+
 def list_stops(db: Session, load: Load) -> list[Stop]:
     return list(db.scalars(select(Stop).where(Stop.load_id == load.id).order_by(Stop.sequence)))
 

@@ -23,6 +23,7 @@ import {
   arriveAtStop,
   fetchMeter,
   fetchActiveLoad,
+  endActiveLoad,
   sendDetentionNotice,
   generateClaim,
   isAuthenticated,
@@ -153,8 +154,10 @@ async function startLoad() {
   }
 }
 
-function endLoad() {
-  setActiveStop(null);
+async function endLoad() {
+  const stopId = activeStopId.value;
+  if (stopId) await endActiveLoad(stopId); // durable: departs the stop server-side
+  else setActiveStop(null);
   filed.value = null;
   setupDemo();
 }

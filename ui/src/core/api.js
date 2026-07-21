@@ -266,6 +266,16 @@ export async function fetchActiveLoad() {
   return data.stop_id;
 }
 
+export async function endActiveLoad(stopId) {
+  // durable end: mark the stop departed server-side, then drop local state
+  try {
+    await fetch(`${API_BASE}/load/${stopId}/end`, { method: "POST", headers: headers() });
+  } catch {
+    /* offline — local clear still happens; server stays armed until next end */
+  }
+  setActiveStop(null);
+}
+
 export async function sendDetentionNotice(stopId) {
   const resp = await fetch(`${API_BASE}/load/${stopId}/notice`, {
     method: "POST",
