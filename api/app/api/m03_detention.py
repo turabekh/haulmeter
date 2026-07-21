@@ -38,10 +38,13 @@ def start(
     return {"claim_id": str(claim.id), "mode": claim.mode.value}
 
 
-def _load_claim(db: Session, claim_id: uuid.UUID) -> m3.DetentionClaim:
+def _load_claim(db: Session, claim_id: uuid.UUID, account: identity.Account) -> m3.DetentionClaim:
+    # a detention claim is private to its driver: 404 if missing, 403 if not theirs
     claim = m3.get_claim(db, claim_id)
     if claim is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "claim not found")
+    if claim.account_id != account.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your claim")
     return claim
 
 
@@ -51,7 +54,7 @@ def clock(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
-    claim = _load_claim(db, claim_id)
+    claim = _load_claim(db, claim_id, account)
     state = m3.clock(db, claim, now=datetime.now(UTC))
     return {
         "phase": state.phase.value,
@@ -67,7 +70,7 @@ def pack(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
-    claim = _load_claim(db, claim_id)
+    claim = _load_claim(db, claim_id, account)
     result = m3.generate_pack(db, claim, now=datetime.now(UTC), gateway=_GATEWAY)
     return {
         "claim_id": str(claim.id),

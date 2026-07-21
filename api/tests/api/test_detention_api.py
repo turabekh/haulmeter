@@ -68,3 +68,13 @@ def test_detention_start_and_pack_flow(client, db):
     assert body["state"] == "invoiced"
     assert body["amount_cents"] == 15000  # 2h * $75
     assert body["receivable_ref"] is not None
+
+    # a detention claim is private to its driver: another account is refused
+    other = client.post(
+        "/auth/register", json={"email": "nosy@example.com", "password": "pw-123456"}
+    )
+    ho = {"Authorization": f"Bearer {other.json()['token']}"}
+    assert client.get(f"/detention/{claim_id}/clock", headers=ho).status_code == 403
+    assert client.post(f"/detention/{claim_id}/pack", headers=ho).status_code == 403
+    # the owner still reads their own clock
+    assert client.get(f"/detention/{claim_id}/clock", headers=headers).status_code == 200

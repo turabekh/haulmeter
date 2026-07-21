@@ -123,6 +123,19 @@ def test_condition_capture_guided_sequence(client, db):
         assert photo.status_code == 201
         assert photo.json()["photo_count"] == i
 
+    # another account must never append to this evidence chain (tampering) -> 403
+    other = client.post(
+        "/auth/register", json={"email": "tamper@example.com", "password": "pw-123456"}
+    )
+    ho = {"Authorization": f"Bearer {other.json()['token']}"}
+    assert (
+        client.post(
+            f"/protection/condition/{capture_id}/photo", json={"prompt": "fake"}, headers=ho
+        ).status_code
+        == 403
+    )
+    assert client.get(f"/protection/summary/{stop.id}", headers=ho).status_code == 403
+
 
 def test_condition_photo_is_idempotent_on_replay(client, db):
     from app.foundation.f02_facility import public as facility

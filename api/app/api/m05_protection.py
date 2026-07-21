@@ -156,6 +156,9 @@ def condition_photo(
     capture = db.get(m5.ConditionCapture, capture_id)
     if capture is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "capture not found")
+    if capture.account_id != account.id:
+        # never let another account append to someone's evidence chain (tampering)
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your capture")
 
     def _apply(_env):
         content = (
@@ -197,4 +200,7 @@ def summary(
     stop = loads.get_stop(db, stop_id)
     if stop is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "stop not found")
+    load = loads.get_load(db, stop.load_id)
+    if load is None or load.account_id != account.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your stop")
     return m5.protection_summary(db, stop)
