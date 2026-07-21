@@ -19,8 +19,21 @@ import FleetWorkspaceSurface from "./surfaces/FleetWorkspaceSurface.vue";
 import AdminConsoleSurface from "./surfaces/AdminConsoleSurface.vue";
 import PublicScorecardSurface from "./surfaces/PublicScorecardSurface.vue";
 import OwnerPortalSurface from "./surfaces/OwnerPortalSurface.vue";
-import DevIndexSurface from "./surfaces/DevIndexSurface.vue";
 import { isAuthenticated } from "./core/api.js";
+
+// DEV-ONLY: the /dev directory ships ONLY in development builds. Vite replaces
+// import.meta.env.DEV with `false` in production, so the route (and its lazily
+// imported component chunk) is tree-shaken out — the dev tool never reaches prod.
+const devRoutes = import.meta.env.DEV
+  ? [
+      {
+        path: "/dev",
+        name: "dev",
+        component: () => import("./surfaces/DevIndexSurface.vue"),
+        meta: { public: true, chrome: false, portal: true },
+      },
+    ]
+  : [];
 
 export const routes = [
   { path: "/", redirect: "/map" },
@@ -44,8 +57,7 @@ export const routes = [
   { path: "/owner", name: "owner", component: OwnerPortalSurface, meta: { chrome: false, portal: true } },
   // §18 PUBLIC portal — no login (meta.public bypasses the auth guard)
   { path: "/scorecard", name: "scorecard", component: PublicScorecardSurface, meta: { public: true, chrome: false, portal: true } },
-  // DEV-ONLY directory of every surface (public so it's always reachable)
-  { path: "/dev", name: "dev", component: DevIndexSurface, meta: { public: true, chrome: false, portal: true } },
+  ...devRoutes, // /dev — development builds only (see above)
 ];
 
 // AI-CONTEXT: the auth gate. No session -> the login flow; already signed in ->

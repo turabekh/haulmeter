@@ -11,6 +11,7 @@ import { login, register } from "../core/api.js";
 
 const router = useRouter();
 const { t } = useI18n();
+const isDev = import.meta.env.DEV; // the dev-directory link ships only in dev builds
 
 const mode = ref("login"); // login | register
 const form = reactive({ email: "", password: "" });
@@ -85,7 +86,7 @@ async function submit() {
       {{ mode === "login" ? t("auth.to_register") : t("auth.to_login") }}
     </button>
 
-    <button class="auth__dev" type="button" @click="router.push('/dev')">
+    <button v-if="isDev" class="auth__dev" type="button" @click="router.push('/dev')">
       Explore all screens (dev directory) →
     </button>
   </div>

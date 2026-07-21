@@ -976,6 +976,13 @@ describe("OwnerPortalSurface — Property-Owner portal (M6-FR5, design-prd §18)
 });
 
 describe("DevIndexSurface — dev directory of all surfaces", () => {
+  it("registers the /dev route in development builds only (import.meta.env.DEV)", () => {
+    // vitest runs with DEV=true, so the route is present here; a production
+    // `vite build` sets DEV=false and tree-shakes the route + its component out.
+    expect(import.meta.env.DEV).toBe(true);
+    expect(routes.some((r) => r.name === "dev")).toBe(true);
+  });
+
   it("lists every surface group and signs in as admin", async () => {
     logout();
     const router = testRouter();
