@@ -14,20 +14,25 @@ import { statusPresentation, isStale } from "../presentation.js";
 const props = defineProps({
   pins: { type: Array, default: () => [] },
 });
-const emit = defineEmits(["pinTap"]);
+// `located` fires with the driver's GPS so the surface can refetch the overlay
+// around them (pins follow the driver, not a fixed center).
+const emit = defineEmits(["pinTap", "located"]);
 
 const now = Date.now();
 const mapEl = ref(null);
 const live = ref(false); // true once a GL map is rendering tiles
 const positions = ref({}); // facility_id -> { x, y } pixel coords on the live map
 let map = null;
+let located = false; // once the driver is centered, stop auto-fitting to pins
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
-// desaturated built-ins: dark at night, light by day (§11.6). Swappable later.
-function styleUrl() {
+// Mapbox Standard (GL v3): modern vector basemap with dynamic lighting. Day/night
+// via lightPreset so it reads well in a dark cab; the saturated semantic pins ride
+// on top as DOM overlays regardless of basemap (§11.2).
+const STYLE = "mapbox://styles/mapbox/standard";
+function lightPreset() {
   const hour = new Date().getHours();
-  const night = hour < 7 || hour >= 19;
-  return night ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/light-v11";
+  return hour < 7 || hour >= 19 ? "night" : "day";
 }
 
 const DALLAS = [-96.797, 32.7767];
@@ -69,15 +74,35 @@ onMounted(async () => {
     mapboxgl.accessToken = TOKEN;
     map = new mapboxgl.Map({
       container: mapEl.value,
-      style: styleUrl(),
+      style: STYLE,
       center: center(),
       zoom: props.pins.length ? 9 : 4,
-      attributionControl: true,
     });
+
+    // "locate me": a blue dot + heading that centers on the driver's GPS, with a
+    // tap control to re-center. Auto-triggered on load — a driver's map opens on
+    // where they are (§10.1). Emits `located` so the surface refetches nearby pins.
+    const geolocate = new mapboxgl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true,
+      showUserHeading: true,
+    });
+    map.addControl(geolocate, "bottom-right");
+    geolocate.on("geolocate", (e) => {
+      located = true;
+      emit("located", { lat: e.coords.latitude, lon: e.coords.longitude });
+    });
+
     map.on("load", () => {
-      fitToPins();
+      map.setConfigProperty("basemap", "lightPreset", lightPreset());
+      fitToPins(); // fallback framing until GPS resolves (or if it's denied)
       syncPins();
       live.value = true;
+      try {
+        geolocate.trigger();
+      } catch {
+        /* geolocation blocked/unavailable — stay framed on the pins */
+      }
     });
     map.on("move", syncPins);
   } catch {
@@ -89,14 +114,14 @@ onUnmounted(() => {
   if (map) map.remove();
 });
 
-// pins refresh (new overlay) -> refit + reproject when live
+// pins refresh (new overlay) -> reproject; only refit while we haven't centered
+// on the driver (once located, the map stays on them, not the pin bounds)
 watch(
   () => props.pins,
   () => {
-    if (live.value) {
-      fitToPins();
-      syncPins();
-    }
+    if (!live.value) return;
+    if (!located) fitToPins();
+    syncPins();
   },
   { deep: true },
 );

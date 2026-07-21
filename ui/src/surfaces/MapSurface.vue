@@ -34,12 +34,20 @@ const PRESET_TYPES = {
 };
 const PARKING_RANK = { empty: 0, some: 1, null: 2, full: 3 };
 
+// the map's fetch center: the driver's GPS once located (MapCanvas @located),
+// else a sensible default until then (§10.1 — a real map follows the driver)
+const geo = ref({ lat: 32.78, lon: -96.8 });
+function onLocated({ lat, lon }) {
+  geo.value = { lat, lon };
+  loadOverlay(); // pins near the driver, not a fixed point
+  loadHandoffs();
+}
+
 // live pins from the M1 API when a session exists; otherwise fixtures (§ api.js)
 const livePins = ref(null);
 async function loadOverlay() {
   try {
-    // AI-CONTEXT: a real map centers on the driver's GPS; fixed center pending geolocation wiring
-    livePins.value = await fetchOverlay({ lat: 32.78, lon: -96.8, preset: preset.value });
+    livePins.value = await fetchOverlay({ lat: geo.value.lat, lon: geo.value.lon, preset: preset.value });
   } catch {
     livePins.value = null; // fall back to fixtures (unauthenticated / offline)
   }
@@ -66,7 +74,7 @@ const handoffs = ref([]);
 
 async function loadHandoffs() {
   try {
-    handoffs.value = await fetchNearbyHandoffs({ lat: 32.78, lon: -96.8 });
+    handoffs.value = await fetchNearbyHandoffs({ lat: geo.value.lat, lon: geo.value.lon });
   } catch {
     handoffs.value = sampleHandoffs(); // unauthenticated / offline
   }
@@ -132,7 +140,7 @@ function submitReport() {
         {{ handoffs.length }} {{ t("handoff.nearby") }}
       </button>
       <div class="map__canvas">
-        <MapCanvas :pins="pins" @pin-tap="selected = $event" />
+        <MapCanvas :pins="pins" @pin-tap="selected = $event" @located="onLocated" />
         <button class="report-chip" type="button" :aria-label="t('map.report')" @click="reporting = true">
           <CircleDot :size="24" :stroke-width="2" aria-hidden="true" />
         </button>
