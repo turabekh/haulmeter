@@ -17,6 +17,16 @@ from app.modules.m12_fleet import public as m12
 
 router = APIRouter(prefix="/fleet", tags=["fleet"])
 
+_MANAGEMENT = (m12.FleetRole.owner, m12.FleetRole.dispatcher)
+
+
+def _require_manager(db: Session, fleet_id: uuid.UUID, account: identity.Account) -> None:
+    # fleet-wide money + roster is management data: only an active owner/dispatcher
+    # of THIS fleet may read the report/claims or invite (403 for anyone else)
+    role = m12.member_role(db, fleet_id, account.id)
+    if role not in _MANAGEMENT:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "fleet management only")
+
 
 class CreateFleetIn(BaseModel):
     name: str
@@ -54,6 +64,7 @@ def invite(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
+    _require_manager(db, fleet_id, account)
     m = m12.invite_driver(db, fleet_id, body.driver_account_id)
     return {"membership_id": str(m.id), "state": m.state.value}
 
@@ -64,6 +75,7 @@ def report(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
+    _require_manager(db, fleet_id, account)
     r = m12.fleet_report(db, fleet_id)
     return {
         "driver_count": r.driver_count,
@@ -88,6 +100,7 @@ def claims_desk(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
+    _require_manager(db, fleet_id, account)
     return m12.fleet_claims_desk(db, fleet_id)
 
 

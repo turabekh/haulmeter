@@ -147,6 +147,19 @@ def list_fleets_for(db: Session, account_id) -> list[dict]:
     return out
 
 
+def member_role(db: Session, fleet_org_id, account_id) -> FleetRole | None:
+    # the account's role in the fleet if an ACTIVE member, else None. Backs the
+    # API authz gate: only management (owner/dispatcher) sees fleet-wide money.
+    membership = db.scalars(
+        select(FleetMembership).where(
+            FleetMembership.fleet_org_id == fleet_org_id,
+            FleetMembership.driver_account_id == account_id,
+            FleetMembership.state == MembershipState.active,
+        )
+    ).first()
+    return membership.role if membership else None
+
+
 def list_members(db: Session, fleet_org_id, consented_only: bool = True) -> list[FleetMembership]:
     stmt = select(FleetMembership).where(FleetMembership.fleet_org_id == fleet_org_id)
     if consented_only:

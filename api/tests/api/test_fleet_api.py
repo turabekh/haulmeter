@@ -55,6 +55,29 @@ def test_create_fleet_and_report(client, db):
     assert body["owed_cents"] == 15000
 
 
+def test_fleet_report_claims_invite_gated_to_management(client, db):
+    # fleet-wide money + roster is owner/dispatcher only — never any authed user
+    _, owner = _auth(client)
+    fleet_id = client.post("/fleet", json={"name": "Acme"}, headers=owner).json()["fleet_id"]
+
+    outsider = client.post(
+        "/auth/register", json={"email": "outsider@example.com", "password": "pw-123456"}
+    )
+    ho = {"Authorization": f"Bearer {outsider.json()['token']}"}
+    oid = outsider.json()["account_id"]
+
+    assert client.get(f"/fleet/{fleet_id}/report", headers=ho).status_code == 403
+    assert client.get(f"/fleet/{fleet_id}/claims", headers=ho).status_code == 403
+    assert (
+        client.post(
+            f"/fleet/{fleet_id}/invite", json={"driver_account_id": oid}, headers=ho
+        ).status_code
+        == 403
+    )
+    # the owner (management) is still allowed through
+    assert client.get(f"/fleet/{fleet_id}/claims", headers=owner).status_code == 200
+
+
 def test_my_fleets_lists_created_fleet(client, db):
     _, headers = _auth(client)
     assert client.get("/fleet/mine", headers=headers).json() == []  # none yet
