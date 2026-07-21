@@ -294,5 +294,12 @@
   "claim.ev_notice": "Broker notified",
   "claim.ev_action": "Action logged",
   "claim.ev_system": "Event recorded",
-  "incident.logged": "Incident logged — added to your evidence"
+  "incident.logged": "Incident logged — added to your evidence",
+  "auth.authority_q": "How do you run?",
+  "auth.authority.own_mc": "My own authority",
+  "auth.authority.leased": "Leased to a carrier",
+  "auth.authority.company": "Company driver",
+  "auth.authority_desc.own_mc": "You have your own MC# — you bill brokers directly.",
+  "auth.authority_desc.leased": "You own the truck but run under a carrier's authority.",
+  "auth.authority_desc.company": "You drive the company's truck; your carrier collects detention."
 }

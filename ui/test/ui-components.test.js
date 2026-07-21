@@ -381,6 +381,33 @@ describe("AuthSurface + auth guard (F1, PRD §7.1)", () => {
     expect(w.find(".cta").text()).toContain("Create account");
   });
 
+  it("asks operating authority on signup and registers with the chosen one (§7.1)", async () => {
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: () => Promise.resolve({ token: "tok-op", account_id: "acc-op" }),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      const w = mount(AuthSurface, { global: { plugins: [router] } });
+      await w.find(".auth__toggle").trigger("click"); // -> Create account
+      const opts = w.findAll(".auth-opt");
+      expect(opts.length).toBe(3); // own_mc / leased / company
+      expect(w.find(".auth-opt--on").text()).toContain("My own authority"); // default
+      await opts[2].trigger("click"); // choose Company driver
+      await w.findAll(".field__input").at(0).setValue("new@example.com");
+      await w.findAll(".field__input").at(1).setValue("pw-123456");
+      await w.find("form").trigger("submit");
+      await flushPromises();
+      const post = fetchStub.mock.calls.find((c) => String(c[0]).endsWith("/auth/register"));
+      expect(JSON.parse(post[1].body)).toMatchObject({ email: "new@example.com", authority: "company" });
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+
   it("redirects an unauthenticated visit to a tab into /login", async () => {
     logout();
     const router = createRouter({ history: createMemoryHistory(), routes });

@@ -294,5 +294,12 @@
   "claim.ev_notice": "ਬ੍ਰੋਕਰ ਨੂੰ ਸੂਚਿਤ",
   "claim.ev_action": "ਕਾਰਵਾਈ ਦਰਜ",
   "claim.ev_system": "ਘਟਨਾ ਦਰਜ",
-  "incident.logged": "ਘਟਨਾ ਦਰਜ — ਤੁਹਾਡੇ ਸਬੂਤ ਵਿੱਚ ਸ਼ਾਮਲ"
+  "incident.logged": "ਘਟਨਾ ਦਰਜ — ਤੁਹਾਡੇ ਸਬੂਤ ਵਿੱਚ ਸ਼ਾਮਲ",
+  "auth.authority_q": "ਤੁਸੀਂ ਕਿਵੇਂ ਚਲਾਉਂਦੇ ਹੋ?",
+  "auth.authority.own_mc": "ਮੇਰਾ ਆਪਣਾ ਅਧਿਕਾਰ",
+  "auth.authority.leased": "ਕੈਰੀਅਰ ਨੂੰ ਲੀਜ਼",
+  "auth.authority.company": "ਕੰਪਨੀ ਡਰਾਈਵਰ",
+  "auth.authority_desc.own_mc": "ਤੁਹਾਡੇ ਕੋਲ ਆਪਣਾ MC# ਹੈ — ਤੁਸੀਂ ਬ੍ਰੋਕਰਾਂ ਨੂੰ ਸਿੱਧਾ ਬਿੱਲ ਕਰਦੇ ਹੋ।",
+  "auth.authority_desc.leased": "ਟਰੱਕ ਤੁਹਾਡਾ ਹੈ ਪਰ ਤੁਸੀਂ ਕੈਰੀਅਰ ਦੇ ਅਧਿਕਾਰ ਹੇਠ ਚਲਾਉਂਦੇ ਹੋ।",
+  "auth.authority_desc.company": "ਤੁਸੀਂ ਕੰਪਨੀ ਦਾ ਟਰੱਕ ਚਲਾਉਂਦੇ ਹੋ; ਤੁਹਾਡਾ ਕੈਰੀਅਰ ਰੁਕਾਵਟ ਵਸੂਲਦਾ ਹੈ।"
 }

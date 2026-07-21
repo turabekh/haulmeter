@@ -294,5 +294,12 @@
   "claim.ev_notice": "Bróker notificado",
   "claim.ev_action": "Acción registrada",
   "claim.ev_system": "Evento registrado",
-  "incident.logged": "Incidente registrado — añadido a tu evidencia"
+  "incident.logged": "Incidente registrado — añadido a tu evidencia",
+  "auth.authority_q": "¿Cómo operas?",
+  "auth.authority.own_mc": "Mi propia autoridad",
+  "auth.authority.leased": "Arrendado a un transportista",
+  "auth.authority.company": "Conductor de empresa",
+  "auth.authority_desc.own_mc": "Tienes tu propio MC# — facturas a los brókers directamente.",
+  "auth.authority_desc.leased": "Eres dueño del camión pero operas bajo la autoridad de un transportista.",
+  "auth.authority_desc.company": "Conduces el camión de la empresa; tu transportista cobra la detención."
 }

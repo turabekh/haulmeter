@@ -294,5 +294,12 @@
   "claim.ev_notice": "Dilaalka waa la ogeysiiyay",
   "claim.ev_action": "Ficil la diiwaangeliyay",
   "claim.ev_system": "Dhacdo la diiwaangeliyay",
-  "incident.logged": "Dhacdada waa la diiwaangeliyay — lagu daray caddayntaada"
+  "incident.logged": "Dhacdada waa la diiwaangeliyay — lagu daray caddayntaada",
+  "auth.authority_q": "Sidee ku shaqeysaa?",
+  "auth.authority.own_mc": "Awooddayda gaarka ah",
+  "auth.authority.leased": "Loo kireeyay xamuulaha",
+  "auth.authority.company": "Darawal shirkadeed",
+  "auth.authority_desc.own_mc": "Waxaad leedahay MC# gaar ah — dilaalada si toos ah ayaad u soo qortaa.",
+  "auth.authority_desc.leased": "Gaadhiga adigaa leh laakiin waxaad ku shaqeysaa awoodda xamuulaha.",
+  "auth.authority_desc.company": "Waxaad wadaa gaadhiga shirkadda; xamuulahaagu wuxuu soo qaadaa sugitaanka."
 }

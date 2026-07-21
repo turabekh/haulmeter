@@ -18,6 +18,11 @@ const form = reactive({ email: "", password: "" });
 const error = ref("");
 const submitting = ref(false);
 
+// operating authority declared at signup — decides whether detention claims are
+// invoiced to the broker (owner-op) or exported to a carrier (company driver)
+const AUTHORITIES = ["own_mc", "leased", "company"];
+const authority = ref("own_mc");
+
 function toggle() {
   mode.value = mode.value === "login" ? "register" : "login";
   error.value = "";
@@ -30,7 +35,7 @@ async function submit() {
     if (mode.value === "login") {
       await login(form.email.trim(), form.password);
     } else {
-      await register(form.email.trim(), form.password);
+      await register(form.email.trim(), form.password, authority.value);
     }
     router.push("/map");
   } catch (e) {
@@ -74,6 +79,26 @@ async function submit() {
           required
         />
       </label>
+
+      <!-- operating authority — asked once, at signup (§7.1) -->
+      <fieldset v-if="mode === 'register'" class="authority">
+        <legend class="field__label">{{ t("auth.authority_q") }}</legend>
+        <div class="authority__opts" role="radiogroup">
+          <button
+            v-for="a in AUTHORITIES"
+            :key="a"
+            type="button"
+            class="auth-opt"
+            :class="{ 'auth-opt--on': authority === a }"
+            role="radio"
+            :aria-checked="authority === a"
+            @click="authority = a"
+          >
+            <span class="auth-opt__name">{{ t(`auth.authority.${a}`) }}</span>
+            <span class="auth-opt__desc">{{ t(`auth.authority_desc.${a}`) }}</span>
+          </button>
+        </div>
+      </fieldset>
 
       <p v-if="error" class="auth__error" role="alert">{{ error }}</p>
 
@@ -154,6 +179,49 @@ async function submit() {
   margin: 0;
   color: var(--flare-500);
   font-size: var(--type-caption-size);
+}
+.authority {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.authority legend {
+  padding: 0;
+  margin-bottom: var(--s-1);
+}
+.authority__opts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.auth-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+  background: var(--ink-1);
+  color: var(--text-1);
+}
+.auth-opt--on {
+  border-color: var(--shield-500);
+  background: var(--shield-050, var(--ink-1));
+}
+.auth-opt__name {
+  font-size: var(--type-body-size);
+  font-weight: 500;
+}
+.auth-opt--on .auth-opt__name {
+  color: var(--shield-500);
+}
+.auth-opt__desc {
+  font-size: var(--type-caption-size);
+  color: var(--text-3);
 }
 .cta {
   width: 100%;

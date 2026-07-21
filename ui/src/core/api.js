@@ -308,11 +308,11 @@ export async function login(email, password) {
   return _adopt(await resp.json(), email);
 }
 
-export async function register(email, password) {
+export async function register(email, password, authority = null) {
   const resp = await fetch(`${API_BASE}/auth/register`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, authority }),
   });
   if (resp.status === 409) throw new Error("email_taken");
   if (!resp.ok) throw new Error(`register failed: ${resp.status}`);

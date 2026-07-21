@@ -294,5 +294,12 @@
   "claim.ev_notice": "Broker ogohlantirildi",
   "claim.ev_action": "Amal qayd etildi",
   "claim.ev_system": "Hodisa qayd etildi",
-  "incident.logged": "Hodisa qayd etildi — dalilingizga qo'shildi"
+  "incident.logged": "Hodisa qayd etildi — dalilingizga qo'shildi",
+  "auth.authority_q": "Qanday ishlaysiz?",
+  "auth.authority.own_mc": "O'z ruxsatnomam",
+  "auth.authority.leased": "Tashuvchiga ijaraga",
+  "auth.authority.company": "Kompaniya haydovchisi",
+  "auth.authority_desc.own_mc": "Sizda o'z MC# bor — brokerlarga to'g'ridan-to'g'ri hisob yuborasiz.",
+  "auth.authority_desc.leased": "Yuk mashinasi sizniki, lekin tashuvchi ruxsatnomasi ostida ishlaysiz.",
+  "auth.authority_desc.company": "Kompaniya mashinasini haydaysiz; kutishni tashuvchingiz undiradi."
 }

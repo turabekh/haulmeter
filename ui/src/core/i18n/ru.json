@@ -294,5 +294,12 @@
   "claim.ev_notice": "Брокер уведомлён",
   "claim.ev_action": "Действие записано",
   "claim.ev_system": "Событие записано",
-  "incident.logged": "Инцидент записан — добавлен к доказательствам"
+  "incident.logged": "Инцидент записан — добавлен к доказательствам",
+  "auth.authority_q": "Как вы работаете?",
+  "auth.authority.own_mc": "Своя лицензия",
+  "auth.authority.leased": "В аренде у перевозчика",
+  "auth.authority.company": "Наёмный водитель",
+  "auth.authority_desc.own_mc": "У вас свой MC# — вы выставляете счета брокерам напрямую.",
+  "auth.authority_desc.leased": "Вы владеете грузовиком, но работаете под лицензией перевозчика.",
+  "auth.authority_desc.company": "Вы водите грузовик компании; простой взыскивает ваш перевозчик."
 }
