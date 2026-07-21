@@ -244,5 +244,15 @@
   "admin.scope": "Ko'lam",
   "admin.new_key": "kalit",
   "admin.new_value": "qiymat",
-  "admin.add": "Qo'shish"
+  "admin.add": "Qo'shish",
+  "owner.demo": "Demo ma'lumot — e'lonlarni boshqarish uchun kiring.",
+  "owner.pause": "To'xtatish",
+  "owner.resume": "Davom ettirish",
+  "owner.spot_label": "Joy",
+  "owner.price": "Narx",
+  "owner.add_spot": "Joy qo'shish",
+  "owner.prop_name": "Maydon nomi",
+  "owner.lat": "Kenglik",
+  "owner.lon": "Uzunlik",
+  "owner.add_property": "Maydon qo'shish"
 }

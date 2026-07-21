@@ -84,6 +84,30 @@ def add_spot(
     return spot
 
 
+def get_property(db: Session, property_id) -> ParkingProperty | None:
+    return db.get(ParkingProperty, property_id)
+
+
+def get_spot(db: Session, spot_id) -> ParkingSpot | None:
+    return db.get(ParkingSpot, spot_id)
+
+
+def update_spot(
+    db: Session,
+    spot: ParkingSpot,
+    price_cents_per_night: int | None = None,
+    active: bool | None = None,
+) -> ParkingSpot:
+    # owner self-serve edits (M6-FR1): re-price or pause/resume a listing. A paused
+    # spot drops out of bookable_near (it filters active) but keeps its history.
+    if price_cents_per_night is not None:
+        spot.price_cents_per_night = price_cents_per_night
+    if active is not None:
+        spot.active = active
+    db.flush()
+    return spot
+
+
 # --- Instant booking (M6-FR2) ---
 def _overlaps(db: Session, spot_id, start_at, end_at) -> bool:
     for booking in db.scalars(select(Booking).where(Booking.spot_id == spot_id)):

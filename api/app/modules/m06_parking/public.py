@@ -24,12 +24,15 @@ from .domain.service import (
     check_out,
     closing_loop,
     create_property,
+    get_property,
+    get_spot,
     is_overstay,
     owner_bookings,
     owner_payable_cents,
     owner_properties,
     property_spots,
     register_module,
+    update_spot,
 )
 
 __all__ = [
@@ -52,10 +55,13 @@ __all__ = [
     "check_out",
     "closing_loop",
     "create_property",
+    "get_property",
+    "get_spot",
     "is_overstay",
     "owner_bookings",
     "owner_payable_cents",
     "owner_properties",
     "property_spots",
     "register_module",
+    "update_spot",
 ]

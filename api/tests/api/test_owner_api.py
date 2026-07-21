@@ -67,3 +67,75 @@ def test_empty_owner_dashboard(client):
     assert body["properties"] == []
     assert body["bookings"] == []
     assert body["payout_cents"] == 0
+
+
+def test_owner_creates_property_and_manages_spots(client):
+    _, headers = _auth(client)
+
+    # create a listing, add a spot -> it shows on the dashboard
+    prop = client.post(
+        "/owner/property",
+        json={"name": "Depot Overnight Lot", "lat": DALLAS[0], "lon": DALLAS[1]},
+        headers=headers,
+    )
+    assert prop.status_code == 201
+    prop_id = prop.json()["id"]
+
+    spot = client.post(
+        f"/owner/property/{prop_id}/spot",
+        json={"label": "A1", "price_cents_per_night": 2400},
+        headers=headers,
+    )
+    assert spot.status_code == 201
+    spot_id = spot.json()["id"]
+    assert spot.json()["active"] is True
+
+    # re-price and pause the spot
+    patched = client.patch(
+        f"/owner/spot/{spot_id}",
+        json={"price_cents_per_night": 2600, "active": False},
+        headers=headers,
+    )
+    assert patched.status_code == 200
+    assert patched.json()["price_cents_per_night"] == 2600
+    assert patched.json()["active"] is False
+
+    # it round-trips on the dashboard
+    board = client.get("/owner/dashboard", headers=headers).json()
+    assert board["properties"][0]["name"] == "Depot Overnight Lot"
+    assert board["properties"][0]["spots"][0]["price_cents_per_night"] == 2600
+    assert board["properties"][0]["spots"][0]["active"] is False
+
+
+def test_owner_cannot_touch_another_owners_property(client, db):
+    _, alice = _auth(client, email="alice@example.com")
+    _, bob = _auth(client, email="bob@example.com")
+
+    prop_id = client.post(
+        "/owner/property",
+        json={"name": "Alice's Lot", "lat": DALLAS[0], "lon": DALLAS[1]},
+        headers=alice,
+    ).json()["id"]
+
+    # Bob may not add a spot to Alice's property
+    denied = client.post(
+        f"/owner/property/{prop_id}/spot",
+        json={"label": "X", "price_cents_per_night": 999},
+        headers=bob,
+    )
+    assert denied.status_code == 403
+
+    # Alice adds a spot; Bob may not patch it
+    spot_id = client.post(
+        f"/owner/property/{prop_id}/spot",
+        json={"label": "A1", "price_cents_per_night": 2400},
+        headers=alice,
+    ).json()["id"]
+    assert (
+        client.patch(f"/owner/spot/{spot_id}", json={"active": False}, headers=bob).status_code
+        == 403
+    )
+
+
+def test_owner_write_requires_auth(client):
+    assert client.post("/owner/property", json={"name": "x", "lat": 0, "lon": 0}).status_code == 401

@@ -244,5 +244,15 @@
   "admin.scope": "Scope",
   "admin.new_key": "key",
   "admin.new_value": "value",
-  "admin.add": "Add"
+  "admin.add": "Add",
+  "owner.demo": "Demo data — sign in to manage your listings.",
+  "owner.pause": "Pause",
+  "owner.resume": "Resume",
+  "owner.spot_label": "Spot",
+  "owner.price": "Price",
+  "owner.add_spot": "Add spot",
+  "owner.prop_name": "Property name",
+  "owner.lat": "Lat",
+  "owner.lon": "Lon",
+  "owner.add_property": "Add property"
 }

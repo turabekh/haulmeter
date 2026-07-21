@@ -244,5 +244,15 @@
   "admin.scope": "ਦਾਇਰਾ",
   "admin.new_key": "ਕੁੰਜੀ",
   "admin.new_value": "ਮੁੱਲ",
-  "admin.add": "ਜੋੜੋ"
+  "admin.add": "ਜੋੜੋ",
+  "owner.demo": "ਡੈਮੋ ਡਾਟਾ — ਆਪਣੀਆਂ ਲਿਸਟਿੰਗਾਂ ਦਾ ਪ੍ਰਬੰਧ ਕਰਨ ਲਈ ਸਾਈਨ ਇਨ ਕਰੋ।",
+  "owner.pause": "ਰੋਕੋ",
+  "owner.resume": "ਮੁੜ ਸ਼ੁਰੂ",
+  "owner.spot_label": "ਥਾਂ",
+  "owner.price": "ਕੀਮਤ",
+  "owner.add_spot": "ਥਾਂ ਜੋੜੋ",
+  "owner.prop_name": "ਜਾਇਦਾਦ ਦਾ ਨਾਮ",
+  "owner.lat": "ਅਕਸ਼",
+  "owner.lon": "ਰੇਖਾਂਸ਼",
+  "owner.add_property": "ਜਾਇਦਾਦ ਜੋੜੋ"
 }

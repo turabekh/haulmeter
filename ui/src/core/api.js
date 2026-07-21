@@ -481,6 +481,33 @@ export async function fetchScorecard(facilityId) {
 export async function fetchOwnerDashboard() {
   return apiGet(`/owner/dashboard`, `owner-dashboard`);
 }
+export async function createOwnerProperty(name, lat, lon) {
+  const resp = await fetch(`${API_BASE}/owner/property`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ name, lat, lon }),
+  });
+  if (!resp.ok) throw new Error(`create property ${resp.status}`);
+  return resp.json();
+}
+export async function addOwnerSpot(propertyId, label, priceCentsPerNight) {
+  const resp = await fetch(`${API_BASE}/owner/property/${propertyId}/spot`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ label, price_cents_per_night: priceCentsPerNight }),
+  });
+  if (!resp.ok) throw new Error(`add spot ${resp.status}`);
+  return resp.json();
+}
+export async function updateOwnerSpot(spotId, patch) {
+  const resp = await fetch(`${API_BASE}/owner/spot/${spotId}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify(patch),
+  });
+  if (!resp.ok) throw new Error(`update spot ${resp.status}`);
+  return resp.json();
+}
 
 export async function fetchEarnings() {
   return apiGet(`/money/earnings`, `earnings`);

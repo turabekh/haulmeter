@@ -896,9 +896,66 @@ describe("OwnerPortalSurface — Property-Owner portal (M6-FR5, design-prd §18)
       await flushPromises();
       expect(w.find(".payout__figure").text()).toBe("$39.60");
       expect(w.text()).toContain("Depot Lot");
-      expect(w.find(".spot__price").text()).toBe("$24.00/night");
+      // live view is read-write: the price is an editable input pre-filled in $
+      expect(w.find(".spot__price-in").element.value).toBe("24.00");
       expect(w.findAll("tbody tr").length).toBe(1);
       expect(w.find("tbody tr").text()).toContain("Checked out"); // friendly state label
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+
+  it("creates a property, adds a spot, re-prices and pauses it", async () => {
+    setToken("tok-owner");
+    let props = [];
+    const fetchStub = vi.fn().mockImplementation((url, opts) => {
+      const u = String(url);
+      const method = opts?.method || "GET";
+      if (u.endsWith("/owner/dashboard")) return jsonOk({ payout_cents: 0, properties: props, bookings: [] });
+      if (u.endsWith("/owner/property") && method === "POST") {
+        props = [{ id: "p1", name: JSON.parse(opts.body).name, vetted: false, spots: [] }];
+        return jsonOk({ id: "p1" });
+      }
+      if (u.includes("/owner/property/p1/spot") && method === "POST") {
+        const b = JSON.parse(opts.body);
+        props[0].spots.push({ id: "s1", label: b.label, price_cents_per_night: b.price_cents_per_night, active: true });
+        return jsonOk({ id: "s1" });
+      }
+      if (u.includes("/owner/spot/s1") && method === "PATCH") {
+        Object.assign(props[0].spots[0], JSON.parse(opts.body));
+        return jsonOk({ id: "s1" });
+      }
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(OwnerPortalSurface);
+      await flushPromises();
+      // add a property
+      await w.find(".in--name").setValue("Depot Overnight Lot");
+      await w.find(".addprop").trigger("submit");
+      await flushPromises();
+      expect(w.text()).toContain("Depot Overnight Lot");
+      // add a spot ($24/night -> 2400 cents)
+      await w.find(".addspot .in--label").setValue("A1");
+      await w.find(".addspot .in--price").setValue("24");
+      await w.find(".addspot").trigger("submit");
+      await flushPromises();
+      const spotPost = fetchStub.mock.calls.find((c) => String(c[0]).includes("/spot") && c[1]?.method === "POST");
+      expect(JSON.parse(spotPost[1].body)).toMatchObject({ label: "A1", price_cents_per_night: 2400 });
+      // re-price to $26 -> PATCH with 2600 cents
+      const priceIn = w.find(".spot__price-in");
+      priceIn.element.value = "26.00";
+      await priceIn.trigger("change");
+      await flushPromises();
+      const patch = fetchStub.mock.calls.find((c) => String(c[0]).includes("/owner/spot/s1") && c[1]?.method === "PATCH");
+      expect(JSON.parse(patch[1].body)).toMatchObject({ price_cents_per_night: 2600 });
+      // pause it -> PATCH active:false
+      await w.find(".pause").trigger("click");
+      await flushPromises();
+      const pausePatch = fetchStub.mock.calls.filter((c) => c[1]?.method === "PATCH").pop();
+      expect(JSON.parse(pausePatch[1].body)).toMatchObject({ active: false });
     } finally {
       vi.unstubAllGlobals();
       logout();

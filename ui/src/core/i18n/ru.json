@@ -244,5 +244,15 @@
   "admin.scope": "Область",
   "admin.new_key": "ключ",
   "admin.new_value": "значение",
-  "admin.add": "Добавить"
+  "admin.add": "Добавить",
+  "owner.demo": "Демо-данные — войдите, чтобы управлять объектами.",
+  "owner.pause": "Пауза",
+  "owner.resume": "Возобновить",
+  "owner.spot_label": "Место",
+  "owner.price": "Цена",
+  "owner.add_spot": "Добавить место",
+  "owner.prop_name": "Название объекта",
+  "owner.lat": "Широта",
+  "owner.lon": "Долгота",
+  "owner.add_property": "Добавить объект"
 }

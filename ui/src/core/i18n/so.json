@@ -244,5 +244,15 @@
   "admin.scope": "Baaxadda",
   "admin.new_key": "fure",
   "admin.new_value": "qiime",
-  "admin.add": "Ku dar"
+  "admin.add": "Ku dar",
+  "owner.demo": "Xog demo ah — soo gal si aad u maamusho liistadaada.",
+  "owner.pause": "Jooji",
+  "owner.resume": "Sii wad",
+  "owner.spot_label": "Meel",
+  "owner.price": "Qiime",
+  "owner.add_spot": "Ku dar meel",
+  "owner.prop_name": "Magaca guriga",
+  "owner.lat": "Dhig",
+  "owner.lon": "God",
+  "owner.add_property": "Ku dar guri"
 }

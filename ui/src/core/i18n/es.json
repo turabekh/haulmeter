@@ -244,5 +244,15 @@
   "admin.scope": "Ámbito",
   "admin.new_key": "clave",
   "admin.new_value": "valor",
-  "admin.add": "Añadir"
+  "admin.add": "Añadir",
+  "owner.demo": "Datos de demo — inicia sesión para gestionar tus anuncios.",
+  "owner.pause": "Pausar",
+  "owner.resume": "Reanudar",
+  "owner.spot_label": "Plaza",
+  "owner.price": "Precio",
+  "owner.add_spot": "Añadir plaza",
+  "owner.prop_name": "Nombre de propiedad",
+  "owner.lat": "Lat",
+  "owner.lon": "Lon",
+  "owner.add_property": "Añadir propiedad"
 }
