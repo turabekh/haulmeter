@@ -50,15 +50,33 @@ def _dwell(db, fac, i, hours=2.0):
     location.disarm_geofence(db, drv.id, fac.id, occurred_at=NOW)
 
 
+def _make_dev_driver_owner_operator(db):
+    # give the dev-driver OWN authority so filed detention claims are invoiced to
+    # the broker (money owed to the driver) instead of exported to a carrier. In
+    # production this comes from the driver's onboarding-declared authority
+    # (own_mc / leased / company), ideally FMCSA-verified.
+    from sqlalchemy import select
+
+    from app.foundation.f01_identity.domain.models import Account
+
+    drv = db.scalar(select(Account).where(Account.email == "dev-driver@longhaul.local"))
+    if drv is None:
+        drv = identity.register_account(db, "dev-driver@longhaul.local", "longhaul-dev-1")
+    identity.upsert_driver_profile(db, drv, authority_type=identity.AuthorityType.own_mc)
+    db.commit()
+    print("dev-driver set to own_mc (owner-operator) — new claims will show as money owed")
+
+
 def main():
     db = SessionLocal()
+    _make_dev_driver_owner_operator(db)  # always run — independent of the cluster guard
     existing = (
         [f for f in facility.nearest(db, *CENTER, 8000) if f.name == MARKER]
         if hasattr(facility, "nearest")
         else []
     )
     if existing:
-        print("demo data already seeded — skipping. Center:", CENTER)
+        print("demo data already seeded — skipping cluster. Center:", CENTER)
         db.close()
         return
 
