@@ -27,6 +27,7 @@ import IncidentSheet from "../src/core/components/IncidentSheet.vue";
 import AdminConsoleSurface from "../src/surfaces/AdminConsoleSurface.vue";
 import PublicScorecardSurface from "../src/surfaces/PublicScorecardSurface.vue";
 import OwnerPortalSurface from "../src/surfaces/OwnerPortalSurface.vue";
+import DevIndexSurface from "../src/surfaces/DevIndexSurface.vue";
 import GhostwriterSheet from "../src/core/components/GhostwriterSheet.vue";
 import SleepSheet from "../src/core/components/SleepSheet.vue";
 import HandoffSheet from "../src/core/components/HandoffSheet.vue";
@@ -967,6 +968,36 @@ describe("OwnerPortalSurface — Property-Owner portal (M6-FR5, design-prd §18)
       await flushPromises();
       const pausePatch = fetchStub.mock.calls.filter((c) => c[1]?.method === "PATCH").pop();
       expect(JSON.parse(pausePatch[1].body)).toMatchObject({ active: false });
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+});
+
+describe("DevIndexSurface — dev directory of all surfaces", () => {
+  it("lists every surface group and signs in as admin", async () => {
+    logout();
+    const router = testRouter();
+    const fetchStub = vi.fn().mockImplementation((url) =>
+      String(url).endsWith("/auth/login")
+        ? jsonOk({ token: "tok-admin", account_id: "acc-1" })
+        : jsonOk({}),
+    );
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(DevIndexSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      // the four groups + key destinations are present as clickable cards
+      expect(w.text()).toContain("Driver app");
+      expect(w.text()).toContain("Web portals");
+      const paths = w.findAll(".card__path").map((n) => n.text());
+      expect(paths).toEqual(expect.arrayContaining(["/map", "/load", "/admin", "/owner", "/scorecard"]));
+      // one-click admin sign-in hits /auth/login and reflects the session
+      await w.findAll(".btn--primary")[1].trigger("click"); // "Sign in as admin"
+      await flushPromises();
+      expect(fetchStub.mock.calls.some((c) => String(c[0]).endsWith("/auth/login"))).toBe(true);
+      expect(w.text()).toContain("Signed in");
     } finally {
       vi.unstubAllGlobals();
       logout();

@@ -84,8 +84,23 @@ async function submit() {
     <button class="auth__toggle" type="button" @click="toggle">
       {{ mode === "login" ? t("auth.to_register") : t("auth.to_login") }}
     </button>
+
+    <button class="auth__dev" type="button" @click="router.push('/dev')">
+      Explore all screens (dev directory) →
+    </button>
   </div>
 </template>
+
+<style scoped>
+.auth__dev {
+  margin-top: var(--s-4);
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  text-decoration: underline;
+}
+</style>
 
 <style scoped>
 .auth {
