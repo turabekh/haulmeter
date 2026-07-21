@@ -26,6 +26,7 @@ from .models import Booking, ParkingProperty, ParkingSpot
 FLAG_KEY = "m06_parking"
 MODULE = "m06"
 DEFAULT_TAKE_RATE_BPS = 1750  # 17.5% all-in (design-prd §9 / PRD §9) -> F13 config
+CONFIG_TAKE_RATE_KEY = "m06_take_rate_bps"  # F13 pricing scope; editable in F14 admin
 FULL_REFUND_HOURS = 24
 GATES = ["refund_policy", "damage_liability_posture"]
 
@@ -110,17 +111,27 @@ def _ledger_accounts(db: Session, owner_account_id):
     return cash, owner, platform
 
 
+def _configured_take_rate(db: Session) -> int:
+    # the live take rate: F13 config (edited in the F14 admin console) falling back
+    # to the compiled default — the activation knob the config editor opens (§21.8)
+    from app.foundation.f13_flags import public as flags
+
+    return int(flags.get_config(db, CONFIG_TAKE_RATE_KEY, DEFAULT_TAKE_RATE_BPS))
+
+
 def book(
     db: Session,
     spot: ParkingSpot,
     driver_account_id,
     start_at: datetime,
     end_at: datetime,
-    take_rate_bps: int = DEFAULT_TAKE_RATE_BPS,
+    take_rate_bps: int | None = None,
     gateway=None,
 ) -> Booking:
     if _overlaps(db, spot.id, start_at, end_at):
         raise SpotUnavailable(str(spot.id))
+    if take_rate_bps is None:  # unset -> the live F13-config rate (default fallback)
+        take_rate_bps = _configured_take_rate(db)
     nights = max(1, (end_at.date() - start_at.date()).days)
     price = nights * spot.price_cents_per_night
     take = round(price * take_rate_bps / 10000)

@@ -58,6 +58,24 @@ def test_booking_records_balanced_ledger_with_take_rate(db):
     assert ledger.balance(db, platform) == -840
 
 
+def test_take_rate_reads_f13_config_knob(db):
+    # the take rate is a live F13-config knob (edited in the F14 admin console);
+    # unset it falls back to the compiled default, set it applies immediately
+    owner, driver = _accounts(db)
+    prop, spot = _listing(db, owner, price=2400)
+
+    flags.set_config(db, m6.CONFIG_TAKE_RATE_KEY, 1000, scope="pricing")  # 10%
+    booking = m6.book(db, spot, driver.id, T0, T0 + timedelta(days=2))
+    assert booking.take_cents == 480  # 10% of 4800, not the 17.5% default
+    assert booking.owner_payout_cents == 4320
+
+    # an explicit argument still overrides the config (callers can force a rate)
+    b2 = m6.book(
+        db, spot, driver.id, T0 + timedelta(days=5), T0 + timedelta(days=7), take_rate_bps=2000
+    )
+    assert b2.take_cents == 960  # 20% of 4800
+
+
 def test_double_booking_rejected(db):
     owner, driver = _accounts(db)
     prop, spot = _listing(db, owner)
