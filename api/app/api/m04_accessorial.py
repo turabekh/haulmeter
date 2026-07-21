@@ -20,7 +20,7 @@ from app.modules.m04_accessorial import public as m4
 router = APIRouter(prefix="/accessorial", tags=["accessorial"])
 
 _GATEWAY = notify.RecordingNotificationGateway()  # F8 seam (dev)
-_PROVIDER = ai.FakeModelProvider()  # F9 seam (dev)
+_PROVIDER = ai.resolve_provider()  # F9: real Claude when ANTHROPIC_API_KEY set, else Fake
 
 
 class TonuIn(BaseModel):

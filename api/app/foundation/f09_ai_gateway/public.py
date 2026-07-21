@@ -10,6 +10,7 @@ from .domain.enums import AiTask
 from .domain.models import AiCall, Embedding, ModuleBudget, Prompt, PromptFixture
 from .domain.provider import (
     EMBED_DIM,
+    AnthropicModelProvider,
     CompletionResult,
     EmbeddingResult,
     FakeModelProvider,
@@ -17,6 +18,7 @@ from .domain.provider import (
     StructuredResult,
     StubModelProvider,
     deterministic_vector,
+    resolve_provider,
 )
 from .domain.service import (
     BudgetExceeded,
@@ -51,6 +53,8 @@ __all__ = [
     "ModelProvider",
     "FakeModelProvider",
     "StubModelProvider",
+    "AnthropicModelProvider",
+    "resolve_provider",
     "deterministic_vector",
     "BudgetExceeded",
     "PromptNotFound",

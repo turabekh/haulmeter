@@ -104,3 +104,97 @@ class StubModelProvider:
 
     def synthesize(self, text: str, locale: str) -> str:
         raise NotImplementedError("TTS adapter is a seam; wired at activation")
+
+
+# --- Real adapter: Anthropic Messages API (the F9 activation) ---
+_ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+_ANTHROPIC_VERSION = "2023-06-01"
+
+
+def _anthropic_messages(
+    api_key: str, model: str, system: str | None, user: str, max_tokens: int = 1024
+) -> tuple[str, int, int]:
+    # single HTTP call to the Messages API; kept as a module function so tests can
+    # monkeypatch it without hitting the network. Returns (text, in_tok, out_tok).
+    import httpx
+
+    body: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": user}],
+    }
+    if system:
+        body["system"] = system
+    resp = httpx.post(
+        _ANTHROPIC_URL,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": _ANTHROPIC_VERSION,
+            "content-type": "application/json",
+        },
+        json=body,
+        timeout=60.0,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    usage = data.get("usage", {})
+    return text, int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0))
+
+
+def _extract_json(text: str) -> dict:
+    import json
+
+    s = text.strip()
+    if s.startswith("```"):  # tolerate a ```json fence
+        s = s.strip("`")
+    start, end = s.find("{"), s.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            parsed = json.loads(s[start : end + 1])
+            return parsed if isinstance(parsed, dict) else {}
+        except ValueError:
+            pass
+    return {}  # unparseable -> service's required_keys check raises StructuredOutputError
+
+
+class AnthropicModelProvider:
+    """Live Claude adapter. Real `complete` + `parse_structured` (text intelligence);
+    `embed`/`transcribe`/`synthesize` delegate to a deterministic fallback because
+    Anthropic has no embeddings/STT/TTS API — those stay separate provider seams."""
+
+    def __init__(
+        self, api_key: str, model: str, fallback: "FakeModelProvider | None" = None
+    ) -> None:
+        self._key = api_key
+        self._model = model
+        self._fallback = fallback or FakeModelProvider()
+
+    def complete(self, prompt: str, context: dict) -> CompletionResult:
+        text, i, o = _anthropic_messages(self._key, self._model, None, prompt)
+        return CompletionResult(text, i, o)
+
+    def parse_structured(self, prompt: str, context: dict) -> StructuredResult:
+        system = "Return ONLY a single valid JSON object — no prose, no markdown."
+        text, i, o = _anthropic_messages(self._key, self._model, system, prompt)
+        return StructuredResult(_extract_json(text), i, o)
+
+    def embed(self, text: str) -> EmbeddingResult:
+        return self._fallback.embed(text)
+
+    def transcribe(self, audio_ref: str, locale: str) -> str:
+        return self._fallback.transcribe(audio_ref, locale)
+
+    def synthesize(self, text: str, locale: str) -> str:
+        return self._fallback.synthesize(text, locale)
+
+
+def resolve_provider() -> ModelProvider:
+    # the live provider when ANTHROPIC_API_KEY is set (F9 activated), else the
+    # deterministic Fake — the same shape the app has always run on without a key.
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    if settings.anthropic_api_key:
+        return AnthropicModelProvider(settings.anthropic_api_key, settings.f9_model)
+    return FakeModelProvider()

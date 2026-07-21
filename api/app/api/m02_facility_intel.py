@@ -20,7 +20,7 @@ router = APIRouter(prefix="/facility", tags=["facility"])
 
 # AI-CONTEXT: F9 provider seam — swap the deterministic fake for the real model
 # adapter (latest Claude models via the claude-api skill) at activation.
-_PROVIDER = ai.FakeModelProvider()
+_PROVIDER = ai.resolve_provider()  # F9: real Claude when ANTHROPIC_API_KEY set, else Fake
 
 
 def _serialize_review(review) -> dict:

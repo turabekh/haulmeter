@@ -116,3 +116,47 @@ def test_stub_provider_is_a_seam(db):
     stub = ai.StubModelProvider()
     with pytest.raises(NotImplementedError):
         stub.complete("x", {})
+
+
+# --- Real Anthropic adapter (F9 activation) ---
+def test_resolve_provider_falls_back_to_fake_without_key():
+    # no ANTHROPIC_API_KEY in the test env -> deterministic Fake (today's behavior)
+    provider = ai.resolve_provider()
+    assert isinstance(provider, ai.FakeModelProvider)
+
+
+def test_anthropic_provider_complete_and_structured(monkeypatch):
+    from app.foundation.f09_ai_gateway.domain import provider as prov
+
+    calls = []
+
+    def fake_messages(api_key, model, system, user, max_tokens=1024):
+        calls.append({"model": model, "system": system, "user": user})
+        if system:  # parse_structured asks for JSON
+            return '```json\n{"lines": [{"kind": "detention", "amount_cents": 15000}]}\n```', 40, 12
+        return "Per our rate confirmation, $150 detention is owed.", 30, 18
+
+    monkeypatch.setattr(prov, "_anthropic_messages", fake_messages)
+
+    p = prov.AnthropicModelProvider("sk-test", "claude-haiku-4-5-20251001")
+
+    completion = p.complete("Draft a notice.", {})
+    assert completion.text == "Per our rate confirmation, $150 detention is owed."
+    assert (completion.input_tokens, completion.output_tokens) == (30, 18)
+
+    structured = p.parse_structured("Extract the pay lines.", {})
+    assert structured.data == {
+        "lines": [{"kind": "detention", "amount_cents": 15000}]
+    }  # fence stripped
+    assert calls[-1]["model"] == "claude-haiku-4-5-20251001"
+
+    # embeddings/STT/TTS have no Anthropic API -> deterministic fallback, not a crash
+    assert len(p.embed("hello").vector) == ai.EMBED_DIM
+    assert p.synthesize("hi", "en").startswith("audio://")
+
+
+def test_extract_json_tolerates_prose_and_returns_empty_on_garbage():
+    from app.foundation.f09_ai_gateway.domain.provider import _extract_json
+
+    assert _extract_json('Here you go: {"a": 1} — hope that helps') == {"a": 1}
+    assert _extract_json("no json here") == {}  # -> service raises StructuredOutputError

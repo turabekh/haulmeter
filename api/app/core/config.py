@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     smtp_host: str = Field(default="mailpit")
     smtp_port: int = Field(default=1038)
 
+    # F9 AI gateway — real Claude provider activates when a key is present; empty
+    # -> the deterministic FakeModelProvider (canned output). Key lives in .env only.
+    anthropic_api_key: str = Field(default="")
+    f9_model: str = Field(default="claude-haiku-4-5-20251001")
+
     @property
     def database_url(self) -> str:
         return (

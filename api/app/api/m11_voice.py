@@ -15,7 +15,7 @@ from app.foundation.f09_ai_gateway import public as ai
 from app.modules.m11_voice import public as m11
 
 router = APIRouter(prefix="/voice", tags=["voice"])
-_PROVIDER = ai.FakeModelProvider()  # F9 STT/TTS/LLM seam (dev)
+_PROVIDER = ai.resolve_provider()  # F9: real Claude when ANTHROPIC_API_KEY set, else Fake
 
 
 class AskIn(BaseModel):
