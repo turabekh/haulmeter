@@ -6,6 +6,7 @@ dev defaults — NOT for any real deployment. There is no admin UI yet (F14 Admi
 Console is later in the foundation order); this seeds the account so it exists
 the moment auth endpoints / F14 land.
 """
+
 import os
 import sys
 
@@ -31,9 +32,7 @@ def main() -> None:
         account = identity.register_account(session, ADMIN_EMAIL, ADMIN_PASSWORD)
         identity.attach_role(session, account, identity.Role.platform_admin)
         session.commit()
-        sys.stdout.write(
-            f"created platform_admin: {ADMIN_EMAIL} (id={account.id})\n"
-        )
+        sys.stdout.write(f"created platform_admin: {ADMIN_EMAIL} (id={account.id})\n")
     finally:
         session.close()
 

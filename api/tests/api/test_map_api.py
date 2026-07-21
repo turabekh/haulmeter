@@ -50,6 +50,39 @@ def test_register_login_and_overlay(client, db):
     assert "Stop" in names
 
 
+def test_overlay_enriches_bookable_and_fuel_badges(client, db):
+    # M1 can't import M6/M7, so the overlay endpoint attaches the marketplace
+    # badges that drive the map's Book / Fuel-here actions (NAV-5)
+    from app.foundation.f01_identity import public as identity
+    from app.modules.m06_parking import public as m6
+    from app.modules.m07_fuel import public as m7
+
+    headers = _auth(client)
+    owner = identity.register_account(db, "lotowner@example.com", "pw-123456")
+    prop = m6.create_property(db, owner.id, "Yardline", *DALLAS, vetted=True)
+    m6.add_spot(db, prop, "A1", price_cents_per_night=2400)
+    station = facility.create_facility(db, facility.FacilityType.fuel_station, "QuikFuel", *DALLAS)
+    m7.set_station_pricing(db, station.id, gross_cents_per_gal=419, discount_cents_per_gal=25)
+
+    pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "tonight"},
+        headers=headers,
+    ).json()
+    yardline = next(p for p in pins if p["name"] == "Yardline")
+    book = next(b for b in yardline["badges"] if b["kind"] == "bookable")
+    assert book["value"] == 2400 and book["spot_id"]  # cheapest active spot + price
+
+    fuel_pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "fuel"},
+        headers=headers,
+    ).json()
+    quik = next(p for p in fuel_pins if p["name"] == "QuikFuel")
+    net = next(b for b in quik["badges"] if b["kind"] == "fuel_net")
+    assert net["net"] == 394 and net["savings"] == 25  # $4.19 gross − 25¢ discount
+
+
 def test_login_wrong_password(client):
     client.post("/auth/register", json={"email": "x@example.com", "password": "right-pw"})
     resp = client.post("/auth/login", json={"email": "x@example.com", "password": "wrong"})

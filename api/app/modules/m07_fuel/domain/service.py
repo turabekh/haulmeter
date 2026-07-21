@@ -99,6 +99,20 @@ def net_cents_per_gal(pricing: StationPricing) -> int:
     return pricing.gross_cents_per_gal - pricing.discount_cents_per_gal
 
 
+def fuel_summary(db: Session, facility_ref) -> dict | None:
+    # net/gross/savings for a fuel-station facility — backs the map's fuel badge
+    # (M7 net pricing surfaced on the M1 overlay at the API layer)
+    pricing = db.scalar(select(StationPricing).where(StationPricing.facility_ref == facility_ref))
+    if pricing is None:
+        return None
+    net = net_cents_per_gal(pricing)
+    return {
+        "gross": pricing.gross_cents_per_gal,
+        "net": net,
+        "savings": pricing.gross_cents_per_gal - net,
+    }
+
+
 def _is_network(pricing: StationPricing) -> bool:
     return pricing.merchant_id is not None
 

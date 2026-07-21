@@ -15,6 +15,8 @@ from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f10_crowd import public as crowd
 from app.modules.m01_map import public as m1
+from app.modules.m06_parking import public as m6
+from app.modules.m07_fuel import public as m7
 
 router = APIRouter(prefix="/map", tags=["map"])
 
@@ -51,7 +53,38 @@ def overlay(
     pins = m1.map_overlay(
         db, account.id, lat, lon, radius_m, preset=m1.Preset(preset), required_amenities=required
     )
-    return [_serialize_pin(p) for p in pins]
+    return [_enrich(db, p) for p in pins]
+
+
+def _enrich(db: Session, pin) -> dict:
+    # M1 can't import later modules, so the marketplace badges (M6 bookable spot,
+    # M7 net fuel price) that drive the map's Book / Fuel actions are attached here
+    # at the composition layer.
+    data = _serialize_pin(pin)
+    if pin.facility_type == "parking_property":
+        summary = m6.bookable_summary(db, pin.facility_id)
+        if summary:
+            data["badges"].append(
+                {
+                    "kind": "bookable",
+                    "value": summary["price_cents_per_night"],
+                    "spot_id": summary["spot_id"],
+                }
+            )
+    elif pin.facility_type == "fuel_station":
+        summary = m7.fuel_summary(db, pin.facility_id)
+        if summary:
+            data["badges"].append(
+                {
+                    "kind": "fuel_net",
+                    "value": summary["net"],
+                    "net": summary["net"],
+                    "gross": summary["gross"],
+                    "savings": summary["savings"],
+                    "station_ref": str(pin.facility_id),
+                }
+            )
+    return data
 
 
 @router.get("/corridor")

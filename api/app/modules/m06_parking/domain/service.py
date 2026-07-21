@@ -88,6 +88,19 @@ def get_property(db: Session, property_id) -> ParkingProperty | None:
     return db.get(ParkingProperty, property_id)
 
 
+def bookable_summary(db: Session, facility_ref) -> dict | None:
+    # the cheapest ACTIVE spot for the property behind a facility pin — backs the
+    # map's "Book" badge (M6 inventory surfaced on the M1 overlay at the API layer)
+    prop = db.scalar(select(ParkingProperty).where(ParkingProperty.facility_ref == facility_ref))
+    if prop is None:
+        return None
+    active = [s for s in property_spots(db, prop.id) if s.active]
+    if not active:
+        return None
+    cheapest = min(active, key=lambda s: s.price_cents_per_night)
+    return {"spot_id": str(cheapest.id), "price_cents_per_night": cheapest.price_cents_per_night}
+
+
 def get_spot(db: Session, spot_id) -> ParkingSpot | None:
     return db.get(ParkingSpot, spot_id)
 

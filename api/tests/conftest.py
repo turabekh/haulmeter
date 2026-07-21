@@ -1,8 +1,16 @@
-import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session, sessionmaker
+# Tests are hermetic: never use the real F9 provider. Clear the key BEFORE any app
+# import so get_settings() (and each module's resolve_provider()) sees no key and
+# falls back to the deterministic FakeModelProvider — no network, no cost, no flake.
+# (Only affects this pytest process; the running app container keeps its key.)
+import os
 
-from app.core.config import get_settings
+os.environ.pop("ANTHROPIC_API_KEY", None)
+
+import pytest  # noqa: E402
+from sqlalchemy import create_engine, text  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+
+from app.core.config import get_settings  # noqa: E402
 from app.core.db import Base
 from db_registry import import_all_models
 
