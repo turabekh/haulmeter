@@ -184,3 +184,16 @@ def disarm_stop(db: Session, stop: Stop, occurred_at: datetime | None = None) ->
 
 def list_stops(db: Session, load: Load) -> list[Stop]:
     return list(db.scalars(select(Stop).where(Stop.load_id == load.id).order_by(Stop.sequence)))
+
+
+def active_stop_for_account(db: Session, account_id) -> Stop | None:
+    # the driver's current stop: the most recent ARMED stop across their loads
+    # (arm is the active marker; arrival is derived from geofence presence, not a
+    # status change). Lets a fresh device resume The Meter without local state.
+    stmt = (
+        select(Stop)
+        .join(Load, Stop.load_id == Load.id)
+        .where(Load.account_id == account_id, Stop.status == StopStatus.armed)
+        .order_by(Stop.created_at.desc())
+    )
+    return db.scalars(stmt).first()

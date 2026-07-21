@@ -16,6 +16,7 @@ from .domain.enums import (
 from .domain.models import Counterparty, Load, Stop
 from .domain.service import (
     FacilityNotFound,
+    active_stop_for_account,
     add_stop,
     arm_stop,
     create_counterparty,
@@ -42,6 +43,7 @@ __all__ = [
     "StopStatus",
     "StopType",
     "FacilityNotFound",
+    "active_stop_for_account",
     "add_stop",
     "arm_stop",
     "create_counterparty",

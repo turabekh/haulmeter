@@ -22,8 +22,10 @@ import {
   createActiveLoad,
   arriveAtStop,
   fetchMeter,
+  fetchActiveLoad,
   sendDetentionNotice,
   generateClaim,
+  isAuthenticated,
 } from "../core/api.js";
 
 const { isDriving } = useDriverState();
@@ -67,6 +69,15 @@ async function loadMeter() {
 }
 
 onMounted(async () => {
+  // no locally-remembered stop? ask the server if this driver has one armed
+  // (fresh-device resume) before falling back to the demo Meter.
+  if (!activeStopId.value && isAuthenticated.value) {
+    try {
+      await fetchActiveLoad();
+    } catch {
+      /* offline — demo below */
+    }
+  }
   if (activeStopId.value) await loadMeter();
   else setupDemo();
   timer = setInterval(() => (now.value = Date.now()), 1000);

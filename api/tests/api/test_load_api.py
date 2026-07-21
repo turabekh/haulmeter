@@ -52,6 +52,31 @@ def test_create_requires_auth(client):
     assert client.post("/load", json={}).status_code == 401
 
 
+def test_active_load_requires_auth(client):
+    assert client.get("/load/active").status_code == 401
+
+
+def test_active_load_resumes_the_current_stop(client, db):
+    headers = _auth(client)
+    # nothing armed yet -> null
+    assert client.get("/load/active", headers=headers).json()["stop_id"] is None
+
+    stop_id = _create(client, headers)  # arms the stop
+    active = client.get("/load/active", headers=headers)
+    assert active.status_code == 200
+    assert active.json()["stop_id"] == stop_id  # a fresh device can resume here
+
+
+def test_active_load_is_per_account(client, db):
+    # one driver's armed stop is never another's active load
+    a = _auth(client)
+    stop_id = _create(client, a)
+    b = client.post("/auth/register", json={"email": "other@example.com", "password": "pw-123456"})
+    b_headers = {"Authorization": f"Bearer {b.json()['token']}"}
+    assert client.get("/load/active", headers=a).json()["stop_id"] == stop_id
+    assert client.get("/load/active", headers=b_headers).json()["stop_id"] is None
+
+
 def test_meter_pre_arrival_then_live_after_arrive(client, db):
     headers = _auth(client)
     stop_id = _create(client, headers)

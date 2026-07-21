@@ -255,6 +255,17 @@ export async function fetchMeter(stopId) {
   return apiGet(`/load/${stopId}/meter`, `meter:${stopId}`);
 }
 
+// resume point: the driver's current armed stop server-side, so a fresh device
+// (no persisted activeStopId) can re-open The Meter. Adopts it as the active stop.
+export async function fetchActiveLoad() {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/load/active`, { headers: headers() });
+  if (!resp.ok) throw new Error(`active load ${resp.status}`);
+  const data = await resp.json();
+  if (data.stop_id) setActiveStop(data.stop_id);
+  return data.stop_id;
+}
+
 export async function sendDetentionNotice(stopId) {
   const resp = await fetch(`${API_BASE}/load/${stopId}/notice`, {
     method: "POST",

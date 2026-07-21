@@ -1027,6 +1027,38 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
     w.unmount();
   });
 
+  it("resumes the current load from /load/active when nothing is stored locally", async () => {
+    setToken("tok-resume");
+    setActiveStop(null); // fresh device: no persisted stop
+    const fetchStub = vi.fn().mockImplementation((url) => {
+      const u = String(url);
+      if (u.endsWith("/load/active")) return jsonOk({ stop_id: "stop-resumed" });
+      if (u.includes("/load/stop-resumed/meter")) {
+        return jsonOk({
+          stop_id: "stop-resumed", facility_name: "Resumed Receiver", counterparty: "Acme",
+          appointment: null, arrived: false, free_time_minutes: 120, rate_cents_per_hour: 7500,
+          phase: "not_arrived", free_time_remaining_seconds: null, detention_seconds: 0,
+          detention_cents: 0, notice_sent: false,
+        });
+      }
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      const w = mount(LoadSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      // it discovered the armed stop server-side and opened its live Meter
+      expect(fetchStub.mock.calls.some((c) => String(c[0]).endsWith("/load/active"))).toBe(true);
+      expect(w.text()).toContain("Resumed Receiver");
+      w.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
+
   it("goes live for an active pre-arrival stop with an 'I've arrived' CTA (M3 clock)", async () => {
     setToken("tok-live");
     setActiveStop("stop-live-1");

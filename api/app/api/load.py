@@ -76,6 +76,17 @@ def create_load(
     return {"load_id": str(load.id), "stop_id": str(stop.id)}
 
 
+@router.get("/active")
+def active_load(
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    # resume point: the driver's current armed stop (or null). Lets a fresh device
+    # re-open The Meter without relying on client-persisted activeStopId.
+    stop = loads.active_stop_for_account(db, account.id)
+    return {"stop_id": str(stop.id) if stop else None}
+
+
 @router.post("/{stop_id}/arrive", status_code=201)
 def arrive(
     stop_id: uuid.UUID,
