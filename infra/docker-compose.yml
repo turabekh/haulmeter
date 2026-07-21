@@ -90,6 +90,11 @@ services:
     build:
       context: ../ui
       dockerfile: Dockerfile.dev
+    # Vite exposes VITE_-prefixed vars to the app; MAPBOX_TOKEN (public pk.* token)
+    # lives in the gitignored infra/.env, never in the repo. Empty -> tiles fall
+    # back to the placeholder canvas (M1 activation seam).
+    environment:
+      VITE_MAPBOX_TOKEN: ${MAPBOX_TOKEN:-}
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "${UI_PORT}"]
     ports:
       - "${UI_PORT}:${UI_PORT}"
