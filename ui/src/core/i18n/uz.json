@@ -260,5 +260,7 @@
   "admin.audit_when": "Qachon",
   "admin.audit_who": "Operator",
   "admin.audit_what": "Amal",
-  "score.what_drivers_say": "Haydovchilar nima deydi"
+  "score.what_drivers_say": "Haydovchilar nima deydi",
+  "book.taken": "Bu joy o'sha tunlarga band qilindi. Boshqasini tanlang.",
+  "book.failed": "Bron qilib bo'lmadi — qayta urinib ko'ring."
 }

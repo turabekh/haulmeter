@@ -27,6 +27,7 @@ const nights = ref(1);
 const totalCents = computed(() => nightlyCents * nights.value);
 const booked = ref(false);
 const submitting = ref(false);
+const error = ref("");
 
 function step(delta) {
   nights.value = Math.max(1, nights.value + delta);
@@ -41,18 +42,20 @@ function isoAtMidnight(offsetDays) {
 
 async function confirm() {
   submitting.value = true;
+  error.value = "";
   try {
     await bookSpot({
       spotId,
       startAt: isoAtMidnight(0),
       endAt: isoAtMidnight(nights.value),
     });
-  } catch {
-    // unauthenticated / offline: the checkout still resolves; the write is
-    // queued behind api.js in a later offline pass (F12). One price stands.
+    booked.value = true; // only on a real 201 — never fake a confirmation
+  } catch (e) {
+    // a booking is transactional (money) — show the real outcome, don't pretend
+    error.value = e.status === 409 ? t("book.taken") : t("book.failed");
+  } finally {
+    submitting.value = false;
   }
-  submitting.value = false;
-  booked.value = true;
 }
 </script>
 
@@ -101,6 +104,8 @@ async function confirm() {
         <span class="total__label">{{ t("booking.total") }}</span>
         <span class="total__figure">{{ formatMoney(totalCents) }}</span>
       </section>
+
+      <p v-if="error" class="book__error" role="alert">{{ error }}</p>
 
       <button class="cta" type="button" :disabled="submitting" @click="confirm">
         {{ t("facility.book") }} — {{ formatMoney(totalCents) }}
@@ -260,6 +265,15 @@ async function confirm() {
   text-align: center;
   color: var(--text-3);
   font-size: var(--type-caption-size);
+}
+.book__error {
+  margin: 0 0 var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-control);
+  background: color-mix(in srgb, var(--flare-500) 12%, transparent);
+  color: var(--flare-500);
+  font-size: var(--type-body-size);
+  text-align: center;
 }
 .cta {
   display: flex;

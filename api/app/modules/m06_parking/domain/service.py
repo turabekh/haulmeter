@@ -10,7 +10,7 @@ damage/liability posture.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -88,16 +88,23 @@ def get_property(db: Session, property_id) -> ParkingProperty | None:
     return db.get(ParkingProperty, property_id)
 
 
-def bookable_summary(db: Session, facility_ref) -> dict | None:
-    # the cheapest ACTIVE spot for the property behind a facility pin — backs the
-    # map's "Book" badge (M6 inventory surfaced on the M1 overlay at the API layer)
+def bookable_summary(db: Session, facility_ref, at: datetime | None = None) -> dict | None:
+    # the cheapest AVAILABLE spot for tonight (no active booking overlapping the
+    # next 24h) — backs the map's "Book" badge. Returns None when the property is
+    # fully booked, so a booked lot drops its Book affordance on the map.
+    at = at or datetime.now(UTC)
+    window_end = at + timedelta(days=1)
     prop = db.scalar(select(ParkingProperty).where(ParkingProperty.facility_ref == facility_ref))
     if prop is None:
         return None
-    active = [s for s in property_spots(db, prop.id) if s.active]
-    if not active:
+    available = [
+        s
+        for s in property_spots(db, prop.id)
+        if s.active and not _overlaps(db, s.id, at, window_end)
+    ]
+    if not available:
         return None
-    cheapest = min(active, key=lambda s: s.price_cents_per_night)
+    cheapest = min(available, key=lambda s: s.price_cents_per_night)
     return {"spot_id": str(cheapest.id), "price_cents_per_night": cheapest.price_cents_per_night}
 
 

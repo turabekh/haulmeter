@@ -351,7 +351,11 @@ export async function bookSpot({ spotId, startAt, endAt }) {
     headers: headers(),
     body: JSON.stringify({ spot_id: spotId, start_at: startAt, end_at: endAt }),
   });
-  if (!resp.ok) throw new Error(`book failed: ${resp.status}`);
+  if (!resp.ok) {
+    const err = new Error(`book failed: ${resp.status}`);
+    err.status = resp.status; // 409 = spot already taken for those nights
+    throw err;
+  }
   return resp.json();
 }
 

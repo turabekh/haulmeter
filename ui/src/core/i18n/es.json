@@ -260,5 +260,7 @@
   "admin.audit_when": "Cuándo",
   "admin.audit_who": "Operador",
   "admin.audit_what": "Acción",
-  "score.what_drivers_say": "Lo que dicen los conductores"
+  "score.what_drivers_say": "Lo que dicen los conductores",
+  "book.taken": "Esta plaza acaba de reservarse para esas noches. Prueba otra.",
+  "book.failed": "No se pudo reservar — inténtalo de nuevo."
 }

@@ -76,6 +76,22 @@ def test_take_rate_reads_f13_config_knob(db):
     assert b2.take_cents == 960  # 20% of 4800
 
 
+def test_bookable_summary_reflects_availability(db):
+    from datetime import UTC, datetime
+
+    owner, driver = _accounts(db)
+    prop, spot = _listing(db, owner, price=2400)
+    now = datetime.now(UTC)
+
+    # one active spot, free -> it's the bookable summary
+    summary = m6.bookable_summary(db, prop.facility_ref, at=now)
+    assert summary is not None and summary["spot_id"] == str(spot.id)
+
+    # book it for tonight -> the property has no available spot -> no Book badge
+    m6.book(db, spot, driver.id, now, now + timedelta(hours=12))
+    assert m6.bookable_summary(db, prop.facility_ref, at=now) is None
+
+
 def test_double_booking_rejected(db):
     owner, driver = _accounts(db)
     prop, spot = _listing(db, owner)

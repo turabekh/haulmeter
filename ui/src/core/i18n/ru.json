@@ -260,5 +260,7 @@
   "admin.audit_when": "Когда",
   "admin.audit_who": "Оператор",
   "admin.audit_what": "Действие",
-  "score.what_drivers_say": "Что говорят водители"
+  "score.what_drivers_say": "Что говорят водители",
+  "book.taken": "Это место только что заняли на эти ночи. Выберите другое.",
+  "book.failed": "Не удалось забронировать — попробуйте снова."
 }

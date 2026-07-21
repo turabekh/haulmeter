@@ -260,5 +260,7 @@
   "admin.audit_when": "When",
   "admin.audit_who": "Operator",
   "admin.audit_what": "Action",
-  "score.what_drivers_say": "What drivers say"
+  "score.what_drivers_say": "What drivers say",
+  "book.taken": "This spot was just booked for those nights. Try another.",
+  "book.failed": "Couldn't book — please try again."
 }

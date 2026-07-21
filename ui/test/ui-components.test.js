@@ -128,9 +128,11 @@ describe("BookingSurface — checkout (M6, NAV-3 / one final price)", () => {
     expect(w.find(".cta").text()).toContain("$48.00");
   });
 
-  it("confirm resolves to a Booked confirmation carrying the same figure", async () => {
-    // no session/offline: the POST is rejected; the checkout still resolves
-    const fetchStub = vi.fn().mockRejectedValue(new Error("no session"));
+  it("a real 201 resolves to a Booked confirmation carrying the same figure", async () => {
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ booking_id: "bk1", nights: 1, price_cents: 2400, state: "booked" }),
+    });
     vi.stubGlobal("fetch", fetchStub);
     try {
       const w = await mountAt({ name: "Yardline Secured Parking", nightly: "2400" });
@@ -138,7 +140,36 @@ describe("BookingSurface — checkout (M6, NAV-3 / one final price)", () => {
       await flushPromises();
       expect(w.text()).toContain("Booked");
       expect(w.find(".done__figure").text()).toBe("$24.00");
-      expect(w.text()).toContain("1 Nights"); // nights + property summary
+      expect(w.text()).toContain("1 Nights");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does NOT fake a confirmation when the spot is taken (409) — shows the real error", async () => {
+    const fetchStub = vi.fn().mockResolvedValue({ ok: false, status: 409 });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = await mountAt({ name: "Yardline Secured Parking", nightly: "2400" });
+      await w.find(".cta").trigger("click");
+      await flushPromises();
+      expect(w.text()).not.toContain("Booked"); // no false success
+      expect(w.find(".book__error").text()).toContain("just booked"); // the honest message
+      expect(w.find(".cta").exists()).toBe(true); // still on the checkout, can retry
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("shows an error (not a fake Booked) when the booking POST fails offline", async () => {
+    const fetchStub = vi.fn().mockRejectedValue(new Error("offline"));
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = await mountAt({ name: "Yardline Secured Parking", nightly: "2400" });
+      await w.find(".cta").trigger("click");
+      await flushPromises();
+      expect(w.text()).not.toContain("Booked");
+      expect(w.find(".book__error").exists()).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }

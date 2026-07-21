@@ -260,5 +260,7 @@
   "admin.audit_when": "ਕਦੋਂ",
   "admin.audit_who": "ਓਪਰੇਟਰ",
   "admin.audit_what": "ਕਾਰਵਾਈ",
-  "score.what_drivers_say": "ਡਰਾਈਵਰ ਕੀ ਕਹਿੰਦੇ ਹਨ"
+  "score.what_drivers_say": "ਡਰਾਈਵਰ ਕੀ ਕਹਿੰਦੇ ਹਨ",
+  "book.taken": "ਇਹ ਥਾਂ ਹੁਣੇ ਉਨ੍ਹਾਂ ਰਾਤਾਂ ਲਈ ਬੁੱਕ ਹੋ ਗਈ। ਹੋਰ ਵੇਖੋ।",
+  "book.failed": "ਬੁੱਕ ਨਹੀਂ ਹੋ ਸਕੀ — ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।"
 }
