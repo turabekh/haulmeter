@@ -184,6 +184,38 @@ def meter(
     }
 
 
+@router.get("/{stop_id}/claim")
+def claim_detail(
+    stop_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    # the filed claim's contents: the money, the terms, and the GPS-verified
+    # evidence chain behind it (owner-gated, read-only)
+    stop = _owned_stop(db, stop_id, account)
+    claim = m3.claim_for_stop(db, stop.id)
+    if claim is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no claim for this stop")
+    load = loads.get_load(db, stop.load_id)
+    cp = loads.get_counterparty(db, load.counterparty_id) if load and load.counterparty_id else None
+    fac = facility.get_facility(db, stop.facility_id)
+    return {
+        "claim_id": str(claim.id),
+        "amount_cents": claim.amount_cents,
+        "detention_seconds": claim.detention_seconds,
+        "free_time_minutes": claim.free_time_minutes,
+        "rate_cents_per_hour": claim.detention_rate_cents_per_hour,
+        "state": claim.state.value,
+        "mode": claim.mode.value,
+        "facility": fac.name if fac else None,
+        "counterparty": cp.name if cp else None,
+        "notice_sent": claim.start_notice_sent_at is not None,
+        "filed": claim.state.value != "open",
+        "created_at": claim.created_at.isoformat() if claim.created_at else None,
+        **m3.claim_evidence(db, claim),
+    }
+
+
 def _claim_or_409(db: Session, stop) -> m3.DetentionClaim:
     claim = m3.claim_for_stop(db, stop.id)
     if claim is None:

@@ -203,6 +203,24 @@ def test_notice_flags_notice_sent_on_the_meter(client, db):
     assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["notice_sent"] is True
 
 
+def test_claim_detail_shows_contents_and_evidence(client, db):
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+    # no claim generated yet -> 404
+    assert client.get(f"/load/{stop_id}/claim", headers=headers).status_code == 404
+
+    client.post(f"/load/{stop_id}/arrive", headers=headers)
+    client.post(f"/load/{stop_id}/claim", headers=headers)
+
+    d = client.get(f"/load/{stop_id}/claim", headers=headers).json()
+    assert d["filed"] is True
+    assert d["facility"] == "Dallas Receiver"
+    assert d["counterparty"] == "Acme Brokerage"
+    assert d["chain_valid"] is True  # the GPS evidence chain verifies
+    assert d["record_count"] >= 1
+    assert any(e["type"] == "GEOFENCE" for e in d["timeline"])  # the arrival is in the pack
+
+
 def test_meter_404_for_unknown_stop(client):
     headers = _auth(client)
     resp = client.get("/load/00000000-0000-0000-0000-000000000000/meter", headers=headers)

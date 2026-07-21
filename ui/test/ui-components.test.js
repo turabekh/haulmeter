@@ -23,6 +23,7 @@ import VoiceSheet from "../src/core/components/VoiceSheet.vue";
 import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
 import AuditSurface from "../src/surfaces/AuditSurface.vue";
 import ConditionSurface from "../src/surfaces/ConditionSurface.vue";
+import ClaimSurface from "../src/surfaces/ClaimSurface.vue";
 import IncidentSheet from "../src/core/components/IncidentSheet.vue";
 import AdminConsoleSurface from "../src/surfaces/AdminConsoleSurface.vue";
 import PublicScorecardSurface from "../src/surfaces/PublicScorecardSurface.vue";
@@ -701,6 +702,41 @@ describe("ConditionSurface — cargo-condition capture (M5-FR2)", () => {
     await flushPromises();
     expect(w.text()).toContain("Start a load");
     w.unmount();
+  });
+});
+
+describe("ClaimSurface — claim contents (M3-FR5)", () => {
+  it("shows the money, terms, mode, and GPS-verified evidence chain", async () => {
+    setToken("tok-claim");
+    const fetchStub = vi.fn().mockImplementation((url) =>
+      String(url).includes("/load/stop-x/claim")
+        ? jsonOk({
+            claim_id: "c1", amount_cents: 15000, detention_seconds: 7200, free_time_minutes: 120,
+            rate_cents_per_hour: 7500, state: "invoiced", mode: "invoice",
+            facility: "Perth Dock", counterparty: "Acme Brokerage", notice_sent: true, filed: true,
+            created_at: "2026-07-21T10:00:00Z", chain_valid: true, record_count: 3, artifact_count: 1,
+            timeline: [{ type: "GEOFENCE", occurred_at: "2026-07-21T10:00:00Z" }, { type: "PHOTO", occurred_at: "2026-07-21T10:05:00Z" }],
+          })
+        : jsonOk({}),
+    );
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      router.push("/claim/stop-x");
+      await router.isReady();
+      const w = mount(ClaimSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      expect(w.find(".hero__amount").text()).toBe("$150.00"); // the money
+      expect(w.text()).toContain("Money owed to you"); // invoice mode
+      expect(w.text()).toContain("Perth Dock");
+      expect(w.text()).toContain("Chain verified"); // evidence integrity
+      expect(w.text()).toContain("GPS arrival verified"); // the geofence record, friendly
+      expect(w.text()).toContain("Photo captured");
+      expect(w.text()).toContain("Broker notified"); // notice sent
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
   });
 });
 

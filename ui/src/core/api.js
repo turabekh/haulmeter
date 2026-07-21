@@ -255,6 +255,10 @@ export async function fetchMeter(stopId) {
   return apiGet(`/load/${stopId}/meter`, `meter:${stopId}`);
 }
 
+export async function fetchClaim(stopId) {
+  return apiGet(`/load/${stopId}/claim`, `claim:${stopId}`);
+}
+
 // resume point: the driver's current armed stop server-side, so a fresh device
 // (no persisted activeStopId) can re-open The Meter. Adopts it as the active stop.
 export async function fetchActiveLoad() {

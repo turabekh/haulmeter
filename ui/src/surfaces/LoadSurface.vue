@@ -38,6 +38,13 @@ const arrivalMs = ref(0); // null while a live load is pre-arrival
 const now = ref(Date.now());
 const starting = ref(false);
 const reporting = ref(false); // incident sheet open
+const incidentToast = ref("");
+function onIncidentFiled(e) {
+  // the incident is logged to the F4 evidence chain; confirm it clearly and close
+  reporting.value = false;
+  incidentToast.value = e.state === "queued" ? t("incident.queued") : t("incident.logged");
+  setTimeout(() => (incidentToast.value = ""), 3500);
+}
 const filed = ref(null); // the generated claim result, once filed
 const form = reactive({ facility: "", broker: "", freeMin: 120, rateHr: 75 });
 let timer = null;
@@ -188,6 +195,8 @@ async function endLoad() {
 
 <template>
   <div class="load">
+    <p v-if="incidentToast" class="toast" role="status">{{ incidentToast }}</p>
+
     <section class="card meter-card" :class="{ 'meter-card--sample': !live }">
       <span v-if="!live" class="sample-tag">{{ t("load.sample") }}</span>
       <TheMeter :label="meterLabel" :figure="meterFigure" :variant="variant" :status="meterStatus" />
@@ -219,13 +228,16 @@ async function endLoad() {
       </section>
 
       <!-- arrive -> accrue -> FILE: the loop closes into a GPS-backed claim -->
-      <div v-if="isFiled" class="filed">
+      <button
+        v-if="isFiled"
+        class="filed"
+        type="button"
+        @click="router.push(`/claim/${activeStopId}`)"
+      >
         <Check :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
         <span>{{ t("load.filed") }} · {{ formatMoney(filedAmount) }}</span>
-        <button class="filed__link" type="button" @click="router.push('/money')">
-          {{ t("money.title") }}
-        </button>
-      </div>
+        <span class="filed__link">{{ t("claim.view") }}</span>
+      </button>
 
       <!-- pre-arrival: mark arrival (starts the clock) -->
       <button v-if="live && preArrival" class="cta" type="button" @click="onArrive">
@@ -292,7 +304,7 @@ async function endLoad() {
       </BottomSheet>
 
       <BottomSheet :open="reporting" :title="t('incident.title')" @close="reporting = false">
-        <IncidentSheet />
+        <IncidentSheet @filed="onIncidentFiled" />
       </BottomSheet>
     </template>
   </div>
@@ -388,6 +400,7 @@ async function endLoad() {
   display: flex;
   align-items: center;
   gap: var(--s-2);
+  width: 100%;
   margin-bottom: var(--s-2);
   padding: var(--s-3);
   border-radius: var(--r-card);
@@ -395,6 +408,8 @@ async function endLoad() {
   background: var(--ink-1);
   font-size: var(--type-body-size);
   color: var(--text-1);
+  text-align: left;
+  cursor: pointer;
 }
 .filed__link {
   margin-left: auto;
@@ -402,6 +417,15 @@ async function endLoad() {
   color: var(--shield-500);
   font-size: var(--type-label-size);
   font-weight: 500;
+}
+.toast {
+  margin: 0 0 var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--shield-500);
+  color: var(--on-accent, #fff);
+  font-size: var(--type-body-size);
+  text-align: center;
 }
 .cta {
   width: 100%;

@@ -302,3 +302,24 @@ def get_claim(db: Session, claim_id) -> DetentionClaim | None:
 
 def claim_for_stop(db: Session, stop_ref) -> DetentionClaim | None:
     return db.scalar(select(DetentionClaim).where(DetentionClaim.stop_ref == stop_ref))
+
+
+def claim_evidence(db: Session, claim: DetentionClaim) -> dict:
+    # read-only view of the claim's F4 evidence chain — what's IN the pack, so the
+    # driver can see the GPS-verified proof behind their claim (M3-FR5)
+    log = db.get(evidence.EvidenceLog, claim.evidence_log_ref) if claim.evidence_log_ref else None
+    if log is None:
+        return {"chain_valid": True, "record_count": 0, "artifact_count": 0, "timeline": []}
+    pack = evidence.compose_pack(db, log, evidence.PackTemplate.detention_claim)
+    return {
+        "chain_valid": pack.verification["chain_valid"],
+        "record_count": pack.verification["record_count"],
+        "artifact_count": len(pack.artifacts),
+        "timeline": [
+            {
+                "type": t["type"],
+                "occurred_at": t["occurred_at"].isoformat() if t["occurred_at"] else None,
+            }
+            for t in pack.timeline
+        ],
+    }
