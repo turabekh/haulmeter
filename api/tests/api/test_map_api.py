@@ -62,7 +62,10 @@ def test_overlay_enriches_bookable_and_fuel_badges(client, db):
     prop = m6.create_property(db, owner.id, "Yardline", *DALLAS, vetted=True)
     m6.add_spot(db, prop, "A1", price_cents_per_night=2400)
     station = facility.create_facility(db, facility.FacilityType.fuel_station, "QuikFuel", *DALLAS)
-    m7.set_station_pricing(db, station.id, gross_cents_per_gal=419, discount_cents_per_gal=25)
+    merchant = m7.register_merchant(db, "TripFuel")
+    m7.set_station_pricing(
+        db, station.id, gross_cents_per_gal=419, discount_cents_per_gal=25, merchant_id=merchant.id
+    )
 
     pins = client.get(
         "/map/overlay",
@@ -81,6 +84,7 @@ def test_overlay_enriches_bookable_and_fuel_badges(client, db):
     quik = next(p for p in fuel_pins if p["name"] == "QuikFuel")
     net = next(b for b in quik["badges"] if b["kind"] == "fuel_net")
     assert net["net"] == 394 and net["savings"] == 25  # $4.19 gross − 25¢ discount
+    assert net["is_network"] is True  # network station -> the card leads with "Fuel here"
 
 
 def test_login_wrong_password(client):

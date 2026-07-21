@@ -110,6 +110,7 @@ def fuel_summary(db: Session, facility_ref) -> dict | None:
         "gross": pricing.gross_cents_per_gal,
         "net": net,
         "savings": pricing.gross_cents_per_gal - net,
+        "is_network": _is_network(pricing),
     }
 
 

@@ -197,6 +197,23 @@ describe("FacilityCard — fuel-network station (M7, §11.2 / §12.2)", () => {
     expect(w.emitted().fuel).toBeTruthy();
     expect(w.emitted().fuel[0][0].facility_id).toBe("f-5");
     expect(w.text()).toContain("Navigate"); // stays as secondary
+    expect(w.text()).not.toContain("Report status"); // parking report is nonsensical for fuel
+  });
+
+  it("a receiver dock offers no parking Report status either", () => {
+    const pin = {
+      facility_id: "rcv-1",
+      name: "Dallas Distribution Center",
+      facility_type: "shipper_receiver",
+      status: null,
+      badges: [],
+      freshness: { reported_at: new Date().toISOString(), sample_size: 4 },
+    };
+    const router = testRouter();
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [router] } });
+    expect(w.find(".cta").text()).toContain("Navigate"); // leads with Navigate
+    expect(w.text()).not.toContain("Report status"); // no parking-fullness on a dock
+    expect(w.text()).toContain("View facility"); // dock-time intel is one tap deeper
   });
 });
 

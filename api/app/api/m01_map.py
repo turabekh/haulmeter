@@ -81,6 +81,7 @@ def _enrich(db: Session, pin) -> dict:
                     "net": summary["net"],
                     "gross": summary["gross"],
                     "savings": summary["savings"],
+                    "is_network": summary["is_network"],
                     "station_ref": str(pin.facility_id),
                 }
             )

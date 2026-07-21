@@ -47,6 +47,11 @@ const fuelable = computed(() => !!fuelNet.value?.is_network);
 const freeLot = computed(() =>
   ["truck_stop", "rest_area"].includes(props.pin.facility_type),
 );
+// parking full/empty reporting only makes sense where there IS parking — never
+// on a fuel station or a receiver dock (their crowd signal is price / dock-time)
+const reportable = computed(() =>
+  ["truck_stop", "rest_area", "parking_property"].includes(props.pin.facility_type),
+);
 </script>
 
 <template>
@@ -88,7 +93,8 @@ const freeLot = computed(() =>
       {{ t("facility.navigate") }}
     </button>
 
-    <!-- Navigate stays reachable as secondary whenever it isn't the lead -->
+    <!-- secondary: Navigate whenever it isn't the lead; Report only where parking
+         is a thing (never a fuel station or a receiver dock) -->
     <button
       v-if="bookable || fuelable"
       class="cta cta--secondary"
@@ -97,7 +103,12 @@ const freeLot = computed(() =>
     >
       {{ t("facility.navigate") }}
     </button>
-    <button v-else class="cta cta--secondary" type="button" @click="emit('report', pin)">
+    <button
+      v-else-if="reportable"
+      class="cta cta--secondary"
+      type="button"
+      @click="emit('report', pin)"
+    >
       {{ t("map.report") }}
     </button>
     <button class="cta cta--tertiary" type="button" @click="viewFacility">
