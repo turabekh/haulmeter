@@ -301,5 +301,6 @@
   "auth.authority.company": "Kompaniya haydovchisi",
   "auth.authority_desc.own_mc": "Sizda o'z MC# bor — brokerlarga to'g'ridan-to'g'ri hisob yuborasiz.",
   "auth.authority_desc.leased": "Yuk mashinasi sizniki, lekin tashuvchi ruxsatnomasi ostida ishlaysiz.",
-  "auth.authority_desc.company": "Kompaniya mashinasini haydaysiz; kutishni tashuvchingiz undiradi."
+  "auth.authority_desc.company": "Kompaniya mashinasini haydaysiz; kutishni tashuvchingiz undiradi.",
+  "more.language": "Til"
 }

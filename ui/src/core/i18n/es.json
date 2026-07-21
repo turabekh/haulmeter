@@ -301,5 +301,6 @@
   "auth.authority.company": "Conductor de empresa",
   "auth.authority_desc.own_mc": "Tienes tu propio MC# — facturas a los brókers directamente.",
   "auth.authority_desc.leased": "Eres dueño del camión pero operas bajo la autoridad de un transportista.",
-  "auth.authority_desc.company": "Conduces el camión de la empresa; tu transportista cobra la detención."
+  "auth.authority_desc.company": "Conduces el camión de la empresa; tu transportista cobra la detención.",
+  "more.language": "Idioma"
 }

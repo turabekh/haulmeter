@@ -5,13 +5,26 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
+import { Check } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
+import { LAUNCH_LOCALES } from "../core/i18n/index.js";
 import { email, logout, fetchPoints } from "../core/api.js";
 import { SAMPLE_POINTS } from "../core/fixtures.js";
 
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale, setLocale } = useI18n();
 const points = ref(SAMPLE_POINTS);
+
+// each language shown in its OWN name so a driver recognizes it regardless of the
+// current UI language (F15 launch locales)
+const LANG_NAMES = {
+  en: "English",
+  es: "Español",
+  pa: "ਪੰਜਾਬੀ",
+  ru: "Русский",
+  uz: "Oʻzbekcha",
+  so: "Soomaali",
+};
 
 onMounted(async () => {
   try {
@@ -38,6 +51,25 @@ function signOut() {
         <span class="points__figure">{{ points.balance }}</span>
         <span class="points__level">{{ t(`points.level.${points.level}`) }}</span>
       </div>
+    </section>
+
+    <!-- F15: pick your language; persists across sessions -->
+    <section class="card">
+      <h2 class="card__title">{{ t("more.language") }}</h2>
+      <ul class="langs">
+        <li v-for="code in LAUNCH_LOCALES" :key="code">
+          <button
+            class="lang"
+            :class="{ 'lang--on': locale === code }"
+            type="button"
+            :aria-pressed="locale === code"
+            @click="setLocale(code)"
+          >
+            <span class="lang__name">{{ LANG_NAMES[code] }}</span>
+            <Check v-if="locale === code" :size="18" :stroke-width="2.5" class="lang__tick" aria-hidden="true" />
+          </button>
+        </li>
+      </ul>
     </section>
 
     <section class="card">
@@ -70,6 +102,40 @@ function signOut() {
   font-size: var(--type-label-size);
   color: var(--text-2);
   font-weight: 500;
+}
+.langs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lang {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 48px;
+  padding: var(--s-2) 0;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--line-1);
+  color: var(--text-1);
+  text-align: left;
+  cursor: pointer;
+}
+.langs li:first-child .lang {
+  border-top: none;
+}
+.lang__name {
+  font-size: var(--type-body-size);
+}
+.lang--on .lang__name {
+  color: var(--shield-500);
+  font-weight: 500;
+}
+.lang__tick {
+  color: var(--shield-500);
 }
 .points {
   display: flex;

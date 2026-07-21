@@ -301,5 +301,6 @@
   "auth.authority.company": "ਕੰਪਨੀ ਡਰਾਈਵਰ",
   "auth.authority_desc.own_mc": "ਤੁਹਾਡੇ ਕੋਲ ਆਪਣਾ MC# ਹੈ — ਤੁਸੀਂ ਬ੍ਰੋਕਰਾਂ ਨੂੰ ਸਿੱਧਾ ਬਿੱਲ ਕਰਦੇ ਹੋ।",
   "auth.authority_desc.leased": "ਟਰੱਕ ਤੁਹਾਡਾ ਹੈ ਪਰ ਤੁਸੀਂ ਕੈਰੀਅਰ ਦੇ ਅਧਿਕਾਰ ਹੇਠ ਚਲਾਉਂਦੇ ਹੋ।",
-  "auth.authority_desc.company": "ਤੁਸੀਂ ਕੰਪਨੀ ਦਾ ਟਰੱਕ ਚਲਾਉਂਦੇ ਹੋ; ਤੁਹਾਡਾ ਕੈਰੀਅਰ ਰੁਕਾਵਟ ਵਸੂਲਦਾ ਹੈ।"
+  "auth.authority_desc.company": "ਤੁਸੀਂ ਕੰਪਨੀ ਦਾ ਟਰੱਕ ਚਲਾਉਂਦੇ ਹੋ; ਤੁਹਾਡਾ ਕੈਰੀਅਰ ਰੁਕਾਵਟ ਵਸੂਲਦਾ ਹੈ।",
+  "more.language": "ਭਾਸ਼ਾ"
 }

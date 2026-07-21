@@ -301,5 +301,6 @@
   "auth.authority.company": "Company driver",
   "auth.authority_desc.own_mc": "You have your own MC# — you bill brokers directly.",
   "auth.authority_desc.leased": "You own the truck but run under a carrier's authority.",
-  "auth.authority_desc.company": "You drive the company's truck; your carrier collects detention."
+  "auth.authority_desc.company": "You drive the company's truck; your carrier collects detention.",
+  "more.language": "Language"
 }

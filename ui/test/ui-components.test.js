@@ -455,6 +455,28 @@ describe("MoreSurface — account + points + logout (F1 / M10)", () => {
     expect(isAuthenticated.value).toBe(false);
     expect(router.currentRoute.value.name).toBe("login");
   });
+
+  it("switches the UI language and marks the active one (F15)", async () => {
+    logout();
+    const router = testRouter();
+    const w = mount(MoreSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    try {
+      const langs = w.findAll(".lang");
+      expect(langs.length).toBe(6); // the six launch locales, in their own names
+      expect(w.text()).toContain("Language"); // English by default
+      const es = langs.find((b) => b.text().includes("Español"));
+      await es.trigger("click");
+      await flushPromises();
+      expect(w.text()).toContain("Idioma"); // the whole UI re-renders in Spanish
+      expect(es.classes()).toContain("lang--on");
+    } finally {
+      // reset so the shared locale doesn't leak into later tests
+      await w.findAll(".lang").find((b) => b.text().includes("English")).trigger("click");
+      try { localStorage.removeItem("longhaul.locale"); } catch (e) { /* noop */ }
+      w.unmount();
+    }
+  });
 });
 
 describe("FacilityProfileSurface — driver Q&A (M10-FR4)", () => {

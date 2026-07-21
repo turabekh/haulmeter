@@ -301,5 +301,6 @@
   "auth.authority.company": "Darawal shirkadeed",
   "auth.authority_desc.own_mc": "Waxaad leedahay MC# gaar ah — dilaalada si toos ah ayaad u soo qortaa.",
   "auth.authority_desc.leased": "Gaadhiga adigaa leh laakiin waxaad ku shaqeysaa awoodda xamuulaha.",
-  "auth.authority_desc.company": "Waxaad wadaa gaadhiga shirkadda; xamuulahaagu wuxuu soo qaadaa sugitaanka."
+  "auth.authority_desc.company": "Waxaad wadaa gaadhiga shirkadda; xamuulahaagu wuxuu soo qaadaa sugitaanka.",
+  "more.language": "Luqadda"
 }
