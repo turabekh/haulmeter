@@ -139,6 +139,16 @@ def decide_moderation(
     item.moderator_account_id = moderator_account_id
     item.reason = reason
     item.decided_at = datetime.now(UTC)
+    # every content decision is an operator action -> the F14 audit log, so it
+    # shows up in /admin/audit alongside flag/config changes (accountability)
+    record_action(
+        db,
+        f"moderation_{status.value}",
+        actor_account_id=moderator_account_id,
+        target_kind=item.content_kind,
+        target_ref=item.content_ref,
+        detail={"reason": reason} if reason else {},
+    )
     db.flush()
     return item
 

@@ -181,6 +181,28 @@ def test_admin_audit_log_records_flag_and_config_changes(client, db):
     assert cfg_row["detail"]["key"] == "m06_take_rate_bps"
 
 
+def test_moderation_decision_shows_in_audit_feed(client, db):
+    import uuid as _uuid
+
+    from app.foundation.f14_admin import public as admin
+
+    account_id, headers = _register(client, "ops@example.com")
+    _make_admin(db, account_id)
+
+    # a queued review, then the operator approves it via the console
+    item = admin.enqueue_moderation(db, "review", _uuid.uuid4())
+    decided = client.post(
+        f"/admin/moderation/{item.id}/decide", json={"approve": True}, headers=headers
+    )
+    assert decided.status_code == 200
+
+    rows = client.get("/admin/audit", headers=headers).json()
+    mod = next((r for r in rows if r["action"] == "moderation_approved"), None)
+    assert mod is not None
+    assert mod["actor"] == "ops@example.com"  # attributed to the moderator
+    assert mod["target_kind"] == "review"  # what was decided
+
+
 def test_admin_audit_requires_admin(client, db):
     _, headers = _register(client, "driver@example.com")
     assert client.get("/admin/audit", headers=headers).status_code == 403

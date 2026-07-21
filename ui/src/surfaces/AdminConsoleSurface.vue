@@ -220,7 +220,9 @@ async function onDecide(item, approve) {
               <td>{{ a.actor || "—" }}</td>
               <td>
                 <span class="act">{{ a.action }}</span>
-                <span v-if="a.detail && a.detail.key" class="mono act__key">{{ a.detail.key }}</span>
+                <span v-if="(a.detail && a.detail.key) || a.target_kind" class="mono act__key">
+                  {{ (a.detail && a.detail.key) || a.target_kind }}
+                </span>
               </td>
             </tr>
           </tbody>

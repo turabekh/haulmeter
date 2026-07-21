@@ -732,6 +732,7 @@ describe("AdminConsoleSurface — F14 operator portal (design-prd §18)", () => 
       }
       if (u.endsWith("/admin/audit")) {
         return jsonOk([
+          { id: "a2", action: "moderation_approved", actor: "ops@example.com", target_kind: "review", detail: {}, created_at: "2026-07-21T18:40:00+00:00" },
           { id: "a1", action: "config_set", actor: "ops@example.com", target_kind: "config", detail: { key: "m06_take_rate_bps" }, created_at: "2026-07-21T18:30:00+00:00" },
         ]);
       }
@@ -751,6 +752,9 @@ describe("AdminConsoleSurface — F14 operator portal (design-prd §18)", () => 
       expect(w.text()).toContain("config_set");
       expect(w.text()).toContain("ops@example.com");
       expect(w.text()).toContain("2026-07-21 18:30"); // ISO trimmed, time never localized
+      // moderation decisions now appear in the same feed, labeled by content kind
+      expect(w.text()).toContain("moderation_approved");
+      expect(w.text()).toContain("review"); // target_kind shown when there's no detail.key
       // the North Star funnel renders with per-step counts and drop-off %
       expect(w.text()).toContain("Detention funnel");
       const bars = w.findAll(".bar__fill");
