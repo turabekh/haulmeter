@@ -302,5 +302,13 @@
   "auth.authority_desc.own_mc": "У вас свой MC# — вы выставляете счета брокерам напрямую.",
   "auth.authority_desc.leased": "Вы владеете грузовиком, но работаете под лицензией перевозчика.",
   "auth.authority_desc.company": "Вы водите грузовик компании; простой взыскивает ваш перевозчик.",
-  "more.language": "Язык"
+  "more.language": "Язык",
+  "evidence.title": "Доказательства",
+  "evidence.view_all": "Все доказательства →",
+  "evidence.photos": "Фото состояния груза",
+  "evidence.no_photos": "Фото состояния пока нет.",
+  "evidence.timeline": "Хронология",
+  "evidence.no_events": "Событий пока нет.",
+  "evidence.documents": "Документы в деле",
+  "evidence.images_note": "Изображения выдаются безопасно после активации хранилища."
 }

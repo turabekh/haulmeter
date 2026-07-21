@@ -302,5 +302,13 @@
   "auth.authority_desc.own_mc": "You have your own MC# — you bill brokers directly.",
   "auth.authority_desc.leased": "You own the truck but run under a carrier's authority.",
   "auth.authority_desc.company": "You drive the company's truck; your carrier collects detention.",
-  "more.language": "Language"
+  "more.language": "Language",
+  "evidence.title": "Evidence",
+  "evidence.view_all": "View all evidence →",
+  "evidence.photos": "Cargo condition photos",
+  "evidence.no_photos": "No condition photos captured yet.",
+  "evidence.timeline": "Timeline",
+  "evidence.no_events": "No events recorded yet.",
+  "evidence.documents": "Documents on file",
+  "evidence.images_note": "Photo images are served securely once the storage layer is live."
 }

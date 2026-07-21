@@ -302,5 +302,13 @@
   "auth.authority_desc.own_mc": "ਤੁਹਾਡੇ ਕੋਲ ਆਪਣਾ MC# ਹੈ — ਤੁਸੀਂ ਬ੍ਰੋਕਰਾਂ ਨੂੰ ਸਿੱਧਾ ਬਿੱਲ ਕਰਦੇ ਹੋ।",
   "auth.authority_desc.leased": "ਟਰੱਕ ਤੁਹਾਡਾ ਹੈ ਪਰ ਤੁਸੀਂ ਕੈਰੀਅਰ ਦੇ ਅਧਿਕਾਰ ਹੇਠ ਚਲਾਉਂਦੇ ਹੋ।",
   "auth.authority_desc.company": "ਤੁਸੀਂ ਕੰਪਨੀ ਦਾ ਟਰੱਕ ਚਲਾਉਂਦੇ ਹੋ; ਤੁਹਾਡਾ ਕੈਰੀਅਰ ਰੁਕਾਵਟ ਵਸੂਲਦਾ ਹੈ।",
-  "more.language": "ਭਾਸ਼ਾ"
+  "more.language": "ਭਾਸ਼ਾ",
+  "evidence.title": "ਸਬੂਤ",
+  "evidence.view_all": "ਸਾਰੇ ਸਬੂਤ ਵੇਖੋ →",
+  "evidence.photos": "ਕਾਰਗੋ ਹਾਲਤ ਫੋਟੋਆਂ",
+  "evidence.no_photos": "ਹਾਲੇ ਕੋਈ ਹਾਲਤ ਫੋਟੋ ਨਹੀਂ।",
+  "evidence.timeline": "ਸਮਾਂ-ਰੇਖਾ",
+  "evidence.no_events": "ਹਾਲੇ ਕੋਈ ਘਟਨਾ ਦਰਜ ਨਹੀਂ।",
+  "evidence.documents": "ਦਸਤਾਵੇਜ਼",
+  "evidence.images_note": "ਸਟੋਰੇਜ ਲਾਈਵ ਹੋਣ 'ਤੇ ਫੋਟੋ ਚਿੱਤਰ ਸੁਰੱਖਿਅਤ ਢੰਗ ਨਾਲ ਦਿੱਤੇ ਜਾਂਦੇ ਹਨ।"
 }

@@ -96,6 +96,7 @@ def test_stop_scoped_endpoints_reject_another_owner(client, db):
     )
     hb = {"Authorization": f"Bearer {b.json()['token']}"}
     assert client.get(f"/load/{stop_id}/meter", headers=hb).status_code == 403
+    assert client.get(f"/load/{stop_id}/evidence", headers=hb).status_code == 403
     assert client.post(f"/load/{stop_id}/arrive", headers=hb).status_code == 403
     assert client.post(f"/load/{stop_id}/notice", headers=hb).status_code == 403
     assert client.post(f"/load/{stop_id}/claim", headers=hb).status_code == 403
@@ -233,6 +234,37 @@ def test_meter_reports_condition_photo_count(client, db):
     ).json()["capture_id"]
     client.post(f"/protection/condition/{cap}/photo", json={"prompt": "seals"}, headers=headers)
     assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["photos_captured"] == 1
+
+
+def test_evidence_detail_aggregates_photos_and_timeline(client, db):
+    # the consolidated Evidence view: every F4 log for the stop in one place —
+    # cargo-condition photos (with their guided prompt) + the GPS-verified timeline
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+    client.post(f"/load/{stop_id}/arrive", headers=headers)
+
+    # capture two guided condition photos
+    cap = client.post(
+        "/protection/condition/start", json={"stop_id": stop_id}, headers=headers
+    ).json()["capture_id"]
+    client.post(f"/protection/condition/{cap}/photo", json={"prompt": "seals"}, headers=headers)
+    client.post(
+        f"/protection/condition/{cap}/photo",
+        json={"prompt": "trailer_exterior"},
+        headers=headers,
+    )
+
+    ev = client.get(f"/load/{stop_id}/evidence", headers=headers)
+    assert ev.status_code == 200
+    body = ev.json()
+    assert body["facility"] == "Dallas Receiver"
+    assert body["chain_valid"] is True
+    assert body["photo_count"] == 2
+    prompts = {p["prompt"] for p in body["photos"]}
+    assert prompts == {"seals", "trailer_exterior"}
+    assert all(p["content_hash"] for p in body["photos"])  # a verified hash per photo
+    assert body["record_count"] >= 2
+    assert any(e["type"] == "PHOTO" for e in body["timeline"])
 
 
 def test_meter_404_for_unknown_stop(client):

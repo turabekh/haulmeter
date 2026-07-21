@@ -17,6 +17,7 @@ from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
+from app.foundation.f04_evidence import public as evidence
 from app.foundation.f05_load import public as loads
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f14_admin import public as admin
@@ -215,6 +216,25 @@ def claim_detail(
         "filed": claim.state.value != "open",
         "created_at": claim.created_at.isoformat() if claim.created_at else None,
         **m3.claim_evidence(db, claim),
+    }
+
+
+@router.get("/{stop_id}/evidence")
+def evidence_detail(
+    stop_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    # everything captured for this load in one place: GPS timeline + cargo-condition
+    # photos (all F4 logs for the stop) + the documents on file (owner-gated)
+    stop = _owned_stop(db, stop_id, account)
+    fac = facility.get_facility(db, stop.facility_id)
+    docs = m5.wallet(db, account.id)["documents"]
+    return {
+        "stop_id": str(stop.id),
+        "facility": fac.name if fac else None,
+        "documents": [{"doc_type": d["doc_type"], "status": d["status"]} for d in docs],
+        **evidence.stop_evidence(db, stop.id),
     }
 
 

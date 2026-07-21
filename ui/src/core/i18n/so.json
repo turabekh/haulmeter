@@ -302,5 +302,13 @@
   "auth.authority_desc.own_mc": "Waxaad leedahay MC# gaar ah — dilaalada si toos ah ayaad u soo qortaa.",
   "auth.authority_desc.leased": "Gaadhiga adigaa leh laakiin waxaad ku shaqeysaa awoodda xamuulaha.",
   "auth.authority_desc.company": "Waxaad wadaa gaadhiga shirkadda; xamuulahaagu wuxuu soo qaadaa sugitaanka.",
-  "more.language": "Luqadda"
+  "more.language": "Luqadda",
+  "evidence.title": "Caddaynta",
+  "evidence.view_all": "Eeg dhammaan caddaynta →",
+  "evidence.photos": "Sawirrada xaalada xamuulka",
+  "evidence.no_photos": "Weli sawirro xaalad ma jiraan.",
+  "evidence.timeline": "Jadwalka wakhtiga",
+  "evidence.no_events": "Weli dhacdooyin lama diiwaangelin.",
+  "evidence.documents": "Dukumeentiyada faylka",
+  "evidence.images_note": "Sawirrada si ammaan ah ayaa loo bixiyaa marka kaydku firfircoono."
 }

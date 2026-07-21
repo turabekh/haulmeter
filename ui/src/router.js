@@ -14,6 +14,7 @@ import LoadCalcSurface from "./surfaces/LoadCalcSurface.vue";
 import AuditSurface from "./surfaces/AuditSurface.vue";
 import ConditionSurface from "./surfaces/ConditionSurface.vue";
 import ClaimSurface from "./surfaces/ClaimSurface.vue";
+import EvidenceSurface from "./surfaces/EvidenceSurface.vue";
 import AuthSurface from "./surfaces/AuthSurface.vue";
 import MoreSurface from "./surfaces/MoreSurface.vue";
 import FleetWorkspaceSurface from "./surfaces/FleetWorkspaceSurface.vue";
@@ -51,6 +52,7 @@ export const routes = [
   { path: "/money/audit", name: "money-audit", component: AuditSurface },
   { path: "/protection/condition", name: "condition", component: ConditionSurface },
   { path: "/claim/:stopId", name: "claim", component: ClaimSurface },
+  { path: "/load/:stopId/evidence", name: "evidence", component: EvidenceSurface },
   { path: "/docs", name: "docs", component: DocsSurface },
   { path: "/more", name: "more", component: MoreSurface },
   // §18 web-first portal — no tab chrome, wider frame; auth required (fleet owner)

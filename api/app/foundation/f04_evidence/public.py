@@ -17,6 +17,7 @@ from .domain.service import (
     compose_pack,
     create_log,
     render_pack_pdf,
+    stop_evidence,
     verify_chain,
 )
 
@@ -35,6 +36,7 @@ __all__ = [
     "append_record",
     "attach_artifact",
     "compose_pack",
+    "stop_evidence",
     "create_log",
     "render_pack_pdf",
     "verify_chain",

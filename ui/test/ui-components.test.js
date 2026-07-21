@@ -24,6 +24,7 @@ import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
 import AuditSurface from "../src/surfaces/AuditSurface.vue";
 import ConditionSurface from "../src/surfaces/ConditionSurface.vue";
 import ClaimSurface from "../src/surfaces/ClaimSurface.vue";
+import EvidenceSurface from "../src/surfaces/EvidenceSurface.vue";
 import IncidentSheet from "../src/core/components/IncidentSheet.vue";
 import AdminConsoleSurface from "../src/surfaces/AdminConsoleSurface.vue";
 import PublicScorecardSurface from "../src/surfaces/PublicScorecardSurface.vue";
@@ -782,6 +783,47 @@ describe("ClaimSurface — claim contents (M3-FR5)", () => {
       expect(w.text()).toContain("GPS arrival verified"); // the geofence record, friendly
       expect(w.text()).toContain("Photo captured");
       expect(w.text()).toContain("Broker notified"); // notice sent
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+});
+
+describe("EvidenceSurface — consolidated evidence locker (M5/M3)", () => {
+  it("shows condition photos with labels, the timeline, and the verified badge", async () => {
+    setToken("tok-ev");
+    const fetchStub = vi.fn().mockImplementation((url) =>
+      String(url).includes("/load/stop-e/evidence")
+        ? jsonOk({
+            stop_id: "stop-e", facility: "Perth Dock", chain_valid: true,
+            record_count: 3, photo_count: 2,
+            documents: [{ doc_type: "cdl", status: "ok" }],
+            photos: [
+              { prompt: "seals", content_hash: "abc123def456", captured_at: "2026-07-21T10:05:00Z" },
+              { prompt: "trailer_exterior", content_hash: "beef99cafe01", captured_at: "2026-07-21T10:06:00Z" },
+            ],
+            timeline: [
+              { type: "GEOFENCE", occurred_at: "2026-07-21T10:00:00Z" },
+              { type: "PHOTO", occurred_at: "2026-07-21T10:05:00Z" },
+              { type: "PHOTO", occurred_at: "2026-07-21T10:06:00Z" },
+            ],
+          })
+        : jsonOk({}),
+    );
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      router.push("/load/stop-e/evidence");
+      await router.isReady();
+      const w = mount(EvidenceSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      expect(w.text()).toContain("Perth Dock");
+      expect(w.text()).toContain("Chain verified"); // chain-integrity badge
+      expect(w.findAll(".photo").length).toBe(2); // one row per captured photo
+      expect(w.text()).toContain("Seals"); // guided prompt -> friendly label
+      expect(w.text()).toContain("GPS arrival verified"); // timeline record, friendly
+      expect(w.text()).toContain("CDL"); // documents on file
     } finally {
       vi.unstubAllGlobals();
       logout();

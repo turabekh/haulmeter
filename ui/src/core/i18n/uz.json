@@ -302,5 +302,13 @@
   "auth.authority_desc.own_mc": "Sizda o'z MC# bor — brokerlarga to'g'ridan-to'g'ri hisob yuborasiz.",
   "auth.authority_desc.leased": "Yuk mashinasi sizniki, lekin tashuvchi ruxsatnomasi ostida ishlaysiz.",
   "auth.authority_desc.company": "Kompaniya mashinasini haydaysiz; kutishni tashuvchingiz undiradi.",
-  "more.language": "Til"
+  "more.language": "Til",
+  "evidence.title": "Dalillar",
+  "evidence.view_all": "Barcha dalillar →",
+  "evidence.photos": "Yuk holati rasmlari",
+  "evidence.no_photos": "Hali holat rasmlari yo'q.",
+  "evidence.timeline": "Vaqt jadvali",
+  "evidence.no_events": "Hali hodisalar yo'q.",
+  "evidence.documents": "Hujjatlar",
+  "evidence.images_note": "Rasm tasvirlari saqlash ishga tushganda xavfsiz beriladi."
 }

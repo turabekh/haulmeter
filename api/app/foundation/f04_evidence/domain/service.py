@@ -121,6 +121,59 @@ def attach_artifact(
     return artifact
 
 
+def stop_evidence(db: Session, stop_ref) -> dict:
+    # aggregate EVERY evidence log tied to a stop (arrival, condition capture,
+    # etc.) into one chronological view — the driver's "what have I got" for a load
+    logs = list(db.scalars(select(EvidenceLog).where(EvidenceLog.stop_ref == stop_ref)))
+    timeline: list[dict] = []
+    photos: list[dict] = []
+    all_valid = True
+    for log in logs:
+        if not verify_chain(db, log).valid:
+            all_valid = False
+        for record in _ordered_records(db, log.id):
+            timeline.append(
+                {
+                    "type": record.record_type.value,
+                    "occurred_at": record.occurred_at,
+                    "log": log.label,
+                }
+            )
+        for artifact in db.scalars(
+            select(EvidenceArtifact).where(EvidenceArtifact.log_id == log.id)
+        ):
+            if artifact.artifact_type == ArtifactType.photo:
+                photos.append(
+                    {
+                        "prompt": (artifact.exif or {}).get("prompt"),
+                        "content_hash": artifact.content_hash,
+                        "captured_at": artifact.captured_at or artifact.received_at,
+                    }
+                )
+    timeline.sort(key=lambda t: t["occurred_at"] or datetime(1970, 1, 1, tzinfo=UTC))
+    photos.sort(key=lambda p: p["captured_at"] or datetime(1970, 1, 1, tzinfo=UTC))
+    return {
+        "chain_valid": all_valid,
+        "record_count": len(timeline),
+        "photo_count": len(photos),
+        "timeline": [
+            {
+                "type": t["type"],
+                "occurred_at": t["occurred_at"].isoformat() if t["occurred_at"] else None,
+            }
+            for t in timeline
+        ],
+        "photos": [
+            {
+                "prompt": p["prompt"],
+                "content_hash": p["content_hash"][:12] if p["content_hash"] else None,
+                "captured_at": p["captured_at"].isoformat() if p["captured_at"] else None,
+            }
+            for p in photos
+        ],
+    }
+
+
 def _ordered_records(db: Session, log_id) -> list[EvidenceRecord]:
     return list(
         db.scalars(

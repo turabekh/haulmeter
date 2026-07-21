@@ -302,5 +302,13 @@
   "auth.authority_desc.own_mc": "Tienes tu propio MC# — facturas a los brókers directamente.",
   "auth.authority_desc.leased": "Eres dueño del camión pero operas bajo la autoridad de un transportista.",
   "auth.authority_desc.company": "Conduces el camión de la empresa; tu transportista cobra la detención.",
-  "more.language": "Idioma"
+  "more.language": "Idioma",
+  "evidence.title": "Evidencia",
+  "evidence.view_all": "Ver toda la evidencia →",
+  "evidence.photos": "Fotos del estado de la carga",
+  "evidence.no_photos": "Aún no hay fotos de condición.",
+  "evidence.timeline": "Cronología",
+  "evidence.no_events": "Aún no hay eventos.",
+  "evidence.documents": "Documentos en archivo",
+  "evidence.images_note": "Las imágenes se sirven de forma segura cuando el almacenamiento esté activo."
 }

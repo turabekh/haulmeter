@@ -227,6 +227,14 @@ async function endLoad() {
             {{ noticeSent ? t("load.notice_sent_ok") : t("load.notice_sent") }}
           </li>
         </ul>
+        <button
+          v-if="live"
+          class="card__link"
+          type="button"
+          @click="router.push(`/load/${activeStopId}/evidence`)"
+        >
+          {{ t("evidence.view_all") }}
+        </button>
       </section>
 
       <!-- arrive -> accrue -> FILE: the loop closes into a GPS-backed claim -->
@@ -379,6 +387,16 @@ async function endLoad() {
   font-size: var(--type-label-size);
   color: var(--text-2);
   font-weight: 500;
+}
+.card__link {
+  margin-top: var(--s-3);
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+  cursor: pointer;
 }
 .checklist {
   list-style: none;
