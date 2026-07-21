@@ -38,6 +38,7 @@ MODULE = "m10"
 # economy parameters — F13-config tunable at activation (PRD §8.10 DoD)
 REDEEM_CENTS_PER_POINT = 1  # 1 point = 1¢ against an M6 booking
 EARN_RULES = {"review": 15, "handoff": 10, "answer": 5}
+CONFIG_EARN_PREFIX = "m10_earn_"  # F13 rewards scope; per-kind key, editable in F14 admin
 RATE_LIMIT_PER_DAY = 50  # anti-gaming: max contributions/24h/account
 # free public lots a handoff may relay — NEVER a bookable M6 property
 FREE_LOT_TYPES = (
@@ -105,10 +106,18 @@ def _rate_limited(db: Session, account_id, now: datetime) -> bool:
     return count >= RATE_LIMIT_PER_DAY
 
 
+def _earn_points(db: Session, kind: str) -> int:
+    # the live per-kind earn rate: F13 config (edited in the F14 admin console)
+    # falling back to the compiled EARN_RULES default (the HANDOFF-041 pattern)
+    from app.foundation.f13_flags import public as flags
+
+    return int(flags.get_config(db, f"{CONFIG_EARN_PREFIX}{kind}", EARN_RULES.get(kind, 0)))
+
+
 def award_contribution(db: Session, account_id, kind: str, now: datetime) -> int:
     if _rate_limited(db, account_id, now):
         raise RateLimited(str(account_id))
-    points = EARN_RULES.get(kind, 0)
+    points = _earn_points(db, kind)
     if points > 0:
         crowd.issue_points(db, account_id, points)  # F7 points_earn via F10
         db.add(ContributionLog(account_id=account_id, kind=kind, points=points))

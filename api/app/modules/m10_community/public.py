@@ -10,6 +10,7 @@ flag m10_community.
 from .domain.enums import HandoffState
 from .domain.models import ContributionLog, FacilityAnswer, FacilityQuestion, Handoff
 from .domain.service import (
+    CONFIG_EARN_PREFIX,
     EARN_RULES,
     FLAG_KEY,
     MODULE,
@@ -43,6 +44,7 @@ __all__ = [
     "FacilityAnswer",
     "FacilityQuestion",
     "Handoff",
+    "CONFIG_EARN_PREFIX",
     "EARN_RULES",
     "FLAG_KEY",
     "MODULE",

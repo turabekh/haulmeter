@@ -39,6 +39,19 @@ def test_earn_credits_points_balance(db):
     assert m10.points_balance(db, driver.id) == 15
 
 
+def test_earn_rate_reads_f13_config_knob(db):
+    # the per-kind earn rate is a live F13-config knob (edited in the F14 admin
+    # console); unset falls back to EARN_RULES, set applies to the next award
+    driver = _acct(db, "d@x.com")
+    flags.set_config(db, f"{m10.CONFIG_EARN_PREFIX}review", 25, scope="rewards")
+    awarded = m10.award_contribution(db, driver.id, "review", T0)
+    assert awarded == 25  # the configured rate, not the 15 default
+    assert m10.points_balance(db, driver.id) == 25
+
+    # an un-configured kind still uses its compiled default
+    assert m10.award_contribution(db, driver.id, "handoff", T0) == 10
+
+
 def test_redeem_reduces_balance_and_returns_discount(db):
     driver = _acct(db, "d@x.com")
     m10.award_contribution(db, driver.id, "review", T0)  # +15
