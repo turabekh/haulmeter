@@ -175,7 +175,7 @@ function driverLabel(id) {
           </thead>
           <tbody>
             <tr v-for="(cp, name) in fleet.claims.by_counterparty" :key="name">
-              <td>{{ name }}</td>
+              <td>{{ cp.name || name }}</td>
               <td class="num">{{ formatMoney(cp.owed) }}</td>
               <td class="num" :class="cp.recovery_rate >= 0.75 ? 'good' : 'bad'">
                 {{ pct(cp.recovery_rate) }}

@@ -19,6 +19,7 @@ Owns schema m12. The LAST module — it multiplies everything before it.
 Composes f01 + f05 + f07 + m02 + m04 + m07. Runs behind the F13 flag m12_fleet.
 """
 
+import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
 
@@ -193,13 +194,20 @@ def fleet_claims_desk(db: Session, fleet_org_id) -> dict:
             )
             recovered += amount if is_recovered else 0
             key = str(r.counterparty_ref) if r.counterparty_ref else "unknown"
-            cp = by_counterparty.setdefault(key, {"owed": 0, "recovered": 0, "total": 0})
+            cp = by_counterparty.setdefault(
+                key, {"name": None, "owed": 0, "recovered": 0, "total": 0}
+            )
             cp["total"] += amount
             cp["recovered"] += amount if is_recovered else 0
             if not is_recovered and r.state != ledger.ReceivableState.written_off:
                 cp["owed"] += amount
-    for cp in by_counterparty.values():
+    for key, cp in by_counterparty.items():
         cp["recovery_rate"] = round(cp["recovered"] / cp["total"], 3) if cp["total"] else 0.0
+        # resolve the F5 counterparty UUID to the broker's name (the desk shows
+        # who actually pays — a UUID is useless to a fleet manager, M12-FR3)
+        if key != "unknown":
+            counterparty = loads.get_counterparty(db, uuid.UUID(key))
+            cp["name"] = counterparty.name if counterparty is not None else None
     return {
         "owed_cents": owed,
         "recovered_cents": recovered,

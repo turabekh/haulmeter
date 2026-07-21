@@ -65,9 +65,8 @@ def test_fleet_claims_desk_counterparty_analytics(db):
     fleet, _ = m12.create_fleet(db, owner.id, "Acme", now=T0)
     m12.accept_invite(db, m12.invite_driver(db, fleet.id, driver.id), now=T0)
 
-    broker = facility.create_facility(
-        db, facility.FacilityType.shipper_receiver, "Broker A", *DALLAS
-    )
+    # counterparty_ref points at an F5 counterparty (as the real M3 flow sets it)
+    broker = loads.create_counterparty(db, "Broker A", loads.CounterpartyKind.broker)
     r1 = ledger.create_receivable(
         db, driver.id, ledger.ReceivableKind.detention, 10000, counterparty_ref=broker.id
     )
@@ -80,6 +79,7 @@ def test_fleet_claims_desk_counterparty_analytics(db):
     assert desk["recovered_cents"] == 10000
     assert desk["owed_cents"] == 5000
     cp = desk["by_counterparty"][str(broker.id)]
+    assert cp["name"] == "Broker A"  # the desk resolves the UUID to the broker name
     assert cp["total"] == 15000
     assert cp["recovery_rate"] == round(10000 / 15000, 3)  # this broker pays 2/3
 
