@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     minio_endpoint: str = Field(default="minio:9018")
     minio_access_key: str = Field(default="longhaul")
     minio_secret_key: str = Field(default="longhaul")
+    minio_bucket: str = Field(default="longhaul")
 
     smtp_host: str = Field(default="mailpit")
     smtp_port: int = Field(default=1038)

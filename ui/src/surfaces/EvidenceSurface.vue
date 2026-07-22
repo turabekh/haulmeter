@@ -6,23 +6,39 @@
      images are served from F6 at activation — here each is a verified, labeled
      entry (never a fake thumbnail). -->
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onBeforeUnmount } from "vue";
 import { ArrowLeft, ShieldCheck, MapPin, Camera, Send, FileText, ShieldAlert } from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
-import { fetchEvidence } from "../core/api.js";
+import { fetchEvidence, fetchEvidencePhoto } from "../core/api.js";
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const data = ref(null);
 const missing = ref(false);
+// object URLs for the real F6-served thumbnails, keyed by artifact_id; revoked
+// on unmount so the blobs don't leak.
+const thumbs = ref({});
 
 onMounted(async () => {
+  const stopId = route.params.stopId;
   try {
-    data.value = await fetchEvidence(route.params.stopId);
+    data.value = await fetchEvidence(stopId);
   } catch {
     missing.value = true;
+    return;
+  }
+  for (const p of data.value.photos || []) {
+    if (!p.has_image || !p.artifact_id) continue;
+    const url = await fetchEvidencePhoto(stopId, p.artifact_id);
+    if (url) thumbs.value = { ...thumbs.value, [p.artifact_id]: url };
+  }
+});
+
+onBeforeUnmount(() => {
+  for (const url of Object.values(thumbs.value)) {
+    try { URL.revokeObjectURL(url); } catch { /* noop */ }
   }
 });
 
@@ -71,7 +87,10 @@ function photoLabel(prompt) {
         <p v-if="!data.photos.length" class="muted">{{ t("evidence.no_photos") }}</p>
         <ul v-else class="photos">
           <li v-for="(p, i) in data.photos" :key="i" class="photo">
-            <div class="photo__thumb" aria-hidden="true"><Camera :size="22" :stroke-width="2" /></div>
+            <div class="photo__thumb" aria-hidden="true">
+              <img v-if="thumbs[p.artifact_id]" :src="thumbs[p.artifact_id]" class="photo__img" :alt="photoLabel(p.prompt)" />
+              <Camera v-else :size="22" :stroke-width="2" />
+            </div>
             <div class="photo__meta">
               <span class="photo__label">{{ photoLabel(p.prompt) }}</span>
               <span class="photo__sub mono">{{ time(p.captured_at) }} · #{{ p.content_hash }}</span>
@@ -196,6 +215,12 @@ function photoLabel(prompt) {
   justify-content: center;
   color: var(--text-3);
   flex: none;
+  overflow: hidden;
+}
+.photo__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .photo__meta {
   display: flex;

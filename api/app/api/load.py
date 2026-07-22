@@ -9,7 +9,7 @@ locally from `arrived_at`; this API is the source of truth for the terms + state
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,7 @@ from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
 from app.foundation.f04_evidence import public as evidence
 from app.foundation.f05_load import public as loads
+from app.foundation.f06_documents import public as documents
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f14_admin import public as admin
 from app.modules.m03_detention import public as m3
@@ -236,6 +237,31 @@ def evidence_detail(
         "documents": [{"doc_type": d["doc_type"], "status": d["status"]} for d in docs],
         **evidence.stop_evidence(db, stop.id),
     }
+
+
+@router.get("/{stop_id}/evidence/photo/{artifact_id}")
+def evidence_photo(
+    stop_id: uuid.UUID,
+    artifact_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> Response:
+    # serve the real captured image bytes for one evidence photo (owner-gated).
+    # The artifact must belong to a log tied to THIS owned stop — no cross-load
+    # peeking at another driver's evidence.
+    stop = _owned_stop(db, stop_id, account)
+    artifact = evidence.get_artifact(db, artifact_id)
+    if artifact is None or not artifact.storage_key:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no image")
+    log = db.get(evidence.EvidenceLog, artifact.log_id)
+    if log is None or log.stop_ref != stop.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no image")
+    try:
+        data = documents.default_storage().get(artifact.storage_key)
+    except Exception as exc:  # bytes missing (e.g. stored before MinIO wiring)
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no image") from exc
+    content_type = (artifact.exif or {}).get("content_type") or "image/jpeg"
+    return Response(content=data, media_type=content_type)
 
 
 def _claim_or_409(db: Session, stop) -> m3.DetentionClaim:

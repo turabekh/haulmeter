@@ -310,7 +310,7 @@
   "evidence.timeline": "Хронология",
   "evidence.no_events": "Событий пока нет.",
   "evidence.documents": "Документы в деле",
-  "evidence.images_note": "Изображения выдаются безопасно после активации хранилища.",
+  "evidence.images_note": "Каждое фото надёжно хранится и показывается здесь вместе с проверенным хешем.",
   "more.authority": "Рабочие полномочия",
   "authority.number_label": "Номер MC или DOT",
   "authority.number_ph": "напр. MC 123456",

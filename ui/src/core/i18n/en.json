@@ -310,7 +310,7 @@
   "evidence.timeline": "Timeline",
   "evidence.no_events": "No events recorded yet.",
   "evidence.documents": "Documents on file",
-  "evidence.images_note": "Photo images are served securely once the storage layer is live.",
+  "evidence.images_note": "Every photo is stored securely and shown here with its verified hash.",
   "more.authority": "Operating authority",
   "authority.number_label": "MC or DOT number",
   "authority.number_ph": "e.g. MC 123456",

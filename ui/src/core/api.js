@@ -263,6 +263,22 @@ export async function fetchEvidence(stopId) {
   return apiGet(`/load/${stopId}/evidence`, `evidence:${stopId}`);
 }
 
+// F6: the real captured image for one evidence photo. Bearer auth can't ride a
+// bare <img src>, so fetch the bytes and hand back an object URL the caller shows
+// and later revokes. Returns null if unavailable (offline / not yet served).
+export async function fetchEvidencePhoto(stopId, artifactId) {
+  if (typeof fetch === "undefined" || !token.value) return null;
+  try {
+    const resp = await fetch(`${API_BASE}/load/${stopId}/evidence/photo/${artifactId}`, {
+      headers: headers(),
+    });
+    if (!resp.ok) return null;
+    return URL.createObjectURL(await resp.blob());
+  } catch {
+    return null;
+  }
+}
+
 // resume point: the driver's current armed stop server-side, so a fresh device
 // (no persisted activeStopId) can re-open The Meter. Adopts it as the active stop.
 export async function fetchActiveLoad() {
@@ -717,12 +733,13 @@ export async function startConditionCapture(stopId, phase = "delivery") {
   return resp.json();
 }
 
-export async function addConditionPhoto(captureId, prompt, contentB64 = null) {
+export async function addConditionPhoto(captureId, prompt, contentB64 = null, contentType = null) {
   // F12: a photo taken in a dead zone queues with an idempotency key and appends
   // to the hash-chain exactly once on reconnect (offline.ingest dedupes replays)
   return queuedPost(`/protection/condition/${captureId}/photo`, {
     prompt,
     content_b64: contentB64,
+    content_type: contentType,
   });
 }
 

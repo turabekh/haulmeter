@@ -54,7 +54,7 @@ async function onCapture(event) {
   busy.value = true;
   try {
     const b64 = await fileToB64(file);
-    await addConditionPhoto(captureId.value, step.value, b64);
+    await addConditionPhoto(captureId.value, step.value, b64, file.type || null);
     if (index.value + 1 >= sequence.value.length) done.value = true;
     else index.value += 1;
   } catch {

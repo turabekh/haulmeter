@@ -143,6 +143,7 @@ def condition_start(
 class ConditionPhotoIn(BaseModel):
     prompt: str
     content_b64: str | None = None  # the captured image; a dev placeholder if absent
+    content_type: str | None = None  # the image MIME type, so it serves back honestly
 
 
 @router.post("/condition/{capture_id}/photo", status_code=201)
@@ -166,7 +167,9 @@ def condition_photo(
             if body.content_b64
             else f"photo:{body.prompt}".encode()
         )
-        m5.add_condition_photo(db, capture, body.prompt, content=content)
+        m5.add_condition_photo(
+            db, capture, body.prompt, content=content, content_type=body.content_type
+        )
 
     # F12: an offline photo replayed with its key appends exactly once (no dup chain)
     applied = True

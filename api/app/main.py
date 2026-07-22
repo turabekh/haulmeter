@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,7 +26,34 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-app = FastAPI(title=settings.app_name)
+
+def _wire_object_storage() -> None:
+    # AI-CONTEXT: put MinIO (already in the compose topology, 9018) in the F6
+    # object-storage path so evidence photo bytes persist and serve across
+    # processes. Falls back to the in-memory default if MinIO is unreachable —
+    # capture never breaks (the hash/chain still records; the image is just
+    # unavailable). Tests keep the in-memory default (lifespan doesn't run).
+    from app.foundation.f06_documents import public as documents
+
+    try:
+        storage = documents.MinioObjectStorage(
+            settings.minio_endpoint,
+            settings.minio_access_key,
+            settings.minio_secret_key,
+            settings.minio_bucket,
+        )
+        documents.set_default_storage(storage)
+    except Exception:  # MinIO down / misconfigured -> keep the in-memory default
+        pass
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    _wire_object_storage()
+    yield
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 # AI-CONTEXT: the driver frontend (Quasar/Vue dev) runs on the LOCKED UI ports
 # 9008 / 3008 fallback (HANDOFF §2). Dev CORS is scoped to those origins.

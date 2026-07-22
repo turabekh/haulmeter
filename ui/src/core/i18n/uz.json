@@ -310,7 +310,7 @@
   "evidence.timeline": "Vaqt jadvali",
   "evidence.no_events": "Hali hodisalar yo'q.",
   "evidence.documents": "Hujjatlar",
-  "evidence.images_note": "Rasm tasvirlari saqlash ishga tushganda xavfsiz beriladi.",
+  "evidence.images_note": "Har bir surat xavfsiz saqlanadi va bu yerda tasdiqlangan xeshi bilan ko‘rsatiladi.",
   "more.authority": "Ish vakolati",
   "authority.number_label": "MC yoki DOT raqami",
   "authority.number_ph": "masalan MC 123456",

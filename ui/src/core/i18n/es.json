@@ -310,7 +310,7 @@
   "evidence.timeline": "Cronología",
   "evidence.no_events": "Aún no hay eventos.",
   "evidence.documents": "Documentos en archivo",
-  "evidence.images_note": "Las imágenes se sirven de forma segura cuando el almacenamiento esté activo.",
+  "evidence.images_note": "Cada foto se guarda de forma segura y se muestra aquí con su hash verificado.",
   "more.authority": "Autoridad operativa",
   "authority.number_label": "Número MC o DOT",
   "authority.number_ph": "p. ej. MC 123456",

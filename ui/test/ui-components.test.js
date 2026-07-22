@@ -887,6 +887,43 @@ describe("EvidenceSurface — consolidated evidence locker (M5/M3)", () => {
       logout();
     }
   });
+
+  it("renders a real F6-served thumbnail for photos that have an image", async () => {
+    setToken("tok-ev2");
+    const orig = URL.createObjectURL;
+    URL.createObjectURL = vi.fn(() => "blob:evidence-thumb");
+    const fetchStub = vi.fn().mockImplementation((url) => {
+      const u = String(url);
+      if (u.includes("/evidence/photo/")) {
+        return Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob(["x"])) });
+      }
+      if (u.includes("/load/stop-img/evidence")) {
+        return jsonOk({
+          stop_id: "stop-img", facility: "Perth Dock", chain_valid: true,
+          record_count: 1, photo_count: 1, documents: [],
+          photos: [{ artifact_id: "art-1", has_image: true, prompt: "seals", content_hash: "abc123", captured_at: "2026-07-21T10:05:00Z" }],
+          timeline: [{ type: "PHOTO", occurred_at: "2026-07-21T10:05:00Z" }],
+        });
+      }
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const router = testRouter();
+      router.push("/load/stop-img/evidence");
+      await router.isReady();
+      const w = mount(EvidenceSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      await flushPromises();
+      const img = w.find(".photo__img");
+      expect(img.exists()).toBe(true);
+      expect(img.attributes("src")).toBe("blob:evidence-thumb");
+    } finally {
+      URL.createObjectURL = orig;
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
 });
 
 describe("IncidentSheet — incident capture (M5-FR4)", () => {

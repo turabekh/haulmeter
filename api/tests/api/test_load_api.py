@@ -267,6 +267,51 @@ def test_evidence_detail_aggregates_photos_and_timeline(client, db):
     assert any(e["type"] == "PHOTO" for e in body["timeline"])
 
 
+def test_evidence_photo_serves_the_captured_image_bytes(client, db):
+    # F6 image serving: a captured condition photo's real bytes are stored and
+    # served back (owner-gated), so the Evidence view shows a true thumbnail.
+    import base64
+
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+    client.post(f"/load/{stop_id}/arrive", headers=headers)
+
+    png = b"\x89PNG\r\n\x1a\nFAKE-IMAGE-BYTES"
+    cap = client.post(
+        "/protection/condition/start", json={"stop_id": stop_id}, headers=headers
+    ).json()["capture_id"]
+    client.post(
+        f"/protection/condition/{cap}/photo",
+        json={"prompt": "seals", "content_b64": base64.b64encode(png).decode()},
+        headers=headers,
+    )
+
+    body = client.get(f"/load/{stop_id}/evidence", headers=headers).json()
+    photo = body["photos"][0]
+    assert photo["has_image"] is True
+    assert photo["artifact_id"]
+
+    img = client.get(f"/load/{stop_id}/evidence/photo/{photo['artifact_id']}", headers=headers)
+    assert img.status_code == 200
+    assert img.content == png  # the exact bytes round-trip
+
+    # another driver can never fetch it
+    intruder = client.post(
+        "/auth/register", json={"email": "peeker@example.com", "password": "pw-123456"}
+    ).json()["token"]
+    hi = {"Authorization": f"Bearer {intruder}"}
+    assert client.get(
+        f"/load/{stop_id}/evidence/photo/{photo['artifact_id']}", headers=hi
+    ).status_code == 403
+
+
+def test_evidence_photo_404_for_unknown_artifact(client, db):
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+    zero = "00000000-0000-0000-0000-000000000000"
+    assert client.get(f"/load/{stop_id}/evidence/photo/{zero}", headers=headers).status_code == 404
+
+
 def test_meter_404_for_unknown_stop(client):
     headers = _auth(client)
     resp = client.get("/load/00000000-0000-0000-0000-000000000000/meter", headers=headers)

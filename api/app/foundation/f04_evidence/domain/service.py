@@ -145,9 +145,11 @@ def stop_evidence(db: Session, stop_ref) -> dict:
             if artifact.artifact_type == ArtifactType.photo:
                 photos.append(
                     {
+                        "artifact_id": artifact.id,
                         "prompt": (artifact.exif or {}).get("prompt"),
                         "content_hash": artifact.content_hash,
                         "captured_at": artifact.captured_at or artifact.received_at,
+                        "has_image": bool(artifact.storage_key),
                     }
                 )
     timeline.sort(key=lambda t: t["occurred_at"] or datetime(1970, 1, 1, tzinfo=UTC))
@@ -165,13 +167,19 @@ def stop_evidence(db: Session, stop_ref) -> dict:
         ],
         "photos": [
             {
+                "artifact_id": str(p["artifact_id"]),
                 "prompt": p["prompt"],
                 "content_hash": p["content_hash"][:12] if p["content_hash"] else None,
                 "captured_at": p["captured_at"].isoformat() if p["captured_at"] else None,
+                "has_image": p["has_image"],
             }
             for p in photos
         ],
     }
+
+
+def get_artifact(db: Session, artifact_id) -> EvidenceArtifact | None:
+    return db.get(EvidenceArtifact, artifact_id)
 
 
 def _ordered_records(db: Session, log_id) -> list[EvidenceRecord]:

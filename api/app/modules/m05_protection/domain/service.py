@@ -8,6 +8,7 @@ This is the App Store narrative for background location: continuous, visible
 benefit.
 """
 
+import uuid
 from datetime import UTC, date, datetime
 
 from sqlalchemy import func, select
@@ -22,6 +23,23 @@ from .models import ConditionCapture, Incident, OnTimeProof
 
 FLAG_KEY = "m05_protection"
 MODULE = "m05"
+DEFAULT_PHOTO_CONTENT_TYPE = "image/jpeg"
+
+
+def _persist_photo_bytes(
+    log_id, content: bytes, content_type: str | None
+) -> tuple[str, str] | None:
+    # store the captured image bytes in F6 object storage (MinIO in dev) so the
+    # Evidence view can serve a real thumbnail. Returns (storage_key, content_type)
+    # or None if the store fails — capture never blocks on storage (the hash and
+    # chain still record; the image is simply unavailable to serve).
+    content_type = content_type or DEFAULT_PHOTO_CONTENT_TYPE
+    key = f"evidence/{log_id}/{uuid.uuid4()}"
+    try:
+        documents.default_storage().put(key, content, content_type)
+    except Exception:
+        return None
+    return key, content_type
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -124,18 +142,26 @@ def add_condition_photo(
     gps_lat: float | None = None,
     gps_lon: float | None = None,
     captured_at: datetime | None = None,
+    content_type: str | None = None,
 ):
     log = db.get(evidence.EvidenceLog, capture.evidence_log_ref)
+    meta = {**(exif or {}), "prompt": prompt}
+    storage_key = None
+    if content is not None:
+        stored = _persist_photo_bytes(log.id, content, content_type)
+        if stored is not None:
+            storage_key, meta["content_type"] = stored
     artifact = evidence.attach_artifact(
         db,
         log,
         evidence.ArtifactType.photo,
         content=content,
         content_hash=content_hash,
-        exif={**(exif or {}), "prompt": prompt},
+        exif=meta,
         gps_lat=gps_lat,
         gps_lon=gps_lon,
         captured_at=captured_at,
+        storage_key=storage_key,
     )
     capture.photo_count += 1
     db.flush()
@@ -186,10 +212,27 @@ def capture_incident(
     return incident
 
 
-def add_incident_photo(db: Session, incident: Incident, content: bytes, captured_at=None):
+def add_incident_photo(
+    db: Session,
+    incident: Incident,
+    content: bytes,
+    captured_at=None,
+    content_type: str | None = None,
+):
     log = db.get(evidence.EvidenceLog, incident.evidence_log_ref)
+    meta: dict = {}
+    storage_key = None
+    stored = _persist_photo_bytes(log.id, content, content_type)
+    if stored is not None:
+        storage_key, meta["content_type"] = stored
     return evidence.attach_artifact(
-        db, log, evidence.ArtifactType.photo, content=content, captured_at=captured_at
+        db,
+        log,
+        evidence.ArtifactType.photo,
+        content=content,
+        captured_at=captured_at,
+        exif=meta,
+        storage_key=storage_key,
     )
 
 
