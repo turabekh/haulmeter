@@ -11,6 +11,8 @@ import re
 
 # tokens that must stay uppercase (directions) rather than title-case to "Eb"
 _DIRECTIONS = {"EB", "WB", "NB", "SB", "NE", "NW", "SE", "SW"}
+# common acronyms in gov POI names that read wrong title-cased ("Nhs", "Rv")
+_ACRONYMS = {"NHS", "RV", "ATM", "EV", "CB", "DOT", "USA", "TA", "PFJ"}
 # small words that stay lowercase mid-name (never first token)
 _LOWER = {"at", "of", "on", "the", "and", "to", "by"}
 _HIGHWAY_PREFIX = {"I", "US", "SR", "SH", "CR", "IH", "HWY", "RT", "RTE"}
@@ -31,7 +33,7 @@ def _fix_highway(token: str) -> str | None:
 
 def _fix_token(token: str, first: bool) -> str:
     up = token.upper()
-    if up in _DIRECTIONS:
+    if up in _DIRECTIONS or up in _ACRONYMS:
         return up
     highway = _fix_highway(token)
     if highway is not None:

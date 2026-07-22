@@ -228,11 +228,21 @@ def fetch_tpims(url: str) -> list[dict]:
 
 
 # --- OSM (Geofabrik extract, osmium-filtered GeoJSON) ---
+def _osm_hgv(tags: dict) -> bool:
+    # truck-relevant: a fuel/parking POI only counts if it admits heavy goods
+    # vehicles — otherwise we'd ingest every gas station and parking lot in a state.
+    return (
+        tags.get("hgv") in ("yes", "designated")
+        or tags.get("access") == "hgv"
+        or tags.get("truck") == "yes"
+    )
+
+
 _OSM_TYPE_RULES = [
     (lambda t: t.get("highway") in ("rest_area", "services"), FacilityType.rest_area),
-    (lambda t: t.get("amenity") == "fuel", FacilityType.fuel_station),
     (lambda t: t.get("amenity") == "truck_stop", FacilityType.truck_stop),
-    (lambda t: t.get("amenity") == "parking", FacilityType.parking_property),
+    (lambda t: t.get("amenity") == "fuel" and _osm_hgv(t), FacilityType.fuel_station),
+    (lambda t: t.get("amenity") == "parking" and _osm_hgv(t), FacilityType.parking_property),
 ]
 
 

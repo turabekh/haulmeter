@@ -16,6 +16,16 @@ def _load(name: str):
     return json.loads((FIX / name).read_text())
 
 
+# --- Name normalization (condition C — display trust) ---
+def test_name_normalization_preserves_highways_directions_acronyms():
+    from app.foundation.f02_facility.domain.ingest.normalize import normalize_name
+
+    assert normalize_name("REST AREA I-94 EB") == "Rest Area I-94 EB"
+    assert normalize_name("NHS WELCOME CENTER") == "NHS Welcome Center"  # acronym kept
+    assert normalize_name("PILOT TRAVEL CENTER US41") == "Pilot Travel Center US-41"
+    assert normalize_name("") == ""
+
+
 # --- Adapters ---
 def test_parse_ntad_normalizes_name_and_keeps_capacity():
     recs = facility.parse_ntad(_load("ntad_page.geojson"))
@@ -65,6 +75,26 @@ def test_osm_polygon_uses_centroid():
     lot = recs["way/222"]
     assert lot.facility_type == facility.FacilityType.parking_property
     assert 43.79 < lot.lat < 43.81 and -91.242 < lot.lon < -91.240  # centroid of the ring
+
+
+def test_osm_skips_non_truck_fuel_and_parking():
+    # a plain gas station / car park is NOT ingested — only HGV-admitting POIs, else
+    # the layer floods with every parking lot in the state (rest areas always qualify).
+    gj = {
+        "type": "FeatureCollection",
+        "features": [
+            {"geometry": {"type": "Point", "coordinates": [-89.0, 43.0]},
+             "properties": {"@id": "n/1", "amenity": "fuel", "name": "Car Gas"}},
+            {"geometry": {"type": "Point", "coordinates": [-89.1, 43.1]},
+             "properties": {"@id": "n/2", "amenity": "parking", "name": "Mall Lot"}},
+            {"geometry": {"type": "Point", "coordinates": [-89.2, 43.2]},
+             "properties": {"@id": "n/3", "amenity": "fuel", "hgv": "yes", "name": "Truck Fuel"}},
+            {"geometry": {"type": "Point", "coordinates": [-89.3, 43.3]},
+             "properties": {"@id": "n/4", "highway": "rest_area", "name": "Rest Area"}},
+        ],
+    }
+    refs = {r.external_ref for r in facility.parse_osm(gj)}
+    assert refs == {"n/3", "n/4"}  # truck fuel + rest area kept; car gas + mall lot dropped
 
 
 def test_chain_adapter_is_a_stub():

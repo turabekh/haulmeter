@@ -37,6 +37,7 @@ The F2 keystone gained a real ingestion pipeline: **every source lands the same 
 
 - **Live NTAD national ingest:** **1827 real facilities** created (88 deduped) in ~12s, with normalized names, provenance, capacity, confidence 0.75; **visible via `/map/overlay`**; **clustering confirmed live** (1834 in view → 0 pins + 1351 cluster cells, bounded).
 - **TPIMS (WI) + OSM (WI) flowing in dev:** static → 3 facilities; dynamic → 2 beliefs applied, 1 skipped (`trustData=false`); the WI belief carries `freshest_at = 2026-07-22T03:35:00Z` (the **real feed timestamp**, not ingest time); OSM fixture → facilities, one **cross-source-deduped** with the NTAD/TPIMS site.
+- **Live OSM (Wisconsin) ingested** (post-plan follow-on): `make osm-extract STATE=wisconsin` (277 MB Geofabrik pbf → osmium filter in a Debian container) → 33 MB GeoJSON; the HGV-gated `parse_osm` reduced 80,393 raw features to **423 truck-relevant records → 259 created, 164 deduped against NTAD**. **10 WI facilities now carry both NTAD+OSM provenance** (e.g. "Rest Area #63": ntad+osm, capacity 22 from NTAD, confidence 0.90) — cross-source merge proven at scale on real data. Fixes made while doing it: OSM fuel/parking now require an HGV tag (else every gas station/parking lot floods in); name normalization preserves acronyms (NHS stays "NHS", not "Nhs"); the osmium image is Debian+apt (no dependency on a specific published image).
 - **CI is network-free** — every adapter/pipeline tested against committed fixtures (`api/tests/fixtures/ingest/`). Suite: **pytest 358** (was 345; +13) · **vitest 116** · `lint-imports` **29/29** · `ruff` clean · `vite build` OK.
 - **DoD:** (a) NTAD national + provenance ✔ · (b) TPIMS static+dynamic WI in dev, timestamps→badges ✔ · (c) OSM WI in dev ✔ · (d) cross-source dedupe test (NTAD+TPIMS+OSM → one facility, NTAD wins capacity) ✔ · (e) seed off by default + documented ✔ · (f) suites green, no network in CI ✔ · (g) this handoff ✔.
 
@@ -49,8 +50,8 @@ The F2 keystone gained a real ingestion pipeline: **every source lands the same 
 
 ## 4. Exact next task / follow-ons
 
-- **Confirm the live TPIMS endpoint** (the V2.2 URLs drifted) — update the `data_sources.tpims_static/dynamic` config values, enable the `f02_ingest_tpims_*` flags, and the worker starts refreshing WI (then the 8 MAASTO states).
-- **Run the live OSM extract** for Wisconsin: `make osm-extract STATE=wisconsin && make ingest-osm STATE=wisconsin` (downloads a ~250 MB Geofabrik pbf, osmium-filters in a container). Then regional extracts for national OSM.
+- **Confirm the live TPIMS endpoint** (the V2.2 URLs drifted → 404). The public feed now appears to require **partner registration / an API token** (the spec's "trusted partners" note) — this is an owner/ops task: register with MAASTO / the state DOTs, then set `data_sources.tpims_static/dynamic` config + enable the `f02_ingest_tpims_*` flags and the worker refreshes WI (then the 8 MAASTO states). The pipeline is proven and ready; only the live URL/token is missing.
+- **Live OSM (Wisconsin): DONE** this session (see §2). To extend nationally: `make osm-extract STATE=<state> && make ingest-osm STATE=<state>` per state, or regional Geofabrik extracts.
 - **Chain locators** (Pilot/Love's/TA): the adapter seam exists; wire real sources after ToS review.
 - **Zoom-adaptive cluster precision** (current fixed 0.1° is coarse at continental zoom) and the **client cluster-bubble render** (server already returns clusters; MapSurface keeps them in `clusters` for the render) — both refinements; §20 device-class fps stays a manual measurement.
 - Then resume the remaining activation seams (Stripe / fuel partner / collections+legal / IFTA — all owner-provisioned).

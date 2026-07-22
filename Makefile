@@ -5,7 +5,9 @@ COMPOSE = docker compose -f infra/docker-compose.yml
         seed ingest-ntad ingest-tpims ingest-osm osm-extract
 
 STATE ?= wisconsin
-OSMIUM_IMAGE ?= yagajs/osmium-tool:latest
+# osmium-tool is packaged in Debian/Ubuntu; install it in a slim base at run time
+# (no dependency on a specific published osmium image).
+OSMIUM_IMAGE ?= debian:stable-slim
 
 help:
 	@echo "LONGHAUL make targets:"
@@ -68,14 +70,16 @@ ingest-tpims:
 ingest-osm:
 	$(COMPOSE) exec api python -m scripts.ingest_osm /app/data/osm/$(STATE).geojson
 
-# Docker-only OSM extract: download a Geofabrik state pbf, filter truck-relevant
-# features with osmium, export GeoJSON. Output lands in api/data/osm/ (gitignored).
+# OSM extract: download a Geofabrik state pbf (host curl), then osmium-filter +
+# export truck-relevant features in a container. Output -> api/data/osm/ (gitignored).
 osm-extract:
 	mkdir -p api/data/osm
+	curl -fSL -o api/data/osm/$(STATE).osm.pbf \
+	  https://download.geofabrik.de/north-america/us/$(STATE)-latest.osm.pbf
 	docker run --rm -v "$(PWD)/api/data/osm:/data" $(OSMIUM_IMAGE) sh -c '\
-	  wget -qO /data/$(STATE).osm.pbf https://download.geofabrik.de/north-america/us/$(STATE)-latest.osm.pbf && \
+	  apt-get update -qq && apt-get install -y -qq --no-install-recommends osmium-tool >/dev/null && \
 	  osmium tags-filter /data/$(STATE).osm.pbf \
-	    nwr/highway=rest_area,services nwr/amenity=fuel,truck_stop nwr/amenity=parking \
+	    nwr/highway=rest_area,services nwr/amenity=truck_stop nwr/hgv nwr/access=hgv \
 	    -o /data/$(STATE)-filtered.osm.pbf --overwrite && \
-	  osmium export /data/$(STATE)-filtered.osm.pbf -o /data/$(STATE).geojson --overwrite && \
-	  echo "wrote api/data/osm/$(STATE).geojson"'
+	  osmium export /data/$(STATE)-filtered.osm.pbf -o /data/$(STATE).geojson --overwrite'
+	@echo "wrote api/data/osm/$(STATE).geojson"
