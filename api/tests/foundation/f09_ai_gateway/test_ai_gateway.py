@@ -160,3 +160,65 @@ def test_extract_json_tolerates_prose_and_returns_empty_on_garbage():
 
     assert _extract_json('Here you go: {"a": 1} — hope that helps') == {"a": 1}
     assert _extract_json("no json here") == {}  # -> service raises StructuredOutputError
+
+
+# --- Real Voyage embeddings adapter (F9 embeddings activation) ---
+def test_fake_embedding_is_the_platform_dimension():
+    # the Fake produces EMBED_DIM-wide vectors so search works without a key,
+    # and the DB column (migration 0026) matches.
+    assert len(ai.FakeModelProvider().embed("dock notes").vector) == ai.EMBED_DIM
+    assert ai.EMBED_DIM == 1024
+
+
+def test_voyage_provider_maps_embedding_response(monkeypatch):
+    from app.foundation.f09_ai_gateway.domain import provider as prov
+
+    captured = {}
+
+    def fake_voyage(api_key, model, text, dim):
+        captured.update(api_key=api_key, model=model, dim=dim)
+        return [0.1] * dim, 7
+
+    monkeypatch.setattr(prov, "_voyage_embed", fake_voyage)
+    result = prov.VoyageEmbeddingProvider("pa-test", "voyage-3.5").embed("quick turnaround")
+    assert len(result.vector) == ai.EMBED_DIM
+    assert result.input_tokens == 7
+    assert captured == {"api_key": "pa-test", "model": "voyage-3.5", "dim": ai.EMBED_DIM}
+
+
+def test_voyage_provider_delegates_text_to_fallback():
+    # Voyage does embeddings only; complete/parse/transcribe/synthesize still work
+    p = ai.VoyageEmbeddingProvider("pa-test", "voyage-3.5")
+    assert p.complete("draft this", {}).text
+    assert p.transcribe("audio://x", "en")
+    assert p.synthesize("hi", "en").startswith("audio://")
+
+
+def test_resolve_provider_uses_voyage_for_embeddings(monkeypatch):
+    from app.core.config import get_settings
+    from app.foundation.f09_ai_gateway.domain import provider as prov
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("VOYAGE_API_KEY", "pa-test")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    try:
+        resolved = prov.resolve_provider()
+        assert isinstance(resolved, prov.VoyageEmbeddingProvider)
+    finally:
+        get_settings.cache_clear()
+
+
+def test_resolve_provider_composes_anthropic_text_with_voyage_embed(monkeypatch):
+    from app.core.config import get_settings
+    from app.foundation.f09_ai_gateway.domain import provider as prov
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("VOYAGE_API_KEY", "pa-test")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    try:
+        resolved = prov.resolve_provider()
+        # Anthropic handles text; its embed fallback is the live Voyage provider
+        assert isinstance(resolved, prov.AnthropicModelProvider)
+        assert isinstance(resolved._fallback, prov.VoyageEmbeddingProvider)
+    finally:
+        get_settings.cache_clear()

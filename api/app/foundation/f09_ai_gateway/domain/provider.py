@@ -13,9 +13,11 @@ import hashlib
 from dataclasses import dataclass
 from typing import Protocol
 
-# AI-CONTEXT: placeholder dimension; the real embedding model's dimension is
-# set at F9 activation (a migration + a pgvector ANN index at that point).
-EMBED_DIM = 16
+# AI-CONTEXT: the platform embedding dimension. voyage-3.5's default output
+# dimension (also 256/512/2048-capable). The Fake produces deterministic vectors
+# of this width, so search works identically with or without a Voyage key; the
+# real vectors + the HNSW ANN index (migration 0026) light up at activation.
+EMBED_DIM = 1024
 
 
 @dataclass
@@ -189,12 +191,75 @@ class AnthropicModelProvider:
         return self._fallback.synthesize(text, locale)
 
 
+# --- Real embeddings adapter: Voyage AI (the F9 embeddings activation) ---
+# Anthropic has no embeddings API; Voyage is its recommended embeddings partner.
+_VOYAGE_URL = "https://api.voyageai.com/v1/embeddings"
+
+
+def _voyage_embed(api_key: str, model: str, text: str, dim: int) -> tuple[list[float], int]:
+    # single HTTP call to the Voyage embeddings API; kept as a module function so
+    # tests monkeypatch it without touching the network. Returns (vector, tokens).
+    import httpx
+
+    resp = httpx.post(
+        _VOYAGE_URL,
+        headers={"Authorization": f"Bearer {api_key}", "content-type": "application/json"},
+        json={"input": [text], "model": model, "output_dimension": dim, "input_type": "document"},
+        timeout=60.0,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    vector = list(data["data"][0]["embedding"])
+    tokens = int(data.get("usage", {}).get("total_tokens", 0)) or _tokens(text)
+    return vector, tokens
+
+
+class VoyageEmbeddingProvider:
+    """Live embeddings adapter. Real `embed` via Voyage; `complete`/`parse_structured`/
+    `transcribe`/`synthesize` delegate to a deterministic fallback so it still
+    satisfies the full ModelProvider protocol (Voyage does embeddings only)."""
+
+    def __init__(
+        self, api_key: str, model: str, fallback: "FakeModelProvider | None" = None
+    ) -> None:
+        self._key = api_key
+        self._model = model
+        self._fallback = fallback or FakeModelProvider()
+
+    def complete(self, prompt: str, context: dict) -> CompletionResult:
+        return self._fallback.complete(prompt, context)
+
+    def parse_structured(self, prompt: str, context: dict) -> StructuredResult:
+        return self._fallback.parse_structured(prompt, context)
+
+    def embed(self, text: str) -> EmbeddingResult:
+        vector, tokens = _voyage_embed(self._key, self._model, text, EMBED_DIM)
+        return EmbeddingResult(vector, tokens)
+
+    def transcribe(self, audio_ref: str, locale: str) -> str:
+        return self._fallback.transcribe(audio_ref, locale)
+
+    def synthesize(self, text: str, locale: str) -> str:
+        return self._fallback.synthesize(text, locale)
+
+
 def resolve_provider() -> ModelProvider:
-    # the live provider when ANTHROPIC_API_KEY is set (F9 activated), else the
-    # deterministic Fake — the same shape the app has always run on without a key.
+    # compose the live providers by capability: Anthropic for text intelligence,
+    # Voyage for embeddings. Either (or both) activates when its key is set; with
+    # no keys, the deterministic Fake — the shape the app has always run on.
     from app.core.config import get_settings
 
     settings = get_settings()
+    embed_provider = (
+        VoyageEmbeddingProvider(settings.voyage_api_key, settings.embed_model)
+        if settings.voyage_api_key
+        else None
+    )
     if settings.anthropic_api_key:
-        return AnthropicModelProvider(settings.anthropic_api_key, settings.f9_model)
+        # Anthropic handles text; its fallback answers embed/STT/TTS -> Voyage when set
+        return AnthropicModelProvider(
+            settings.anthropic_api_key, settings.f9_model, fallback=embed_provider
+        )
+    if embed_provider is not None:
+        return embed_provider
     return FakeModelProvider()

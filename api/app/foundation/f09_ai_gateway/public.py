@@ -17,6 +17,7 @@ from .domain.provider import (
     ModelProvider,
     StructuredResult,
     StubModelProvider,
+    VoyageEmbeddingProvider,
     deterministic_vector,
     resolve_provider,
 )
@@ -54,6 +55,7 @@ __all__ = [
     "FakeModelProvider",
     "StubModelProvider",
     "AnthropicModelProvider",
+    "VoyageEmbeddingProvider",
     "resolve_provider",
     "deterministic_vector",
     "BudgetExceeded",

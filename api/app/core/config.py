@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     # is present; empty -> the deterministic FakeAuthorityVerifier. Key in .env only.
     fmcsa_webkey: str = Field(default="")
 
+    # F9 embeddings — Voyage AI (Anthropic's recommended embeddings partner; Anthropic
+    # has no embeddings API). Real vectors activate when a key is present; empty -> the
+    # deterministic FakeModelProvider embedding. Key in .env only. Model dim = EMBED_DIM.
+    voyage_api_key: str = Field(default="")
+    embed_model: str = Field(default="voyage-3.5")
+
     @property
     def database_url(self) -> str:
         return (
