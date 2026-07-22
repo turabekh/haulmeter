@@ -63,8 +63,15 @@ def _make_dev_driver_owner_operator(db):
     if drv is None:
         drv = identity.register_account(db, "dev-driver@longhaul.local", "longhaul-dev-1")
     identity.upsert_driver_profile(db, drv, authority_type=identity.AuthorityType.own_mc)
+    # activate the FMCSA verification seam and pre-verify the dev-driver so the
+    # verified-authority pill shows in the browser (Fake verifier, no webKey needed).
+    from app.foundation.f13_flags import public as flags
+
+    identity.register_authority_verification(db)
+    flags.enable(db, identity.AUTHORITY_VERIFICATION_FLAG)
+    identity.verify_authority(db, drv, mc_number="123456", dot_number="1000001")
     db.commit()
-    print("dev-driver set to own_mc (owner-operator) — new claims will show as money owed")
+    print("dev-driver set to own_mc (owner-operator), authority verified — pill will show")
 
 
 def main():

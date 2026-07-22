@@ -3,17 +3,46 @@
      (balance in Mono + contributor level). Calm and minimal (§15.3). Log out
      clears the session (api.js) and returns to the auth surface. -->
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, reactive, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { Check } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
 import { LAUNCH_LOCALES } from "../core/i18n/index.js";
-import { email, logout, fetchPoints } from "../core/api.js";
+import { email, logout, fetchPoints, fetchMe, verifyAuthority } from "../core/api.js";
 import { SAMPLE_POINTS } from "../core/fixtures.js";
 
 const router = useRouter();
 const { t, locale, setLocale } = useI18n();
 const points = ref(SAMPLE_POINTS);
+
+// F1: operating-authority verification (FMCSA). Section only appears when the
+// F13 flag is on; verified state is plain text here (§10 — no badges on More),
+// the colored status pill lives where credibility is consumed (Claim / Money).
+const me = ref(null);
+const authForm = reactive({ number: "", busy: false, error: "" });
+
+async function loadMe() {
+  try {
+    me.value = await fetchMe();
+  } catch {
+    me.value = null; // unauthenticated / offline — hide the section
+  }
+}
+
+async function submitVerify() {
+  authForm.error = "";
+  if (!authForm.number.trim()) return;
+  authForm.busy = true;
+  try {
+    me.value = { ...me.value, ...(await verifyAuthority({ mcNumber: authForm.number.trim() })) };
+    if (!me.value.verified) authForm.error = t("authority.error");
+    else authForm.number = "";
+  } catch (e) {
+    authForm.error = e.message === "verification_disabled" ? t("authority.disabled") : t("authority.error");
+  } finally {
+    authForm.busy = false;
+  }
+}
 
 // each language shown in its OWN name so a driver recognizes it regardless of the
 // current UI language (F15 launch locales)
@@ -32,6 +61,7 @@ onMounted(async () => {
   } catch {
     points.value = SAMPLE_POINTS; // unauthenticated / offline
   }
+  await loadMe();
 });
 
 function signOut() {
@@ -70,6 +100,38 @@ function signOut() {
           </button>
         </li>
       </ul>
+    </section>
+
+    <!-- F1: operating-authority verification — only when the F13 flag is on -->
+    <section v-if="me && me.verification_enabled" class="card">
+      <h2 class="card__title">{{ t("more.authority") }}</h2>
+
+      <div v-if="me.verified" class="verified">
+        <Check :size="18" :stroke-width="2.5" class="verified__tick" aria-hidden="true" />
+        <span class="verified__name">{{ me.legal_name || ("MC# " + me.mc_number) }}</span>
+        <span class="verified__label">{{ t("authority.verified") }}</span>
+      </div>
+
+      <div v-else class="authority__body">
+        <p class="authority__hint">{{ t("authority.hint") }}</p>
+        <form class="authority__form" @submit.prevent="submitVerify">
+          <label class="field">
+            <span class="field__label">{{ t("authority.number_label") }}</span>
+            <input
+              v-model="authForm.number"
+              class="field__input"
+              type="text"
+              inputmode="numeric"
+              :placeholder="t('authority.number_ph')"
+              autocapitalize="characters"
+            />
+          </label>
+          <p v-if="authForm.error" class="authority__error" role="alert">{{ authForm.error }}</p>
+          <button class="cta cta--accent" type="submit" :disabled="authForm.busy">
+            {{ authForm.busy ? t("authority.verifying") : t("authority.verify") }}
+          </button>
+        </form>
+      </div>
     </section>
 
     <section class="card">
@@ -155,6 +217,63 @@ function signOut() {
   margin: 0 0 var(--s-4);
   font-size: var(--type-body-size);
   color: var(--text-1);
+}
+.verified {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 48px;
+}
+.verified__tick {
+  color: var(--ledger-500);
+  flex-shrink: 0;
+}
+.verified__name {
+  font-size: var(--type-body-size);
+  color: var(--text-1);
+  flex: 1;
+}
+.verified__label {
+  font-size: var(--type-caption-size);
+  color: var(--ledger-500);
+  font-weight: 500;
+}
+.authority__hint {
+  margin: 0 0 var(--s-3);
+  font-size: var(--type-caption-size);
+  color: var(--text-3);
+}
+.authority__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.field__label {
+  font-size: var(--type-label-size);
+  color: var(--text-2);
+}
+.field__input {
+  min-height: 56px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-control);
+  border: 1px solid var(--line-1);
+  background: var(--ink-0);
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+}
+.authority__error {
+  margin: 0;
+  color: var(--flare-500);
+  font-size: var(--type-caption-size);
+}
+.cta--accent {
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 .cta {
   width: 100%;

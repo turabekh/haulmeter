@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str = Field(default="")
     f9_model: str = Field(default="claude-haiku-4-5-20251001")
 
+    # F1 authority verification — real FMCSA QCMobile lookup activates when a webKey
+    # is present; empty -> the deterministic FakeAuthorityVerifier. Key in .env only.
+    fmcsa_webkey: str = Field(default="")
+
     @property
     def database_url(self) -> str:
         return (

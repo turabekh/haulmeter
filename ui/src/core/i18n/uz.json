@@ -310,5 +310,15 @@
   "evidence.timeline": "Vaqt jadvali",
   "evidence.no_events": "Hali hodisalar yo'q.",
   "evidence.documents": "Hujjatlar",
-  "evidence.images_note": "Rasm tasvirlari saqlash ishga tushganda xavfsiz beriladi."
+  "evidence.images_note": "Rasm tasvirlari saqlash ishga tushganda xavfsiz beriladi.",
+  "more.authority": "Ish vakolati",
+  "authority.number_label": "MC yoki DOT raqami",
+  "authority.number_ph": "masalan MC 123456",
+  "authority.verify": "FMCSA orqali tekshirish",
+  "authority.verifying": "Tekshirilmoqda…",
+  "authority.verified": "Tasdiqlangan",
+  "authority.not_verified": "Tasdiqlanmagan",
+  "authority.hint": "Vakolatingizni bepul FMCSA tekshiruvi bilan tasdiqlang — bu turib qolish da'volaringizni kuchaytiradi.",
+  "authority.error": "Bu raqamni tasdiqlay olmadik. Tekshirib, qayta urinib ko‘ring.",
+  "authority.disabled": "Tekshiruv hali yoqilmagan."
 }

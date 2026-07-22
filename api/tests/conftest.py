@@ -5,6 +5,7 @@
 import os
 
 os.environ.pop("ANTHROPIC_API_KEY", None)
+os.environ.pop("FMCSA_WEBKEY", None)  # -> deterministic FakeAuthorityVerifier
 
 import pytest  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402

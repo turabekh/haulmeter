@@ -310,5 +310,15 @@
   "evidence.timeline": "Timeline",
   "evidence.no_events": "No events recorded yet.",
   "evidence.documents": "Documents on file",
-  "evidence.images_note": "Photo images are served securely once the storage layer is live."
+  "evidence.images_note": "Photo images are served securely once the storage layer is live.",
+  "more.authority": "Operating authority",
+  "authority.number_label": "MC or DOT number",
+  "authority.number_ph": "e.g. MC 123456",
+  "authority.verify": "Verify with FMCSA",
+  "authority.verifying": "Checking…",
+  "authority.verified": "Verified",
+  "authority.not_verified": "Not verified",
+  "authority.hint": "Confirm your authority with a free FMCSA lookup — it strengthens your detention claims.",
+  "authority.error": "We couldn't confirm that number. Check it and try again.",
+  "authority.disabled": "Verification isn't turned on yet."
 }

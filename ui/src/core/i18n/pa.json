@@ -310,5 +310,15 @@
   "evidence.timeline": "ਸਮਾਂ-ਰੇਖਾ",
   "evidence.no_events": "ਹਾਲੇ ਕੋਈ ਘਟਨਾ ਦਰਜ ਨਹੀਂ।",
   "evidence.documents": "ਦਸਤਾਵੇਜ਼",
-  "evidence.images_note": "ਸਟੋਰੇਜ ਲਾਈਵ ਹੋਣ 'ਤੇ ਫੋਟੋ ਚਿੱਤਰ ਸੁਰੱਖਿਅਤ ਢੰਗ ਨਾਲ ਦਿੱਤੇ ਜਾਂਦੇ ਹਨ।"
+  "evidence.images_note": "ਸਟੋਰੇਜ ਲਾਈਵ ਹੋਣ 'ਤੇ ਫੋਟੋ ਚਿੱਤਰ ਸੁਰੱਖਿਅਤ ਢੰਗ ਨਾਲ ਦਿੱਤੇ ਜਾਂਦੇ ਹਨ।",
+  "more.authority": "ਓਪਰੇਟਿੰਗ ਅਥਾਰਟੀ",
+  "authority.number_label": "MC ਜਾਂ DOT ਨੰਬਰ",
+  "authority.number_ph": "ਜਿਵੇਂ MC 123456",
+  "authority.verify": "FMCSA ਨਾਲ ਤਸਦੀਕ ਕਰੋ",
+  "authority.verifying": "ਜਾਂਚ ਹੋ ਰਹੀ ਹੈ…",
+  "authority.verified": "ਤਸਦੀਕਸ਼ੁਦਾ",
+  "authority.not_verified": "ਤਸਦੀਕ ਨਹੀਂ ਹੋਈ",
+  "authority.hint": "ਮੁਫ਼ਤ FMCSA ਜਾਂਚ ਨਾਲ ਆਪਣੀ ਅਥਾਰਟੀ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ — ਇਹ ਤੁਹਾਡੇ ਡਿਟੈਂਸ਼ਨ ਦਾਅਵਿਆਂ ਨੂੰ ਮਜ਼ਬੂਤ ਕਰਦਾ ਹੈ।",
+  "authority.error": "ਅਸੀਂ ਉਹ ਨੰਬਰ ਪੁਸ਼ਟੀ ਨਹੀਂ ਕਰ ਸਕੇ। ਜਾਂਚ ਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  "authority.disabled": "ਤਸਦੀਕ ਹਾਲੇ ਚਾਲੂ ਨਹੀਂ ਹੈ।"
 }

@@ -310,5 +310,15 @@
   "evidence.timeline": "Хронология",
   "evidence.no_events": "Событий пока нет.",
   "evidence.documents": "Документы в деле",
-  "evidence.images_note": "Изображения выдаются безопасно после активации хранилища."
+  "evidence.images_note": "Изображения выдаются безопасно после активации хранилища.",
+  "more.authority": "Рабочие полномочия",
+  "authority.number_label": "Номер MC или DOT",
+  "authority.number_ph": "напр. MC 123456",
+  "authority.verify": "Проверить в FMCSA",
+  "authority.verifying": "Проверяем…",
+  "authority.verified": "Подтверждено",
+  "authority.not_verified": "Не подтверждено",
+  "authority.hint": "Подтвердите свои полномочия бесплатной проверкой FMCSA — это усилит ваши претензии по простою.",
+  "authority.error": "Не удалось подтвердить этот номер. Проверьте его и попробуйте снова.",
+  "authority.disabled": "Проверка пока не включена."
 }

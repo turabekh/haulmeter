@@ -323,6 +323,25 @@ export async function register(email, password, authority = null) {
   return _adopt(await resp.json(), email);
 }
 
+export async function fetchMe() {
+  // F1: who's signed in + their operating-authority verification state
+  const resp = await fetch(`${API_BASE}/auth/me`, { headers: headers() });
+  if (!resp.ok) throw new Error(`me failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function verifyAuthority({ mcNumber, dotNumber }) {
+  // F1: back the self-declared authority with an FMCSA MC#/DOT lookup
+  const resp = await fetch(`${API_BASE}/auth/verify-authority`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ mc_number: mcNumber || null, dot_number: dotNumber || null }),
+  });
+  if (resp.status === 403) throw new Error("verification_disabled");
+  if (!resp.ok) throw new Error(`verify failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchOverlay({ lat, lon, radiusM = 8000, preset = "drive" }) {
   const q = new URLSearchParams({ lat, lon, radius_m: radiusM, preset });
   return apiGet(`/map/overlay?${q}`, `overlay:${preset}`);

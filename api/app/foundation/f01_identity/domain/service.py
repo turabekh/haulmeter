@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .auth_methods import get_handler
-from .enums import AuthorityType, MethodType, OrgType, Role
+from .enums import AuthorityType, MethodType, OrgType, Role, VerifyStatus
 from .models import (
     Account,
     AuthMethod,
@@ -15,9 +15,13 @@ from .models import (
     OrgMembership,
     RoleAttachment,
 )
+from .verifier import AuthorityVerifier, resolve_verifier
 
 DEFAULT_SESSION_TTL = timedelta(days=30)
 INVOICING_AUTHORITIES = {AuthorityType.own_mc, AuthorityType.leased}
+
+# F13 flag gating the FMCSA verification seam (activation switch, PRD §6).
+AUTHORITY_VERIFICATION_FLAG = "f01_authority_verification"
 
 
 class EmailAlreadyRegistered(Exception):
@@ -166,3 +170,35 @@ def can_invoice(profile: DriverProfile | None) -> bool:
     if profile is None or profile.authority_type is None:
         return False
     return profile.authority_type in INVOICING_AUTHORITIES
+
+
+def register_authority_verification(db: Session) -> None:
+    # idempotent: ensure the F13 activation flag exists (mirrors module register_*).
+    from app.foundation.f13_flags import public as flags
+
+    flags.register_flag(
+        db, AUTHORITY_VERIFICATION_FLAG, description="F1 Operating-authority verification (FMCSA)"
+    )
+
+
+def verify_authority(
+    db: Session,
+    account: Account,
+    mc_number: str | None,
+    dot_number: str | None,
+    verifier: AuthorityVerifier | None = None,
+) -> DriverProfile:
+    # runs the (key-gated) FMCSA lookup and records the outcome on the profile.
+    # Verification strengthens credibility; it never changes can_invoice.
+    verifier = verifier or resolve_verifier()
+    result = verifier.verify(mc_number, dot_number)
+    verified = result.found and result.allowed_to_operate
+    return upsert_driver_profile(
+        db,
+        account,
+        mc_number=result.mc_number or (mc_number or None),
+        dot_number=result.dot_number or (dot_number or None),
+        legal_name=result.legal_name if verified else None,
+        authority_verify_status=(VerifyStatus.verified if verified else VerifyStatus.failed),
+        authority_verified_at=(datetime.now(UTC) if verified else None),
+    )

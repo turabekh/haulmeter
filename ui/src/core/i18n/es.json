@@ -310,5 +310,15 @@
   "evidence.timeline": "Cronología",
   "evidence.no_events": "Aún no hay eventos.",
   "evidence.documents": "Documentos en archivo",
-  "evidence.images_note": "Las imágenes se sirven de forma segura cuando el almacenamiento esté activo."
+  "evidence.images_note": "Las imágenes se sirven de forma segura cuando el almacenamiento esté activo.",
+  "more.authority": "Autoridad operativa",
+  "authority.number_label": "Número MC o DOT",
+  "authority.number_ph": "p. ej. MC 123456",
+  "authority.verify": "Verificar con FMCSA",
+  "authority.verifying": "Comprobando…",
+  "authority.verified": "Verificado",
+  "authority.not_verified": "Sin verificar",
+  "authority.hint": "Confirma tu autoridad con una consulta gratuita a FMCSA — refuerza tus reclamos de detención.",
+  "authority.error": "No pudimos confirmar ese número. Revísalo e inténtalo de nuevo.",
+  "authority.disabled": "La verificación aún no está activada."
 }

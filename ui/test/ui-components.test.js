@@ -480,6 +480,64 @@ describe("MoreSurface — account + points + logout (F1 / M10)", () => {
   });
 });
 
+describe("MoreSurface — operating-authority verification (F1 / FMCSA)", () => {
+  function routedFetch(map) {
+    return vi.fn((url) => {
+      const key = Object.keys(map).find((k) => String(url).includes(k));
+      const body = map[key] ?? {};
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+    });
+  }
+
+  it("hides the section entirely when the F13 flag is off", async () => {
+    setToken("tok-authoff");
+    vi.stubGlobal("fetch", routedFetch({
+      "/community/points": { balance: 0, level: "new" },
+      "/auth/me": { verification_enabled: false, verified: false, authority: "own_mc" },
+    }));
+    try {
+      const w = mount(MoreSurface, { global: { plugins: [testRouter()] } });
+      await flushPromises();
+      expect(w.text()).not.toContain("Operating authority");
+      w.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+
+  it("shows the verify form when enabled, then the verified name after a lookup", async () => {
+    setToken("tok-authon");
+    vi.stubGlobal("fetch", routedFetch({
+      "/community/points": { balance: 0, level: "new" },
+      "/auth/me": { verification_enabled: true, verified: false, authority: "own_mc", mc_number: null },
+      "/auth/verify-authority": {
+        verified: true,
+        verify_status: "verified",
+        mc_number: "123456",
+        legal_name: "CARRIER 123456 LLC",
+      },
+    }));
+    try {
+      const w = mount(MoreSurface, { global: { plugins: [testRouter()] } });
+      await flushPromises();
+      expect(w.text()).toContain("Operating authority");
+      expect(w.find(".authority__form").exists()).toBe(true);
+
+      await w.find(".field__input").setValue("123456");
+      await w.find(".authority__form").trigger("submit");
+      await flushPromises();
+
+      expect(w.find(".verified__name").text()).toContain("CARRIER 123456 LLC");
+      expect(w.find(".verified__label").text()).toContain("Verified");
+      w.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+});
+
 describe("FacilityProfileSurface — driver Q&A (M10-FR4)", () => {
   it("lists questions + answers with the on-site badge (fixture)", async () => {
     const router = testRouter();

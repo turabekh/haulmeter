@@ -310,5 +310,15 @@
   "evidence.timeline": "Jadwalka wakhtiga",
   "evidence.no_events": "Weli dhacdooyin lama diiwaangelin.",
   "evidence.documents": "Dukumeentiyada faylka",
-  "evidence.images_note": "Sawirrada si ammaan ah ayaa loo bixiyaa marka kaydku firfircoono."
+  "evidence.images_note": "Sawirrada si ammaan ah ayaa loo bixiyaa marka kaydku firfircoono.",
+  "more.authority": "Awoodda hawlgalka",
+  "authority.number_label": "Lambarka MC ama DOT",
+  "authority.number_ph": "tusaale MC 123456",
+  "authority.verify": "Ku xaqiiji FMCSA",
+  "authority.verifying": "Waa la hubinayaa…",
+  "authority.verified": "La xaqiijiyay",
+  "authority.not_verified": "Lama xaqiijin",
+  "authority.hint": "Ku xaqiiji awooddaada baaritaan FMCSA oo bilaash ah — waxay xoojisaa sheegashooyinkaaga daahitaanka.",
+  "authority.error": "Ma xaqiijin karin lambarkaas. Hubi oo mar kale isku day.",
+  "authority.disabled": "Xaqiijinta weli lama shidin."
 }

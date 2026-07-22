@@ -6,7 +6,7 @@ method registry is the seam for future OAuth/OTP. Consumed by every module.
 """
 
 from .domain.auth_methods import get_handler, is_implemented
-from .domain.enums import AuthorityType, MethodType, OrgType, Role
+from .domain.enums import AuthorityType, MethodType, OrgType, Role, VerifyStatus
 from .domain.models import (
     Account,
     AuthMethod,
@@ -17,6 +17,7 @@ from .domain.models import (
     RoleAttachment,
 )
 from .domain.service import (
+    AUTHORITY_VERIFICATION_FLAG,
     AuthMethodNotEnabled,
     EmailAlreadyRegistered,
     add_auth_method,
@@ -27,8 +28,16 @@ from .domain.service import (
     create_organization,
     create_session,
     register_account,
+    register_authority_verification,
     resolve_session,
     upsert_driver_profile,
+    verify_authority,
+)
+from .domain.verifier import (
+    AuthorityVerifier,
+    FakeAuthorityVerifier,
+    VerificationResult,
+    resolve_verifier,
 )
 
 __all__ = [
@@ -43,8 +52,10 @@ __all__ = [
     "MethodType",
     "OrgType",
     "Role",
+    "VerifyStatus",
     "AuthMethodNotEnabled",
     "EmailAlreadyRegistered",
+    "AUTHORITY_VERIFICATION_FLAG",
     "add_auth_method",
     "add_membership",
     "attach_role",
@@ -53,8 +64,14 @@ __all__ = [
     "create_organization",
     "create_session",
     "register_account",
+    "register_authority_verification",
     "resolve_session",
     "upsert_driver_profile",
+    "verify_authority",
+    "AuthorityVerifier",
+    "FakeAuthorityVerifier",
+    "VerificationResult",
+    "resolve_verifier",
     "get_handler",
     "is_implemented",
 ]

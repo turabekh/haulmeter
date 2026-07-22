@@ -11,19 +11,25 @@ import { ArrowLeft, ShieldCheck, MapPin, Camera, Send, FileText } from "lucide-v
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
 import { formatMoney, formatClock } from "../core/meter.js";
-import { fetchClaim } from "../core/api.js";
+import { fetchClaim, fetchMe } from "../core/api.js";
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const claim = ref(null);
 const missing = ref(false);
+const me = ref(null); // F1: verified authority, shown on the invoice it backs
 
 onMounted(async () => {
   try {
     claim.value = await fetchClaim(route.params.stopId);
   } catch {
     missing.value = true;
+  }
+  try {
+    me.value = await fetchMe();
+  } catch {
+    me.value = null;
   }
 });
 
@@ -72,6 +78,10 @@ function evTime(iso) {
         <span class="hero__amount">{{ formatMoney(claim.amount_cents) }}</span>
         <span class="hero__label">{{ owed ? t("claim.owed") : t("claim.exported") }}</span>
         <p class="hero__hint">{{ owed ? t("claim.owed_hint") : t("claim.exported_hint") }}</p>
+        <!-- F1: the verified MC# this invoice is billed under -->
+        <span v-if="owed && me && me.verified" class="authpill">
+          MC# {{ me.mc_number }} · {{ t("authority.verified") }}
+        </span>
       </section>
 
       <!-- how the number was reached -->
@@ -190,6 +200,15 @@ function evTime(iso) {
   color: var(--text-3);
   font-size: var(--type-caption-size);
   max-width: 40ch;
+}
+.authpill {
+  margin-top: var(--s-2);
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--ledger-500);
+  color: var(--ink-0);
+  font-size: var(--type-caption-size);
+  font-weight: 500;
 }
 .card {
   background: var(--ink-1);

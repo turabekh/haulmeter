@@ -24,3 +24,9 @@ class AuthorityType(enum.Enum):
     own_mc = "own_mc"
     leased = "leased"
     company = "company"
+
+
+class VerifyStatus(enum.Enum):
+    unverified = "unverified"  # never attempted
+    verified = "verified"  # FMCSA confirms an active carrier
+    failed = "failed"  # not found / not authorized to operate

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 
-from .enums import AuthorityType, MethodType, OrgType, Role
+from .enums import AuthorityType, MethodType, OrgType, Role, VerifyStatus
 
 SCHEMA = "f01"
 
@@ -141,6 +141,17 @@ class DriverProfile(Base):
     )
     authority_type: Mapped[AuthorityType | None] = mapped_column(
         Enum(AuthorityType, name="authority_type", schema=SCHEMA), nullable=True
+    )
+    mc_number: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    dot_number: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    legal_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    authority_verify_status: Mapped[VerifyStatus] = mapped_column(
+        Enum(VerifyStatus, name="verify_status", schema=SCHEMA),
+        default=VerifyStatus.unverified,
+        server_default=VerifyStatus.unverified.value,
+    )
+    authority_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     truck_length_ft: Mapped[int | None] = mapped_column(nullable=True)
     truck_height_in: Mapped[int | None] = mapped_column(nullable=True)

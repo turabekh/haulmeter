@@ -13,7 +13,7 @@ import GhostwriterSheet from "../core/components/GhostwriterSheet.vue";
 import { useI18n } from "../core/i18n.js";
 import { formatMoney } from "../core/meter.js";
 import { receivableStatusToken } from "../core/presentation.js";
-import { fetchOwed, fetchEarnings } from "../core/api.js";
+import { fetchOwed, fetchEarnings, fetchMe } from "../core/api.js";
 import { SAMPLE_OWED, SAMPLE_EARNINGS } from "../core/fixtures.js";
 
 const { t } = useI18n();
@@ -21,6 +21,7 @@ const router = useRouter();
 const rows = ref(SAMPLE_OWED);
 const earnings = ref(SAMPLE_EARNINGS);
 const drafting = ref(false);
+const me = ref(null); // F1: verified operating authority, shown as a trust pill
 
 onMounted(async () => {
   try {
@@ -32,6 +33,11 @@ onMounted(async () => {
     earnings.value = await fetchEarnings();
   } catch {
     earnings.value = SAMPLE_EARNINGS; // unauthenticated / offline
+  }
+  try {
+    me.value = await fetchMe();
+  } catch {
+    me.value = null;
   }
 });
 
@@ -53,6 +59,13 @@ function stateLabel(state) {
         variant="accruing"
       />
     </section>
+
+    <!-- F1: verified authority — a §200 status pill where credibility is billed -->
+    <div v-if="me && me.verified" class="authpill-row">
+      <span class="pill authpill">
+        MC# {{ me.mc_number }} · {{ t("authority.verified") }}
+      </span>
+    </div>
 
     <ul class="breakdown">
       <li class="breakdown__row">
@@ -155,6 +168,12 @@ function stateLabel(state) {
   font-weight: 500;
   color: var(--ink-0);
   background: var(--pill-color);
+}
+.authpill-row {
+  margin-bottom: var(--s-3);
+}
+.authpill {
+  background: var(--ledger-500);
 }
 .row__right {
   display: flex;
