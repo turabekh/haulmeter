@@ -9,6 +9,7 @@ import TabBar from "../src/core/components/TabBar.vue";
 import PresetChips from "../src/core/components/PresetChips.vue";
 import FacilityCard from "../src/core/components/FacilityCard.vue";
 import MapSurface from "../src/surfaces/MapSurface.vue";
+import MapCanvas from "../src/core/components/MapCanvas.vue";
 import FacilityProfileSurface from "../src/surfaces/FacilityProfileSurface.vue";
 import TheMeter from "../src/core/components/TheMeter.vue";
 import LoadSurface from "../src/surfaces/LoadSurface.vue";
@@ -1633,5 +1634,24 @@ describe("MapSurface (design-prd §10.1 / §11.4)", () => {
       vi.unstubAllGlobals();
       logout();
     }
+  });
+});
+
+describe("MapCanvas — server-side cluster bubbles (§11.5)", () => {
+  it("renders a count bubble per cluster (dominant status color), tappable", () => {
+    const w = mount(MapCanvas, {
+      props: {
+        pins: [],
+        clusters: [
+          { count: 42, lat: 43.0, lon: -89.0, status: "some" },
+          { count: 7, lat: 44.0, lon: -90.0, status: "full" },
+        ],
+      },
+    });
+    const bubbles = w.findAll(".cluster");
+    expect(bubbles).toHaveLength(2);
+    expect(bubbles[0].find(".cluster__count").text()).toBe("42");
+    expect(bubbles[0].attributes("aria-label")).toContain("42");
+    w.unmount();
   });
 });

@@ -53,7 +53,7 @@ The F2 keystone gained a real ingestion pipeline: **every source lands the same 
 - **Confirm the live TPIMS endpoint** (the V2.2 URLs drifted → 404). The public feed now appears to require **partner registration / an API token** (the spec's "trusted partners" note) — this is an owner/ops task: register with MAASTO / the state DOTs, then set `data_sources.tpims_static/dynamic` config + enable the `f02_ingest_tpims_*` flags and the worker refreshes WI (then the 8 MAASTO states). The pipeline is proven and ready; only the live URL/token is missing.
 - **Live OSM (Wisconsin): DONE** this session (see §2). To extend nationally: `make osm-extract STATE=<state> && make ingest-osm STATE=<state>` per state, or regional Geofabrik extracts.
 - **Chain locators** (Pilot/Love's/TA): the adapter seam exists; wire real sources after ToS review.
-- **Zoom-adaptive cluster precision** (current fixed 0.1° is coarse at continental zoom) and the **client cluster-bubble render** (server already returns clusters; MapSurface keeps them in `clusters` for the render) — both refinements; §20 device-class fps stays a manual measurement.
+- **Zoom-adaptive cluster precision + client cluster-bubble render: DONE.** Cluster precision now scales with the view (continental 2015 facilities → 94 bubbles, was 1351 at fixed 0.1°); MapCanvas renders count bubbles (dominant status color, §11.5) that zoom-in on tap, so the map is never marker-less at wide zoom. §20 device-class fps remains a manual measurement.
 - Then resume the remaining activation seams (Stripe / fuel partner / collections+legal / IFTA — all owner-provisioned).
 
 ## 5. Port / env changes

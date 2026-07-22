@@ -60,6 +60,15 @@ def test_overlay_clusters_at_density_bounding_the_payload(db):
     assert sum(c.count for c in dense["clusters"]) == 12  # every facility accounted for
 
 
+def test_cluster_precision_is_zoom_adaptive():
+    from app.modules.m01_map.domain.service import _cluster_precision_deg
+
+    # a continental view uses much coarser cells than a metro view, so a zoomed-out
+    # map doesn't over-cluster into thousands of cells
+    assert _cluster_precision_deg(3_000_000) > _cluster_precision_deg(20_000)
+    assert _cluster_precision_deg(1_000) == 0.02  # floored for tight views
+
+
 def test_tonight_preset_sorts_by_availability(db):
     account = _account(db)
     full = facility.create_facility(db, facility.FacilityType.truck_stop, "Full", *DALLAS)

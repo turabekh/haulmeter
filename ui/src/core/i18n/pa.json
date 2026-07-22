@@ -326,5 +326,6 @@
   "voice.replay": "ਜਵਾਬ ਚਲਾਓ",
   "voice.retry": "ਸਮਝ ਨਹੀਂ ਆਇਆ — ਦੁਬਾਰਾ ਬੋਲੋ ਜਾਂ ਲਿਖੋ।",
   "voice.mic_blocked": "ਮਾਈਕ ਬੰਦ ਹੈ — ਆਪਣਾ ਸਵਾਲ ਲਿਖੋ।",
-  "map.data_credit": "© OpenStreetMap contributors (ODbL)"
+  "map.data_credit": "© OpenStreetMap contributors (ODbL)",
+  "map.cluster_label": "ਸਟਾਪ"
 }

@@ -326,5 +326,6 @@
   "voice.replay": "Play answer",
   "voice.retry": "Didn't catch that — try again or type.",
   "voice.mic_blocked": "Mic is off — type your question.",
-  "map.data_credit": "© OpenStreetMap contributors (ODbL)"
+  "map.data_credit": "© OpenStreetMap contributors (ODbL)",
+  "map.cluster_label": "stops"
 }

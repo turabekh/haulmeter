@@ -174,7 +174,7 @@ async function submitReport(status) {
         {{ handoffs.length }} {{ t("handoff.nearby") }}
       </button>
       <div class="map__canvas">
-        <MapCanvas :pins="pins" @pin-tap="selected = $event" @located="onLocated" />
+        <MapCanvas :pins="pins" :clusters="clusters" @pin-tap="selected = $event" @located="onLocated" />
         <button class="report-chip" type="button" :aria-label="t('map.report')" @click="reportChip">
           <CircleDot :size="24" :stroke-width="2" aria-hidden="true" />
         </button>

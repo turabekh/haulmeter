@@ -326,5 +326,6 @@
   "voice.replay": "Javobni eshittirish",
   "voice.retry": "Tushunmadim — qayta ayting yoki yozing.",
   "voice.mic_blocked": "Mikrofon o‘chiq — savolingizni yozing.",
-  "map.data_credit": "© OpenStreetMap contributors (ODbL)"
+  "map.data_credit": "© OpenStreetMap contributors (ODbL)",
+  "map.cluster_label": "to‘xtash"
 }

@@ -18,6 +18,8 @@ const { t } = useI18n();
 
 const props = defineProps({
   pins: { type: Array, default: () => [] },
+  // server-side clusters at density (§11.5): { count, lat, lon, status }
+  clusters: { type: Array, default: () => [] },
 });
 
 // icon encodes facility TYPE (color still encodes status, hollow = stale) — a
@@ -40,8 +42,18 @@ const now = Date.now();
 const mapEl = ref(null);
 const live = ref(false); // true once a GL map is rendering tiles
 const positions = ref({}); // facility_id -> { x, y } pixel coords on the live map
+const clusterPositions = ref({}); // cluster index -> { x, y }
 let map = null;
 let located = false; // once the driver is centered, stop auto-fitting to pins
+
+// the map frames on whatever is in view — individual pins, or cluster centroids
+// when the server clustered at density (pins is then empty)
+function overlayLngLat() {
+  return [
+    ...props.pins.map((p) => [p.lon, p.lat]),
+    ...props.clusters.map((c) => [c.lon, c.lat]),
+  ];
+}
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 // Mapbox Standard (GL v3): modern vector basemap with dynamic lighting. Day/night
@@ -55,9 +67,10 @@ function lightPreset() {
 
 const DALLAS = [-96.797, 32.7767];
 function center() {
-  if (!props.pins.length) return DALLAS;
-  const lat = props.pins.reduce((s, p) => s + p.lat, 0) / props.pins.length;
-  const lon = props.pins.reduce((s, p) => s + p.lon, 0) / props.pins.length;
+  const points = overlayLngLat();
+  if (!points.length) return DALLAS;
+  const lon = points.reduce((s, p) => s + p[0], 0) / points.length;
+  const lat = points.reduce((s, p) => s + p[1], 0) / points.length;
   return [lon, lat];
 }
 
@@ -69,12 +82,19 @@ function syncPins() {
     next[pin.facility_id] = { x: pt.x, y: pt.y };
   }
   positions.value = next;
+  const nextC = {};
+  props.clusters.forEach((c, i) => {
+    const pt = map.project([c.lon, c.lat]);
+    nextC[i] = { x: pt.x, y: pt.y };
+  });
+  clusterPositions.value = nextC;
 }
 
 function fitToPins() {
-  if (!map || props.pins.length < 2) return;
-  const lats = props.pins.map((p) => p.lat);
-  const lons = props.pins.map((p) => p.lon);
+  const points = overlayLngLat();
+  if (!map || points.length < 2) return;
+  const lons = points.map((p) => p[0]);
+  const lats = points.map((p) => p[1]);
   map.fitBounds(
     [
       [Math.min(...lons), Math.min(...lats)],
@@ -82,6 +102,11 @@ function fitToPins() {
     ],
     { padding: 56, maxZoom: 14, duration: 0 },
   );
+}
+
+function zoomToCluster(cluster) {
+  if (!map) return;
+  map.easeTo({ center: [cluster.lon, cluster.lat], zoom: map.getZoom() + 2, duration: 300 });
 }
 
 onMounted(async () => {
@@ -135,7 +160,7 @@ onUnmounted(() => {
 // pins refresh (new overlay) -> reproject; only refit while we haven't centered
 // on the driver (once located, the map stays on them, not the pin bounds)
 watch(
-  () => props.pins,
+  () => [props.pins, props.clusters],
   () => {
     if (!live.value) return;
     if (!located) fitToPins();
@@ -146,8 +171,9 @@ watch(
 
 // bounds-normalized fallback layout (used until/unless tiles are live)
 const bounds = computed(() => {
-  const lats = props.pins.map((p) => p.lat);
-  const lons = props.pins.map((p) => p.lon);
+  const points = overlayLngLat();
+  const lons = points.map((p) => p[0]);
+  const lats = points.map((p) => p[1]);
   return {
     minLat: Math.min(...lats),
     maxLat: Math.max(...lats),
@@ -155,19 +181,24 @@ const bounds = computed(() => {
     maxLon: Math.max(...lons),
   };
 });
-function fallbackStyle(pin) {
+function fallbackLatLon(lat, lon) {
   const b = bounds.value;
   const spanLat = b.maxLat - b.minLat || 1;
   const spanLon = b.maxLon - b.minLon || 1;
-  const top = 90 - ((pin.lat - b.minLat) / spanLat) * 80 - 5;
-  const left = ((pin.lon - b.minLon) / spanLon) * 80 + 10;
+  const top = 90 - ((lat - b.minLat) / spanLat) * 80 - 5;
+  const left = ((lon - b.minLon) / spanLon) * 80 + 10;
   return { top: `${top}%`, left: `${left}%` };
 }
 
 function pinStyle(pin) {
   const p = live.value ? positions.value[pin.facility_id] : null;
-  const pos = p ? { top: `${p.y}px`, left: `${p.x}px` } : fallbackStyle(pin);
+  const pos = p ? { top: `${p.y}px`, left: `${p.x}px` } : fallbackLatLon(pin.lat, pin.lon);
   return { ...pos, "--pin-color": `var(${statusPresentation(pin.status).token})` };
+}
+function clusterStyle(cluster, i) {
+  const p = live.value ? clusterPositions.value[i] : null;
+  const pos = p ? { top: `${p.y}px`, left: `${p.x}px` } : fallbackLatLon(cluster.lat, cluster.lon);
+  return { ...pos, "--pin-color": `var(${statusPresentation(cluster.status).token})` };
 }
 function stale(pin) {
   return isStale(pin.freshness, now);
@@ -191,6 +222,19 @@ function stale(pin) {
       <span class="pin__puck">
         <component :is="iconFor(pin)" :size="15" :stroke-width="2.5" aria-hidden="true" />
       </span>
+    </button>
+    <!-- §11.5: at density the server clusters; a count bubble (dominant status color),
+         tap zooms in. -->
+    <button
+      v-for="(cl, i) in clusters"
+      :key="'cl-' + i"
+      type="button"
+      class="cluster"
+      :style="clusterStyle(cl, i)"
+      :aria-label="`${cl.count} ${t('map.cluster_label')}`"
+      @click="zoomToCluster(cl)"
+    >
+      <span class="cluster__count">{{ cl.count }}</span>
     </button>
     <!-- data attribution — OSM-derived rows require ODbL credit (PRD §12) -->
     <span class="canvas__credit">{{ t("map.data_credit") }}</span>
@@ -272,5 +316,27 @@ function stale(pin) {
   background: #fff;
   color: var(--pin-color);
   border-color: var(--pin-color);
+}
+/* §11.5 cluster chip: count + dominant status color */
+.cluster {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 36px;
+  height: 36px;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--pin-color);
+  color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.cluster__count {
+  font-size: var(--type-label-size);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 </style>

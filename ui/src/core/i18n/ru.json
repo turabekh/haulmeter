@@ -326,5 +326,6 @@
   "voice.replay": "Воспроизвести ответ",
   "voice.retry": "Не расслышал — повторите или напишите.",
   "voice.mic_blocked": "Микрофон выключен — напишите вопрос.",
-  "map.data_credit": "© OpenStreetMap contributors (ODbL)"
+  "map.data_credit": "© OpenStreetMap contributors (ODbL)",
+  "map.cluster_label": "стоянок"
 }
