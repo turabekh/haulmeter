@@ -320,5 +320,10 @@
   "authority.not_verified": "Tasdiqlanmagan",
   "authority.hint": "Vakolatingizni bepul FMCSA tekshiruvi bilan tasdiqlang — bu turib qolish da'volaringizni kuchaytiradi.",
   "authority.error": "Bu raqamni tasdiqlay olmadik. Tekshirib, qayta urinib ko‘ring.",
-  "authority.disabled": "Tekshiruv hali yoqilmagan."
+  "authority.disabled": "Tekshiruv hali yoqilmagan.",
+  "voice.listening": "Tinglayapman…",
+  "voice.stop": "To‘xtatish",
+  "voice.replay": "Javobni eshittirish",
+  "voice.retry": "Tushunmadim — qayta ayting yoki yozing.",
+  "voice.mic_blocked": "Mikrofon o‘chiq — savolingizni yozing."
 }

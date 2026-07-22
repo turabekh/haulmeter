@@ -320,5 +320,10 @@
   "authority.not_verified": "Not verified",
   "authority.hint": "Confirm your authority with a free FMCSA lookup — it strengthens your detention claims.",
   "authority.error": "We couldn't confirm that number. Check it and try again.",
-  "authority.disabled": "Verification isn't turned on yet."
+  "authority.disabled": "Verification isn't turned on yet.",
+  "voice.listening": "Listening…",
+  "voice.stop": "Stop",
+  "voice.replay": "Play answer",
+  "voice.retry": "Didn't catch that — try again or type.",
+  "voice.mic_blocked": "Mic is off — type your question."
 }

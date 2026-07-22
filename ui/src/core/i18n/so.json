@@ -320,5 +320,10 @@
   "authority.not_verified": "Lama xaqiijin",
   "authority.hint": "Ku xaqiiji awooddaada baaritaan FMCSA oo bilaash ah — waxay xoojisaa sheegashooyinkaaga daahitaanka.",
   "authority.error": "Ma xaqiijin karin lambarkaas. Hubi oo mar kale isku day.",
-  "authority.disabled": "Xaqiijinta weli lama shidin."
+  "authority.disabled": "Xaqiijinta weli lama shidin.",
+  "voice.listening": "Waan dhegeysanayaa…",
+  "voice.stop": "Jooji",
+  "voice.replay": "Ka dhig jawaabta",
+  "voice.retry": "Ma maqlin — mar kale isku day ama qor.",
+  "voice.mic_blocked": "Maykaha waa la damiyay — su'aashaada qor."
 }

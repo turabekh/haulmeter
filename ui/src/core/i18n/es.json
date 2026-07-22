@@ -320,5 +320,10 @@
   "authority.not_verified": "Sin verificar",
   "authority.hint": "Confirma tu autoridad con una consulta gratuita a FMCSA — refuerza tus reclamos de detención.",
   "authority.error": "No pudimos confirmar ese número. Revísalo e inténtalo de nuevo.",
-  "authority.disabled": "La verificación aún no está activada."
+  "authority.disabled": "La verificación aún no está activada.",
+  "voice.listening": "Escuchando…",
+  "voice.stop": "Detener",
+  "voice.replay": "Reproducir respuesta",
+  "voice.retry": "No te entendí — inténtalo otra vez o escribe.",
+  "voice.mic_blocked": "El micrófono está apagado — escribe tu pregunta."
 }

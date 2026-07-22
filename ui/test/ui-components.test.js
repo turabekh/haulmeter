@@ -588,6 +588,74 @@ describe("VoiceSheet — copilot ask/answer (M11-FR1)", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  function installSpeech() {
+    const instances = [];
+    class FakeRecognition {
+      constructor() { instances.push(this); }
+      start() { this.started = true; }
+      stop() { if (this.onend) this.onend(); }
+    }
+    const speak = vi.fn();
+    vi.stubGlobal("SpeechRecognition", FakeRecognition);
+    vi.stubGlobal("speechSynthesis", { speak, cancel: vi.fn() });
+    vi.stubGlobal("SpeechSynthesisUtterance", class { constructor(text) { this.text = text; } });
+    return { instances, speak };
+  }
+
+  it("on-device: captures speech via the mic and routes it to /voice/ask (§14)", async () => {
+    const { instances } = installSpeech();
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ intent: "money_owed", spoken: "You're owed $150.00." }),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(VoiceSheet);
+      await flushPromises();
+      expect(w.find(".voice__mic").exists()).toBe(true); // mic shown when supported
+      expect(instances[0].started).toBe(true); // auto-listens on open (voice-first)
+      instances[0].onresult({ results: [[{ transcript: "what am I owed" }]] });
+      await flushPromises();
+      expect(fetchStub.mock.calls[0][0]).toContain("/voice/ask");
+      expect(w.find(".voice__answer").text()).toContain("$150.00");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("on-device: speaks the answer aloud while DRIVING (§14.1 audio-first)", async () => {
+    const { instances, speak } = installSpeech();
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ intent: "help", spoken: "Ask me anything." }),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(VoiceSheet, { props: { driving: true } });
+      await flushPromises();
+      instances[0].onresult({ results: [[{ transcript: "help" }]] });
+      await flushPromises();
+      expect(speak).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("on-device: unrecognized speech shows one re-ask, then typing still works (§14.5)", async () => {
+    const { instances } = installSpeech();
+    vi.stubGlobal("fetch", vi.fn());
+    try {
+      const w = mount(VoiceSheet);
+      await flushPromises();
+      instances[0].onerror({ error: "no-speech" });
+      await flushPromises();
+      expect(w.find(".voice__hint").text()).toBeTruthy(); // graceful re-ask
+      expect(w.find(".voice__input").exists()).toBe(true); // visual fallback available
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe("MapSurface — voice wake affordance (M11-FR5)", () => {
