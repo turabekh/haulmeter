@@ -35,31 +35,54 @@ const PRESET_TYPES = {
 const PARKING_RANK = { empty: 0, some: 1, null: 2, full: 3 };
 
 // the map's fetch center: the driver's GPS once located (MapCanvas @located),
-// else a sensible default until then (§10.1 — a real map follows the driver)
+// else a sensible default until then (§10.1 — a real map follows the driver).
+// Handoffs stay point-based (nearby); the overlay is viewport-driven (onBounds).
 const geo = ref({ lat: 32.78, lon: -96.8 });
 function onLocated({ lat, lon }) {
   geo.value = { lat, lon };
-  loadOverlay(); // pins near the driver, not a fixed point
-  loadHandoffs();
+  loadHandoffs(); // the map's recenter fires @bounds -> overlay refetch on its own
 }
 
+// the continental US, shown until the live map reports its viewport. At national
+// span the server returns cluster bubbles (§11.5), never a hardcoded city.
+const CONTINENTAL_US = { min_lat: 24, min_lon: -125, max_lat: 50, max_lon: -66 };
+
 // live pins from the M1 API when a session exists; otherwise fixtures (§ api.js).
-// At real national density the server returns clusters instead (§11.5) — kept in
-// `clusters` for the cluster-bubble render; `pins` is empty in that case.
+// At real density the server returns clusters instead (§11.5) — kept in `clusters`
+// for the cluster-bubble render; `pins` is empty in that case.
 const livePins = ref(null);
 const clusters = ref([]);
-async function loadOverlay() {
+let lastBbox = CONTINENTAL_US; // the current viewport; a preset flip refetches it
+let overlayController = null; // aborts the in-flight fetch when a newer one starts
+let boundsTimer = null; // debounce rapid pan/zoom moveend bursts (~300ms)
+
+async function loadOverlay(bbox = lastBbox) {
+  lastBbox = bbox;
+  if (overlayController) overlayController.abort();
+  overlayController = new AbortController();
   try {
-    const resp = await fetchOverlay({ lat: geo.value.lat, lon: geo.value.lon, preset: preset.value });
+    const resp = await fetchOverlay({
+      bbox,
+      preset: preset.value,
+      signal: overlayController.signal,
+    });
     livePins.value = resp.pins;
     clusters.value = resp.clusters || [];
-  } catch {
+  } catch (e) {
+    if (e.name === "AbortError") return; // superseded by a newer viewport — keep pins
     livePins.value = null; // fall back to fixtures (unauthenticated / offline)
     clusters.value = [];
   }
 }
-onMounted(loadOverlay);
-watch(preset, loadOverlay);
+
+// MapCanvas @bounds on load + every moveend (pan/zoom). Debounced so a drag settles
+// before we hit the API; the AbortController cancels any fetch a newer move outran.
+function onBounds(bbox) {
+  clearTimeout(boundsTimer);
+  boundsTimer = setTimeout(() => loadOverlay(bbox), 300);
+}
+onMounted(() => loadOverlay()); // continental clusters until the map reports bounds
+watch(preset, () => loadOverlay()); // preset flip refetches the current viewport
 
 const pins = computed(() => {
   if (livePins.value) return livePins.value; // API already preset-filtered
@@ -174,7 +197,7 @@ async function submitReport(status) {
         {{ handoffs.length }} {{ t("handoff.nearby") }}
       </button>
       <div class="map__canvas">
-        <MapCanvas :pins="pins" :clusters="clusters" @pin-tap="selected = $event" @located="onLocated" />
+        <MapCanvas :pins="pins" :clusters="clusters" @pin-tap="selected = $event" @located="onLocated" @bounds="onBounds" />
         <button class="report-chip" type="button" :aria-label="t('map.report')" @click="reportChip">
           <CircleDot :size="24" :stroke-width="2" aria-hidden="true" />
         </button>

@@ -158,6 +158,32 @@ def overlay_pins(
     return [_pin_for(db, fac, providers) for fac in facilities]
 
 
+def _facilities_in_bbox(db, min_lat, min_lon, max_lat, max_lon, facility_types):
+    if not facility_types:
+        return facility_registry.in_bbox(db, min_lat, min_lon, max_lat, max_lon)
+    seen: dict = {}
+    for ftype in facility_types:
+        for fac in facility_registry.in_bbox(
+            db, min_lat, min_lon, max_lat, max_lon, facility_type=ftype
+        ):
+            seen[fac.id] = fac
+    return list(seen.values())
+
+
+def overlay_pins_bbox(
+    db: Session,
+    min_lat: float,
+    min_lon: float,
+    max_lat: float,
+    max_lon: float,
+    facility_types=None,
+    badge_providers=None,
+) -> list[Pin]:
+    providers = badge_providers or DEFAULT_BADGE_PROVIDERS
+    facilities = _facilities_in_bbox(db, min_lat, min_lon, max_lat, max_lon, facility_types)
+    return [_pin_for(db, fac, providers) for fac in facilities]
+
+
 def cluster_pins(pins: list[Pin], precision_deg: float = 0.1) -> list[Cluster]:
     buckets: dict[tuple[int, int], list[Pin]] = {}
     for pin in pins:

@@ -60,6 +60,55 @@ def test_overlay_clusters_at_density_bounding_the_payload(db):
     assert sum(c.count for c in dense["clusters"]) == 12  # every facility accounted for
 
 
+def test_overlay_bbox_returns_only_facilities_in_view(db):
+    # the viewport-driven overlay (primary map mode): a bbox query returns exactly
+    # what falls inside the rectangle, nothing outside it (fixes the empty map).
+    account = _account(db)
+    facility.create_facility(db, facility.FacilityType.truck_stop, "InView", 32.78, -96.79)
+    facility.create_facility(db, facility.FacilityType.truck_stop, "FarAway", 41.88, -87.63)  # IL
+    view = m1.map_overlay_view_bbox(db, account.id, 32.70, -96.90, 32.90, -96.70)
+    assert view["clustered"] is False
+    names = {p.name for p in view["pins"]}
+    assert names == {"InView"}  # the Illinois stop is outside the Texas viewport
+
+
+def test_overlay_bbox_clusters_when_dense(db):
+    # a small viewport over many facilities clusters (payload bounded, §11.5)
+    account = _account(db)
+    for i in range(12):
+        facility.create_facility(
+            db, facility.FacilityType.truck_stop, f"Stop {i}", 32.77 + i * 0.001, -96.80 + i * 0.001
+        )
+    sparse = m1.map_overlay_view_bbox(db, account.id, 32.70, -96.90, 32.90, -96.70, cap=100)
+    assert sparse["clustered"] is False and len(sparse["pins"]) == 12
+
+    dense = m1.map_overlay_view_bbox(db, account.id, 32.70, -96.90, 32.90, -96.70, cap=3)
+    assert dense["clustered"] is True and dense["pins"] == []
+    assert sum(c.count for c in dense["clusters"]) == 12  # every facility accounted for
+
+
+def test_overlay_bbox_area_cap_forces_clusters(db):
+    # a continental-span viewport always clusters, even when sparse — so a national
+    # pan never returns thousands of individual pins (MAX_BBOX_DEG2 guard).
+    account = _account(db)
+    facility.create_facility(db, facility.FacilityType.truck_stop, "TX", 32.78, -96.79)
+    facility.create_facility(db, facility.FacilityType.truck_stop, "IL", 41.88, -87.63)
+    view = m1.map_overlay_view_bbox(db, account.id, 24.0, -125.0, 50.0, -66.0)  # continental US
+    assert view["clustered"] is True  # area > MAX_BBOX_DEG2, though only 2 facilities
+    assert view["pins"] == [] and sum(c.count for c in view["clusters"]) == 2
+
+
+def test_overlay_bbox_filters_by_preset(db):
+    # bbox mode honors the preset layer filter (Work = shipper/receiver only)
+    account = _account(db)
+    facility.create_facility(db, facility.FacilityType.truck_stop, "Stop", 32.78, -96.79)
+    facility.create_facility(db, facility.FacilityType.shipper_receiver, "Dock", 32.781, -96.791)
+    view = m1.map_overlay_view_bbox(
+        db, account.id, 32.70, -96.90, 32.90, -96.70, preset=m1.Preset.work
+    )
+    assert {p.name for p in view["pins"]} == {"Dock"}  # truck stop excluded by preset
+
+
 def test_cluster_precision_is_zoom_adaptive():
     from app.modules.m01_map.domain.service import _cluster_precision_deg
 

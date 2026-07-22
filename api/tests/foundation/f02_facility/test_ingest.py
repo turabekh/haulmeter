@@ -128,6 +128,22 @@ def test_cross_source_dedupe_merges_the_same_physical_site(db):
     assert fac.confidence > 0.8  # three independent sources
 
 
+def test_dev_seed_facilities_are_excluded_from_dedupe(db):
+    # DEV_SEED field-test facilities show on the map but must never be a merge target
+    # for real ingest — otherwise NTAD/OSM data would collapse into throwaway records.
+    dev = facility.create_facility(
+        db, facility.FacilityType.rest_area, "DEV — Rest Area I-94 EB", 43.0700, -89.4000,
+        is_dev=True,
+    )
+    real = facility.create_facility(
+        db, facility.FacilityType.rest_area, "Rest Area I-94 EB", 43.0701, -89.4001
+    )
+    matches = facility.find_duplicate_candidates(db, "Rest Area I-94 EB", 43.0700, -89.4000)
+    ids = {f.id for f in matches}
+    assert real.id in ids  # the real neighbor is a candidate
+    assert dev.id not in ids  # the DEV facility is never one
+
+
 def test_ingest_is_idempotent(db):
     page = facility.parse_ntad(_load("ntad_page.geojson"))
     first = facility.ingest_records(db, page, batch_id="run-1")

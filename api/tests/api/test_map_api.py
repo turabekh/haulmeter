@@ -118,6 +118,27 @@ def test_report_updates_belief_reflected_in_overlay(client, db):
     assert pin["status"] == "full"  # report -> aggregate -> pin, live over HTTP
 
 
+def test_overlay_bbox_is_the_primary_mode(client, db):
+    # the map fetches by viewport bbox (min/max lat/lon), not a fixed point+radius
+    headers = _auth(client)
+    facility.create_facility(db, facility.FacilityType.truck_stop, "InView", *DALLAS)
+    facility.create_facility(db, facility.FacilityType.truck_stop, "Chicago", 41.88, -87.63)
+    resp = client.get(
+        "/map/overlay",
+        params={"min_lat": 32.70, "min_lon": -96.90, "max_lat": 32.90, "max_lon": -96.70},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    names = [p["name"] for p in resp.json()["pins"]]
+    assert names == ["InView"]  # the Chicago stop is outside the Texas viewport
+
+
+def test_overlay_without_bbox_or_point_is_422(client):
+    headers = _auth(client)
+    resp = client.get("/map/overlay", headers=headers)
+    assert resp.status_code == 422
+
+
 def test_corridor_endpoint(client, db):
     headers = _auth(client)
     facility.create_facility(db, facility.FacilityType.truck_stop, "Ahead", 32.90, -96.7970)

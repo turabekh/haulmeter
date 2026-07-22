@@ -7,7 +7,7 @@ here: POST /map/report → F10 belief → the next GET /map/overlay reflects it.
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -52,19 +52,37 @@ def _serialize_cluster(cluster) -> dict:
 
 @router.get("/overlay")
 def overlay(
-    lat: float,
-    lon: float,
-    radius_m: float = 8000,
     preset: str = "drive",
     amenities: str = "",
+    min_lat: float | None = None,
+    min_lon: float | None = None,
+    max_lat: float | None = None,
+    max_lon: float | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+    radius_m: float = 8000,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
-    # sparse -> individual pins; dense -> server-side clusters (bounded payload, §11.5/§20)
+    # PRIMARY: viewport bbox (min/max lat/lon) — the map fetches what's in view.
+    # SECONDARY: point + radius (corridor / nearby). Sparse -> pins; dense or huge
+    # area -> server-side clusters (bounded payload, §11.5/§20).
     required = [a for a in amenities.split(",") if a] or None
-    view = m1.map_overlay_view(
-        db, account.id, lat, lon, radius_m, preset=m1.Preset(preset), required_amenities=required
-    )
+    preset_enum = m1.Preset(preset)
+    if None not in (min_lat, min_lon, max_lat, max_lon):
+        view = m1.map_overlay_view_bbox(
+            db, account.id, min_lat, min_lon, max_lat, max_lon,
+            preset=preset_enum, required_amenities=required,
+        )
+    elif None not in (lat, lon):
+        view = m1.map_overlay_view(
+            db, account.id, lat, lon, radius_m, preset=preset_enum, required_amenities=required
+        )
+    else:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "provide a bbox (min_lat,min_lon,max_lat,max_lon) or a point (lat,lon)",
+        )
     return {
         "clustered": view["clustered"],
         "total": view["total"],

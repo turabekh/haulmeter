@@ -25,7 +25,9 @@ NOW = datetime.now(UTC)
 
 
 def _facility(db, ftype, name, dlat, dlon):
-    return facility.create_facility(db, ftype, name, CENTER[0] + dlat, CENTER[1] + dlon)
+    return facility.create_facility(
+        db, ftype, name, CENTER[0] + dlat, CENTER[1] + dlon, is_dev=True
+    )
 
 
 def _parking(db, seeder, fac, status):
@@ -91,7 +93,8 @@ def _seed_origin(db):
         print(f"DEV origin facilities already present near {lat},{lon}")
         return
     facility.create_facility(
-        db, facility.FacilityType.shipper_receiver, "DEV — Test Shipper", lat + 0.0008, lon
+        db, facility.FacilityType.shipper_receiver, "DEV — Test Shipper", lat + 0.0008, lon,
+        is_dev=True,
     )
     ts = facility.create_facility(
         db,
@@ -99,6 +102,7 @@ def _seed_origin(db):
         "DEV — Test Truck Stop",
         lat - 0.0008,
         lon + 0.0009,
+        is_dev=True,
     )
     seeder = identity.register_account(
         db, f"dev-origin-{NOW.timestamp():.0f}@seed.local", "pw-123456"

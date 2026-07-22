@@ -34,9 +34,10 @@ const ICONS = {
 function iconFor(pin) {
   return ICONS[pin.facility_type] || Circle;
 }
-// `located` fires with the driver's GPS so the surface can refetch the overlay
-// around them (pins follow the driver, not a fixed center).
-const emit = defineEmits(["pinTap", "located"]);
+// `bounds` fires with the current viewport (on load + every pan/zoom) so the surface
+// fetches exactly what's in view. `located` fires with the driver's GPS (handoffs +
+// the map's own recenter, whose moveend re-emits `bounds`).
+const emit = defineEmits(["pinTap", "located", "bounds"]);
 
 const now = Date.now();
 const mapEl = ref(null);
@@ -44,15 +45,23 @@ const live = ref(false); // true once a GL map is rendering tiles
 const positions = ref({}); // facility_id -> { x, y } pixel coords on the live map
 const clusterPositions = ref({}); // cluster index -> { x, y }
 let map = null;
-let located = false; // once the driver is centered, stop auto-fitting to pins
 
-// the map frames on whatever is in view — individual pins, or cluster centroids
-// when the server clustered at density (pins is then empty)
+// the map is viewport-driven: it never auto-frames to the returned pins (that would
+// fight the driver's pan). Whatever the map shows, the surface fetches for.
 function overlayLngLat() {
   return [
     ...props.pins.map((p) => [p.lon, p.lat]),
     ...props.clusters.map((c) => [c.lon, c.lat]),
   ];
+}
+
+// the map's live viewport as the API's bbox params (min/max lat/lon)
+function emitBounds() {
+  if (!map) return;
+  const b = map.getBounds();
+  const sw = b.getSouthWest();
+  const ne = b.getNorthEast();
+  emit("bounds", { min_lat: sw.lat, min_lon: sw.lng, max_lat: ne.lat, max_lon: ne.lng });
 }
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -65,14 +74,10 @@ function lightPreset() {
   return hour < 7 || hour >= 19 ? "night" : "day";
 }
 
-const DALLAS = [-96.797, 32.7767];
-function center() {
-  const points = overlayLngLat();
-  if (!points.length) return DALLAS;
-  const lon = points.reduce((s, p) => s + p[0], 0) / points.length;
-  const lat = points.reduce((s, p) => s + p[1], 0) / points.length;
-  return [lon, lat];
-}
+// the map opens on the continental US (never a hardcoded city) — the server returns
+// cluster bubbles at this span (§11.5); GPS then recenters if the driver allows it.
+const US_CENTER = [-98.5, 39.8];
+const US_ZOOM = 3.5;
 
 function syncPins() {
   if (!map) return;
@@ -90,20 +95,6 @@ function syncPins() {
   clusterPositions.value = nextC;
 }
 
-function fitToPins() {
-  const points = overlayLngLat();
-  if (!map || points.length < 2) return;
-  const lons = points.map((p) => p[0]);
-  const lats = points.map((p) => p[1]);
-  map.fitBounds(
-    [
-      [Math.min(...lons), Math.min(...lats)],
-      [Math.max(...lons), Math.max(...lats)],
-    ],
-    { padding: 56, maxZoom: 14, duration: 0 },
-  );
-}
-
 function zoomToCluster(cluster) {
   if (!map) return;
   map.easeTo({ center: [cluster.lon, cluster.lat], zoom: map.getZoom() + 2, duration: 300 });
@@ -118,8 +109,8 @@ onMounted(async () => {
     map = new mapboxgl.Map({
       container: mapEl.value,
       style: STYLE,
-      center: center(),
-      zoom: props.pins.length ? 9 : 4,
+      center: US_CENTER,
+      zoom: US_ZOOM,
     });
 
     // "locate me": a blue dot + heading that centers on the driver's GPS, with a
@@ -132,22 +123,23 @@ onMounted(async () => {
     });
     map.addControl(geolocate, "bottom-right");
     geolocate.on("geolocate", (e) => {
-      located = true;
+      // the control recenters the map -> its moveend re-emits `bounds` -> refetch
       emit("located", { lat: e.coords.latitude, lon: e.coords.longitude });
     });
 
     map.on("load", () => {
       map.setConfigProperty("basemap", "lightPreset", lightPreset());
-      fitToPins(); // fallback framing until GPS resolves (or if it's denied)
       syncPins();
       live.value = true;
+      emitBounds(); // fetch the initial (continental) viewport
       try {
         geolocate.trigger();
       } catch {
-        /* geolocation blocked/unavailable — stay framed on the pins */
+        /* geolocation blocked/unavailable — stay on the continental view */
       }
     });
     map.on("move", syncPins);
+    map.on("moveend", emitBounds); // every pan/zoom refetches what's now in view
   } catch {
     live.value = false; // WebGL unavailable / offline -> keep the placeholder
   }
@@ -157,14 +149,12 @@ onUnmounted(() => {
   if (map) map.remove();
 });
 
-// pins refresh (new overlay) -> reproject; only refit while we haven't centered
-// on the driver (once located, the map stays on them, not the pin bounds)
+// a new overlay (the viewport's fetch resolved) -> reproject onto the live map.
+// The viewport itself is driver-controlled; we never re-frame to the pins.
 watch(
   () => [props.pins, props.clusters],
   () => {
-    if (!live.value) return;
-    if (!located) fitToPins();
-    syncPins();
+    if (live.value) syncPins();
   },
   { deep: true },
 );

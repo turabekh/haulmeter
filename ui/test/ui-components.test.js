@@ -2,7 +2,7 @@
 // laws that are testable in jsdom: exactly 5 labeled tabs & no hamburger
 // (NAV-1), preset chips (§11.3), facility card single primary CTA + report, and
 // DRIVING → Corridor mode (§11.4).
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import TabBar from "../src/core/components/TabBar.vue";
@@ -1634,6 +1634,97 @@ describe("MapSurface (design-prd §10.1 / §11.4)", () => {
       vi.unstubAllGlobals();
       logout();
     }
+  });
+});
+
+describe("MapSurface — viewport-driven overlay (empty-map fix)", () => {
+  const overlayCalls = (stub) =>
+    stub.mock.calls.filter((c) => String(c[0]).includes("/map/overlay"));
+  const emptyOverlay = () => jsonOk({ clustered: false, total: 0, pins: [], clusters: [] });
+
+  beforeEach(() => {
+    useDriverState().setState(DriverState.IDLE);
+    setToken("tok-vp");
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    logout();
+  });
+
+  it("fetches by viewport bbox on mount, then refetches (debounced) on bounds change", async () => {
+    vi.useFakeTimers();
+    const stub = vi.fn(() => emptyOverlay());
+    vi.stubGlobal("fetch", stub);
+    const w = mount(MapSurface, { global: { plugins: [testRouter()] } });
+    await flushPromises();
+    const first = overlayCalls(stub);
+    expect(first.length).toBe(1); // one fetch on mount — the continental default view
+    expect(String(first[0][0])).toMatch(/min_lat=.*min_lon=.*max_lat=.*max_lon=/); // bbox, not a point
+
+    w.findComponent(MapCanvas).vm.$emit("bounds", {
+      min_lat: 44, min_lon: -90, max_lat: 45, max_lon: -89,
+    });
+    await vi.advanceTimersByTimeAsync(300); // debounce settles
+    await flushPromises();
+    const after = overlayCalls(stub);
+    expect(after.length).toBe(2);
+    expect(String(after[1][0])).toContain("min_lat=44"); // refetched for the new viewport
+  });
+
+  it("debounces a burst of moveend bounds into a single refetch", async () => {
+    vi.useFakeTimers();
+    const stub = vi.fn(() => emptyOverlay());
+    vi.stubGlobal("fetch", stub);
+    const w = mount(MapSurface, { global: { plugins: [testRouter()] } });
+    await flushPromises();
+    const canvas = w.findComponent(MapCanvas);
+    canvas.vm.$emit("bounds", { min_lat: 40, min_lon: -90, max_lat: 41, max_lon: -89 });
+    canvas.vm.$emit("bounds", { min_lat: 41, min_lon: -89, max_lat: 42, max_lon: -88 });
+    canvas.vm.$emit("bounds", { min_lat: 42, min_lon: -88, max_lat: 43, max_lon: -87 });
+    await vi.advanceTimersByTimeAsync(300);
+    await flushPromises();
+    const calls = overlayCalls(stub);
+    expect(calls.length).toBe(2); // 1 mount + only the last bounds of the burst
+    expect(String(calls[1][0])).toContain("min_lat=42");
+  });
+
+  it("aborts the in-flight overlay fetch when the viewport moves again (rapid pan)", async () => {
+    vi.useFakeTimers();
+    const signals = [];
+    let n = 0;
+    const stub = vi.fn((url, opts) => {
+      if (String(url).includes("/map/overlay")) {
+        signals.push(opts?.signal);
+        n += 1;
+        if (n === 2) return new Promise(() => {}); // the first pan's fetch stays in-flight
+      }
+      return emptyOverlay();
+    });
+    vi.stubGlobal("fetch", stub);
+    const w = mount(MapSurface, { global: { plugins: [testRouter()] } });
+    await flushPromises(); // #1 mount fetch resolves
+    const canvas = w.findComponent(MapCanvas);
+    canvas.vm.$emit("bounds", { min_lat: 44, min_lon: -90, max_lat: 45, max_lon: -89 });
+    await vi.advanceTimersByTimeAsync(300); // #2 in-flight (hangs)
+    canvas.vm.$emit("bounds", { min_lat: 41, min_lon: -88, max_lat: 42, max_lon: -87 });
+    await vi.advanceTimersByTimeAsync(300); // #3 supersedes -> aborts #2
+    await flushPromises();
+    expect(signals[1].aborted).toBe(true); // the outrun request was cancelled
+    expect(signals[2].aborted).toBe(false); // the newest one is live
+  });
+
+  it("refetches the current viewport when the preset changes", async () => {
+    const stub = vi.fn(() => emptyOverlay());
+    vi.stubGlobal("fetch", stub);
+    const w = mount(MapSurface, { global: { plugins: [testRouter()] } });
+    await flushPromises();
+    const before = overlayCalls(stub).length;
+    await w.findAll(".chip")[2].trigger("click"); // the Work preset
+    await flushPromises();
+    const calls = overlayCalls(stub);
+    expect(calls.length).toBeGreaterThan(before);
+    expect(String(calls[calls.length - 1][0])).toContain("preset=work");
   });
 });
 

@@ -47,6 +47,9 @@ class Facility(Base):
     hours: Mapped[dict] = mapped_column(JSON, default=dict)
     # 0..1, recomputed from the count + priority of contributing sources (PRD §12)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    # DEV_SEED field-test facilities: shown on the map, but excluded from real-data
+    # dedupe + confidence so they never merge with or pollute NTAD/OSM/TPIMS records
+    is_dev: Mapped[bool] = mapped_column(default=False)
     merged_into_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(f"{SCHEMA}.facility.id", ondelete="SET NULL"), nullable=True
     )

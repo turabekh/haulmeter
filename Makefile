@@ -2,7 +2,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci \
-        seed ingest-ntad ingest-tpims ingest-osm osm-extract
+        seed purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract
 
 STATE ?= wisconsin
 # osmium-tool is packaged in Debian/Ubuntu; install it in a slim base at run time
@@ -59,6 +59,10 @@ ci: env preflight lint test
 # Optional: DEV_SEED_ORIGIN=lat,lon plants a few "DEV —" facilities around a point.
 seed:
 	$(COMPOSE) exec -e DEV_SEED=1 -e DEV_SEED_ORIGIN="$(DEV_SEED_ORIGIN)" api python -m scripts.seed_demo
+
+# delete demo/test leftovers (admin-only facilities) from the dev DB
+purge-demo:
+	$(COMPOSE) exec api python -m scripts.purge_demo
 
 ingest-ntad:
 	$(COMPOSE) exec api python -m scripts.ingest_ntad

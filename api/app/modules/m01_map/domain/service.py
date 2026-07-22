@@ -108,6 +108,59 @@ def map_overlay_view(
     return {"clustered": True, "pins": [], "clusters": clusters, "total": len(pins)}
 
 
+# beyond this viewport area, always cluster — a continental pan never returns pins
+MAX_BBOX_DEG2 = 100.0
+
+
+def _bbox_precision_deg(min_lat: float, min_lon: float, max_lat: float, max_lon: float) -> float:
+    span_deg = max(abs(max_lat - min_lat), abs(max_lon - min_lon))
+    return _cluster_precision_deg(span_deg * _METERS_PER_DEGREE / 2)
+
+
+def map_overlay_bbox(
+    db: Session,
+    account_id,
+    min_lat: float,
+    min_lon: float,
+    max_lat: float,
+    max_lon: float,
+    preset: Preset = Preset.drive,
+    required_amenities: list[str] | None = None,
+):
+    pins = mapsvc.overlay_pins_bbox(
+        db, min_lat, min_lon, max_lat, max_lon, facility_types=PRESET_TYPES[preset]
+    )
+    if required_amenities:
+        pins = [p for p in pins if _has_amenities(db, p, required_amenities)]
+    if preset == Preset.tonight:
+        pins = sorted(pins, key=lambda p: _PARKING_RANK.get(p.status, 2))
+    return pins
+
+
+def map_overlay_view_bbox(
+    db: Session,
+    account_id,
+    min_lat: float,
+    min_lon: float,
+    max_lat: float,
+    max_lon: float,
+    preset: Preset = Preset.drive,
+    required_amenities: list[str] | None = None,
+    cap: int = OVERLAY_PIN_CAP,
+):
+    # viewport-driven overlay (the primary map mode). Individual pins when sparse;
+    # server-side clusters when dense OR when the viewport spans a huge area (§11.5).
+    pins = map_overlay_bbox(
+        db, account_id, min_lat, min_lon, max_lat, max_lon, preset, required_amenities
+    )
+    area = abs(max_lat - min_lat) * abs(max_lon - min_lon)
+    if len(pins) > cap or area > MAX_BBOX_DEG2:
+        precision = _bbox_precision_deg(min_lat, min_lon, max_lat, max_lon)
+        clusters = mapsvc.cluster_pins(pins, precision_deg=precision)
+        return {"clustered": True, "pins": [], "clusters": clusters, "total": len(pins)}
+    return {"clustered": False, "pins": pins, "clusters": [], "total": len(pins)}
+
+
 def _has_amenities(db: Session, pin, required: list[str]) -> bool:
     fac = facility.get_facility(db, pin.facility_id)
     amenities = (fac.attributes or {}).get("amenities", []) if fac is not None else []

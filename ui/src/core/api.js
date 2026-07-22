@@ -358,9 +358,29 @@ export async function verifyAuthority({ mcNumber, dotNumber }) {
   return resp.json();
 }
 
-export async function fetchOverlay({ lat, lon, radiusM = 8000, preset = "drive" }) {
-  const q = new URLSearchParams({ lat, lon, radius_m: radiusM, preset });
-  return apiGet(`/map/overlay?${q}`, `overlay:${preset}`);
+// PRIMARY: viewport bbox — the map fetches exactly what's in view (pan/zoom driven).
+// SECONDARY: point + radius (corridor / nearby). `signal` lets a newer viewport
+// fetch abort the in-flight one, so a fast pan never paints stale pins. Bypasses the
+// offline cache on purpose — per-viewport payloads are transient; offline falls back
+// to fixtures in the caller.
+export async function fetchOverlay({ bbox, lat, lon, radiusM = 8000, preset = "drive", signal } = {}) {
+  const params = { preset };
+  if (bbox) {
+    params.min_lat = bbox.min_lat;
+    params.min_lon = bbox.min_lon;
+    params.max_lat = bbox.max_lat;
+    params.max_lon = bbox.max_lon;
+  } else {
+    params.lat = lat;
+    params.lon = lon;
+    params.radius_m = radiusM;
+  }
+  const resp = await fetch(`${API_BASE}/map/overlay?${new URLSearchParams(params)}`, {
+    headers: headers(),
+    signal,
+  });
+  if (!resp.ok) throw new Error(`overlay failed: ${resp.status}`);
+  return resp.json();
 }
 
 export async function report(facilityId, signalType, value) {

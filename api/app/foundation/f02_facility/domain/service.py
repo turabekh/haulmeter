@@ -26,6 +26,7 @@ def create_facility(
     address: str | None = None,
     attributes: dict | None = None,
     hours: dict | None = None,
+    is_dev: bool = False,
 ) -> Facility:
     facility = Facility(
         facility_type=facility_type,
@@ -36,6 +37,7 @@ def create_facility(
         geohash=geohash_util.encode(lat, lon),
         attributes=attributes or {},
         hours=hours or {},
+        is_dev=is_dev,
     )
     db.add(facility)
     db.flush()
@@ -104,6 +106,7 @@ def find_duplicate_candidates(db: Session, name: str, lat: float, lon: float) ->
         select(Facility)
         .where(Facility.geohash.like(f"{block}%"))
         .where(Facility.status != FacilityStatus.merged)
+        .where(~Facility.is_dev)  # real-data ingest never merges into DEV_SEED facilities
         .where(func.similarity(Facility.name, name) >= DEDUP_NAME_SIMILARITY)
         .order_by(func.similarity(Facility.name, name).desc())
     )
@@ -165,6 +168,31 @@ def nearest(
     if facility_type is not None:
         stmt = stmt.where(Facility.facility_type == facility_type)
     return list(db.scalars(stmt))
+
+
+BBOX_QUERY_LIMIT = 5000  # DB safety ceiling; the map clusters well before this
+
+
+def in_bbox(
+    db: Session,
+    min_lat: float,
+    min_lon: float,
+    max_lat: float,
+    max_lon: float,
+    facility_type: FacilityType | None = None,
+) -> list[Facility]:
+    # facilities intersecting the map viewport (the primary overlay mode). Includes
+    # is_dev facilities — they must render for field-testing. Hard LIMIT is a safety
+    # ceiling; the M1 layer clusters at density well before it.
+    envelope = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+    stmt = (
+        select(Facility)
+        .where(Facility.status != FacilityStatus.merged)
+        .where(func.ST_Intersects(Facility.geom, envelope))
+    )
+    if facility_type is not None:
+        stmt = stmt.where(Facility.facility_type == facility_type)
+    return list(db.scalars(stmt.limit(BBOX_QUERY_LIMIT)))
 
 
 def set_lot_polygon(db: Session, facility: Facility, polygon_wkt: str) -> Facility:
