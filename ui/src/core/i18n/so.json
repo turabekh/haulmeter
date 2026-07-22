@@ -325,5 +325,6 @@
   "voice.stop": "Jooji",
   "voice.replay": "Ka dhig jawaabta",
   "voice.retry": "Ma maqlin — mar kale isku day ama qor.",
-  "voice.mic_blocked": "Maykaha waa la damiyay — su'aashaada qor."
+  "voice.mic_blocked": "Maykaha waa la damiyay — su'aashaada qor.",
+  "map.data_credit": "© OpenStreetMap contributors (ODbL)"
 }

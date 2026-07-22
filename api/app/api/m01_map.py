@@ -39,6 +39,17 @@ def _serialize_pin(pin) -> dict:
     }
 
 
+def _serialize_cluster(cluster) -> dict:
+    # §11.5: a cluster chip shows count + dominant status color (client renders color)
+    return {
+        "cluster": True,
+        "count": cluster.count,
+        "lat": cluster.center_lat,
+        "lon": cluster.center_lon,
+        "status": cluster.dominant_status,
+    }
+
+
 @router.get("/overlay")
 def overlay(
     lat: float,
@@ -48,12 +59,18 @@ def overlay(
     amenities: str = "",
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
-) -> list[dict]:
+) -> dict:
+    # sparse -> individual pins; dense -> server-side clusters (bounded payload, §11.5/§20)
     required = [a for a in amenities.split(",") if a] or None
-    pins = m1.map_overlay(
+    view = m1.map_overlay_view(
         db, account.id, lat, lon, radius_m, preset=m1.Preset(preset), required_amenities=required
     )
-    return [_enrich(db, p) for p in pins]
+    return {
+        "clustered": view["clustered"],
+        "total": view["total"],
+        "pins": [_enrich(db, p) for p in view["pins"]],
+        "clusters": [_serialize_cluster(c) for c in view["clusters"]],
+    }
 
 
 def _enrich(db: Session, pin) -> dict:

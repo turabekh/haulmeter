@@ -1,0 +1,47 @@
+[
+  {
+    "siteId": "WI00094IS0024700ERSTARE01",
+    "timeStamp": "2026-07-20T12:00:00Z",
+    "relevantHighway": "94",
+    "referencePost": "247",
+    "exitID": null,
+    "directionOfTravel": "E",
+    "name": "I-94 EB REST AREA",
+    "location": { "latitude": 43.07010, "longitude": -89.40010, "streetAdr": null, "city": "Madison", "state": "WI", "zip": "53718", "timeZone": "Central" },
+    "ownership": "PU",
+    "capacity": 55,
+    "amenities": ["restrooms", "vending"],
+    "images": [],
+    "logos": []
+  },
+  {
+    "siteId": "WI00041IS0031900ERSTARE02",
+    "timeStamp": "2026-07-20T12:00:00Z",
+    "relevantHighway": "41",
+    "referencePost": "319",
+    "exitID": null,
+    "directionOfTravel": "E",
+    "name": "US-41 EB REST AREA",
+    "location": { "latitude": 44.20000, "longitude": -88.40000, "streetAdr": null, "city": "Appleton", "state": "WI", "zip": "54911", "timeZone": "Central" },
+    "ownership": "PU",
+    "capacity": 40,
+    "amenities": ["restrooms"],
+    "images": [],
+    "logos": []
+  },
+  {
+    "siteId": "WI00090IS0012000WRSTARE03",
+    "timeStamp": "2026-07-20T12:00:00Z",
+    "relevantHighway": "90",
+    "referencePost": "120",
+    "exitID": null,
+    "directionOfTravel": "W",
+    "name": "I-90 WB REST AREA",
+    "location": { "latitude": 43.80000, "longitude": -90.50000, "streetAdr": null, "city": "Tomah", "state": "WI", "zip": "54660", "timeZone": "Central" },
+    "ownership": "PU",
+    "capacity": 30,
+    "amenities": [],
+    "images": [],
+    "logos": []
+  }
+]

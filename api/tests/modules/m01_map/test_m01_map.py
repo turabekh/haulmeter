@@ -41,6 +41,25 @@ def test_drive_preset_shows_only_its_layers(db):
     assert "truck_stop" in types and "fuel_station" in types
 
 
+def test_overlay_clusters_at_density_bounding_the_payload(db):
+    # design-prd §11.5 / §20: above the pin cap the server returns clusters, so the
+    # payload stays bounded at real national density (here forced with a low cap).
+    account = _account(db)
+    for i in range(12):
+        facility.create_facility(
+            db, facility.FacilityType.truck_stop, f"Stop {i}", 32.77 + i * 0.001, -96.80 + i * 0.001
+        )
+    sparse = m1.map_overlay_view(db, account.id, 32.78, -96.79, 20000, cap=100)
+    assert sparse["clustered"] is False and len(sparse["pins"]) == 12
+
+    dense = m1.map_overlay_view(db, account.id, 32.78, -96.79, 20000, cap=3)
+    assert dense["clustered"] is True
+    assert dense["pins"] == []  # no per-pin payload
+    assert dense["total"] == 12
+    assert 0 < len(dense["clusters"]) < 12  # bounded: fewer cluster cells than pins
+    assert sum(c.count for c in dense["clusters"]) == 12  # every facility accounted for
+
+
 def test_tonight_preset_sorts_by_availability(db):
     account = _account(db)
     full = facility.create_facility(db, facility.FacilityType.truck_stop, "Full", *DALLAS)

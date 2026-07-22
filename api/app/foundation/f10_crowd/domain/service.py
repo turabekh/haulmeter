@@ -32,6 +32,15 @@ POINTS_PER_SIGNAL: dict[SignalType, int] = {
     SignalType.facility_attribute: 10,
 }
 
+# a reading younger than this counts as "fresh" for authoritative-vs-crowd precedence
+FRESH_THRESHOLD_SECONDS: dict[SignalType, float] = {
+    SignalType.parking_fullness: 1800,  # 30 min (TPIMS updates every 1-5 min)
+    SignalType.weigh_station_status: 3600,
+    SignalType.fuel_price: 43200,
+    SignalType.facility_attribute: 604800,
+}
+AUTHORITATIVE_TRUST = 5.0  # above any crowd trust_weight
+
 
 class FacilityNotFound(Exception):
     pass
@@ -127,6 +136,39 @@ def submit(
     return submission
 
 
+def submit_authoritative(
+    db: Session,
+    facility_id,
+    signal_type: SignalType,
+    value: dict,
+    submitted_at: datetime,
+    source: str,
+    trust_data: bool = True,
+) -> Submission | None:
+    # an authoritative feed (e.g. TPIMS). No driver, no points, no geofence proof —
+    # but a real source + real timestamp. Honors the feed's trust flag (condition A):
+    # if trust_data is false the reading is NOT recorded, so it never presents as
+    # fresh truth. Returns None when skipped.
+    if not trust_data:
+        return None
+    if facility_registry.get_facility(db, facility_id) is None:
+        raise FacilityNotFound(str(facility_id))
+    submission = Submission(
+        account_id=None,
+        facility_id=facility_id,
+        signal_type=signal_type,
+        value=value,
+        presence_proven=True,
+        authoritative=True,
+        source=source,
+        trust_weight=AUTHORITATIVE_TRUST,
+        submitted_at=submitted_at,
+    )
+    db.add(submission)
+    db.flush()
+    return submission
+
+
 # --- Aggregation: current best belief ---
 def _decay_weight(age_seconds: float, signal_type: SignalType) -> float:
     half_life = HALF_LIFE_SECONDS[signal_type]
@@ -160,6 +202,26 @@ def aggregate_belief(
 
     if not scored:
         return None
+
+    # Belief precedence when an authoritative feed (TPIMS) contributes (condition A):
+    # fresh authoritative > fresh crowd > stale authoritative > stale crowd. Pure
+    # crowd data is untouched (the branch below only runs if any authoritative row
+    # is in scope), so existing crowd behavior — decay-weighted over all — is intact.
+    if any(s.authoritative for s, _ in scored):
+        fresh_cutoff = FRESH_THRESHOLD_SECONDS[signal_type]
+
+        def _is_fresh(sub) -> bool:
+            return (as_of - sub.submitted_at).total_seconds() <= fresh_cutoff
+
+        for want_fresh, want_auth in ((True, True), (True, False), (False, True), (False, False)):
+            group = [
+                (s, w)
+                for s, w in scored
+                if _is_fresh(s) == want_fresh and s.authoritative == want_auth
+            ]
+            if group:
+                scored = group
+                break
 
     total_weight = sum(w for _, w in scored)
     freshest = max(s.submitted_at for s, _ in scored)

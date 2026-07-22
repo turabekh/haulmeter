@@ -8,6 +8,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    String,
     UniqueConstraint,
     func,
 )
@@ -29,8 +30,9 @@ class Submission(Base):
     __table_args__ = {"schema": SCHEMA}
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    account_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey(ACCOUNT_FK, ondelete="CASCADE"), index=True
+    # nullable: authoritative feed submissions (e.g. TPIMS) have no driver account
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="CASCADE"), index=True, nullable=True
     )
     facility_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey(FACILITY_FK, ondelete="CASCADE"), index=True
@@ -38,6 +40,9 @@ class Submission(Base):
     signal_type: Mapped[SignalType] = mapped_column(SIGNAL_TYPE_ENUM, index=True)
     value: Mapped[dict] = mapped_column(JSON, default=dict)
     presence_proven: Mapped[bool] = mapped_column(default=False)
+    # an authoritative feed (TPIMS) outranks crowd at equal freshness (PRD §12)
+    authoritative: Mapped[bool] = mapped_column(default=False)
+    source: Mapped[str | None] = mapped_column(String(40), nullable=True)
     trust_weight: Mapped[float] = mapped_column(Float, default=1.0)
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     received_at: Mapped[datetime] = mapped_column(

@@ -43,13 +43,19 @@ function onLocated({ lat, lon }) {
   loadHandoffs();
 }
 
-// live pins from the M1 API when a session exists; otherwise fixtures (§ api.js)
+// live pins from the M1 API when a session exists; otherwise fixtures (§ api.js).
+// At real national density the server returns clusters instead (§11.5) — kept in
+// `clusters` for the cluster-bubble render; `pins` is empty in that case.
 const livePins = ref(null);
+const clusters = ref([]);
 async function loadOverlay() {
   try {
-    livePins.value = await fetchOverlay({ lat: geo.value.lat, lon: geo.value.lon, preset: preset.value });
+    const resp = await fetchOverlay({ lat: geo.value.lat, lon: geo.value.lon, preset: preset.value });
+    livePins.value = resp.pins;
+    clusters.value = resp.clusters || [];
   } catch {
     livePins.value = null; // fall back to fixtures (unauthenticated / offline)
+    clusters.value = [];
   }
 }
 onMounted(loadOverlay);

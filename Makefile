@@ -1,7 +1,11 @@
 COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
-.PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci
+.PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci \
+        seed ingest-ntad ingest-tpims ingest-osm osm-extract
+
+STATE ?= wisconsin
+OSMIUM_IMAGE ?= yagajs/osmium-tool:latest
 
 help:
 	@echo "LONGHAUL make targets:"
@@ -47,3 +51,31 @@ fmt:
 	$(COMPOSE) run --rm --no-deps api ruff format .
 
 ci: env preflight lint test
+
+# --- Real POI data (PRD §12) — live pulls only, never in CI ---
+# Dev seed is OFF by default; this forces it on for local field-testing.
+# Optional: DEV_SEED_ORIGIN=lat,lon plants a few "DEV —" facilities around a point.
+seed:
+	$(COMPOSE) exec -e DEV_SEED=1 -e DEV_SEED_ORIGIN="$(DEV_SEED_ORIGIN)" api python -m scripts.seed_demo
+
+ingest-ntad:
+	$(COMPOSE) exec api python -m scripts.ingest_ntad
+
+ingest-tpims:
+	$(COMPOSE) exec api python -m scripts.ingest_tpims
+
+# reads api/data/osm/$(STATE).geojson (produced by `make osm-extract`)
+ingest-osm:
+	$(COMPOSE) exec api python -m scripts.ingest_osm /app/data/osm/$(STATE).geojson
+
+# Docker-only OSM extract: download a Geofabrik state pbf, filter truck-relevant
+# features with osmium, export GeoJSON. Output lands in api/data/osm/ (gitignored).
+osm-extract:
+	mkdir -p api/data/osm
+	docker run --rm -v "$(PWD)/api/data/osm:/data" $(OSMIUM_IMAGE) sh -c '\
+	  wget -qO /data/$(STATE).osm.pbf https://download.geofabrik.de/north-america/us/$(STATE)-latest.osm.pbf && \
+	  osmium tags-filter /data/$(STATE).osm.pbf \
+	    nwr/highway=rest_area,services nwr/amenity=fuel,truck_stop nwr/amenity=parking \
+	    -o /data/$(STATE)-filtered.osm.pbf --overwrite && \
+	  osmium export /data/$(STATE)-filtered.osm.pbf -o /data/$(STATE).geojson --overwrite && \
+	  echo "wrote api/data/osm/$(STATE).geojson"'

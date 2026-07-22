@@ -46,7 +46,7 @@ def test_register_login_and_overlay(client, db):
         headers=headers,
     )
     assert resp.status_code == 200
-    names = [p["name"] for p in resp.json()]
+    names = [p["name"] for p in resp.json()["pins"]]
     assert "Stop" in names
 
 
@@ -71,7 +71,7 @@ def test_overlay_enriches_bookable_and_fuel_badges(client, db):
         "/map/overlay",
         params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "tonight"},
         headers=headers,
-    ).json()
+    ).json()["pins"]
     yardline = next(p for p in pins if p["name"] == "Yardline")
     book = next(b for b in yardline["badges"] if b["kind"] == "bookable")
     assert book["value"] == 2400 and book["spot_id"]  # cheapest active spot + price
@@ -80,7 +80,7 @@ def test_overlay_enriches_bookable_and_fuel_badges(client, db):
         "/map/overlay",
         params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "fuel"},
         headers=headers,
-    ).json()
+    ).json()["pins"]
     quik = next(p for p in fuel_pins if p["name"] == "QuikFuel")
     net = next(b for b in quik["badges"] if b["kind"] == "fuel_net")
     assert net["net"] == 394 and net["savings"] == 25  # $4.19 gross − 25¢ discount
@@ -114,7 +114,7 @@ def test_report_updates_belief_reflected_in_overlay(client, db):
         params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "drive"},
         headers=headers,
     )
-    pin = next(p for p in overlay.json() if p["facility_id"] == str(fac.id))
+    pin = next(p for p in overlay.json()["pins"] if p["facility_id"] == str(fac.id))
     assert pin["status"] == "full"  # report -> aggregate -> pin, live over HTTP
 
 

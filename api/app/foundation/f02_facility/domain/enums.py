@@ -22,6 +22,7 @@ class FacilityStatus(enum.Enum):
 class SourceKind(enum.Enum):
     osm = "osm"
     fhwa = "fhwa"
+    ntad = "ntad"  # NTAD/BTS Truck Stop Parking — authoritative capacity counts
     tpims = "tpims"
     chain_list = "chain_list"
     user_checkin = "user_checkin"

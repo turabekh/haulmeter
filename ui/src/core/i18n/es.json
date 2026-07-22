@@ -325,5 +325,6 @@
   "voice.stop": "Detener",
   "voice.replay": "Reproducir respuesta",
   "voice.retry": "No te entendí — inténtalo otra vez o escribe.",
-  "voice.mic_blocked": "El micrófono está apagado — escribe tu pregunta."
+  "voice.mic_blocked": "El micrófono está apagado — escribe tu pregunta.",
+  "map.data_credit": "© OpenStreetMap contributors (ODbL)"
 }

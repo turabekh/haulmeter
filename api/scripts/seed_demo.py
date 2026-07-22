@@ -1,11 +1,13 @@
-"""AI-CONTEXT: DEV-ONLY demo seed. Populates a coherent cluster of facilities
-around downtown Dallas (a US location) so the signed-in browser experience is
-rich: truck stops with live parking status, a bookable parking lot, receivers
-with dock-time, fuel stations with net pricing, and a couple of approved reviews
-for the public scorecard. Idempotent-ish: skips if the marker facility exists.
-Run: docker compose -f infra/docker-compose.yml exec api python scripts/seed_demo.py
+"""AI-CONTEXT: DEV-ONLY demo seed (PRD §12). OFF by default — real POI data comes
+from the F2 ingestion pipeline (NTAD/TPIMS/OSM). This runs ONLY when DEV_SEED=1,
+for a rich local browser experience. Optionally DEV_SEED_ORIGIN=lat,lon plants a
+few obviously-fake "DEV —" facilities (shipper, truck stop, bookable yard) around
+any point on earth, so geofencing + the detention clock can be field-tested
+anywhere. Idempotent-ish: skips if the marker facility exists.
+Run: make seed   (or DEV_SEED=1 ... python scripts/seed_demo.py)
 """
 
+import os
 from datetime import UTC, datetime, timedelta
 
 from app.core.db import SessionLocal
@@ -74,8 +76,61 @@ def _make_dev_driver_owner_operator(db):
     print("dev-driver set to own_mc (owner-operator), authority verified — pill will show")
 
 
+def _seed_origin(db):
+    # DEV_SEED_ORIGIN=lat,lon -> a few obviously-fake facilities around any point so
+    # geofencing/detention can be field-tested off the US grid. Names start "DEV —".
+    raw = os.environ.get("DEV_SEED_ORIGIN")
+    if not raw:
+        return
+    try:
+        lat, lon = (float(x.strip()) for x in raw.split(","))
+    except ValueError:
+        print(f"DEV_SEED_ORIGIN ignored (expected lat,lon): {raw!r}")
+        return
+    if any(f.name.startswith("DEV —") for f in facility.nearest(db, lat, lon, 3000)):
+        print(f"DEV origin facilities already present near {lat},{lon}")
+        return
+    facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, "DEV — Test Shipper", lat + 0.0008, lon
+    )
+    ts = facility.create_facility(
+        db,
+        facility.FacilityType.truck_stop,
+        "DEV — Test Truck Stop",
+        lat - 0.0008,
+        lon + 0.0009,
+    )
+    seeder = identity.register_account(
+        db, f"dev-origin-{NOW.timestamp():.0f}@seed.local", "pw-123456"
+    )
+    crowd.submit(
+        db,
+        seeder.id,
+        ts.id,
+        crowd.SignalType.parking_fullness,
+        {"status": "some"},
+        NOW,
+        award=False,
+    )
+    crowd.update_belief(db, ts.id, crowd.SignalType.parking_fullness, as_of=NOW)
+    owner = identity.register_account(
+        db, f"dev-yard-{NOW.timestamp():.0f}@seed.local", "pw-123456"
+    )
+    prop = m6.create_property(db, owner.id, "DEV — Test Yard", lat, lon - 0.0009, vetted=True)
+    m6.add_spot(db, prop, "D1", price_cents_per_night=1500)
+    db.commit()
+    print(f"DEV origin seeded around {lat},{lon}: shipper, truck stop, bookable yard")
+
+
 def main():
+    if os.environ.get("DEV_SEED") != "1":
+        print(
+            "seed skipped — DEV_SEED != 1 "
+            "(real POI data comes from F2 ingestion). Use `make seed`."
+        )
+        return
     db = SessionLocal()
+    _seed_origin(db)  # honor DEV_SEED_ORIGIN even if the Dallas cluster already exists
     _make_dev_driver_owner_operator(db)  # always run — independent of the cluster guard
     existing = (
         [f for f in facility.nearest(db, *CENTER, 8000) if f.name == MARKER]

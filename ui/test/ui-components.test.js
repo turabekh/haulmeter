@@ -1599,9 +1599,14 @@ describe("MapSurface (design-prd §10.1 / §11.4)", () => {
     const fetchStub = vi.fn().mockImplementation((url, opts) => {
       const u = String(url);
       if (u.includes("/map/overlay")) {
-        return jsonOk([
-          { facility_id: "f-ta", name: "TA Dallas", facility_type: "truck_stop", lat: 32.78, lon: -96.82, status, shape: "circle", freshness: { as_of: "2026-07-21T15:00:00Z", ttl_seconds: 3600 } },
-        ]);
+        return jsonOk({
+          clustered: false,
+          total: 1,
+          clusters: [],
+          pins: [
+            { facility_id: "f-ta", name: "TA Dallas", facility_type: "truck_stop", lat: 32.78, lon: -96.82, status, shape: "circle", freshness: { as_of: "2026-07-21T15:00:00Z", ttl_seconds: 3600 } },
+          ],
+        });
       }
       if (u.endsWith("/map/report") && opts?.method === "POST") {
         status = JSON.parse(opts.body).value.status; // server would flip the belief

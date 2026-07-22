@@ -70,9 +70,13 @@ def add_source(
     facility: Facility,
     source_kind: SourceKind,
     external_ref: str | None = None,
+    attributes: dict | None = None,
 ) -> FacilitySource:
     source = FacilitySource(
-        facility_id=facility.id, source_kind=source_kind, external_ref=external_ref
+        facility_id=facility.id,
+        source_kind=source_kind,
+        external_ref=external_ref,
+        attributes=attributes or {},
     )
     db.add(source)
     db.flush()
@@ -128,6 +132,20 @@ def resolve_canonical(db: Session, facility_id) -> Facility | None:
 
 def get_facility(db: Session, facility_id) -> Facility | None:
     return db.get(Facility, facility_id)
+
+
+def facility_for_source(db: Session, source_kind: SourceKind, external_ref: str) -> Facility | None:
+    # resolve the canonical facility a given source record maps to (e.g. a TPIMS
+    # siteId -> facility), following any merges.
+    source = db.scalar(
+        select(FacilitySource).where(
+            FacilitySource.source_kind == source_kind,
+            FacilitySource.external_ref == external_ref,
+        )
+    )
+    if source is None:
+        return None
+    return resolve_canonical(db, source.facility_id)
 
 
 def nearest(

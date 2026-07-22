@@ -1,0 +1,5 @@
+[
+  {"siteId": "WI00094IS0024700ERSTARE01", "timeStamp": "2026-07-22T03:35:00Z", "timeStampStatic": "2026-07-20T12:00:00Z", "reportedAvailable": "12", "trend": "FILLING", "open": true, "trustData": true, "capacity": 55},
+  {"siteId": "WI00041IS0031900ERSTARE02", "timeStamp": "2026-07-22T03:34:00Z", "timeStampStatic": "2026-07-20T12:00:00Z", "reportedAvailable": "Low", "trend": "FILLING", "open": true, "trustData": true, "capacity": 40},
+  {"siteId": "WI00090IS0012000WRSTARE03", "timeStamp": "2026-07-22T03:33:00Z", "timeStampStatic": "2026-07-20T12:00:00Z", "reportedAvailable": "9", "trend": "STEADY", "open": true, "trustData": false, "capacity": 30}
+]

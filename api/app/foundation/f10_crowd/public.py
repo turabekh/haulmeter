@@ -19,6 +19,7 @@ from .domain.service import (
     get_or_create_trust,
     issue_points,
     submit,
+    submit_authoritative,
     update_belief,
 )
 
@@ -37,5 +38,6 @@ __all__ = [
     "get_or_create_trust",
     "issue_points",
     "submit",
+    "submit_authoritative",
     "update_belief",
 ]

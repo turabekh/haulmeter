@@ -1,0 +1,11 @@
+{
+  "type": "FeatureCollection",
+  "exceededTransferLimit": false,
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.1800, 43.1200] },
+      "properties": { "OBJECTID": 5003, "nhs_rest_stop": "REST AREA I-90 WB", "municipality": "TOMAH", "state": "WI", "number_of_spots": 45 }
+    }
+  ]
+}

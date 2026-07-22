@@ -76,6 +76,30 @@ def map_overlay(
     return pins
 
 
+# above this many pins in view, the server clusters (design-prd §11.5) so the map
+# payload stays bounded at real national density and the client budget (§20) holds
+OVERLAY_PIN_CAP = 300
+
+
+def map_overlay_view(
+    db: Session,
+    account_id,
+    center_lat: float,
+    center_lon: float,
+    radius_m: float,
+    preset: Preset = Preset.drive,
+    required_amenities: list[str] | None = None,
+    cap: int = OVERLAY_PIN_CAP,
+):
+    # returns individual pins when sparse; server-side clusters when dense. Payload
+    # size is bounded either way (≤ cap pins, or the number of cluster cells).
+    pins = map_overlay(db, account_id, center_lat, center_lon, radius_m, preset, required_amenities)
+    if len(pins) <= cap:
+        return {"clustered": False, "pins": pins, "clusters": [], "total": len(pins)}
+    clusters = mapsvc.cluster_pins(pins)
+    return {"clustered": True, "pins": [], "clusters": clusters, "total": len(pins)}
+
+
 def _has_amenities(db: Session, pin, required: list[str]) -> bool:
     fac = facility.get_facility(db, pin.facility_id)
     amenities = (fac.attributes or {}).get("amenities", []) if fac is not None else []

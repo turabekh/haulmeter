@@ -12,6 +12,9 @@
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { Truck, TreePine, SquareParking, Fuel, Warehouse, Circle } from "lucide-vue-next";
 import { statusPresentation, isStale } from "../presentation.js";
+import { useI18n } from "../i18n.js";
+
+const { t } = useI18n();
 
 const props = defineProps({
   pins: { type: Array, default: () => [] },
@@ -189,6 +192,8 @@ function stale(pin) {
         <component :is="iconFor(pin)" :size="15" :stroke-width="2.5" aria-hidden="true" />
       </span>
     </button>
+    <!-- data attribution — OSM-derived rows require ODbL credit (PRD §12) -->
+    <span class="canvas__credit">{{ t("map.data_credit") }}</span>
   </div>
 </template>
 
@@ -208,6 +213,17 @@ function stale(pin) {
 }
 .canvas__gl--on {
   opacity: 1;
+}
+.canvas__credit {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  padding: 0 var(--s-1);
+  border-radius: var(--r-pill);
+  background: var(--ink-1);
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  pointer-events: none;
 }
 .canvas__note {
   position: absolute;

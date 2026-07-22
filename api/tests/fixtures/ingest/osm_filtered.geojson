@@ -1,0 +1,20 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-89.39990, 43.06990] },
+      "properties": { "@id": "node/111", "highway": "rest_area", "name": "I-94 EB Rest Area", "hgv": "yes" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Polygon", "coordinates": [[[-91.2410,43.8010],[-91.2400,43.8010],[-91.2400,43.8000],[-91.2410,43.8000],[-91.2410,43.8010]]] },
+      "properties": { "@id": "way/222", "amenity": "parking", "access": "hgv", "name": "La Crosse Truck Lot" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-88.0130, 44.5190] },
+      "properties": { "@id": "node/333", "amenity": "fuel", "hgv": "yes", "name": "Green Bay Fuel" }
+    }
+  ]
+}

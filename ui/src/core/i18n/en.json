@@ -325,5 +325,6 @@
   "voice.stop": "Stop",
   "voice.replay": "Play answer",
   "voice.retry": "Didn't catch that — try again or type.",
-  "voice.mic_blocked": "Mic is off — type your question."
+  "voice.mic_blocked": "Mic is off — type your question.",
+  "map.data_credit": "© OpenStreetMap contributors (ODbL)"
 }

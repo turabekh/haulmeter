@@ -34,3 +34,6 @@ npm-debug.log*
 .idea/
 .vscode/
 *.swp
+
+# OSM extracts (live-pulled via make osm-extract)
+api/data/osm/
