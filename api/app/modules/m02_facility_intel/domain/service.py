@@ -148,9 +148,16 @@ def moderate_review(
     if approve:
         crowd.issue_points(db, review.account_id, REVIEW_POINTS)
         if provider is not None and review.text:
-            ai.embed_and_store(
-                db, provider, MODULE, "facility_review", review.facility_id, review.text
-            )
+            # AI-CONTEXT: embedding is a best-effort enhancement — the HTTP embed
+            # runs before any DB write, so a Voyage failure (e.g. a free-tier 429)
+            # never blocks approval; the review is simply searchable once re-embedded
+            # (Decision 197 — storage/enrichment never blocks the core action).
+            try:
+                ai.embed_and_store(
+                    db, provider, MODULE, "facility_review", review.facility_id, review.text
+                )
+            except Exception:
+                pass
     db.flush()
     return review
 

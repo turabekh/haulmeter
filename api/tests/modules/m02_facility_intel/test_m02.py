@@ -71,6 +71,21 @@ def test_review_moderation_awards_points_on_approval(db):
     assert ledger.balance(db, points) == m2.REVIEW_POINTS
 
 
+def test_approval_survives_an_embedding_failure(db):
+    # embedding is best-effort — a Voyage failure (e.g. a free-tier 429) must not
+    # block review approval or its points award (Decision 197).
+    class FailingEmbedProvider(ai.FakeModelProvider):
+        def embed(self, text):
+            raise RuntimeError("voyage 429")
+
+    fac = _receiver(db)
+    author = _account(db, "resilient@example.com")
+    review = m2.submit_review(db, fac.id, author.id, {"safety": 5}, text="Great dock")
+    m2.moderate_review(db, review, approve=True, provider=FailingEmbedProvider())
+    assert review.status == m2.ReviewStatus.approved  # approval still went through
+    assert len(m2.list_reviews(db, fac.id)) == 1
+
+
 def test_invalid_ratings_rejected(db):
     fac = _receiver(db)
     author = _account(db)

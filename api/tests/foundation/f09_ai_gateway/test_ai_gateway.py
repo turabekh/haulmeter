@@ -194,6 +194,62 @@ def test_voyage_provider_delegates_text_to_fallback():
     assert p.synthesize("hi", "en").startswith("audio://")
 
 
+def test_voyage_embed_retries_on_429_then_succeeds(monkeypatch):
+    import time as _time
+
+    import httpx
+
+    from app.foundation.f09_ai_gateway.domain import provider as prov
+
+    calls = {"n": 0}
+
+    class _Resp:
+        def __init__(self, status):
+            self.status_code = status
+
+        def json(self):
+            return {"data": [{"embedding": [0.0] * prov.EMBED_DIM}], "usage": {"total_tokens": 5}}
+
+        def raise_for_status(self):
+            if self.status_code != 200:
+                raise httpx.HTTPStatusError("err", request=None, response=None)
+
+    def fake_post(url, **kw):
+        calls["n"] += 1
+        return _Resp(429 if calls["n"] < 3 else 200)  # rate-limited twice, then OK
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setattr(_time, "sleep", lambda _s: None)  # no real backoff wait in tests
+    vector, tokens = prov._voyage_embed("k", "voyage-3.5", "hi", prov.EMBED_DIM)
+    assert len(vector) == prov.EMBED_DIM and tokens == 5 and calls["n"] == 3
+
+
+def test_voyage_embed_raises_after_exhausting_retries(monkeypatch):
+    import time as _time
+
+    import httpx
+
+    from app.foundation.f09_ai_gateway.domain import provider as prov
+
+    calls = {"n": 0}
+
+    class _Resp:
+        status_code = 429
+
+        def raise_for_status(self):
+            raise httpx.HTTPStatusError("429", request=None, response=None)
+
+    def fake_post(url, **kw):
+        calls["n"] += 1
+        return _Resp()
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setattr(_time, "sleep", lambda _s: None)
+    with pytest.raises(httpx.HTTPStatusError):
+        prov._voyage_embed("k", "voyage-3.5", "hi", prov.EMBED_DIM)
+    assert calls["n"] == prov._EMBED_MAX_TRIES  # tried the bounded max, then raised
+
+
 def test_resolve_provider_uses_voyage_for_embeddings(monkeypatch):
     from app.core.config import get_settings
     from app.foundation.f09_ai_gateway.domain import provider as prov

@@ -194,24 +194,32 @@ class AnthropicModelProvider:
 # --- Real embeddings adapter: Voyage AI (the F9 embeddings activation) ---
 # Anthropic has no embeddings API; Voyage is its recommended embeddings partner.
 _VOYAGE_URL = "https://api.voyageai.com/v1/embeddings"
+_EMBED_MAX_TRIES = 3
+_EMBED_BACKOFF_BASE = 0.5  # seconds; 0.5s, 1.0s between retries — bounded, request-safe
 
 
 def _voyage_embed(api_key: str, model: str, text: str, dim: int) -> tuple[list[float], int]:
-    # single HTTP call to the Voyage embeddings API; kept as a module function so
-    # tests monkeypatch it without touching the network. Returns (vector, tokens).
+    # HTTP call to the Voyage embeddings API with bounded retry-with-backoff on 429
+    # (free-tier rate limit) and 5xx. Kept as a module function so tests monkeypatch
+    # it without touching the network. Returns (vector, tokens); raises on exhaustion.
+    import time
+
     import httpx
 
-    resp = httpx.post(
-        _VOYAGE_URL,
-        headers={"Authorization": f"Bearer {api_key}", "content-type": "application/json"},
-        json={"input": [text], "model": model, "output_dimension": dim, "input_type": "document"},
-        timeout=60.0,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    vector = list(data["data"][0]["embedding"])
-    tokens = int(data.get("usage", {}).get("total_tokens", 0)) or _tokens(text)
-    return vector, tokens
+    headers = {"Authorization": f"Bearer {api_key}", "content-type": "application/json"}
+    body = {"input": [text], "model": model, "output_dimension": dim, "input_type": "document"}
+    for attempt in range(_EMBED_MAX_TRIES):
+        resp = httpx.post(_VOYAGE_URL, headers=headers, json=body, timeout=60.0)
+        retryable = resp.status_code == 429 or resp.status_code >= 500
+        if retryable and attempt < _EMBED_MAX_TRIES - 1:
+            time.sleep(_EMBED_BACKOFF_BASE * (2**attempt))
+            continue
+        resp.raise_for_status()  # raises on the final/non-retryable failure
+        data = resp.json()
+        vector = list(data["data"][0]["embedding"])
+        tokens = int(data.get("usage", {}).get("total_tokens", 0)) or _tokens(text)
+        return vector, tokens
+    raise RuntimeError("unreachable")  # loop always returns or raises
 
 
 class VoyageEmbeddingProvider:
