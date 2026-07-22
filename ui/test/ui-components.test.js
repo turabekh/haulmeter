@@ -333,6 +333,17 @@ describe("FacilityProfileSurface — M8 intel (FR6 risk + FR2 fastest hour)", ()
 describe("AuthSurface + auth guard (F1, PRD §7.1)", () => {
   beforeEach(() => logout());
 
+  it("shows the brand wordmark (PRD §17.6), not the LONGHAUL placeholder", async () => {
+    const router = testRouter();
+    router.push("/login");
+    await router.isReady();
+    const w = mount(AuthSurface, { global: { plugins: [router] } });
+    const brand = w.find(".auth__brand").text();
+    expect(brand).toBe("Haulmeter");
+    expect(brand).not.toContain("LONGHAUL"); // placeholder must be gone
+    w.unmount();
+  });
+
   it("logs in and routes to the map; token persists", async () => {
     const fetchStub = vi.fn().mockResolvedValue({
       ok: true,

@@ -8,6 +8,7 @@ import { ref, reactive } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
 import { login, register } from "../core/api.js";
+import { BRAND } from "../core/brand.js";
 
 const router = useRouter();
 const { t } = useI18n();
@@ -52,7 +53,7 @@ async function submit() {
 <template>
   <div class="auth">
     <div class="auth__head">
-      <h1 class="auth__brand">LONGHAUL</h1>
+      <h1 class="auth__brand">{{ BRAND }}</h1>
       <p class="auth__tagline">{{ t("auth.tagline") }}</p>
     </div>
 

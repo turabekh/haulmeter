@@ -490,7 +490,7 @@ Supporting platform metrics: DAU/MAU ≥ 40%; W8 driver retention; % of stops wi
 3. Fuel payment-partner and merchant-network route (direct merchant deals vs. white-label network).
 4. Commercial fuel-price feed licensing (OPIS et al.) vs. crowd+network-only pricing.
 5. Marketplace damage-coverage insurance: carrier, cost, and coverage cap for M6 activation.
-6. Final brand name and trademark clearance (LONGHAUL is internal only).
+6. **Brand name = "Haulmeter"** (decided 2026-07-22, owner; design-prd §23). "LONGHAUL" was the internal placeholder. Trademark clearance + domain acquisition remain the open real-world step.
 7. Points redemption rate and earn-table calibration (F13 config; tune with live data).
 8. TPIMS feed coverage/format survey per state (engineering spike during F2 build).
 

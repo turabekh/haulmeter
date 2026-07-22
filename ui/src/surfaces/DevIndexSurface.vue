@@ -8,6 +8,7 @@
 <script setup>
 import { ref } from "vue";
 import { useRouter } from "vue-router";
+import { BRAND } from "../core/brand.js";
 import { isAuthenticated, email, logout, login, register } from "../core/api.js";
 
 const router = useRouter();
@@ -87,7 +88,7 @@ function go(to) {
 <template>
   <div class="dev">
     <header class="dev__head">
-      <h1 class="dev__title">LONGHAUL — dev directory</h1>
+      <h1 class="dev__title">{{ BRAND }} — dev directory</h1>
       <p class="dev__sub">Every surface in one place. This page is a dev tool, not a product screen.</p>
     </header>
 
