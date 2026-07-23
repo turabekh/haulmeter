@@ -170,6 +170,27 @@ def submit_authoritative(
 
 
 # --- Aggregation: current best belief ---
+def _contributor_key(s: Submission):
+    # one belief contribution per contributor: a driver (account), a feed (source),
+    # else the row itself. So the SAME driver re-reporting a spot can't stack weight
+    # or inflate the "N drivers" count — only their freshest reading counts.
+    if s.authoritative:
+        return ("feed", s.source)
+    if s.account_id is not None:
+        return ("acct", s.account_id)
+    return ("row", s.id)
+
+
+def _latest_per_contributor(submissions: list[Submission]) -> list[Submission]:
+    latest: dict = {}
+    for s in submissions:
+        key = _contributor_key(s)
+        cur = latest.get(key)
+        if cur is None or s.submitted_at > cur.submitted_at:
+            latest[key] = s
+    return list(latest.values())
+
+
 def _decay_weight(age_seconds: float, signal_type: SignalType) -> float:
     half_life = HALF_LIFE_SECONDS[signal_type]
     return 0.5 ** (max(0.0, age_seconds) / half_life)
@@ -187,6 +208,7 @@ def aggregate_belief(
             )
         )
     )
+    submissions = _latest_per_contributor(submissions)
     scored: list[tuple[Submission, float]] = []
     for submission in submissions:
         age = (as_of - submission.submitted_at).total_seconds()

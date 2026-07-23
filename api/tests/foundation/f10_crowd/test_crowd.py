@@ -127,6 +127,33 @@ def test_categorical_belief_is_trust_and_recency_weighted(db):
     assert 0.0 < belief.confidence <= 1.0
 
 
+def test_one_driver_reporting_repeatedly_counts_once(db):
+    # a driver re-reporting the same spot must NOT inflate the "N drivers" count or
+    # stack weight onto their own opinion — only their freshest reading counts.
+    fac = _facility(db)
+    spammer = _account(db, "spammer@example.com")
+    for i in range(4):  # same driver, four reports, changing their mind on the last
+        crowd.submit(
+            db, spammer.id, fac.id, crowd.SignalType.parking_fullness,
+            {"status": "empty" if i < 3 else "full"},
+            submitted_at=T0 + timedelta(minutes=i), award=False,
+        )
+    at = T0 + timedelta(minutes=4)
+    belief = crowd.aggregate_belief(db, fac.id, crowd.SignalType.parking_fullness, as_of=at)
+    assert belief.sample_size == 1  # one distinct driver, not four
+    assert belief.value == {"status": "full"}  # their freshest opinion wins, not a stacked tally
+
+    # a second, distinct driver now genuinely makes it two
+    other = _account(db, "other@example.com")
+    crowd.submit(
+        db, other.id, fac.id, crowd.SignalType.parking_fullness, {"status": "full"},
+        submitted_at=T0 + timedelta(minutes=4), award=False,
+    )
+    at = T0 + timedelta(minutes=4)
+    belief = crowd.aggregate_belief(db, fac.id, crowd.SignalType.parking_fullness, as_of=at)
+    assert belief.sample_size == 2  # two distinct drivers
+
+
 def test_time_decay_favours_fresher_reports(db):
     fac = _facility(db)
     a = _account(db, "a@example.com")
