@@ -335,5 +335,7 @@
   "fuel.report.question": "What's the diesel price here?",
   "fuel.report.increase": "Increase price",
   "fuel.report.decrease": "Decrease price",
-  "fuel.report.submit": "Submit price"
+  "fuel.report.submit": "Submit price",
+  "fuel.week_of": "wk of",
+  "facility.spots": "spots"
 }

@@ -135,6 +135,8 @@ def parse_available(raw) -> int | str | None:
     s = str(raw).strip()
     if s.lower() == LOW:
         return LOW  # category, never int-parsed (condition A)
+    if s.lower() in ("unknown", "n/a", ""):
+        return None  # real IL feeds emit "Unknown" (not in spec) -> no reading
     try:
         return int(s)
     except ValueError:
@@ -183,6 +185,13 @@ def parse_tpims_static(records: list[dict]) -> list[StagedRecord]:
     return out
 
 
+def _parse_trend(raw) -> str | None:
+    # real IL feeds emit trend "Unknown" (not in spec) -> treat as no trend
+    if raw is None or str(raw).strip().lower() == "unknown":
+        return None
+    return raw
+
+
 def parse_tpims_dynamic(records: list[dict]) -> list[DynamicStatus]:
     out: list[DynamicStatus] = []
     for r in records:
@@ -192,12 +201,19 @@ def parse_tpims_dynamic(records: list[dict]) -> list[DynamicStatus]:
                 reported_at=_parse_ts(r.get("timeStamp")),
                 available=parse_available(r.get("reportedAvailable")),
                 capacity=r.get("capacity"),
-                trend=r.get("trend"),
-                open=bool(r.get("open")) if r.get("open") is not None else True,
+                trend=_parse_trend(r.get("trend")),
+                open=bool(r.get("open")) if r.get("open") is not None else True,  # null -> open
                 trust_data=bool(r.get("trustData")) if r.get("trustData") is not None else True,
             )
         )
     return out
+
+
+def has_usable_reading(status: DynamicStatus) -> bool:
+    # a belief needs a real signal: a known availability, or a closed station (which
+    # is itself "no spots"). "Unknown"/absent availability on an OPEN station says
+    # nothing — no belief, regardless of trustData (real IL feeds are mostly these).
+    return status.available is not None or not status.open
 
 
 def derive_parking_status(status: DynamicStatus) -> str:

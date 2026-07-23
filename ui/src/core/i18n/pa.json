@@ -335,5 +335,7 @@
   "fuel.report.question": "ਇੱਥੇ ਡੀਜ਼ਲ ਦੀ ਕੀਮਤ ਕੀ ਹੈ?",
   "fuel.report.increase": "ਕੀਮਤ ਵਧਾਓ",
   "fuel.report.decrease": "ਕੀਮਤ ਘਟਾਓ",
-  "fuel.report.submit": "ਕੀਮਤ ਭੇਜੋ"
+  "fuel.report.submit": "ਕੀਮਤ ਭੇਜੋ",
+  "fuel.week_of": "ਹਫ਼ਤਾ",
+  "facility.spots": "ਥਾਂਵਾਂ"
 }

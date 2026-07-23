@@ -1,0 +1,135 @@
+[
+  {
+    "siteId": "IL00074IW006200004",
+    "timeStamp": "2021-03-26T22:52:43Z",
+    "relevantHighway": "I-74",
+    "referencePost": "62.0",
+    "exitID": "",
+    "directionOfTravel": "W",
+    "name": "Spoon River",
+    "location": {
+      "latitude": 40.88021482983514,
+      "longitude": -90.08949009521503,
+      "streetAdr": "I-74",
+      "city": "Trenton Corners",
+      "state": "IL",
+      "zip": "61436",
+      "timeZone": "Central"
+    },
+    "ownership": "PU",
+    "capacity": 12,
+    "amenities": [
+      "Vending machine",
+      "Weather info available"
+    ],
+    "images": [
+      "https://cctv.travelmidwest.com/snapshots/TPIMS_17.jpg"
+    ]
+  },
+  {
+    "siteId": "IL00074IE006200001",
+    "timeStamp": "2021-03-17T21:26:34Z",
+    "relevantHighway": "I-74",
+    "referencePost": "62.0",
+    "exitID": "",
+    "directionOfTravel": "E",
+    "name": "Spoon River",
+    "location": {
+      "latitude": 40.878753328048546,
+      "longitude": -90.09364215477534,
+      "streetAdr": "I-74",
+      "city": "Elba Township",
+      "state": "IL",
+      "zip": "61436",
+      "timeZone": "Central"
+    },
+    "ownership": "PU",
+    "capacity": 13,
+    "amenities": [
+      "Vending machine",
+      "Weather info available"
+    ],
+    "images": [
+      "https://cctv.travelmidwest.com/snapshots/TPIMS_16.jpg"
+    ]
+  },
+  {
+    "siteId": "IL00074IE011400005",
+    "timeStamp": "2021-04-02T20:55:17Z",
+    "relevantHighway": "I-74",
+    "referencePost": "114.0",
+    "exitID": "",
+    "directionOfTravel": "E",
+    "name": "Mackinaw Dells",
+    "location": {
+      "latitude": 40.612499794461826,
+      "longitude": -89.24503950234022,
+      "streetAdr": "Unknown",
+      "city": "Congerville",
+      "state": "IL",
+      "zip": "61729",
+      "timeZone": "Central"
+    },
+    "ownership": "PU",
+    "capacity": 25,
+    "amenities": [
+      "Vending machine",
+      "TTY Station",
+      "Weather info available"
+    ],
+    "images": [
+      "https://cctv.travelmidwest.com/snapshots/TPIMS_19.jpg"
+    ]
+  },
+  {
+    "siteId": "IL00074IE015600037",
+    "timeStamp": "2024-08-01T19:46:37Z",
+    "relevantHighway": "I-74",
+    "referencePost": "156.0",
+    "exitID": "",
+    "directionOfTravel": "E",
+    "name": "Farm Land",
+    "location": {
+      "latitude": 40.2732225168317,
+      "longitude": -88.6762289011956,
+      "streetAdr": "",
+      "city": "",
+      "state": "IL",
+      "zip": "",
+      "timeZone": "Central"
+    },
+    "ownership": "PU",
+    "capacity": 0,
+    "amenities": [
+      "Vending machine",
+      "Rest room (assisted)",
+      "TTY Station",
+      "Weather info available"
+    ],
+    "images": []
+  },
+  {
+    "siteId": "IL00055IS010400024",
+    "timeStamp": "2024-08-01T19:46:36Z",
+    "relevantHighway": "I-55",
+    "referencePost": "104.0",
+    "exitID": "",
+    "directionOfTravel": "S",
+    "name": "RailSplitter",
+    "location": {
+      "latitude": 39.8871017270459,
+      "longitude": -89.596591145575,
+      "streetAdr": "000 Unknown St",
+      "city": "Unknown",
+      "state": "IL",
+      "zip": "00000",
+      "timeZone": "Central"
+    },
+    "ownership": "PU",
+    "capacity": 0,
+    "amenities": [
+      "Vending machine"
+    ],
+    "images": []
+  }
+]

@@ -35,6 +35,14 @@ const fresh = computed(() => freshnessLabel(props.pin.freshness, now));
 const stale = computed(() => isStale(props.pin.freshness, now));
 const grossFuel = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_price")?.value ?? null);
 const isFuel = computed(() => props.pin.facility_type === "fuel_station");
+// TPIMS availability: the "Low" category or an int count, with capacity alongside —
+// "Low" is shown verbatim, NEVER parsed to a number (condition A). Absent otherwise.
+const availability = computed(() => {
+  const a = props.pin.availability;
+  if (a === null || a === undefined) return null;
+  const cap = props.pin.capacity;
+  return cap ? `${a} · ${cap} ${t("facility.spots")}` : `${a} ${t("facility.spots")}`;
+});
 // M6: a bookable badge carries the take-inclusive nightly price in cents.
 const nightlyCents = computed(() => props.pin.badges?.find((b) => b.kind === "bookable")?.value ?? null);
 const bookable = computed(() => nightlyCents.value !== null);
@@ -56,7 +64,14 @@ const fuelSource = computed(() => {
   if (b.source === "crowd") {
     return freshnessLabel({ reported_at: b.as_of, sample_size: b.sample_size }, now) ?? t("fuel.reported");
   }
-  if (b.source === "regional") return t("fuel.regional_avg");
+  if (b.source === "regional") {
+    // §11.7 honesty: label the EIA period (data time), not ingest time — "regional
+    // avg · wk of Jul 20". as_of is the week_of date (YYYY-MM-DD).
+    const wk = b.as_of
+      ? ` · ${t("fuel.week_of")} ${new Date(b.as_of + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+      : "";
+    return `${t("fuel.regional_avg")}${wk}`;
+  }
   return null;
 });
 const fuelIndicative = computed(() => fuelNet.value?.indicative === true);
@@ -76,6 +91,7 @@ const reportable = computed(() =>
     <h3 class="fac__name">{{ pin.name }}</h3>
     <div class="fac__row">
       <StatusPill v-if="pin.status" :status="pin.status" :hollow="stale" />
+      <span v-if="availability" class="fac__avail">{{ availability }}</span>
       <span v-if="fresh" class="fac__fresh">{{ fresh }}</span>
     </div>
 
@@ -167,6 +183,11 @@ const reportable = computed(() =>
 .fac__fresh {
   color: var(--text-3);
   font-size: var(--type-caption-size);
+}
+.fac__avail {
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  font-variant-numeric: tabular-nums;
 }
 .fac__fuel {
   display: flex;

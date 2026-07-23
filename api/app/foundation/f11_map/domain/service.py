@@ -55,6 +55,11 @@ class Pin:
     status: str | None = None
     badges: list[Badge] = field(default_factory=list)
     freshness: Freshness | None = None
+    # TPIMS availability as reported (int count OR the "Low" category — NEVER an int
+    # parse of "Low", condition A) + the site's total capacity, so the card can show
+    # "Low · N spots" honestly. None for crowd-only / no-reading facilities.
+    availability: object = None
+    capacity: int | None = None
 
 
 @dataclass
@@ -113,14 +118,17 @@ DEFAULT_BADGE_PROVIDERS = [fuel_price_badge]
 def _parking_status(db: Session, facility):
     belief = crowd.get_belief(db, facility.id, crowd.SignalType.parking_fullness)
     if belief is None:
-        return None, None
-    status = (belief.value or {}).get("status")
-    return status, Freshness(reported_at=belief.freshest_at, sample_size=belief.sample_size)
+        return None, None, None
+    value = belief.value or {}
+    status = value.get("status")
+    freshness = Freshness(reported_at=belief.freshest_at, sample_size=belief.sample_size)
+    return status, freshness, value.get("available")  # "available" present only for TPIMS
 
 
 def _pin_for(db: Session, facility, badge_providers) -> Pin:
     lat, lon = facility_registry.coordinates(db, facility)
-    status, freshness = _parking_status(db, facility)
+    status, freshness, availability = _parking_status(db, facility)
+    capacity = (facility.attributes or {}).get("capacity") if availability is not None else None
     badges = [b for provider in badge_providers if (b := provider(db, facility)) is not None]
     return Pin(
         facility_id=facility.id,
@@ -132,6 +140,8 @@ def _pin_for(db: Session, facility, badge_providers) -> Pin:
         status=status,
         badges=badges,
         freshness=freshness,
+        availability=availability,
+        capacity=capacity,
     )
 
 

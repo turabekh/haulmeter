@@ -220,6 +220,42 @@ describe("FacilityCard — fuel-network station (M7, §11.2 / §12.2)", () => {
   });
 });
 
+describe("FacilityCard — TPIMS availability (condition A / §11.7)", () => {
+  function tpimsPin(availability, capacity, freshMs) {
+    return {
+      facility_id: "il-1",
+      name: "Spoon River",
+      facility_type: "rest_area",
+      status: "some",
+      availability,
+      capacity,
+      badges: [],
+      freshness: { reported_at: new Date(freshMs).toISOString(), sample_size: 1 },
+    };
+  }
+
+  it("renders 'Low' as the category with capacity alongside — never a number", () => {
+    const w = mount(FacilityCard, { props: { pin: tpimsPin("Low", 13, Date.now()) }, global: { plugins: [testRouter()] } });
+    const avail = w.find(".fac__avail").text();
+    expect(avail).toContain("Low"); // the category, verbatim
+    expect(avail).toContain("13"); // capacity alongside
+    expect(avail).not.toMatch(/Low\s*\d/); // "Low" is not turned into a count
+  });
+
+  it("renders a real count with capacity, and a FEED-timestamp freshness badge", () => {
+    const feed = Date.parse("2026-07-23T08:59:17Z");
+    const w = mount(FacilityCard, { props: { pin: tpimsPin(1, 13, feed) }, global: { plugins: [testRouter()] } });
+    expect(w.find(".fac__avail").text()).toContain("1 · 13"); // count of capacity
+    expect(w.find(".fac__fresh").exists()).toBe(true); // freshness from the feed timestamp
+  });
+
+  it("shows no availability line for a facility without a reading", () => {
+    const pin = tpimsPin(null, null, Date.now());
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [testRouter()] } });
+    expect(w.find(".fac__avail").exists()).toBe(false);
+  });
+});
+
 describe("FacilityCard — crowd / regional diesel price (M7-FR5 / M1-FR5)", () => {
   function fuelPin(badge) {
     return {
@@ -240,6 +276,7 @@ describe("FacilityCard — crowd / regional diesel price (M7-FR5 / M1-FR5)", () 
     const w = mount(FacilityCard, { props: { pin }, global: { plugins: [testRouter()] } });
     expect(w.find(".fac__fuel-figure").text()).toBe("~$3.78"); // indicative -> tilde
     expect(w.find(".fac__fuel-src").text()).toContain("regional avg");
+    expect(w.find(".fac__fuel-src").text()).toContain("wk of Jul 14"); // EIA period, not ingest time
     expect(w.find(".cta").text()).toContain("Navigate"); // not "Fuel here" (non-network)
     expect(w.text()).toContain("Report diesel price"); // the crowd affordance is present
   });

@@ -70,6 +70,10 @@ ingest-ntad:
 ingest-tpims:
 	$(COMPOSE) exec api python -m scripts.ingest_tpims
 
+# probe unverified TPIMS state feeds (KY/MN) — reachability + spec-shape, never CI
+probe-tpims:
+	$(COMPOSE) exec api python -m scripts.probe_tpims
+
 # EIA weekly regional diesel baseline (M1-FR5). Needs EIA_API_KEY in infra/.env
 # (free at eia.gov/opendata). Or pass FIXTURE=path to load a saved payload key-free.
 ingest-eia:

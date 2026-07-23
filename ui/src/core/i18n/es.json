@@ -335,5 +335,7 @@
   "fuel.report.question": "¿Cuál es el precio del diésel aquí?",
   "fuel.report.increase": "Subir precio",
   "fuel.report.decrease": "Bajar precio",
-  "fuel.report.submit": "Enviar precio"
+  "fuel.report.submit": "Enviar precio",
+  "fuel.week_of": "sem. del",
+  "facility.spots": "lugares"
 }

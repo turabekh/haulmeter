@@ -70,6 +70,24 @@ def test_tpims_dynamic_low_is_a_category_not_an_int():
     assert facility.derive_parking_status(numeric) == "some"  # 12 of 55 -> low-ish
 
 
+def test_tpims_unknown_and_trend_hardening_from_real_il_rows():
+    # real IL feeds emit reportedAvailable/trend "Unknown" (not in the V2.2 spec)
+    statuses = {s.site_id: s for s in facility.parse_tpims_dynamic(_load("tpims_il_dynamic.json"))}
+    unknown = statuses["IL00074IE015600037"]
+    assert unknown.available is None  # "Unknown" -> no reading, never int-parsed
+    assert unknown.trend is None  # trend "Unknown" -> null
+    assert facility.has_usable_reading(unknown) is False  # open + no reading -> no belief
+
+    trusted_unknown = statuses["IL00074IE011400005"]  # Unknown but trustData=true
+    assert facility.has_usable_reading(trusted_unknown) is False  # no belief, regardless of trust
+
+    null_open = statuses["IL00055IS010400024"]
+    assert null_open.open is True  # open=null tolerated (defaults open)
+
+    low = statuses["IL00074IE006200001"]
+    assert low.available == facility.LOW and facility.derive_parking_status(low) == "some"
+
+
 def test_osm_polygon_uses_centroid():
     recs = {r.external_ref: r for r in facility.parse_osm(_load("osm_filtered.geojson"))}
     lot = recs["way/222"]

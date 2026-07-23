@@ -9,14 +9,15 @@ from app.foundation.f13_flags import public as flags
 
 CONFIG_SCOPE = "data_sources"
 
-# discovered 2026-07-22 (see HANDOFF-065). Overridable via the config registry.
+# discovered 2026-07-22 (HANDOFF-065); TPIMS switched to the verified-live Travel
+# Midwest IL feed 2026-07-23 (HANDOFF-068). Overridable via the config registry.
 DEFAULTS = {
     "ntad_featureserver": (
         "https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/"
         "NTAD_Truck_Stop_Parking/FeatureServer/0"
     ),
-    "tpims_static": "https://transportal.cee.wisc.edu/TPIMS/static",
-    "tpims_dynamic": "https://transportal.cee.wisc.edu/TPIMS/dynamic",
+    "tpims_static": "https://truckparking.travelmidwest.com/TPIMS_Static.json",
+    "tpims_dynamic": "https://truckparking.travelmidwest.com/TPIMS_Dynamic.json",
     "geofabrik_base": "https://download.geofabrik.de/north-america/us",
 }
 

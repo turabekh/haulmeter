@@ -19,28 +19,6 @@ db_registry.import_all_models()
 from app.core.db import SessionLocal  # noqa: E402
 from app.modules.m07_fuel import public as m7  # noqa: E402
 
-EIA_URL = "https://api.eia.gov/v2/petroleum/pri/gnd/data/"
-DUOAREAS = ["NUS", "R10", "R20", "R30", "R40", "R50"]  # US + PADD1..5
-PRODUCT = "EPD2D"  # No. 2 Diesel (on-highway retail)
-
-
-def fetch(api_key: str) -> dict:
-    import httpx
-
-    params = [
-        ("api_key", api_key),
-        ("frequency", "weekly"),
-        ("data[0]", "value"),
-        ("facets[product][]", PRODUCT),
-        ("sort[0][column]", "period"),
-        ("sort[0][direction]", "desc"),
-        ("length", "300"),
-    ]
-    params += [("facets[duoarea][]", area) for area in DUOAREAS]
-    resp = httpx.get(EIA_URL, params=params, timeout=60.0)
-    resp.raise_for_status()
-    return resp.json()
-
 
 def main() -> None:
     if len(sys.argv) > 1:
@@ -53,7 +31,7 @@ def main() -> None:
                 "and add it to infra/.env, or pass a JSON payload path."
             )
             return
-        payload = fetch(key)
+        payload = m7.fetch_eia(key)
 
     db = SessionLocal()
     try:

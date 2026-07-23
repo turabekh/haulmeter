@@ -1,8 +1,9 @@
-"""AI-CONTEXT: Background worker (dev/CI parity). Runs the F2 refresh jobs behind
-F13 flags (PRD §12): TPIMS dynamic availability (~3 min) and TPIMS static metadata
-(daily). NTAD + OSM are manual make-target pulls, not scheduled here. A minimal
-interval scheduler (no extra deps); each job has exponential failure backoff so a
-dead feed doesn't log-spam every interval. Jobs no-op unless their flag is enabled.
+"""AI-CONTEXT: Background worker (dev/CI parity). Runs the refresh jobs behind F13
+flags (PRD §12): TPIMS dynamic availability (~3 min), TPIMS static metadata (daily),
+and the EIA regional diesel baseline (weekly, M1-FR5). NTAD + OSM are manual
+make-target pulls, not scheduled here. A minimal interval scheduler (no extra deps);
+each job has exponential failure backoff so a dead feed doesn't log-spam every
+interval. Jobs no-op unless their flag is enabled.
 """
 
 import signal
@@ -38,6 +39,9 @@ def _jobs() -> list[Job]:
     return [
         Job("tpims_dynamic", ingest_flags.FLAG_TPIMS_DYNAMIC, 180, runners.run_tpims_dynamic),
         Job("tpims_static", ingest_flags.FLAG_TPIMS_STATIC, 86400, runners.run_tpims_static),
+        # weekly (EIA publishes on-highway diesel Mondays ~5pm ET); upsert is
+        # idempotent so the interval need not align to the exact release.
+        Job("eia_regional", ingest_flags.FLAG_EIA, 604800, runners.run_eia),
     ]
 
 

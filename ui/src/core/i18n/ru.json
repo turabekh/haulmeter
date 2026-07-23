@@ -335,5 +335,7 @@
   "fuel.report.question": "Какая здесь цена на дизель?",
   "fuel.report.increase": "Увеличить цену",
   "fuel.report.decrease": "Уменьшить цену",
-  "fuel.report.submit": "Отправить цену"
+  "fuel.report.submit": "Отправить цену",
+  "fuel.week_of": "нед. от",
+  "facility.spots": "мест"
 }

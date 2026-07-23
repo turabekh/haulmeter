@@ -110,6 +110,34 @@ EIA_REGIONS = {
     "NUS": "US",
 }
 EIA_DIESEL_PRODUCT = "EPD2D"  # No. 2 Diesel — ignore gasoline rows in a mixed payload
+EIA_URL = "https://api.eia.gov/v2/petroleum/pri/gnd/data/"
+EIA_DUOAREAS = ["NUS", "R10", "R20", "R30", "R40", "R50"]  # US + PADD1..5
+
+
+class MissingEIAKey(Exception):
+    pass
+
+
+def fetch_eia(api_key: str) -> dict:
+    # live pull of EIA's weekly on-highway diesel by region (make-target + worker
+    # only, never CI). Shared by scripts.ingest_eia and runners.run_eia.
+    if not api_key:
+        raise MissingEIAKey("EIA_API_KEY not set")
+    import httpx
+
+    params = [
+        ("api_key", api_key),
+        ("frequency", "weekly"),
+        ("data[0]", "value"),
+        ("facets[product][]", EIA_DIESEL_PRODUCT),
+        ("sort[0][column]", "period"),
+        ("sort[0][direction]", "desc"),
+        ("length", "300"),
+    ]
+    params += [("facets[duoarea][]", area) for area in EIA_DUOAREAS]
+    resp = httpx.get(EIA_URL, params=params, timeout=60.0)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def region_for(lat: float, lon: float) -> str:

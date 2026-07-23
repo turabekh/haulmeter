@@ -335,5 +335,7 @@
   "fuel.report.question": "Waa maxay qiimaha naaftada halkan?",
   "fuel.report.increase": "Kordhi qiimaha",
   "fuel.report.decrease": "Yaree qiimaha",
-  "fuel.report.submit": "Dir qiimaha"
+  "fuel.report.submit": "Dir qiimaha",
+  "fuel.week_of": "usbuuca",
+  "facility.spots": "meelood"
 }

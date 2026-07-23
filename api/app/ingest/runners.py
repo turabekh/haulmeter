@@ -4,12 +4,14 @@ happens here, invoked from make targets / the worker — never from CI (tests dr
 the pure adapters + pipeline against committed fixtures). Idempotent by design.
 """
 
+import os
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
 from app.foundation.f02_facility import public as facility
 from app.foundation.f10_crowd import public as crowd
+from app.modules.m07_fuel import public as m7
 
 from . import sources
 
@@ -61,6 +63,9 @@ def run_tpims_dynamic(db: Session, now: datetime | None = None, commit: bool = T
         if fac is None:
             skipped += 1  # site not in the registry yet (run tpims_static first)
             continue
+        if not facility.has_usable_reading(st):
+            skipped += 1  # "Unknown"/no reading on an open site -> no belief (any trustData)
+            continue
         submission = crowd.submit_authoritative(
             db,
             fac.id,
@@ -91,3 +96,14 @@ def run_osm(db: Session, geojson_path: str, commit: bool = True) -> facility.Ing
     if commit:
         db.commit()
     return stats
+
+
+def run_eia(db: Session, commit: bool = True) -> dict:
+    # weekly EIA regional diesel refresh (M1-FR5). Idempotent upsert per PADD region,
+    # so re-running before EIA publishes just rewrites the same week — cadence is
+    # forgiving. Live pull; make-target + worker only, never CI.
+    payload = m7.fetch_eia(os.environ.get("EIA_API_KEY", ""))
+    regions = m7.ingest_eia_prices(db, payload)
+    if commit:
+        db.commit()
+    return {"regions": regions}

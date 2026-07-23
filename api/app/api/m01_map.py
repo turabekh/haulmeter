@@ -30,6 +30,8 @@ def _serialize_pin(pin) -> dict:
         "lat": pin.lat,
         "lon": pin.lon,
         "status": pin.status,
+        "availability": pin.availability,  # int count or "Low" category (never int-parsed)
+        "capacity": pin.capacity,
         "badges": [{"kind": b.kind, "value": b.value} for b in pin.badges],
         "freshness": (
             {"reported_at": pin.freshness.reported_at, "sample_size": pin.freshness.sample_size}

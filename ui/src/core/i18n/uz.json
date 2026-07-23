@@ -335,5 +335,7 @@
   "fuel.report.question": "Bu yerda dizel narxi qancha?",
   "fuel.report.increase": "Narxni oshirish",
   "fuel.report.decrease": "Narxni kamaytirish",
-  "fuel.report.submit": "Narxni yuborish"
+  "fuel.report.submit": "Narxni yuborish",
+  "fuel.week_of": "hafta",
+  "facility.spots": "joy"
 }
