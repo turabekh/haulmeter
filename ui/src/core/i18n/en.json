@@ -337,5 +337,6 @@
   "fuel.report.decrease": "Decrease price",
   "fuel.report.submit": "Submit price",
   "fuel.week_of": "wk of",
-  "facility.spots": "spots"
+  "facility.spots": "spots",
+  "freshness.feed": "official feed"
 }

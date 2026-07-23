@@ -42,6 +42,7 @@ class Badge:
 class Freshness:
     reported_at: object
     sample_size: int
+    source: str | None = None  # provenance of the winning reading ("tpims" feed, else None)
 
 
 @dataclass
@@ -121,7 +122,11 @@ def _parking_status(db: Session, facility):
         return None, None, None
     value = belief.value or {}
     status = value.get("status")
-    freshness = Freshness(reported_at=belief.freshest_at, sample_size=belief.sample_size)
+    freshness = Freshness(
+        reported_at=belief.freshest_at,
+        sample_size=belief.sample_size,
+        source=value.get("source"),  # "tpims" when a feed reading wins; None for crowd
+    )
     return status, freshness, value.get("available")  # "available" present only for TPIMS
 
 

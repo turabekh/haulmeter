@@ -230,7 +230,8 @@ describe("FacilityCard — TPIMS availability (condition A / §11.7)", () => {
       availability,
       capacity,
       badges: [],
-      freshness: { reported_at: new Date(freshMs).toISOString(), sample_size: 1 },
+      // TPIMS reading -> source set, so the badge attributes it to the feed, not drivers
+      freshness: { reported_at: new Date(freshMs).toISOString(), sample_size: 1, source: "tpims" },
     };
   }
 
@@ -246,7 +247,9 @@ describe("FacilityCard — TPIMS availability (condition A / §11.7)", () => {
     const feed = Date.parse("2026-07-23T08:59:17Z");
     const w = mount(FacilityCard, { props: { pin: tpimsPin(1, 13, feed) }, global: { plugins: [testRouter()] } });
     expect(w.find(".fac__avail").text()).toContain("1 · 13"); // count of capacity
-    expect(w.find(".fac__fresh").exists()).toBe(true); // freshness from the feed timestamp
+    const fresh = w.find(".fac__fresh").text();
+    expect(fresh).toContain("official feed"); // authoritative feed, not "N drivers"
+    expect(fresh).not.toContain("driver");
   });
 
   it("shows no availability line for a facility without a reading", () => {

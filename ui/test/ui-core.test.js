@@ -55,6 +55,17 @@ describe("presentation (design-prd §11)", () => {
     expect(freshnessLabel(null, now)).toBe(null);
   });
 
+  it("an authoritative feed reading is attributed to the feed, never 'drivers' (§11.7)", () => {
+    const now = 1_000_000_000_000;
+    // a TPIMS/DOT reading: source set, sample_size irrelevant to attribution
+    const feed = { reported_at: new Date(now - 7 * 60000).toISOString(), sample_size: 1, source: "tpims" };
+    expect(freshnessLabel(feed, now, { feed: "official feed" })).toBe("7m · official feed");
+    expect(freshnessLabel(feed, now, { feed: "official feed" })).not.toContain("driver");
+    // no source -> unchanged crowd attribution
+    const crowd = { reported_at: new Date(now - 7 * 60000).toISOString(), sample_size: 2 };
+    expect(freshnessLabel(crowd, now, { feed: "official feed" })).toBe("7m · 2 drivers");
+  });
+
   it("formats dwell durations as tabular H/M", () => {
     expect(formatDwell(8100)).toBe("2h 15m");
     expect(formatDwell(1800)).toBe("30m");

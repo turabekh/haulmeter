@@ -138,6 +138,32 @@ def test_overlay_fuel_badge_carries_regional_baseline(client, db):
     assert net["net"] == 362 and net["source"] == "regional" and net["indicative"] is True
 
 
+def test_overlay_freshness_carries_feed_source_for_tpims(client, db):
+    # a TPIMS (authoritative) reading tags the pin's freshness with its source, so the
+    # card attributes it to the feed — not "N drivers" (§11.7 honesty)
+    from datetime import UTC, datetime
+
+    from app.foundation.f10_crowd import public as crowd
+
+    headers = _auth(client)
+    fac = facility.create_facility(db, facility.FacilityType.rest_area, "IL Rest", *DALLAS)
+    now = datetime.now(UTC)
+    crowd.submit_authoritative(
+        db, fac.id, crowd.SignalType.parking_fullness,
+        {"status": "some", "available": "Low", "trend": None, "source": "tpims"},
+        submitted_at=now, source="tpims", trust_data=True,
+    )
+    crowd.update_belief(db, fac.id, crowd.SignalType.parking_fullness, as_of=now)
+    pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "tonight"},
+        headers=headers,
+    ).json()["pins"]
+    pin = next(p for p in pins if p["name"] == "IL Rest")
+    assert pin["freshness"]["source"] == "tpims"  # feed provenance surfaced
+    assert pin["availability"] == "Low" and pin["status"] == "some"  # Low category kept
+
+
 def test_overlay_bbox_is_the_primary_mode(client, db):
     # the map fetches by viewport bbox (min/max lat/lon), not a fixed point+radius
     headers = _auth(client)

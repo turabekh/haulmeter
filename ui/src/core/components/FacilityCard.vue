@@ -31,7 +31,7 @@ function viewFacility() {
 }
 
 const now = Date.now();
-const fresh = computed(() => freshnessLabel(props.pin.freshness, now));
+const fresh = computed(() => freshnessLabel(props.pin.freshness, now, { feed: t("freshness.feed") }));
 const stale = computed(() => isStale(props.pin.freshness, now));
 const grossFuel = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_price")?.value ?? null);
 const isFuel = computed(() => props.pin.facility_type === "fuel_station");

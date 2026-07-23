@@ -15,12 +15,16 @@ export function statusPresentation(status) {
   return PARKING_STATUS[status] ?? { token: "--text-3", label: "Unknown" };
 }
 
-// design-prd §11.7: relative age, subtle, honest ("40m · 3 drivers")
-export function freshnessLabel(freshness, nowMs) {
+// design-prd §11.7: relative age, subtle, honest ("40m · 3 drivers"). An
+// authoritative feed (TPIMS/DOT) is NOT a driver sample — it's attributed to the
+// feed (`labels.feed`), never counted as "N drivers". `freshness.source` is the
+// provenance of the CURRENT winning reading (e.g. "tpims"); absent for crowd.
+export function freshnessLabel(freshness, nowMs, labels = {}) {
   if (!freshness || !freshness.reported_at) return null;
   const ageMs = nowMs - new Date(freshness.reported_at).getTime();
   const mins = Math.max(0, Math.round(ageMs / 60000));
   const age = mins < 60 ? `${mins}m` : `${Math.round(mins / 60)}h`;
+  if (freshness.source) return `${age} · ${labels.feed ?? "official feed"}`;
   const n = freshness.sample_size ?? 0;
   const who = n === 1 ? "1 driver" : `${n} drivers`;
   return `${age} · ${who}`;
