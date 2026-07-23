@@ -70,11 +70,23 @@ default center (Dallas 32.78,-96.8) caught only demo leftovers — everywhere el
 | Illinois (pan east) | 38.5,-91.0 → 42.5,-87.5 | **94 real pins** (rest stops, Coalfield NB/SB) — IL loads on pan |
 | Continental (national default) | 24,-125 → 50,-66 | **clustered: 3549 facilities → 80 bubbles** (bounded payload) |
 
+### Live browser pass — real Mapbox token, headless Chromium (Playwright), 360×800 mobile viewport
+
+Drove the actual GL map at `localhost:9008/map` (authenticated, geolocation spoofed to WI 44.5,-89.5).
+Each viewport transition fired a fresh **debounced bbox fetch** and the map repainted. **No token/console errors.**
+
+| Viewport | `/map/overlay` bbox | On-map render |
+|---|---|---|
+| Wisconsin (state, z7) | lat[43.3..45.7] lon[-90.5..-88.5] | **49 real pins** (rest-area + fuel pucks: Wausau, Stevens Point, Madison) |
+| Illinois (pan, z7) | lat[38.7..41.3] lon[-90.0..-88.0] | **25 real pins** (truck stops: Bloomington, Springfield, Decatur, Effingham) |
+| Continental (z3.5) | lat[23.9..52.7] lon[-109.7..-87.3] | **126 cluster bubbles** (§11.5 count + dominant-status color, incl. amber chips) |
+
+Auto-geolocate correctly opened tight (z15) on the WI GPS dot; the empty-map bug is gone at every zoom.
+(Method: temporary `window.__hmMap` seam in MapCanvas to script `jumpTo` — added, used, **reverted**; tree clean.)
+
 ## 5. Exact next task
 
-Owner's call — the map fix is complete and verified. Candidate next steps:
-- **Live browser pass** with a real `VITE_MAPBOX_TOKEN`: spoof GPS to 44.5,-89.5, confirm pins render on the
-  GL map, pan to IL, watch the network tab debounce/abort. (API + unit layers are proven; this is the visual seal.)
+Owner's call — the map fix is complete and verified end-to-end (unit + API + **live browser pass**, §4). Candidates:
 - **TPIMS live token** still blocked on registration (only 3 dev sites); when it lands, `make ingest-tpims`.
 - Resume the module build order per PRD §6 where HANDOFF-064 left the module worklist.
 
