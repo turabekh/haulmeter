@@ -388,6 +388,14 @@ export async function report(facilityId, signalType, value) {
   return queuedPost("/map/report", { facility_id: facilityId, signal_type: signalType, value });
 }
 
+export async function confirmFuelPrice(facilityId, priceCentsPerGal) {
+  // M7-FR5: crowd diesel-price confirmation; queues offline (F12) and syncs later
+  return queuedPost("/fuel/confirm-price", {
+    facility_id: facilityId,
+    price_cents_per_gal: priceCentsPerGal,
+  });
+}
+
 export async function fetchProfile(facilityId) {
   return apiGet(`/facility/${facilityId}/profile`, `profile:${facilityId}`);
 }

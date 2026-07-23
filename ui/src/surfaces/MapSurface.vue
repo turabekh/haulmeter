@@ -13,13 +13,14 @@ import BottomSheet from "../core/components/BottomSheet.vue";
 import FacilityCard from "../core/components/FacilityCard.vue";
 import CorridorStack from "../core/components/CorridorStack.vue";
 import ReportSheet from "../core/components/ReportSheet.vue";
+import PriceReportSheet from "../core/components/PriceReportSheet.vue";
 import VoiceSheet from "../core/components/VoiceSheet.vue";
 import SleepSheet from "../core/components/SleepSheet.vue";
 import HandoffSheet from "../core/components/HandoffSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { SAMPLE_PINS, SAMPLE_CORRIDOR, sampleHandoffs } from "../core/fixtures.js";
-import { fetchOverlay, fetchNearbyHandoffs, broadcastHandoff, report as postReport } from "../core/api.js";
+import { fetchOverlay, fetchNearbyHandoffs, broadcastHandoff, report as postReport, confirmFuelPrice } from "../core/api.js";
 
 const { isDriving } = useDriverState();
 const { t } = useI18n();
@@ -96,6 +97,7 @@ const pins = computed(() => {
 
 const selected = ref(null);
 const reporting = ref(false);
+const pricingReport = ref(false); // the diesel-price report sheet (M7-FR5)
 const listening = ref(false);
 const solving = ref(false);
 const relaying = ref(false);
@@ -179,6 +181,28 @@ async function submitReport(status) {
     /* offline -> the report is queued (F12) and syncs on reconnect */
   }
 }
+
+// M7-FR5: diesel-price contribution. The seed is the station's currently-shown
+// price (crowd/regional) so the driver nudges rather than types.
+const priceStart = computed(() => reportTarget.value?.badges?.find((b) => b.kind === "fuel_net")?.net ?? 389);
+function reportPrice(pin) {
+  reportTarget.value = pin;
+  selected.value = null;
+  pricingReport.value = true;
+}
+async function submitPrice(cents) {
+  // post the per-gallon price (server proves presence + forms the consensus, F10),
+  // then refresh the overlay so the pin's price updates once consensus lands.
+  const target = reportTarget.value;
+  pricingReport.value = false;
+  if (!target) return;
+  try {
+    await confirmFuelPrice(target.facility_id, cents);
+    await loadOverlay();
+  } catch {
+    /* offline -> queued (F12) and syncs on reconnect */
+  }
+}
 </script>
 
 <template>
@@ -225,6 +249,7 @@ async function submitReport(status) {
         :pin="selected"
         @navigate="navigate"
         @report="report"
+        @report-price="reportPrice"
         @book="book"
         @fuel="fuel"
         @handoff="handoff"
@@ -233,6 +258,10 @@ async function submitReport(status) {
 
     <BottomSheet :open="reporting" :title="t('map.report')" @close="reporting = false">
       <ReportSheet @report="submitReport" />
+    </BottomSheet>
+
+    <BottomSheet :open="pricingReport" :title="t('fuel.report.title')" @close="pricingReport = false">
+      <PriceReportSheet :start-cents="priceStart" @submit="submitPrice" />
     </BottomSheet>
 
     <BottomSheet :open="listening" :title="t('voice.title')" @close="listening = false">

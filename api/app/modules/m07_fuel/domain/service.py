@@ -13,7 +13,7 @@ merchant agreement + a live payment partner.
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -23,7 +23,7 @@ from app.foundation.f10_crowd import public as crowd
 from app.modules.m01_map import public as m1
 
 from .enums import FuelTxnState, PriceSource
-from .models import FuelTransaction, Merchant, StationPricing
+from .models import FuelTransaction, Merchant, RegionalFuelPrice, StationPricing
 
 FLAG_KEY = "m07_fuel"
 MODULE = "m07"
@@ -99,19 +99,115 @@ def net_cents_per_gal(pricing: StationPricing) -> int:
     return pricing.gross_cents_per_gal - pricing.discount_cents_per_gal
 
 
-def fuel_summary(db: Session, facility_ref) -> dict | None:
-    # net/gross/savings for a fuel-station facility — backs the map's fuel badge
-    # (M7 net pricing surfaced on the M1 overlay at the API layer)
+# --- EIA regional baseline (M1-FR5): the indicative price until a real one exists ---
+# EIA v2 petroleum/pri/gnd `duoarea` region code -> our PADD region code.
+EIA_REGIONS = {
+    "R10": "PADD1",
+    "R20": "PADD2",
+    "R30": "PADD3",
+    "R40": "PADD4",
+    "R50": "PADD5",
+    "NUS": "US",
+}
+EIA_DIESEL_PRODUCT = "EPD2D"  # No. 2 Diesel — ignore gasoline rows in a mixed payload
+
+
+def region_for(lat: float, lon: float) -> str:
+    # coarse PADD partition by longitude (+ a lat split through the mountain/gulf
+    # south). Deliberately approximate — this backs an INDICATIVE regional average
+    # (labeled as such); a crowd report or a network feed overrides it per-station.
+    if lon >= -82:
+        return "PADD1"  # East Coast
+    if lon >= -104:
+        return "PADD3" if lat < 37 else "PADD2"  # Gulf Coast (south) vs Midwest (north)
+    if lon >= -114:
+        return "PADD5" if lat < 37 else "PADD4"  # desert Southwest vs Rocky Mountain
+    return "PADD5"  # West Coast
+
+
+def upsert_regional_price(
+    db: Session, region: str, gross_cents_per_gal: int, week_of: date
+) -> RegionalFuelPrice:
+    row = db.get(RegionalFuelPrice, region)
+    if row is None:
+        row = RegionalFuelPrice(region=region)
+        db.add(row)
+    row.gross_cents_per_gal = gross_cents_per_gal
+    row.week_of = week_of
+    db.flush()
+    return row
+
+
+def _regional_price(db: Session, lat: float, lon: float) -> RegionalFuelPrice | None:
+    return db.get(RegionalFuelPrice, region_for(lat, lon)) or db.get(RegionalFuelPrice, "US")
+
+
+def parse_eia(payload: dict) -> list[tuple[str, int, date]]:
+    # EIA v2 gnd response -> [(region, cents/gal, week_of)]. Rows look like
+    # {"period":"2026-07-14","duoarea":"R20","value":"3.892","units":"$/GAL"}.
+    out: list[tuple[str, int, date]] = []
+    for row in payload.get("response", {}).get("data", []):
+        region = EIA_REGIONS.get(row.get("duoarea"))
+        if region is None or row.get("value") in (None, ""):
+            continue
+        if row.get("product") != EIA_DIESEL_PRODUCT:
+            continue  # ignore gasoline rows in a mixed payload
+        cents = round(float(row["value"]) * 100)
+        out.append((region, cents, date.fromisoformat(row["period"])))
+    return out
+
+
+def ingest_eia_prices(db: Session, payload: dict) -> int:
+    # EIA returns a time series; keep only the freshest week per region.
+    latest: dict[str, tuple[int, date]] = {}
+    for region, cents, week_of in parse_eia(payload):
+        if region not in latest or week_of > latest[region][1]:
+            latest[region] = (cents, week_of)
+    for region, (cents, week_of) in latest.items():
+        upsert_regional_price(db, region, cents, week_of)
+    return len(latest)
+
+
+def fuel_summary(
+    db: Session, facility_ref, lat: float | None = None, lon: float | None = None
+) -> dict | None:
+    # backs the map's fuel badge. Priority: per-station NETWORK feed -> CROWD
+    # consensus (M7-FR5, with belief freshness) -> EIA REGIONAL baseline (indicative).
     pricing = db.scalar(select(StationPricing).where(StationPricing.facility_ref == facility_ref))
-    if pricing is None:
-        return None
-    net = net_cents_per_gal(pricing)
-    return {
-        "gross": pricing.gross_cents_per_gal,
-        "net": net,
-        "savings": pricing.gross_cents_per_gal - net,
-        "is_network": _is_network(pricing),
-    }
+    if pricing is not None:
+        net = net_cents_per_gal(pricing)
+        as_of, sample_size = pricing.updated_at, None
+        source = "feed"
+        if pricing.source == PriceSource.crowd:
+            source = "crowd"
+            belief = crowd.get_belief(db, facility_ref, crowd.SignalType.fuel_price)
+            if belief is not None:
+                as_of, sample_size = belief.freshest_at, belief.sample_size
+        return {
+            "gross": pricing.gross_cents_per_gal,
+            "net": net,
+            "savings": pricing.gross_cents_per_gal - net,
+            "is_network": _is_network(pricing),
+            "source": source,
+            "indicative": False,
+            "as_of": as_of.isoformat() if as_of else None,
+            "sample_size": sample_size,
+        }
+    if lat is not None and lon is not None:
+        row = _regional_price(db, lat, lon)
+        if row is not None:
+            return {
+                "gross": row.gross_cents_per_gal,
+                "net": row.gross_cents_per_gal,
+                "savings": 0,
+                "is_network": False,
+                "source": "regional",
+                "indicative": True,
+                "region": row.region,
+                "as_of": row.week_of.isoformat(),
+                "sample_size": None,
+            }
+    return None
 
 
 def _is_network(pricing: StationPricing) -> bool:

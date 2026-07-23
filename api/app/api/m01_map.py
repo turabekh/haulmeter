@@ -107,7 +107,9 @@ def _enrich(db: Session, pin) -> dict:
                 }
             )
     elif pin.facility_type == "fuel_station":
-        summary = m7.fuel_summary(db, pin.facility_id)
+        # net feed price -> crowd consensus -> EIA regional baseline (§ m7.fuel_summary).
+        # lat/lon let the regional fallback pick the right PADD when no per-station price.
+        summary = m7.fuel_summary(db, pin.facility_id, lat=pin.lat, lon=pin.lon)
         if summary:
             data["badges"].append(
                 {
@@ -117,6 +119,10 @@ def _enrich(db: Session, pin) -> dict:
                     "gross": summary["gross"],
                     "savings": summary["savings"],
                     "is_network": summary["is_network"],
+                    "source": summary["source"],
+                    "indicative": summary["indicative"],
+                    "as_of": summary["as_of"],
+                    "sample_size": summary["sample_size"],
                     "station_ref": str(pin.facility_id),
                 }
             )

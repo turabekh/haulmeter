@@ -327,5 +327,13 @@
   "voice.retry": "No te entendí — inténtalo otra vez o escribe.",
   "voice.mic_blocked": "El micrófono está apagado — escribe tu pregunta.",
   "map.data_credit": "© OpenStreetMap contributors (ODbL)",
-  "map.cluster_label": "paradas"
+  "map.cluster_label": "paradas",
+  "facility.report_price": "Reportar precio del diésel",
+  "fuel.regional_avg": "prom. regional",
+  "fuel.reported": "reportado",
+  "fuel.report.title": "Reportar precio del diésel",
+  "fuel.report.question": "¿Cuál es el precio del diésel aquí?",
+  "fuel.report.increase": "Subir precio",
+  "fuel.report.decrease": "Bajar precio",
+  "fuel.report.submit": "Enviar precio"
 }

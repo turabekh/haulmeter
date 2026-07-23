@@ -327,5 +327,13 @@
   "voice.retry": "ਸਮਝ ਨਹੀਂ ਆਇਆ — ਦੁਬਾਰਾ ਬੋਲੋ ਜਾਂ ਲਿਖੋ।",
   "voice.mic_blocked": "ਮਾਈਕ ਬੰਦ ਹੈ — ਆਪਣਾ ਸਵਾਲ ਲਿਖੋ।",
   "map.data_credit": "© OpenStreetMap contributors (ODbL)",
-  "map.cluster_label": "ਸਟਾਪ"
+  "map.cluster_label": "ਸਟਾਪ",
+  "facility.report_price": "ਡੀਜ਼ਲ ਦੀ ਕੀਮਤ ਦੱਸੋ",
+  "fuel.regional_avg": "ਖੇਤਰੀ ਔਸਤ",
+  "fuel.reported": "ਦੱਸਿਆ",
+  "fuel.report.title": "ਡੀਜ਼ਲ ਦੀ ਕੀਮਤ ਦੱਸੋ",
+  "fuel.report.question": "ਇੱਥੇ ਡੀਜ਼ਲ ਦੀ ਕੀਮਤ ਕੀ ਹੈ?",
+  "fuel.report.increase": "ਕੀਮਤ ਵਧਾਓ",
+  "fuel.report.decrease": "ਕੀਮਤ ਘਟਾਓ",
+  "fuel.report.submit": "ਕੀਮਤ ਭੇਜੋ"
 }

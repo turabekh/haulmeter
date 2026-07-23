@@ -6,7 +6,10 @@
        · fuel-network station (M7)       -> "Fuel here" with the NET price shown
        · everything else                 -> Navigate (external-nav handoff, M1-FR8)
      Each deep-links (NAV-5) to its full-screen flow; Navigate always stays
-     reachable as the secondary. -->
+     reachable as the secondary. A fuel station always shows its best price with an
+     HONEST source label — network net, crowd-reported + freshness (§11.7), or an
+     EIA regional average — and a "Report diesel price" action feeds the crowd layer
+     (M7-FR5), so real per-station prices displace the regional baseline over time. -->
 <script setup>
 import { computed } from "vue";
 import { Navigation, SquareParking, Fuel } from "lucide-vue-next";
@@ -19,7 +22,7 @@ import { useI18n } from "../i18n.js";
 const props = defineProps({
   pin: { type: Object, required: true },
 });
-const emit = defineEmits(["navigate", "report", "book", "fuel", "handoff"]);
+const emit = defineEmits(["navigate", "report", "report-price", "book", "fuel", "handoff"]);
 const { t } = useI18n();
 const router = useRouter();
 
@@ -31,6 +34,7 @@ const now = Date.now();
 const fresh = computed(() => freshnessLabel(props.pin.freshness, now));
 const stale = computed(() => isStale(props.pin.freshness, now));
 const grossFuel = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_price")?.value ?? null);
+const isFuel = computed(() => props.pin.facility_type === "fuel_station");
 // M6: a bookable badge carries the take-inclusive nightly price in cents.
 const nightlyCents = computed(() => props.pin.badges?.find((b) => b.kind === "bookable")?.value ?? null);
 const bookable = computed(() => nightlyCents.value !== null);
@@ -40,9 +44,22 @@ const parkingFull = computed(
   () => props.pin.facility_type === "parking_property" && !bookable.value,
 );
 const bookLabel = computed(() => `${t("facility.book")} — ${formatMoney(nightlyCents.value)}`);
-// M7: a fuel_net badge carries {gross, net, savings, is_network} in cents.
+// M7: a fuel_net badge carries {net, gross, savings, is_network, source, as_of,
+// sample_size} in cents. `source` is "feed" (network), "crowd", or "regional".
 const fuelNet = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_net") ?? null);
 const fuelable = computed(() => !!fuelNet.value?.is_network);
+// honest provenance under the price: net savings (network), reported age +
+// contributor count (crowd, §11.7), or an EIA regional-average disclaimer.
+const fuelSource = computed(() => {
+  const b = fuelNet.value;
+  if (!b || b.is_network) return null; // network shows the savings pill instead
+  if (b.source === "crowd") {
+    return freshnessLabel({ reported_at: b.as_of, sample_size: b.sample_size }, now) ?? t("fuel.reported");
+  }
+  if (b.source === "regional") return t("fuel.regional_avg");
+  return null;
+});
+const fuelIndicative = computed(() => fuelNet.value?.indicative === true);
 // M10: a free public lot can relay a "leaving soon" spot handoff (never M6).
 const freeLot = computed(() =>
   ["truck_stop", "rest_area"].includes(props.pin.facility_type),
@@ -62,11 +79,13 @@ const reportable = computed(() =>
       <span v-if="fresh" class="fac__fresh">{{ fresh }}</span>
     </div>
 
-    <!-- M7: NET price leads for a fuel-network station; savings called out (§12.2) -->
+    <!-- M7: NET price leads for a fuel-network station; savings called out (§12.2).
+         Crowd/regional prices show the same figure with an honest source label. -->
     <div v-if="fuelNet" class="fac__fuel">
-      <span class="fac__fuel-figure">{{ formatMoney(fuelNet.net) }}</span>
+      <span class="fac__fuel-figure">{{ fuelIndicative ? "~" : "" }}{{ formatMoney(fuelNet.net) }}</span>
       <span class="fac__fuel-label">{{ t("fuel.net") }}/gal</span>
       <span v-if="fuelNet.savings > 0" class="fac__save">{{ t("fuel.save") }} {{ fuelNet.savings }}¢</span>
+      <span v-else-if="fuelSource" class="fac__fuel-src">{{ fuelSource }}</span>
     </div>
     <div v-else-if="grossFuel !== null" class="fac__fuel">
       <span class="fac__fuel-figure">${{ grossFuel.toFixed(2) }}</span>
@@ -110,6 +129,17 @@ const reportable = computed(() =>
       @click="emit('report', pin)"
     >
       {{ t("map.report") }}
+    </button>
+    <!-- M7-FR5: any driver at the pump can report the diesel price; 3 reports form a
+         crowd consensus that displaces the regional baseline on this station's pin -->
+    <button
+      v-if="isFuel"
+      class="cta cta--secondary"
+      type="button"
+      @click="emit('report-price', pin)"
+    >
+      <Fuel :size="18" :stroke-width="2" aria-hidden="true" />
+      {{ t("facility.report_price") }}
     </button>
     <button class="cta cta--tertiary" type="button" @click="viewFacility">
       {{ t("facility.view") }}
@@ -162,6 +192,12 @@ const reportable = computed(() =>
 }
 .fac__fuel-label {
   color: var(--text-2);
+  font-size: var(--type-caption-size);
+}
+/* §11.7: honest provenance under a non-network price (crowd age / regional avg) */
+.fac__fuel-src {
+  margin-left: auto;
+  color: var(--text-3);
   font-size: var(--type-caption-size);
 }
 .fac__save {

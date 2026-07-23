@@ -118,6 +118,26 @@ def test_report_updates_belief_reflected_in_overlay(client, db):
     assert pin["status"] == "full"  # report -> aggregate -> pin, live over HTTP
 
 
+def test_overlay_fuel_badge_carries_regional_baseline(client, db):
+    # M1-FR5: a real fuel station with no per-station price shows the EIA regional
+    # average, tagged as indicative so the card can label it honestly.
+    from datetime import date
+
+    from app.modules.m07_fuel import public as m7
+
+    headers = _auth(client)
+    m7.upsert_regional_price(db, "PADD3", 362, date(2026, 7, 14))  # Dallas (TX) -> PADD3
+    facility.create_facility(db, facility.FacilityType.fuel_station, "Kwik Trip", *DALLAS)
+    pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "fuel"},
+        headers=headers,
+    ).json()["pins"]
+    quik = next(p for p in pins if p["name"] == "Kwik Trip")
+    net = next(b for b in quik["badges"] if b["kind"] == "fuel_net")
+    assert net["net"] == 362 and net["source"] == "regional" and net["indicative"] is True
+
+
 def test_overlay_bbox_is_the_primary_mode(client, db):
     # the map fetches by viewport bbox (min/max lat/lon), not a fixed point+radius
     headers = _auth(client)

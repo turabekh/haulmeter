@@ -220,6 +220,92 @@ describe("FacilityCard — fuel-network station (M7, §11.2 / §12.2)", () => {
   });
 });
 
+describe("FacilityCard — crowd / regional diesel price (M7-FR5 / M1-FR5)", () => {
+  function fuelPin(badge) {
+    return {
+      facility_id: "f-fuel",
+      name: "Kwik Trip",
+      facility_type: "fuel_station",
+      status: null,
+      badges: [badge],
+      freshness: null,
+    };
+  }
+
+  it("shows the EIA regional average (indicative ~$) and never leads with Fuel here", () => {
+    const pin = fuelPin({
+      kind: "fuel_net", net: 378, gross: 378, savings: 0,
+      is_network: false, source: "regional", indicative: true, as_of: "2026-07-14", sample_size: null,
+    });
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [testRouter()] } });
+    expect(w.find(".fac__fuel-figure").text()).toBe("~$3.78"); // indicative -> tilde
+    expect(w.find(".fac__fuel-src").text()).toContain("regional avg");
+    expect(w.find(".cta").text()).toContain("Navigate"); // not "Fuel here" (non-network)
+    expect(w.text()).toContain("Report diesel price"); // the crowd affordance is present
+  });
+
+  it("shows a crowd-reported price with freshness (§11.7), no tilde", () => {
+    const pin = fuelPin({
+      kind: "fuel_net", net: 369, gross: 369, savings: 0, is_network: false,
+      source: "crowd", indicative: false, as_of: new Date().toISOString(), sample_size: 3,
+    });
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [testRouter()] } });
+    expect(w.find(".fac__fuel-figure").text()).toBe("$3.69"); // real price, no tilde
+    expect(w.find(".fac__fuel-src").text()).toContain("3 drivers"); // crowd freshness
+  });
+
+  it("emits report-price when the driver taps Report diesel price", async () => {
+    const pin = fuelPin({
+      kind: "fuel_net", net: 378, gross: 378, savings: 0,
+      is_network: false, source: "regional", indicative: true, as_of: "2026-07-14", sample_size: null,
+    });
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [testRouter()] } });
+    const btn = w.findAll(".cta").find((b) => b.text().includes("Report diesel price"));
+    await btn.trigger("click");
+    expect(w.emitted()["report-price"]).toBeTruthy();
+    expect(w.emitted()["report-price"][0][0].facility_id).toBe("f-fuel");
+  });
+});
+
+describe("MapSurface — report a diesel price (M7-FR5 crowd)", () => {
+  beforeEach(() => useDriverState().setState(DriverState.IDLE));
+  afterEach(() => { vi.unstubAllGlobals(); logout(); });
+
+  it("opens the price sheet from a fuel pin and posts /fuel/confirm-price", async () => {
+    setToken("tok-fuel");
+    const stub = vi.fn((url, opts) => {
+      const u = String(url);
+      if (u.includes("/map/overlay")) {
+        return jsonOk({ clustered: false, total: 1, clusters: [], pins: [
+          { facility_id: "f-fuel", name: "Kwik Trip", facility_type: "fuel_station", lat: 44.5, lon: -89.5, status: null, shape: "circle",
+            badges: [{ kind: "fuel_net", net: 378, gross: 378, savings: 0, is_network: false, source: "regional", indicative: true, as_of: "2026-07-14", sample_size: null, station_ref: "f-fuel" }], freshness: null },
+        ] });
+      }
+      if (u.endsWith("/fuel/confirm-price") && opts?.method === "POST") return jsonOk({ consensus_cents_per_gal: 378 });
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", stub);
+    try {
+      const w = mount(MapSurface, { global: { plugins: [testRouter()] } });
+      await flushPromises();
+      await w.find(".pin").trigger("click"); // open the fuel station's card
+      await flushPromises();
+      expect(w.find(".fac__fuel-figure").text()).toContain("~$3.78");
+      const report = w.findAll(".cta").find((b) => b.text().includes("Report diesel price"));
+      await report.trigger("click");
+      await flushPromises();
+      await w.find(".price__submit").trigger("click"); // submit the seeded price
+      await flushPromises();
+      const post = stub.mock.calls.find((c) => String(c[0]).endsWith("/fuel/confirm-price") && c[1]?.method === "POST");
+      expect(post).toBeTruthy();
+      expect(JSON.parse(post[1].body)).toMatchObject({ facility_id: "f-fuel", price_cents_per_gal: 378 });
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+});
+
 describe("FuelSurface — pump-code flow (M7, NAV-3 / §8.7 one net price)", () => {
   async function mountAt(query) {
     const router = testRouter();

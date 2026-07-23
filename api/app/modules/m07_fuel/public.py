@@ -8,7 +8,7 @@ F13 flag m07_fuel (merchant-agreement + payment-partner gates).
 """
 
 from .domain.enums import FuelTxnState, PriceSource
-from .domain.models import FuelTransaction, Merchant, StationPricing
+from .domain.models import FuelTransaction, Merchant, RegionalFuelPrice, StationPricing
 from .domain.service import (
     DEFAULT_GALLONS,
     FLAG_KEY,
@@ -21,12 +21,16 @@ from .domain.service import (
     corridor_fuel,
     driver_analytics,
     fuel_summary,
+    ingest_eia_prices,
     issue_pump_code,
     net_cents_per_gal,
+    parse_eia,
+    region_for,
     register_merchant,
     register_module,
     set_station_pricing,
     settle,
+    upsert_regional_price,
 )
 
 __all__ = [
@@ -34,6 +38,7 @@ __all__ = [
     "PriceSource",
     "FuelTransaction",
     "Merchant",
+    "RegionalFuelPrice",
     "StationPricing",
     "DEFAULT_GALLONS",
     "FLAG_KEY",
@@ -47,9 +52,13 @@ __all__ = [
     "driver_analytics",
     "issue_pump_code",
     "fuel_summary",
+    "ingest_eia_prices",
     "net_cents_per_gal",
+    "parse_eia",
+    "region_for",
     "register_merchant",
     "register_module",
     "set_station_pricing",
     "settle",
+    "upsert_regional_price",
 ]

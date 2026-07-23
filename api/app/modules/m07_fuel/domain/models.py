@@ -1,9 +1,10 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -48,6 +49,21 @@ class StationPricing(Base):
     source: Mapped[PriceSource] = mapped_column(
         Enum(PriceSource, name="price_source", schema=SCHEMA), default=PriceSource.feed
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RegionalFuelPrice(Base):
+    # EIA weekly on-highway diesel average per PADD region — the indicative baseline
+    # shown on a fuel station until a network feed or a crowd report gives a real
+    # per-station price (M7-FR5 / M1-FR5). One row per region, upserted weekly.
+    __tablename__ = "regional_fuel_price"
+    __table_args__ = {"schema": SCHEMA}
+
+    region: Mapped[str] = mapped_column(String(8), primary_key=True)  # PADD1..5 / US
+    gross_cents_per_gal: Mapped[int] = mapped_column(Integer)
+    week_of: Mapped[date] = mapped_column(Date)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

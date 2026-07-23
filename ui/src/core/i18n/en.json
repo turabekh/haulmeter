@@ -327,5 +327,13 @@
   "voice.retry": "Didn't catch that — try again or type.",
   "voice.mic_blocked": "Mic is off — type your question.",
   "map.data_credit": "© OpenStreetMap contributors (ODbL)",
-  "map.cluster_label": "stops"
+  "map.cluster_label": "stops",
+  "facility.report_price": "Report diesel price",
+  "fuel.regional_avg": "regional avg",
+  "fuel.reported": "reported",
+  "fuel.report.title": "Report diesel price",
+  "fuel.report.question": "What's the diesel price here?",
+  "fuel.report.increase": "Increase price",
+  "fuel.report.decrease": "Decrease price",
+  "fuel.report.submit": "Submit price"
 }

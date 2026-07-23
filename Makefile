@@ -70,6 +70,11 @@ ingest-ntad:
 ingest-tpims:
 	$(COMPOSE) exec api python -m scripts.ingest_tpims
 
+# EIA weekly regional diesel baseline (M1-FR5). Needs EIA_API_KEY in infra/.env
+# (free at eia.gov/opendata). Or pass FIXTURE=path to load a saved payload key-free.
+ingest-eia:
+	$(COMPOSE) exec api python -m scripts.ingest_eia $(FIXTURE)
+
 # reads api/data/osm/$(STATE).geojson (produced by `make osm-extract`)
 ingest-osm:
 	$(COMPOSE) exec api python -m scripts.ingest_osm /app/data/osm/$(STATE).geojson

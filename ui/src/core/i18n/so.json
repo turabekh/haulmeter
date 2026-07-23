@@ -327,5 +327,13 @@
   "voice.retry": "Ma maqlin — mar kale isku day ama qor.",
   "voice.mic_blocked": "Maykaha waa la damiyay — su'aashaada qor.",
   "map.data_credit": "© OpenStreetMap contributors (ODbL)",
-  "map.cluster_label": "joogsi"
+  "map.cluster_label": "joogsi",
+  "facility.report_price": "Sheeg qiimaha naaftada",
+  "fuel.regional_avg": "celceli gobol",
+  "fuel.reported": "la sheegay",
+  "fuel.report.title": "Sheeg qiimaha naaftada",
+  "fuel.report.question": "Waa maxay qiimaha naaftada halkan?",
+  "fuel.report.increase": "Kordhi qiimaha",
+  "fuel.report.decrease": "Yaree qiimaha",
+  "fuel.report.submit": "Dir qiimaha"
 }

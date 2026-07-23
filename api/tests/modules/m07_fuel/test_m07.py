@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -137,3 +137,73 @@ def test_crowd_confirmation_updates_non_network_price(db):
         db, driver.id, station.id, price_cents_per_gal=435, submitted_at=T0
     )
     assert consensus == 435
+
+
+# --- EIA regional baseline (M1-FR5) ---
+def _eia(period, area, product, value):
+    return {"period": period, "duoarea": area, "product": product, "value": value}
+
+
+EIA_PAYLOAD = {
+    "response": {
+        "data": [
+            _eia("2026-07-14", "R20", "EPD2D", "3.784"),
+            _eia("2026-07-07", "R20", "EPD2D", "3.900"),  # older week for PADD2
+            _eia("2026-07-14", "R50", "EPD2D", "4.548"),
+            _eia("2026-07-14", "NUS", "EPD2D", "3.852"),
+            _eia("2026-07-14", "SCA", "EPD2D", "4.9"),  # California — not a PADD, dropped
+            _eia("2026-07-14", "R20", "EPR", "3.2"),  # gasoline — dropped
+        ]
+    }
+}
+
+
+def test_region_for_maps_point_to_padd():
+    # a coarse but defensible partition (interior points; border states like Idaho
+    # sit on the PADD4/5 longitude overlap and are approximate by design)
+    assert m7.region_for(44.5, -89.5) == "PADD2"  # Wisconsin (Midwest)
+    assert m7.region_for(40.7, -74.0) == "PADD1"  # New York (East Coast)
+    assert m7.region_for(29.8, -95.4) == "PADD3"  # Houston (Gulf)
+    assert m7.region_for(40.76, -111.89) == "PADD4"  # Salt Lake City (Rocky Mountain)
+    assert m7.region_for(34.0, -118.2) == "PADD5"  # Los Angeles (West Coast)
+
+
+def test_eia_parse_keeps_diesel_only_and_maps_regions():
+    rows = m7.parse_eia(EIA_PAYLOAD)
+    regions = {r for r, _, _ in rows}
+    assert regions == {"PADD2", "PADD5", "US"}  # California + gasoline rows dropped
+    assert ("PADD2", 378, date(2026, 7, 14)) in rows
+    assert ("PADD2", 390, date(2026, 7, 7)) in rows
+
+
+def test_eia_ingest_upserts_freshest_week(db):
+    n = m7.ingest_eia_prices(db, EIA_PAYLOAD)
+    assert n == 3  # PADD2, PADD5, US
+    row = db.get(m7.RegionalFuelPrice, "PADD2")
+    assert row.gross_cents_per_gal == 378 and row.week_of == date(2026, 7, 14)  # newest week wins
+
+
+def test_fuel_summary_regional_baseline_when_no_station_price(db):
+    m7.ingest_eia_prices(db, EIA_PAYLOAD)
+    station = _station(db, "Kwik Trip", 44.5, -89.5)  # Wisconsin -> PADD2
+    summary = m7.fuel_summary(db, station.id, lat=44.5, lon=-89.5)
+    assert summary["source"] == "regional" and summary["indicative"] is True
+    assert summary["net"] == 378 and summary["savings"] == 0 and summary["is_network"] is False
+
+
+def test_fuel_summary_prefers_crowd_over_regional(db):
+    m7.ingest_eia_prices(db, EIA_PAYLOAD)
+    driver = _driver(db)
+    station = _station(db, "Indie stop", 44.5, -89.5)
+    location.arm_geofence(db, driver.id, station.id)
+    location.evaluate_ping(db, driver.id, 44.5, -89.5, occurred_at=T0)
+    m7.confirm_price(db, driver.id, station.id, price_cents_per_gal=369, submitted_at=T0)
+    summary = m7.fuel_summary(db, station.id, lat=44.5, lon=-89.5)
+    assert summary["source"] == "crowd" and summary["indicative"] is False
+    assert summary["net"] == 369 and summary["as_of"] is not None  # real per-station beats the avg
+
+
+def test_fuel_summary_none_without_price_or_location(db):
+    # no station price and no lat/lon -> nothing to show
+    station = _station(db, "Unknown", 44.5, -89.5)
+    assert m7.fuel_summary(db, station.id) is None
