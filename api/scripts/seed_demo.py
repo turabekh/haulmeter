@@ -43,15 +43,37 @@ def _parking(db, seeder, fac, status):
     crowd.update_belief(db, fac.id, crowd.SignalType.parking_fullness, as_of=NOW)
 
 
+def _seed_account(db, email, password="pw-123456"):
+    # seeder accounts have deterministic emails; a purge drops facilities but keeps
+    # accounts, so get-or-create keeps `make seed` re-runnable after `make purge-demo`.
+    return identity.authenticate(db, email, password) or identity.register_account(
+        db, email, password
+    )
+
+
 def _dwell(db, fac, i, hours=2.0):
     # a tracked visit (arrive -> depart) feeds M2 dock-time; repeat for a sample.
     # ping AT the facility's real coords (not the cluster center) so ENTER fires.
     flat, flon = facility.coordinates(db, fac)
-    drv = identity.register_account(db, f"demo-dwell-{fac.name[:6]}-{i}@seed.local", "pw-123456")
+    drv = _seed_account(db, f"demo-dwell-{fac.name[:6]}-{i}@seed.local")
     location.arm_geofence(db, drv.id, fac.id)
     location.evaluate_ping(db, drv.id, flat, flon, occurred_at=NOW - timedelta(hours=hours))
     location.evaluate_ping(db, drv.id, 33.3, -97.5, occurred_at=NOW)  # far -> exit
     location.disarm_geofence(db, drv.id, fac.id, occurred_at=NOW)
+
+
+def _crowd_fuel(db, fac, prices):
+    # a few drivers report the pump price at this station; the consensus becomes the
+    # CROWD price shown on the pin (M7-FR5), displacing the EIA regional baseline —
+    # no merchant network needed. Presence is proven (ping AT the station) so each
+    # report is geofence-backed, exactly like a real driver at the pump.
+    flat, flon = facility.coordinates(db, fac)
+    for i, cents in enumerate(prices):
+        drv = _seed_account(db, f"demo-fuel-{fac.name[:6]}-{i}@seed.local")
+        location.arm_geofence(db, drv.id, fac.id)
+        location.evaluate_ping(db, drv.id, flat, flon, occurred_at=NOW)  # presence proof
+        m7.confirm_price(db, drv.id, fac.id, cents, submitted_at=NOW)
+        location.disarm_geofence(db, drv.id, fac.id, occurred_at=NOW)
 
 
 def _make_dev_driver_owner_operator(db):
@@ -219,14 +241,21 @@ def main():
     m7.set_station_pricing(
         db, rf.id, gross_cents_per_gal=409, discount_cents_per_gal=15, merchant_id=merchant.id
     )
+    # a non-network station priced purely by CROWD reports (M7-FR5) — a couple of
+    # drivers report the pump; the pin shows the consensus + "N drivers" freshness.
+    indie = _facility(
+        db, facility.FacilityType.fuel_station, "Indie Fuel Stop (demo)", 0.006, -0.014
+    )
+    _crowd_fuel(db, indie, [389, 385, 392])  # ~$3.89 crowd consensus, 3 driver reports
 
     db.commit()
     print("Seeded demo cluster around Dallas", CENTER)
     print(
-        "  facilities: 3 truck stops (some/full/empty) + rest area + 2 receivers + 2 fuel stations"
+        "  facilities: 3 truck stops (some/full/empty) + rest area + 2 receivers + 3 fuel stations"
     )
     print("  bookable:   Yardline Secured Parking + 2 spots")
     print("  scorecard:  Dallas Distribution Center — dock-time + 2 approved reviews")
+    print("  fuel:       2 network (net price) + Indie Fuel Stop (crowd price, 3 reports)")
     db.close()
 
 
