@@ -56,6 +56,9 @@ const bookLabel = computed(() => `${t("facility.book")} — ${formatMoney(nightl
 // sample_size} in cents. `source` is "feed" (network), "crowd", or "regional".
 const fuelNet = computed(() => props.pin.badges?.find((b) => b.kind === "fuel_net") ?? null);
 const fuelable = computed(() => !!fuelNet.value?.is_network);
+// "net" means AFTER the network discount — only a network station earns that word.
+// A crowd-reported pump price or an EIA area estimate is just a per-gallon price.
+const fuelUnit = computed(() => (fuelNet.value?.is_network ? `${t("fuel.net")}/gal` : "/gal"));
 // honest provenance under the price: net savings (network), reported age +
 // contributor count (crowd, §11.7), or an EIA regional-average disclaimer.
 const fuelSource = computed(() => {
@@ -99,7 +102,7 @@ const reportable = computed(() =>
          Crowd/regional prices show the same figure with an honest source label. -->
     <div v-if="fuelNet" class="fac__fuel">
       <span class="fac__fuel-figure">{{ fuelIndicative ? "~" : "" }}{{ formatMoney(fuelNet.net) }}</span>
-      <span class="fac__fuel-label">{{ t("fuel.net") }}/gal</span>
+      <span class="fac__fuel-label">{{ fuelUnit }}</span>
       <span v-if="fuelNet.savings > 0" class="fac__save">{{ t("fuel.save") }} {{ fuelNet.savings }}¢</span>
       <span v-else-if="fuelSource" class="fac__fuel-src">{{ fuelSource }}</span>
     </div>

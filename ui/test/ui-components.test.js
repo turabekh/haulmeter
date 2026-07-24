@@ -194,6 +194,7 @@ describe("FacilityCard — fuel-network station (M7, §11.2 / §12.2)", () => {
     const router = testRouter();
     const w = mount(FacilityCard, { props: { pin }, global: { plugins: [router] } });
     expect(w.find(".fac__fuel-figure").text()).toBe("$3.94"); // net, Mono
+    expect(w.find(".fac__fuel-label").text()).toContain("net"); // "net" only for a network station
     expect(w.find(".fac__save").text()).toContain("25"); // savings called out
     expect(w.find(".cta").text()).toContain("Fuel here");
     await w.find(".cta").trigger("click");
@@ -278,6 +279,7 @@ describe("FacilityCard — crowd / regional diesel price (M7-FR5 / M1-FR5)", () 
     });
     const w = mount(FacilityCard, { props: { pin }, global: { plugins: [testRouter()] } });
     expect(w.find(".fac__fuel-figure").text()).toBe("~$3.78"); // indicative -> tilde
+    expect(w.find(".fac__fuel-label").text()).not.toContain("net"); // an estimate is NOT a "net" price
     expect(w.find(".fac__fuel-src").text()).toContain("regional avg");
     expect(w.find(".fac__fuel-src").text()).toContain("wk of Jul 14"); // EIA period, not ingest time
     expect(w.find(".cta").text()).toContain("Navigate"); // not "Fuel here" (non-network)

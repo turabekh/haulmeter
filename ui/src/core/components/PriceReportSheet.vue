@@ -49,7 +49,7 @@ function step(delta) {
         <Plus :size="24" :stroke-width="2.5" aria-hidden="true" />
       </button>
     </div>
-    <span class="price__unit">{{ t("fuel.net") }}/gal</span>
+    <span class="price__unit">/gal</span>
     <button type="button" class="price__submit" @click="emit('submit', cents)">
       {{ t("fuel.report.submit") }}
     </button>
