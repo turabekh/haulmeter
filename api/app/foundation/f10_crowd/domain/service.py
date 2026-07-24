@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -31,6 +31,13 @@ POINTS_PER_SIGNAL: dict[SignalType, int] = {
     SignalType.fuel_price: 3,
     SignalType.facility_attribute: 10,
 }
+
+# Points-farming cooldown (F13-tunable): after a driver earns points for a signal
+# at a facility, re-reporting the same signal there within this window still updates
+# the belief but earns NO further points. Duration is a config value (default 6h);
+# the belief is already spam-proof via distinct-contributor aggregation.
+CONFIG_AWARD_COOLDOWN_KEY = "f10_award_cooldown_seconds"
+DEFAULT_AWARD_COOLDOWN_SECONDS = 21600  # 6h
 
 # a reading younger than this counts as "fresh" for authoritative-vs-crowd precedence
 FRESH_THRESHOLD_SECONDS: dict[SignalType, float] = {
@@ -104,6 +111,38 @@ def issue_points(db: Session, account_id, amount: int):
     )
 
 
+# --- Points-farming cooldown (F13-tunable) ---
+def _award_cooldown_seconds(db: Session) -> float:
+    from app.foundation.f13_flags import public as flags
+
+    return float(flags.get_config(db, CONFIG_AWARD_COOLDOWN_KEY, DEFAULT_AWARD_COOLDOWN_SECONDS))
+
+
+def _in_award_cooldown(
+    db: Session, account_id, facility_id, signal_type: SignalType, at: datetime
+) -> bool:
+    # blocked if this driver already EARNED points for this signal at this facility
+    # within the cooldown window; anchoring on `awarded` (not on any recorded row)
+    # keeps intermediate cooled-down reports from sliding the window forward.
+    cooldown = _award_cooldown_seconds(db)
+    if cooldown <= 0:
+        return False
+    since = at - timedelta(seconds=cooldown)
+    prior = db.scalar(
+        select(Submission.id)
+        .where(
+            Submission.account_id == account_id,
+            Submission.facility_id == facility_id,
+            Submission.signal_type == signal_type,
+            Submission.awarded.is_(True),
+            Submission.submitted_at >= since,
+            Submission.submitted_at <= at,
+        )
+        .limit(1)
+    )
+    return prior is not None
+
+
 # --- Submission (geofence-presence gated) ---
 def submit(
     db: Session,
@@ -131,8 +170,17 @@ def submit(
     db.add(submission)
     db.flush()
 
-    if presence_proven and award:
+    # Gate ONLY the points award behind the per-driver/facility/signal cooldown —
+    # the submission above and the belief update downstream are untouched, so a
+    # re-report still moves the belief; it just can't farm points (§F10).
+    if (
+        presence_proven
+        and award
+        and not _in_award_cooldown(db, account_id, facility_id, signal_type, submitted_at)
+    ):
         issue_points(db, account_id, POINTS_PER_SIGNAL.get(signal_type, 0))
+        submission.awarded = True
+        db.flush()
     return submission
 
 

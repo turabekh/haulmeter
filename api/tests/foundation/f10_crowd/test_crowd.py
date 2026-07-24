@@ -7,6 +7,7 @@ from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
 from app.foundation.f07_ledger import public as ledger
 from app.foundation.f10_crowd import public as crowd
+from app.foundation.f13_flags import public as flags
 
 DALLAS = (32.7767, -96.7970)
 T0 = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
@@ -82,6 +83,115 @@ def test_submit_unknown_facility_raises(db):
             {"price_cents": 459},
             submitted_at=T0,
         )
+
+
+def test_award_cooldown_blocks_second_award_but_belief_still_updates(db):
+    # a driver re-reporting the same signal at the same facility inside the cooldown
+    # window earns points once; the belief still moves to their freshest reading.
+    account = _account(db)
+    fac = _facility(db)
+    _make_present(db, account, fac)
+    unit = crowd.POINTS_PER_SIGNAL[crowd.SignalType.parking_fullness]
+
+    crowd.submit(
+        db, account.id, fac.id, crowd.SignalType.parking_fullness,
+        {"status": "full"}, submitted_at=T0,
+    )
+    assert _points_balance(db, account) == unit
+
+    # re-report 2h later (< 6h default cooldown): no second award...
+    later = T0 + timedelta(hours=2)
+    location.evaluate_ping(db, account.id, *DALLAS, occurred_at=later)
+    sub2 = crowd.submit(
+        db, account.id, fac.id, crowd.SignalType.parking_fullness,
+        {"status": "empty"}, submitted_at=later,
+    )
+    assert sub2.awarded is False
+    assert _points_balance(db, account) == unit  # unchanged
+
+    # ...but the belief still updated to the freshest reading
+    belief = crowd.update_belief(db, fac.id, crowd.SignalType.parking_fullness, as_of=later)
+    assert belief.value == {"status": "empty"}
+
+
+def test_award_resumes_after_cooldown_window(db):
+    account = _account(db)
+    fac = _facility(db)
+    _make_present(db, account, fac)
+    unit = crowd.POINTS_PER_SIGNAL[crowd.SignalType.parking_fullness]
+
+    crowd.submit(
+        db, account.id, fac.id, crowd.SignalType.parking_fullness,
+        {"status": "full"}, submitted_at=T0,
+    )
+    # 7h later (> 6h default cooldown): award resumes
+    after = T0 + timedelta(hours=7)
+    location.evaluate_ping(db, account.id, *DALLAS, occurred_at=after)
+    sub2 = crowd.submit(
+        db, account.id, fac.id, crowd.SignalType.parking_fullness,
+        {"status": "full"}, submitted_at=after,
+    )
+    assert sub2.awarded is True
+    assert _points_balance(db, account) == unit * 2
+
+
+def test_award_cooldown_is_per_driver(db):
+    # the cooldown is keyed to the driver — two distinct drivers reporting inside the
+    # window are BOTH awarded (only self-farming is blocked).
+    fac = _facility(db)
+    unit = crowd.POINTS_PER_SIGNAL[crowd.SignalType.parking_fullness]
+    a = _account(db, "a@example.com")
+    b = _account(db, "b@example.com")
+    _make_present(db, a, fac)
+    _make_present(db, b, fac)
+
+    crowd.submit(
+        db, a.id, fac.id, crowd.SignalType.parking_fullness,
+        {"status": "full"}, submitted_at=T0,
+    )
+    crowd.submit(
+        db, b.id, fac.id, crowd.SignalType.parking_fullness,
+        {"status": "full"}, submitted_at=T0,
+    )
+    assert _points_balance(db, a) == unit
+    assert _points_balance(db, b) == unit
+
+
+def test_award_cooldown_duration_is_f13_configurable(db):
+    # shrinking the window via F13 config lets an award resume sooner
+    flags.set_config(db, crowd.CONFIG_AWARD_COOLDOWN_KEY, 60)  # 1 minute
+    account = _account(db)
+    fac = _facility(db)
+    _make_present(db, account, fac)
+    unit = crowd.POINTS_PER_SIGNAL[crowd.SignalType.parking_fullness]
+
+    crowd.submit(
+        db, account.id, fac.id, crowd.SignalType.parking_fullness,
+        {"status": "full"}, submitted_at=T0,
+    )
+    after = T0 + timedelta(minutes=2)  # past the shrunken 1-min window
+    location.evaluate_ping(db, account.id, *DALLAS, occurred_at=after)
+    crowd.submit(
+        db, account.id, fac.id, crowd.SignalType.parking_fullness,
+        {"status": "full"}, submitted_at=after,
+    )
+    assert _points_balance(db, account) == unit * 2
+
+
+def test_authoritative_submissions_never_award_regardless_of_cooldown(db):
+    # a feed (TPIMS) carries no account and issues no points, so the cooldown never
+    # applies to it — repeated feed readings never touch a points balance.
+    fac = _facility(db)
+    for i in range(3):
+        crowd.submit_authoritative(
+            db, fac.id, crowd.SignalType.parking_fullness,
+            {"status": "full", "source": "tpims"},
+            submitted_at=T0 + timedelta(minutes=i), source="tpims",
+        )
+    pool = ledger.get_or_create_account(
+        db, ledger.LedgerAccountKind.points_pool, "points:pool", currency=ledger.Currency.points
+    )
+    assert ledger.balance(db, pool) == 0
 
 
 def test_trust_scoring_adjusts(db):

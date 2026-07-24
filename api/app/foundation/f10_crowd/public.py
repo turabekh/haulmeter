@@ -9,6 +9,8 @@ issuance into the F7 closed-loop ledger. Consumed by M1, M2, M7, M10.
 from .domain.enums import SignalType
 from .domain.models import Belief, ContributorTrust, Submission
 from .domain.service import (
+    CONFIG_AWARD_COOLDOWN_KEY,
+    DEFAULT_AWARD_COOLDOWN_SECONDS,
     HALF_LIFE_SECONDS,
     POINTS_PER_SIGNAL,
     BeliefResult,
@@ -28,6 +30,8 @@ __all__ = [
     "Belief",
     "ContributorTrust",
     "Submission",
+    "CONFIG_AWARD_COOLDOWN_KEY",
+    "DEFAULT_AWARD_COOLDOWN_SECONDS",
     "HALF_LIFE_SECONDS",
     "POINTS_PER_SIGNAL",
     "BeliefResult",

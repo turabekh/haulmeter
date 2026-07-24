@@ -48,6 +48,9 @@ class Submission(Base):
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # true only for submissions that actually issued points; the award cooldown
+    # anchors on the last AWARD, never on a merely-recorded (cooled-down) report
+    awarded: Mapped[bool] = mapped_column(default=False)
 
 
 class ContributorTrust(Base):
