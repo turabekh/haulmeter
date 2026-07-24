@@ -282,8 +282,38 @@ describe("FacilityCard — crowd / regional diesel price (M7-FR5 / M1-FR5)", () 
     expect(w.find(".fac__fuel-label").text()).not.toContain("net"); // an estimate is NOT a "net" price
     expect(w.find(".fac__fuel-src").text()).toContain("regional avg");
     expect(w.find(".fac__fuel-src").text()).toContain("wk of Jul 14"); // EIA period, not ingest time
-    expect(w.find(".cta").text()).toContain("Navigate"); // not "Fuel here" (non-network)
+    expect(w.find(".cta").text()).not.toContain("Fuel here"); // never "Fuel here" (non-network)
     expect(w.text()).toContain("Report diesel price"); // the crowd affordance is present
+  });
+
+  it("regional-only station LEADS with the 'be the first' nudge into the report sheet (§15.3)", () => {
+    const pin = fuelPin({
+      kind: "fuel_net", net: 378, gross: 378, savings: 0,
+      is_network: false, source: "regional", indicative: true, as_of: "2026-07-14", sample_size: null,
+    });
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [testRouter()] } });
+    // the empty-state sentence invites the first real report
+    expect(w.find(".fac__nudge").text()).toBe("Be the first to report the diesel price here.");
+    // the LEAD action is the price report (not Navigate); Navigate demotes to secondary
+    expect(w.find(".cta").text()).toContain("Report diesel price");
+    expect(w.find(".cta--secondary").text()).toContain("Navigate");
+    // the regional estimate stays visible as secondary context (no honesty regression)
+    expect(w.find(".fac__fuel-figure").text()).toBe("~$3.78");
+    expect(w.find(".fac__fuel-src").text()).toContain("regional avg");
+    // the report affordance is not duplicated (lead + a second identical secondary)
+    const reportButtons = w.findAll(".cta").filter((b) => b.text().includes("Report diesel price"));
+    expect(reportButtons.length).toBe(1);
+  });
+
+  it("a crowd-priced station keeps Navigate as lead and does NOT show the nudge", () => {
+    const pin = fuelPin({
+      kind: "fuel_net", net: 369, gross: 369, savings: 0, is_network: false,
+      source: "crowd", indicative: false, as_of: new Date().toISOString(), sample_size: 3,
+    });
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [testRouter()] } });
+    expect(w.find(".fac__nudge").exists()).toBe(false); // real data -> no nudge
+    expect(w.find(".cta").text()).toContain("Navigate");
+    expect(w.text()).toContain("Report diesel price"); // secondary report still available
   });
 
   it("shows a crowd-reported price with freshness (§11.7), no tilde", () => {

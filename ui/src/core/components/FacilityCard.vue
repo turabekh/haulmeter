@@ -78,6 +78,11 @@ const fuelSource = computed(() => {
   return null;
 });
 const fuelIndicative = computed(() => fuelNet.value?.indicative === true);
+// M7-FR5 empty state (§15.3): a fuel station priced only by the EIA regional
+// estimate (no network feed, no crowd consensus) leads with a "be the first"
+// nudge into the price-report sheet — the regional line stays as secondary
+// context (§11.7 honesty), and the crowd report displaces the baseline over time.
+const fuelEstimateOnly = computed(() => isFuel.value && fuelNet.value?.source === "regional");
 // M10: a free public lot can relay a "leaving soon" spot handoff (never M6).
 const freeLot = computed(() =>
   ["truck_stop", "rest_area"].includes(props.pin.facility_type),
@@ -117,6 +122,10 @@ const reportable = computed(() =>
       {{ t("facility.fully_booked") }}
     </div>
 
+    <!-- M7-FR5 empty state: only a regional estimate here -> invite the first real
+         report (§15.3), keeping the regional line above as secondary context -->
+    <p v-if="fuelEstimateOnly" class="fac__nudge">{{ t("fuel.be_first") }}</p>
+
     <!-- contextual lead action -->
     <button v-if="bookable" class="cta" type="button" @click="emit('book', pin)">
       <SquareParking :size="20" :stroke-width="2" aria-hidden="true" />
@@ -126,6 +135,15 @@ const reportable = computed(() =>
       <Fuel :size="20" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.fuel_here") }}
     </button>
+    <button
+      v-else-if="fuelEstimateOnly"
+      class="cta"
+      type="button"
+      @click="emit('report-price', pin)"
+    >
+      <Fuel :size="20" :stroke-width="2" aria-hidden="true" />
+      {{ t("facility.report_price") }}
+    </button>
     <button v-else class="cta" type="button" @click="emit('navigate', pin)">
       <Navigation :size="20" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.navigate") }}
@@ -134,7 +152,7 @@ const reportable = computed(() =>
     <!-- secondary: Navigate whenever it isn't the lead; Report only where parking
          is a thing (never a fuel station or a receiver dock) -->
     <button
-      v-if="bookable || fuelable"
+      v-if="bookable || fuelable || fuelEstimateOnly"
       class="cta cta--secondary"
       type="button"
       @click="emit('navigate', pin)"
@@ -150,9 +168,11 @@ const reportable = computed(() =>
       {{ t("map.report") }}
     </button>
     <!-- M7-FR5: any driver at the pump can report the diesel price; 3 reports form a
-         crowd consensus that displaces the regional baseline on this station's pin -->
+         crowd consensus that displaces the regional baseline on this station's pin.
+         When only a regional estimate exists the report action already LEADS, so we
+         don't repeat it here (fuelEstimateOnly). -->
     <button
-      v-if="isFuel"
+      v-if="isFuel && !fuelEstimateOnly"
       class="cta cta--secondary"
       type="button"
       @click="emit('report-price', pin)"
@@ -217,6 +237,13 @@ const reportable = computed(() =>
 .fac__fuel-label {
   color: var(--text-2);
   font-size: var(--type-caption-size);
+}
+/* §15.3 empty state: one sentence of purpose inviting the first price report */
+.fac__nudge {
+  margin: var(--s-3) 0 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
 }
 /* §11.7: honest provenance under a non-network price (crowd age / regional avg) */
 .fac__fuel-src {

@@ -329,6 +329,7 @@
   "map.data_credit": "© OpenStreetMap contributors (ODbL)",
   "map.cluster_label": "stops",
   "facility.report_price": "Report diesel price",
+  "fuel.be_first": "Be the first to report the diesel price here.",
   "fuel.regional_avg": "regional avg",
   "fuel.reported": "reported",
   "fuel.report.title": "Report diesel price",

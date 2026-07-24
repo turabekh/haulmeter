@@ -329,6 +329,7 @@
   "map.data_credit": "© OpenStreetMap contributors (ODbL)",
   "map.cluster_label": "paradas",
   "facility.report_price": "Reportar precio del diésel",
+  "fuel.be_first": "Sé el primero en reportar el precio del diésel aquí.",
   "fuel.regional_avg": "prom. regional",
   "fuel.reported": "reportado",
   "fuel.report.title": "Reportar precio del diésel",

@@ -329,6 +329,7 @@
   "map.data_credit": "© OpenStreetMap contributors (ODbL)",
   "map.cluster_label": "стоянок",
   "facility.report_price": "Сообщить цену дизеля",
+  "fuel.be_first": "Сообщите цену на дизель здесь первым.",
   "fuel.regional_avg": "средняя по региону",
   "fuel.reported": "сообщено",
   "fuel.report.title": "Сообщить цену дизеля",
