@@ -5,7 +5,7 @@
 You are starting Session 1 of LONGHAUL, a greenfield consolidated trucker platform. Work inside the current directory. Follow this prompt exactly.
 
 ## Step 1 — Read the governing documents, in this order, before anything else
-1. `docs/handoffs/HANDOFF-000.md` (initial handoff — current state, rules, ports)
+1. `docs/handoffs/HANDOFF.md` — a pointer to the latest `docs/handoffs/HANDOFF-<n>.md`. For this greenfield Session 1, read the Session-0 bootstrap `docs/handoffs/HANDOFF-000.md` (current state, rules, ports).
 2. `docs/trucker-platform-prd.md` (product PRD)
 3. `docs/design-prd.md` (design constitution)
 

@@ -6,7 +6,8 @@ fuel, and fleet layers. Driver pays $0, forever.
 
 ## Read these first, every session, in this order
 
-1. **`docs/handoffs/HANDOFF-<latest>.md`** — current state, decisions, exact next task, blockers.
+1. **`docs/handoffs/HANDOFF.md`** — a pointer to `docs/handoffs/HANDOFF-<latest>.md`, which holds the
+   current state, decisions, exact next task, blockers. (Session-0 bootstrap: `HANDOFF-000.md`.)
 2. **`docs/trucker-platform-prd.md`** — the product PRD. **Governing build law.**
 3. **`docs/design-prd.md`** — the **design constitution**. Governs EVERY UI decision.
 
