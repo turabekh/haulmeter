@@ -8,7 +8,7 @@ and the admin-view registry every module registers into. The ops console UI is
 a web-first surface (design-prd §18) built later; this is its data spine.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -151,6 +151,28 @@ def decide_moderation(
     )
     db.flush()
     return item
+
+
+# AI-CONTEXT: the platform moderation promise — reported content is resolved within
+# this window. It lives in F14 rather than in the module that first needed it (M13
+# Q-8) because every module's queue makes the same promise to the same people, and a
+# per-module SLA would quietly become several different promises.
+MODERATION_SLA_HOURS = 72
+
+
+def overdue_moderation(db: Session, now: datetime, sla_hours: float = MODERATION_SLA_HOURS):
+    """Pending items past the SLA. An SLA nobody can see is not an SLA."""
+    cutoff = now - timedelta(hours=sla_hours)
+    return list(
+        db.scalars(
+            select(ModerationItem)
+            .where(
+                ModerationItem.status == ModerationStatus.pending,
+                ModerationItem.created_at <= cutoff,
+            )
+            .order_by(ModerationItem.created_at)
+        )
+    )
 
 
 def list_pending_moderation(db: Session, content_kind: str | None = None) -> list[ModerationItem]:

@@ -48,3 +48,48 @@ class AppearanceStatus(enum.Enum):
     done = "done"  # the window ended
     cancelled = "cancelled"  # the vendor called it off
     lapsed = "lapsed"  # drivers reported "not here" and the belief held
+
+
+class ReviewStatus(enum.Enum):
+    """FR5: a vendor review publishes immediately and is hidden only when reported
+    (Q-8). That differs from the M2 facility review, which is queued BEFORE
+    publication — a facility scorecard carries defamation exposure (PRD §13) that a
+    driver's note about a meal does not."""
+
+    visible = "visible"
+    hidden_pending = "hidden_pending"  # reported, awaiting F14 review
+    removed = "removed"  # report upheld
+
+
+class PromotionStatus(enum.Enum):
+    active = "active"
+    expired = "expired"  # Q-1 spirit: a promotion past its window vanishes
+    cancelled = "cancelled"
+    hidden_pending = "hidden_pending"
+    removed = "removed"
+
+
+class PromotionScope(enum.Enum):
+    own_appearances = "own_appearances"  # wherever this vendor is scheduled
+    claimed_facility = "claimed_facility"  # the service centre they claimed (FR7)
+
+
+class ClaimStatus(enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+    disputed = "disputed"  # a second claimant appeared — F14 decides
+
+
+class ModerationReason(enum.Enum):
+    """Why something was reported. `false_property_attestation` exists because PRD
+    §17 Q11 resolved that a vendor's self-attestation of property permission is
+    sufficient for ranked placement — which is only defensible if a demonstrated
+    false attestation is actionable."""
+
+    spam = "spam"
+    offensive = "offensive"
+    false_information = "false_information"
+    false_property_attestation = "false_property_attestation"
+    impersonation = "impersonation"
+    other = "other"

@@ -753,6 +753,15 @@ def _is_dormant(vendor: Vendor, cutoff: datetime) -> bool:
     return last < cutoff
 
 
+def is_presentable(vendor: Vendor) -> bool:
+    """May this vendor appear in front of a driver at all? Suspension arrives by two
+    different routes — an admin action (`status`) and the automatic no-show/report
+    gate (`publish_suspended`) — and every surface must honour BOTH. Keeping the
+    question in one function is what stops a new surface honouring only one.
+    """
+    return vendor.status == VendorStatus.active and not vendor.publish_suspended
+
+
 def in_discovery(db: Session, vendor: Vendor, now: datetime | None = None) -> bool:
     now = now or datetime.now(UTC)
     cutoff = now - timedelta(days=_config_int(db, CONFIG_INACTIVE_DAYS, DEFAULT_INACTIVE_DAYS))

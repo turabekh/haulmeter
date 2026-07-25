@@ -9,6 +9,7 @@ platform operations; every module registers its admin views here.
 from .domain.enums import ModerationStatus
 from .domain.models import AdminAction, AdminView, AnalyticsEvent, ModerationItem
 from .domain.service import (
+    MODERATION_SLA_HOURS,
     count_events,
     decide_moderation,
     emit,
@@ -17,11 +18,14 @@ from .domain.service import (
     list_actions,
     list_admin_views,
     list_pending_moderation,
+    overdue_moderation,
     record_action,
     register_admin_view,
 )
 
 __all__ = [
+    "MODERATION_SLA_HOURS",
+    "overdue_moderation",
     "ModerationStatus",
     "AdminAction",
     "AdminView",

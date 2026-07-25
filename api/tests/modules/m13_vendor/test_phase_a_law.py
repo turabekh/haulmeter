@@ -43,11 +43,51 @@ def test_m13_declares_no_payment_or_order_surface():
         assert forbidden not in source, f"Phase A forbids a payment path: {forbidden}"
 
 
-def test_the_schema_has_no_money_table():
+# every table M13 is allowed to own. The allowlist form is deliberate: an
+# unexpected table fails here even if its name looks innocent. Session B added
+# vendor_review (FR5), promotion (FR6), facility_claim (FR7) and content_report
+# (Q-8) — none of them money tables.
+ALLOWED_TABLES = {
+    "vendor",
+    "vendor_member",
+    "vendor_document",
+    "appearance",
+    "offering",
+    "vendor_review",
+    "promotion",
+    "facility_claim",
+    "content_report",
+}
+# ...and a second, independent net: a money table fails on its NAME, so a future
+# table cannot slip through merely by being added to the allowlist above.
+MONEY_TABLE_WORDS = (
+    "order",
+    "payment",
+    "charge",
+    "payout",
+    "invoice",
+    "transaction",
+    "ledger",
+    "checkout",
+    "price",
+    "billing",
+)
+
+
+def _m13_tables() -> set[str]:
     from app.modules.m13_vendor.domain import models
 
-    tables = {cls.__tablename__ for cls in vars(models).values() if hasattr(cls, "__tablename__")}
-    assert tables == {"vendor", "vendor_member", "vendor_document", "appearance", "offering"}
+    return {cls.__tablename__ for cls in vars(models).values() if hasattr(cls, "__tablename__")}
+
+
+def test_the_schema_owns_only_its_declared_tables():
+    assert _m13_tables() == ALLOWED_TABLES
+
+
+def test_no_table_name_is_money_shaped():
+    for table in _m13_tables():
+        for word in MONEY_TABLE_WORDS:
+            assert word not in table, f"Phase A forbids a money table: {table}"
 
 
 def test_offering_price_is_information_only():

@@ -6,6 +6,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -19,9 +20,14 @@ from app.core.db import Base
 
 from .enums import (
     AppearanceStatus,
+    ClaimStatus,
     DocumentKind,
     DocumentReviewStatus,
     MemberRole,
+    ModerationReason,
+    PromotionScope,
+    PromotionStatus,
+    ReviewStatus,
     VendorStatus,
     VendorType,
     VendorVerifyStatus,
@@ -171,7 +177,11 @@ class Appearance(Base):
     recurrence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     series_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
     # the vendor attests written permission from the property; ranks above
-    # unapproved (Q-3). PRD §17 Q11 asks whether attestation should become upload.
+    # unapproved (Q-3). PRD §17 Q11 RESOLVED (2026-07-25): the self-attestation is
+    # sufficient — no consent document is required — because a demonstrated FALSE
+    # attestation is actionable through the Q-8 moderation path
+    # (ModerationReason.false_property_attestation). The honesty of the ranking
+    # boost rests on that consequence existing, so the two ship together.
     property_approved: Mapped[bool] = mapped_column(Boolean, default=False)
     # Q-2: did the crowd actually confirm this vendor showed up? Set by the sweep
     # when the window closes, and the denominator of the show-up rate.
@@ -199,3 +209,131 @@ class Offering(Base):
     portions: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     appearance: Mapped[Appearance] = relationship(back_populates="offerings")
+
+
+class VendorReview(Base):
+    """FR5. Distinct-REVIEWER counting is the §11.7 discipline here: a driver who
+    reviews the same vendor again replaces their earlier verdict rather than adding
+    a second voice, so "12 drivers" always means twelve people."""
+
+    __tablename__ = "vendor_review"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.vendor.id", ondelete="CASCADE"), index=True
+    )
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="CASCADE"), index=True
+    )
+    rating: Mapped[int] = mapped_column(Integer)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[ReviewStatus] = mapped_column(
+        Enum(ReviewStatus, name="vendor_review_status", schema=SCHEMA),
+        default=ReviewStatus.visible,
+        server_default=ReviewStatus.visible.value,
+        index=True,
+    )
+    moderation_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Promotion(Base):
+    """FR6 / PRD §17 Q10. A promotion is vendor-supplied text in a LABELLED slot. It
+    is deliberately unreachable from the ranking path: `rank_entries` takes no
+    promotion argument and this table is read by a separate function, so Q-3's
+    "promotions never reorder organic results" holds structurally rather than by
+    reviewer vigilance. Free in Phase A; no price, bid, or billing column exists."""
+
+    __tablename__ = "promotion"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.vendor.id", ondelete="CASCADE"), index=True
+    )
+    text: Mapped[str] = mapped_column(String(140))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    scope: Mapped[PromotionScope] = mapped_column(
+        Enum(PromotionScope, name="promotion_scope", schema=SCHEMA),
+        default=PromotionScope.own_appearances,
+        server_default=PromotionScope.own_appearances.value,
+    )
+    status: Mapped[PromotionStatus] = mapped_column(
+        Enum(PromotionStatus, name="promotion_status", schema=SCHEMA),
+        default=PromotionStatus.active,
+        server_default=PromotionStatus.active.value,
+        index=True,
+    )
+    pushed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    moderation_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FacilityClaim(Base):
+    """FR7. Curated facts live HERE, never written back to f02.facility: a claim can
+    only ever ADD to what ingestion knows, so E3.2's union discipline ("a claim edit
+    cannot erase ingested facts") holds by construction instead of by care."""
+
+    __tablename__ = "facility_claim"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.vendor.id", ondelete="CASCADE"), index=True
+    )
+    facility_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(FACILITY_FK, ondelete="CASCADE"), index=True
+    )
+    claimed_name: Mapped[str] = mapped_column(String(160))
+    name_match_score: Mapped[float] = mapped_column(Float, default=0.0)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(DOCUMENT_FK, ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[ClaimStatus] = mapped_column(
+        Enum(ClaimStatus, name="claim_status", schema=SCHEMA),
+        default=ClaimStatus.pending,
+        server_default=ClaimStatus.pending.value,
+        index=True,
+    )
+    moderation_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    # curated additions — additive only, unioned over the ingested facts on read
+    services_added: Mapped[list] = mapped_column(JSON, default=list)
+    hours: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ContentReport(Base):
+    """Q-8. One row per reporting driver, so a vendor listing can require reports
+    from N DISTINCT drivers before it is hidden — a single report must not become a
+    competitor's kill switch on someone's livelihood."""
+
+    __tablename__ = "content_report"
+    __table_args__ = (
+        UniqueConstraint(
+            "content_kind", "content_ref", "account_id", name="uq_report_content_account"
+        ),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    content_kind: Mapped[str] = mapped_column(String(40), index=True)
+    content_ref: Mapped[uuid.UUID] = mapped_column(index=True)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.vendor.id", ondelete="CASCADE"), index=True
+    )
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="CASCADE"), index=True
+    )
+    reason: Mapped[ModerationReason] = mapped_column(
+        Enum(ModerationReason, name="moderation_reason", schema=SCHEMA)
+    )
+    note: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    upheld: Mapped[bool | None] = mapped_column(Boolean, nullable=True)  # None until decided
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
