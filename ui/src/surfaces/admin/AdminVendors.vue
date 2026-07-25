@@ -6,6 +6,9 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "../../core/i18n.js";
 import {
   fetchAdminVendors,
+  fetchVendorDetail,
+  startImpersonation,
+  setImpersonation,
   decideVendor,
   fetchAdminClaims,
   decideClaim,
@@ -37,6 +40,20 @@ async function verify(vendor) {
 async function suspend(vendor, suspended) {
   await decideVendor(vendor.vendor_id, { suspended });
   await load();
+}
+
+const detail = ref(null);
+
+async function openDetail(vendorId) {
+  detail.value = await fetchVendorDetail(vendorId).catch(() => null);
+}
+
+async function viewAs(vendor) {
+  // hands the operator a time-boxed vendor-portal session. Writes made inside it
+  // attribute to the admin, and the portal shows a persistent banner saying so.
+  const body = await startImpersonation(vendor.vendor_id);
+  setImpersonation(body);
+  window.location.assign("/vendor-portal");
 }
 
 async function judgeClaim(claim, approve) {
@@ -90,6 +107,12 @@ onMounted(load);
               <span v-if="v.consecutive_no_shows">×{{ v.consecutive_no_shows }}</span>
             </td>
             <td>
+              <button class="btn" type="button" @click="openDetail(v.vendor_id)">
+                {{ t("admin.vendor.detail") }}
+              </button>
+              <button class="btn" type="button" @click="viewAs(v)">
+                {{ t("admin.imp.view_as") }}
+              </button>
               <button
                 v-if="v.status === 'active'"
                 class="btn btn--danger"
@@ -102,6 +125,39 @@ onMounted(load);
                 {{ t("admin.vendor.reinstate") }}
               </button>
             </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section v-if="detail" class="panel">
+      <h2 class="panel__title">{{ detail.name }}</h2>
+      <ul class="stats">
+        <li class="stat">
+          <span class="stat__figure">{{ detail.shows_up.confirmed }}/{{ detail.shows_up.published }}</span>
+          <span class="stat__label">{{ t("vendor.shows_up") }}</span>
+        </li>
+        <li class="stat">
+          <span class="stat__figure">{{ detail.reviews.average ?? "—" }}</span>
+          <span class="stat__label">{{ t("vendor.reviews") }} ({{ detail.reviews.reviewers }})</span>
+        </li>
+        <li class="stat">
+          <span class="stat__figure">{{ detail.upheld_reports }}</span>
+          <span class="stat__label">{{ t("admin.vendor.reports") }}</span>
+        </li>
+        <li class="stat">
+          <span class="stat__figure">{{ detail.consecutive_no_shows }}</span>
+          <span class="stat__label">{{ t("admin.vendor.strikes") }}</span>
+        </li>
+      </ul>
+      <p v-if="detail.profile_gaps.length" class="panel__note">
+        {{ t("portal.vendor.gaps") }}: {{ detail.profile_gaps.join(", ") }}
+      </p>
+      <table class="table">
+        <tbody>
+          <tr v-for="a in detail.audit" :key="a.created_at + a.action">
+            <td class="table__figure">{{ (a.created_at || "").replace("T", " ").slice(0, 16) }}</td>
+            <td class="table__name">{{ a.action }}</td>
           </tr>
         </tbody>
       </table>

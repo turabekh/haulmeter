@@ -942,9 +942,25 @@ export async function fetchServiceCenter(facilityId) {
 }
 
 // --- FR8 vendor portal (§18) ---
+// AI-CONTEXT: an impersonation token applies to the VENDOR PORTAL only. Admin calls
+// keep the operator's own session — the server rejects an impersonation token on
+// /admin by design, and sending one there would break the console the moment an
+// operator entered "view as".
+function portalHeaders() {
+  try {
+    const imp = JSON.parse(localStorage.getItem("longhaul.impersonation"));
+    if (imp?.token) {
+      return { "Content-Type": "application/json", Authorization: `Bearer ${imp.token}` };
+    }
+  } catch {
+    /* not impersonating */
+  }
+  return headers();
+}
+
 async function portalGet(path) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
-  const resp = await fetch(`${API_BASE}/vendor${path}`, { headers: headers() });
+  const resp = await fetch(`${API_BASE}/vendor${path}`, { headers: portalHeaders() });
   if (!resp.ok) throw new Error(`${path} ${resp.status}`);
   return resp.json();
 }
@@ -953,7 +969,7 @@ async function portalSend(path, method, body) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const resp = await fetch(`${API_BASE}/vendor${path}`, {
     method,
-    headers: headers(),
+    headers: portalHeaders(),
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!resp.ok) throw new Error(`${path} ${resp.status}`);
@@ -1071,3 +1087,40 @@ export const reactivateAccount = (id) => adminSend(`/accounts/${id}/reactivate`,
 export const changeRole = (id, body) => adminSend(`/accounts/${id}/roles`, "POST", body);
 export const setFlagGate = (key, body) => adminSend(`/flags/${key}/gates`, "POST", body);
 export const registerVendorAsAdmin = (body) => adminSend("/vendors", "POST", body);
+
+// --- E-D5 impersonation + decision 7 facilities ---
+// AI-CONTEXT: an impersonation token is held SEPARATELY from the admin's own
+// session and takes precedence while set, so an operator in "view as" cannot
+// accidentally act as themselves — and clearing it restores their own session
+// without a re-login.
+const IMPERSONATION_KEY = "longhaul.impersonation";
+export const impersonation = ref(readImpersonation());
+
+function readImpersonation() {
+  try {
+    return JSON.parse(localStorage.getItem(IMPERSONATION_KEY));
+  } catch {
+    return null;
+  }
+}
+
+export function setImpersonation(value) {
+  impersonation.value = value;
+  try {
+    if (value) localStorage.setItem(IMPERSONATION_KEY, JSON.stringify(value));
+    else localStorage.removeItem(IMPERSONATION_KEY);
+  } catch {
+    /* best-effort */
+  }
+}
+
+export const fetchVendorDetail = (id) => adminGet(`/vendors/${id}/detail`);
+export const startImpersonation = (id) => adminSend(`/vendors/${id}/impersonate`, "POST");
+export const endImpersonation = (token) =>
+  adminSend("/impersonation/end", "POST", { token });
+export const fetchFacilities = (q) => adminGet(`/facilities${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+export const createFacility = (body) => adminSend("/facilities", "POST", body);
+export const editFacility = (id, body) => adminSend(`/facilities/${id}`, "PATCH", body);
+export const mergeFacility = (id, duplicateId) =>
+  adminSend(`/facilities/${id}/merge`, "POST", { duplicate_id: duplicateId });
+export const facilityDuplicates = (id) => adminGet(`/facilities/${id}/duplicates`);

@@ -20,6 +20,9 @@ import { ref, reactive, computed, onMounted } from "vue";
 import { CalendarClock, Megaphone, TriangleAlert, UserRound } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
 import {
+  impersonation,
+  setImpersonation,
+  endImpersonation,
   fetchVendorProfile,
   fetchVendorSchedule,
   fetchVendorPromotions,
@@ -41,6 +44,20 @@ const form = reactive({ languages: "", halal_disclosure: "", busy: false });
 const promo = reactive({ text: "", days: 1, busy: false, delivered: null });
 
 const gaps = computed(() => profile.value?.profile_gaps ?? []);
+// E-D5: an impersonating admin must never forget they are impersonating. The banner
+// is persistent and full-width, names the vendor, and says plainly that writes are
+// recorded as the admin — not as the vendor whose screen this is.
+const viewingAs = computed(() => impersonation.value);
+// what support has already changed here, surfaced to the VENDOR (derived from the
+// audit log server-side, so there is one source of truth)
+const assisted = computed(() => profile.value?.assisted ?? []);
+
+async function exitViewAs() {
+  const held = impersonation.value;
+  setImpersonation(null);
+  if (held?.token) await endImpersonation(held.token).catch(() => {});
+  window.location.reload();
+}
 const suspended = computed(() => profile.value?.publish_suspended === true);
 
 async function load() {
@@ -120,6 +137,16 @@ function when(iso) {
   <div class="portal">
     <h1 class="portal__title">{{ t("portal.vendor.title") }}</h1>
 
+    <div v-if="viewingAs" class="viewas" role="status">
+      <span class="viewas__text">
+        {{ t("admin.imp.banner") }} <strong>{{ viewingAs.vendor_name }}</strong>.
+        {{ t("admin.imp.writes") }}
+      </span>
+      <button class="viewas__exit" type="button" @click="exitViewAs">
+        {{ t("admin.imp.exit") }}
+      </button>
+    </div>
+
     <p v-if="denied" class="portal__note">{{ t("portal.vendor.no_access") }}</p>
 
     <template v-else-if="profile">
@@ -134,6 +161,10 @@ function when(iso) {
           <UserRound :size="16" :stroke-width="2" aria-hidden="true" />
           {{ t("portal.vendor.profile") }}
         </h2>
+        <!-- the vendor is TOLD when support touched their things -->
+        <p v-if="assisted.length" class="portal__assisted">
+          {{ t("vendor.assisted_note") }} — {{ assisted[0].action }}
+        </p>
         <p class="portal__name">{{ profile.name }}</p>
         <p class="portal__tier">{{ t(`vendor.${profile.verify_status}`) }}</p>
 
@@ -256,6 +287,35 @@ function when(iso) {
 </template>
 
 <style scoped>
+/* the banner is deliberately loud and full-width: an operator must not forget
+   whose screen they are on, and marker (caution) is the honest token for it */
+.viewas {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--marker-500);
+  border-radius: var(--r-card);
+  color: var(--marker-500);
+  font-size: var(--type-body-size);
+}
+.viewas__exit {
+  min-height: 48px;
+  padding: 0 var(--s-4);
+  border: 1px solid var(--marker-500);
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--marker-500);
+  font-size: var(--type-label-size);
+}
+.portal__assisted {
+  margin: var(--s-2) 0 0;
+  color: var(--marker-500);
+  font-size: var(--type-caption-size);
+}
 /* §18: desktop-first, comfortable density, 1200 dp cap. Same tokens as the driver
    app; this surface never imports a driver screen. */
 .portal {

@@ -4,7 +4,14 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { useI18n } from "../../core/i18n.js";
-import { fetchAdminIngest } from "../../core/api.js";
+import {
+  fetchAdminIngest,
+  fetchFacilities,
+  createFacility,
+  editFacility,
+  mergeFacility,
+  facilityDuplicates,
+} from "../../core/api.js";
 
 const { t } = useI18n();
 const data = ref(null);
@@ -14,8 +21,53 @@ function stamp(iso) {
   return iso ? iso.replace("T", " ").slice(0, 16) : null;
 }
 
+// decision 7: console-native facility management. Every write goes through the F2
+// pipeline as an ADMIN SOURCE, so a correction never erases what a feed recorded —
+// the copy says so where an operator is about to edit.
+const facilities = ref([]);
+const facSearch = ref("");
+const dupes = ref({});
+const draft = ref({ name: "", facility_type: "truck_stop", lat: "", lon: "", is_dev: false });
+
+const KINDS = [
+  "truck_stop", "rest_area", "parking_property", "shipper_receiver",
+  "fuel_station", "repair", "weigh_station", "scale", "composite",
+];
+
+async function loadFacilities() {
+  facilities.value = await fetchFacilities(facSearch.value || undefined).catch(() => []);
+}
+
+async function addFacility() {
+  if (!draft.value.name || draft.value.lat === "") return;
+  await createFacility({
+    ...draft.value,
+    lat: Number(draft.value.lat),
+    lon: Number(draft.value.lon),
+  });
+  draft.value = { name: "", facility_type: "truck_stop", lat: "", lon: "", is_dev: false };
+  await loadFacilities();
+}
+
+async function rename(fac, name) {
+  if (!name || name === fac.name) return;
+  await editFacility(fac.facility_id, { name });
+  await loadFacilities();
+}
+
+async function findDupes(fac) {
+  dupes.value = { ...dupes.value, [fac.facility_id]: await facilityDuplicates(fac.facility_id) };
+}
+
+async function merge(canonicalId, duplicateId) {
+  await mergeFacility(canonicalId, duplicateId);
+  dupes.value = {};
+  await loadFacilities();
+}
+
 onMounted(async () => {
   data.value = await fetchAdminIngest().catch(() => null);
+  await loadFacilities();
 });
 </script>
 
@@ -51,6 +103,67 @@ onMounted(async () => {
     </section>
 
     <section class="panel">
+      <h2 class="panel__title">{{ t("admin.fac.title") }}</h2>
+      <!-- stated where the operator is about to act, not buried in a doc -->
+      <p class="panel__note">{{ t("admin.fac.provenance") }}</p>
+      <input
+        v-model="facSearch"
+        class="field__input fac__search"
+        type="search"
+        :placeholder="t('admin.fac.search')"
+        @keyup.enter="loadFacilities"
+      />
+      <table class="table">
+        <tbody>
+          <tr v-for="f in facilities" :key="f.facility_id">
+            <td class="table__name">
+              <input
+                class="field__input"
+                :value="f.name"
+                type="text"
+                @change="rename(f, $event.target.value)"
+              />
+              <div class="table__muted">{{ f.facility_type }}</div>
+            </td>
+            <td class="table__muted">
+              {{ t("admin.fac.sources") }}: {{ f.sources.join(", ") }}
+            </td>
+            <td class="table__muted">
+              <span v-if="f.is_dev">is_dev</span>
+            </td>
+            <td>
+              <button class="btn" type="button" @click="findDupes(f)">
+                {{ t("admin.fac.dupes") }}
+              </button>
+              <div v-for="d in dupes[f.facility_id] || []" :key="d.facility_id" class="fac__dupe">
+                <span class="table__muted">{{ d.name }}</span>
+                <button class="btn" type="button" @click="merge(f.facility_id, d.facility_id)">
+                  {{ t("admin.fac.merge") }}
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="panel__note">{{ t("admin.fac.no_delete") }}</p>
+
+      <div class="fac__form">
+        <input v-model="draft.name" class="field__input" type="text" :placeholder="t('admin.acct.name')" />
+        <select v-model="draft.facility_type" class="field__input">
+          <option v-for="k in KINDS" :key="k" :value="k">{{ k }}</option>
+        </select>
+        <input v-model="draft.lat" class="field__input" type="number" step="0.0001" placeholder="lat" />
+        <input v-model="draft.lon" class="field__input" type="number" step="0.0001" placeholder="lon" />
+        <label class="fac__dev">
+          <input v-model="draft.is_dev" type="checkbox" /> is_dev
+        </label>
+        <button class="btn btn--accent" type="button" @click="addFacility">
+          {{ t("admin.fac.add") }}
+        </button>
+      </div>
+    </section>
+
+    <section class="panel">
       <h2 class="panel__title">{{ t("admin.data.sources") }}</h2>
       <table class="table">
         <tbody>
@@ -66,4 +179,27 @@ onMounted(async () => {
 
 <style scoped>
 @import "./admin-shared.css";
+.fac__search {
+  width: 100%;
+  margin-bottom: var(--s-3);
+}
+.fac__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.fac__dupe {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+.fac__dev {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+}
 </style>

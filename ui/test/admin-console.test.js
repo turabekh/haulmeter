@@ -685,3 +685,151 @@ describe("Accounts — powers and their limits (E-D6)", () => {
     expect(w.text()).toContain("No accounts match.");
   });
 });
+
+// --- E-D5 impersonation banner + decision 7 facility editor ---
+import VendorPortalSurface from "../src/surfaces/VendorPortalSurface.vue";
+import AdminData from "../src/surfaces/admin/AdminData.vue";
+import { setImpersonation } from "../src/core/api.js";
+
+describe("Impersonation banner (E-D5)", () => {
+  const PROFILE = {
+    vendor_id: "v-1",
+    name: "Osh Express",
+    verify_status: "verified",
+    languages: ["uz"],
+    halal_disclosure: "Halal butcher",
+    publish_suspended: false,
+    consecutive_no_shows: 0,
+    profile_gaps: [],
+    documents: [],
+    assisted: [],
+  };
+  const ANALYTICS = {
+    sheet_views: 0,
+    confirmations: 0,
+    shows_up: { confirmed: 0, published: 0 },
+    reviews: { average: null, reviewers: 0 },
+    publish_suspended: false,
+  };
+
+  function portalStub(profile = PROFILE) {
+    stubFetch({
+      "/vendor/profile": profile,
+      "/vendor/appearances": [],
+      "/vendor/promotions": [],
+      "/vendor/analytics": ANALYTICS,
+    });
+  }
+
+  afterEach(() => setImpersonation(null));
+
+  it("shows nothing when the operator is not impersonating", async () => {
+    portalStub();
+    const w = mount(VendorPortalSurface);
+    await flushPromises();
+    expect(w.find(".viewas").exists()).toBe(false);
+  });
+
+  it("names the vendor and states that writes are the admin's", async () => {
+    // an operator must not forget whose screen they are on, nor believe their
+    // edits will look like the vendor's
+    setImpersonation({ token: "imp-1", vendor_name: "Osh Express", vendor_id: "v-1" });
+    portalStub();
+    const w = mount(VendorPortalSurface);
+    await flushPromises();
+
+    const banner = w.find(".viewas");
+    expect(banner.exists()).toBe(true);
+    expect(banner.text()).toContain("Osh Express");
+    expect(banner.text()).toContain("recorded as you, not them");
+    expect(banner.text()).toContain("Exit view-as");
+  });
+
+  it("tells the vendor when support has edited their things", async () => {
+    // derived server-side from the audit log, so there is one source of truth
+    portalStub({ ...PROFILE, assisted: [{ action: "profile_edit", at: "2026-07-26T09:00:00Z" }] });
+    const w = mount(VendorPortalSurface);
+    await flushPromises();
+    expect(w.text()).toContain("Edited by Haulmeter support");
+  });
+
+  it("says nothing about support when support has not touched anything", async () => {
+    portalStub();
+    const w = mount(VendorPortalSurface);
+    await flushPromises();
+    expect(w.text()).not.toContain("Edited by Haulmeter support");
+  });
+});
+
+describe("Facility editor (decision 7)", () => {
+  const INGEST = {
+    facilities: { total: 1, by_source: { osm: 1 } },
+    freshness: {},
+    jobs: [],
+    sources: { tpims_static: "https://example/TPIMS_Static.json" },
+  };
+  const FACILITY = {
+    facility_id: "f-1",
+    name: "Gateway Truck Service",
+    facility_type: "repair",
+    status: "confirmed",
+    lat: 37.084,
+    lon: -94.513,
+    address: null,
+    attributes: { services: ["tire"] },
+    confidence: 0.8,
+    is_dev: false,
+    sources: ["osm"],
+  };
+
+  it("states the provenance rule where the operator is about to edit", async () => {
+    // not buried in a doc: an admin edit ADDS a source, it never erases a feed's
+    stubFetch({ "/admin/ingest": INGEST, "/admin/facilities": [FACILITY] });
+    const w = mount(AdminData);
+    await flushPromises();
+    expect(w.text()).toContain("added as an admin source");
+    expect(w.text()).toContain("never erases what a feed recorded");
+  });
+
+  it("shows which feeds already claim a facility", async () => {
+    stubFetch({ "/admin/ingest": INGEST, "/admin/facilities": [FACILITY] });
+    const w = mount(AdminData);
+    await flushPromises();
+    expect(w.text()).toContain("Sources: osm");
+  });
+
+  it("explains that facilities are merged, never deleted", async () => {
+    stubFetch({ "/admin/ingest": INGEST, "/admin/facilities": [FACILITY] });
+    const w = mount(AdminData);
+    await flushPromises();
+    expect(w.text()).toContain("never deleted");
+    expect(w.text()).toContain("merge a duplicate instead");
+  });
+
+  it("sends a rename as a PATCH through the pipeline", async () => {
+    const fetchStub = stubFetch({
+      "/admin/ingest": INGEST,
+      "/admin/facilities": [FACILITY],
+      "PATCH /admin/facilities/f-1": { ...FACILITY, name: "Gateway Truck Centre" },
+    });
+    const w = mount(AdminData);
+    await flushPromises();
+
+    const nameInput = w.findAll(".field__input").find((i) => i.element.value === FACILITY.name);
+    await nameInput.setValue("Gateway Truck Centre");
+    await nameInput.trigger("change");
+    await flushPromises();
+
+    const call = fetchStub.mock.calls.find((c) => String(c[0]).includes("/admin/facilities/f-1"));
+    expect(JSON.parse(call[1].body)).toEqual({ name: "Gateway Truck Centre" });
+  });
+
+  it("offers duplicate discovery rather than a delete button", async () => {
+    stubFetch({ "/admin/ingest": INGEST, "/admin/facilities": [FACILITY] });
+    const w = mount(AdminData);
+    await flushPromises();
+    const buttons = w.findAll(".btn").map((b) => b.text());
+    expect(buttons).toContain("Possible duplicates");
+    expect(buttons.join(" ")).not.toContain("Delete");
+  });
+});
