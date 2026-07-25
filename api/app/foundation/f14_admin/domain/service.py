@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .enums import ModerationStatus
-from .models import AdminAction, AdminView, AnalyticsEvent, ModerationItem
+from .models import AdminAction, AdminView, AnalyticsEvent, JobRun, ModerationItem
 
 
 # --- Event instrumentation standard ---
@@ -95,25 +95,121 @@ def record_action(
     actor_account_id=None,
     target_kind: str | None = None,
     target_ref=None,
+    target_key: str | None = None,
     detail: dict | None = None,
+    before: dict | None = None,
+    after: dict | None = None,
 ) -> AdminAction:
+    """Every admin mutation lands here. `before`/`after` are what make this an audit
+    log rather than an activity feed: after an incident the question is never "was
+    the flag touched" but "what was it before someone touched it"."""
     entry = AdminAction(
         action=action,
         actor_account_id=actor_account_id,
         target_kind=target_kind,
         target_ref=target_ref,
+        target_key=target_key,
         detail=detail or {},
+        before=before,
+        after=after,
     )
     db.add(entry)
     db.flush()
     return entry
 
 
-def list_actions(db: Session, action: str | None = None) -> list[AdminAction]:
+def list_actions(
+    db: Session,
+    action: str | None = None,
+    actor_account_id=None,
+    target_kind: str | None = None,
+    target_key: str | None = None,
+    target_ref=None,
+    limit: int | None = None,
+) -> list[AdminAction]:
+    """Newest first when limited — an operator opening the log wants what just
+    happened, not the first thing that ever did. Unfiltered/unlimited stays oldest
+    first for the existing callers that read it as a chronology."""
     stmt = select(AdminAction)
     if action is not None:
         stmt = stmt.where(AdminAction.action == action)
+    if actor_account_id is not None:
+        stmt = stmt.where(AdminAction.actor_account_id == actor_account_id)
+    if target_kind is not None:
+        stmt = stmt.where(AdminAction.target_kind == target_kind)
+    if target_key is not None:
+        stmt = stmt.where(AdminAction.target_key == target_key)
+    if target_ref is not None:
+        stmt = stmt.where(AdminAction.target_ref == target_ref)
+    if limit is not None:
+        rows = list(db.scalars(stmt.order_by(AdminAction.created_at.desc()).limit(limit)))
+        return rows
     return list(db.scalars(stmt.order_by(AdminAction.created_at)))
+
+
+def last_action_for(db: Session, action: str, target_key: str) -> AdminAction | None:
+    """Who last touched this subject. Config provenance is built on this rather than
+    on a column, so no table has to carry an actor it does not otherwise need."""
+    db.flush()  # the row we are about to read may still be pending
+    return db.scalar(
+        select(AdminAction)
+        .where(AdminAction.action == action, AdminAction.target_key == target_key)
+        .order_by(AdminAction.created_at.desc())
+        .limit(1)
+    )
+
+
+# --- Worker job telemetry (Overview: "did the feeds run?") ---
+def start_job_run(db: Session, job_name: str, now: datetime) -> JobRun:
+    run = JobRun(job_name=job_name, started_at=now, ok=False)
+    db.add(run)
+    db.flush()
+    return run
+
+
+def finish_job_run(
+    db: Session,
+    run: JobRun,
+    now: datetime,
+    ok: bool,
+    summary: dict | None = None,
+    error: str | None = None,
+    consecutive_failures: int = 0,
+    next_run_at: datetime | None = None,
+) -> JobRun:
+    run.finished_at = now
+    run.ok = ok
+    run.summary = summary or {}
+    # a 500-char cap: an operator needs the shape of the failure, and an unbounded
+    # traceback in a telemetry row is how tables quietly become log files
+    run.error = error[:500] if error else None
+    run.consecutive_failures = consecutive_failures
+    run.next_run_at = next_run_at
+    db.flush()
+    return run
+
+
+def latest_job_runs(db: Session, job_names: list[str] | None = None) -> dict[str, JobRun]:
+    """The most recent ATTEMPT per job — success or failure. A job whose last attempt
+    failed must not look healthy because an older success is still on file."""
+    stmt = select(JobRun).order_by(JobRun.started_at.desc())
+    if job_names:
+        stmt = stmt.where(JobRun.job_name.in_(job_names))
+    latest: dict[str, JobRun] = {}
+    for run in db.scalars(stmt):
+        latest.setdefault(run.job_name, run)
+    return latest
+
+
+def job_history(db: Session, job_name: str, limit: int = 20) -> list[JobRun]:
+    return list(
+        db.scalars(
+            select(JobRun)
+            .where(JobRun.job_name == job_name)
+            .order_by(JobRun.started_at.desc())
+            .limit(limit)
+        )
+    )
 
 
 # --- Moderation queue ---

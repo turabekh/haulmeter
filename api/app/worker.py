@@ -10,9 +10,11 @@ import signal
 import sys
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from app.core.db import SessionLocal
 from app.foundation.f13_flags import public as flags
+from app.foundation.f14_admin import public as admin
 from app.ingest import flags as ingest_flags
 from app.ingest import runners, sources
 
@@ -46,22 +48,74 @@ def _jobs() -> list[Job]:
 
 
 def _run_job(job: Job, monotonic: float) -> None:
+    # AI-CONTEXT: every attempt is persisted to f14.job_run as well as logged, so the
+    # Admin Console Overview can answer "did the feeds run, and is anything stuck?"
+    # without anyone reading container logs. A flag-off tick is NOT recorded — an
+    # idle job is not an event, and recording it would bury real runs in noise.
     db = SessionLocal()
+    run = None
     try:
         if not flags.is_enabled(db, job.flag_key):
             job.next_run = monotonic + job.interval_seconds  # flag off -> idle, quietly
             return
+        started = datetime.now(UTC)
+        run = admin.start_job_run(db, job.name, started)
+        db.commit()
+
         summary = job.run(db)
         job.failures = 0
         job.next_run = monotonic + job.interval_seconds
+        admin.finish_job_run(
+            db,
+            run,
+            datetime.now(UTC),
+            ok=True,
+            summary=_summary_dict(summary),
+            consecutive_failures=0,
+            next_run_at=datetime.now(UTC) + timedelta(seconds=job.interval_seconds),
+        )
+        db.commit()
         _log(f"{job.name} ok: {summary}")
     except Exception as exc:  # a dead feed must not spam every interval -> back off
         job.failures += 1
         backoff = min(job.interval_seconds * (2**job.failures), BACKOFF_CAP_SECONDS)
         job.next_run = monotonic + backoff
+        _record_failure(db, run, job, exc, backoff)
         _log(f"{job.name} failed ({job.failures}x): {exc!r} — retrying in {int(backoff)}s")
     finally:
         db.close()
+
+
+def _summary_dict(summary: object) -> dict:
+    # runners return either a dict or an IngestStats dataclass; the console wants one
+    # JSON shape, and `facility_ids` is a set of UUIDs that would not serialize
+    if isinstance(summary, dict):
+        return summary
+    return {
+        key: value
+        for key, value in vars(summary).items()
+        if isinstance(value, (int, float, str, bool)) or value is None
+    }
+
+
+def _record_failure(db, run, job: Job, exc: Exception, backoff: float) -> None:
+    # telemetry must never be the reason a worker dies: the session may already be
+    # broken by whatever raised, so this rolls back first and swallows its own errors
+    try:
+        db.rollback()
+        target = run if run is not None else admin.start_job_run(db, job.name, datetime.now(UTC))
+        admin.finish_job_run(
+            db,
+            target,
+            datetime.now(UTC),
+            ok=False,
+            error=repr(exc),
+            consecutive_failures=job.failures,
+            next_run_at=datetime.now(UTC) + timedelta(seconds=backoff),
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
 
 
 def _startup() -> None:

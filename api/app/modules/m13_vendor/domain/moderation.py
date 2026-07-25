@@ -17,7 +17,7 @@ cannot be suspended by volume of complaint alone.
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -38,6 +38,17 @@ DEFAULT_VENDOR_HIDE_REPORTS = 3
 # upheld reports before a vendor is suspended as a repeat offender
 CONFIG_REPEAT_OFFENDER_STRIKES = "m13_repeat_offender_strikes"
 DEFAULT_REPEAT_OFFENDER_STRIKES = 3
+# how many reports one account may file per rolling 24h. Reporting is a civic act
+# and should stay easy; filing dozens in an evening is not reporting, it is a
+# campaign, and the queue a moderator has to read is a finite resource.
+CONFIG_REPORTS_PER_DAY = "m13_reports_per_day"
+DEFAULT_REPORTS_PER_DAY = 5
+# upheld-frivolous reports before an account's reports stop carrying hide weight.
+# The account keeps reporting and a moderator still sees every one — this is not a
+# ban (that stays out of scope), it is the same class of measure as vendor
+# publish-suspension: the automatic consequence is withdrawn, the human one is not.
+CONFIG_FRIVOLOUS_STRIKES = "m13_frivolous_strikes"
+DEFAULT_FRIVOLOUS_STRIKES = 3
 
 
 class AlreadyReported(Exception):
@@ -48,12 +59,24 @@ class NotReportable(Exception):
     pass
 
 
+class ReportRateLimited(Exception):
+    """Decision 4b. Carries the cap so the UI can say what the limit actually is."""
+
+    def __init__(self, limit: int):
+        super().__init__(str(limit))
+        self.limit = limit
+
+
 @dataclass
 class ReportOutcome:
     report: ContentReport
     hidden: bool
     distinct_reports: int
     moderation_ref: object
+    # true when the reporter is the vendor's own owner/member, or has spent their
+    # credibility on frivolous reports. The report is still filed; it just carries
+    # no automatic weight, and the moderator is told why.
+    discounted: bool = False
 
 
 def _config_int(db: Session, key: str, default: int) -> int:
@@ -65,6 +88,26 @@ def _aware(value: datetime) -> datetime:
 
 
 def distinct_reporters(db: Session, content_kind: str, content_ref) -> int:
+    """Reports that CARRY WEIGHT, counted per distinct account. A vendor reporting
+    their own listing, and an account that has spent its credibility on frivolous
+    reports, are both excluded here — they are still on file, they just cannot move
+    the automatic threshold on their own say-so."""
+    return int(
+        db.scalar(
+            select(func.count(func.distinct(ContentReport.account_id))).where(
+                ContentReport.content_kind == content_kind,
+                ContentReport.content_ref == content_ref,
+                ContentReport.self_reported.is_(False),
+                ContentReport.frivolous.is_(False),
+            )
+        )
+        or 0
+    )
+
+
+def all_reporters(db: Session, content_kind: str, content_ref) -> int:
+    """Every report on file including discounted ones — what a MODERATOR sees, so
+    an attempted self-takedown is visible rather than invisible."""
     return int(
         db.scalar(
             select(func.count(func.distinct(ContentReport.account_id))).where(
@@ -74,6 +117,52 @@ def distinct_reporters(db: Session, content_kind: str, content_ref) -> int:
         )
         or 0
     )
+
+
+def is_own_vendor(db: Session, vendor_id, account_id) -> bool:
+    from .service import is_member
+
+    vendor = db.get(Vendor, vendor_id)
+    if vendor is None:
+        return False
+    return vendor.owner_account_id == account_id or is_member(db, vendor_id, account_id)
+
+
+def frivolous_strikes(db: Session, account_id) -> int:
+    return int(
+        db.scalar(
+            select(func.count())
+            .select_from(ContentReport)
+            .where(
+                ContentReport.account_id == account_id,
+                ContentReport.frivolous.is_(True),
+            )
+        )
+        or 0
+    )
+
+
+def reports_today(db: Session, account_id, now: datetime) -> int:
+    since = now - timedelta(hours=24)
+    return int(
+        db.scalar(
+            select(func.count())
+            .select_from(ContentReport)
+            .where(
+                ContentReport.account_id == account_id,
+                ContentReport.created_at >= since,
+            )
+        )
+        or 0
+    )
+
+
+def reporter_credible(db: Session, account_id) -> bool:
+    """False once an account has accumulated frivolous strikes. Their reports keep
+    reaching a moderator; they simply stop carrying automatic weight. This is not a
+    ban — the human path is untouched, only the automatic one is withdrawn."""
+    strikes = _config_int(db, CONFIG_FRIVOLOUS_STRIKES, DEFAULT_FRIVOLOUS_STRIKES)
+    return frivolous_strikes(db, account_id) < strikes
 
 
 def report_content(
@@ -100,6 +189,17 @@ def report_content(
     if already is not None:
         raise AlreadyReported(str(content_ref))
 
+    limit = _config_int(db, CONFIG_REPORTS_PER_DAY, DEFAULT_REPORTS_PER_DAY)
+    if reports_today(db, account_id, now) >= limit:
+        raise ReportRateLimited(limit)
+
+    # decision 4a/4c: a vendor reporting themselves, or an account that has spent its
+    # credibility, files a report that a moderator will see and that carries no
+    # automatic weight. Recorded, not discarded — discarding would hide the abuse
+    # from the only person able to act on it.
+    self_reported = is_own_vendor(db, vendor_id, account_id)
+    discounted = self_reported or not reporter_credible(db, account_id)
+
     report = ContentReport(
         content_kind=content_kind,
         content_ref=content_ref,
@@ -107,12 +207,14 @@ def report_content(
         account_id=account_id,
         reason=reason,
         note=note,
+        self_reported=self_reported,
+        created_at=now,
     )
     db.add(report)
     db.flush()
 
     count = distinct_reporters(db, content_kind, content_ref)
-    hidden = _apply_hide_policy(db, content_kind, content_ref, count)
+    hidden = False if discounted else _apply_hide_policy(db, content_kind, content_ref, count)
 
     # one F14 queue item per reported ITEM, not per report — a moderator should see
     # "this review, reported by 3 people", not three identical tasks
@@ -123,7 +225,11 @@ def report_content(
         existing_ref = item.id
 
     return ReportOutcome(
-        report=report, hidden=hidden, distinct_reports=count, moderation_ref=existing_ref
+        report=report,
+        hidden=hidden,
+        distinct_reports=count,
+        moderation_ref=existing_ref,
+        discounted=discounted,
     )
 
 
@@ -194,10 +300,17 @@ def resolve_report(
     moderator_account_id=None,
     reason: str | None = None,
     now: datetime | None = None,
+    frivolous: bool = False,
 ) -> dict:
-    """Uphold = the content stays down. Dismiss = it comes straight back. Either way
-    the queue item closes, which is what the 72h SLA is measured against."""
+    """Three outcomes, not two. Uphold = the content stays down. Dismiss = it comes
+    back. **Frivolous** = it comes back AND the report itself was the abuse, so the
+    strike lands on the REPORTER. Without that third verdict a moderator can only
+    ever penalise the reported party, which makes the report button a free weapon.
+
+    Either way the queue item closes, which is what the 72h SLA measures."""
     now = now or datetime.now(UTC)
+    if frivolous and uphold:
+        raise ValueError("a report cannot be both upheld and frivolous")
     reports = list(
         db.scalars(
             select(ContentReport).where(
@@ -209,6 +322,7 @@ def resolve_report(
     )
     for report in reports:
         report.upheld = uphold
+        report.frivolous = frivolous
 
     if content_kind == CONTENT_REVIEW:
         review = db.get(VendorReview, content_ref)
@@ -236,7 +350,25 @@ def resolve_report(
 
     db.flush()
     suspended = _apply_repeat_offender(db, reports, moderator_account_id) if uphold else False
-    return {"upheld": uphold, "reports_closed": len(reports), "vendor_suspended": suspended}
+    # who lost credibility, and are they now past the strike limit? Surfaced so the
+    # console can tell a moderator the consequence of the verdict they just gave.
+    discredited = []
+    if frivolous:
+        for account_id in {r.account_id for r in reports}:
+            discredited.append(
+                {
+                    "account_id": account_id,
+                    "strikes": frivolous_strikes(db, account_id),
+                    "credible": reporter_credible(db, account_id),
+                }
+            )
+    return {
+        "upheld": uphold,
+        "frivolous": frivolous,
+        "reports_closed": len(reports),
+        "vendor_suspended": suspended,
+        "discredited": discredited,
+    }
 
 
 def _close_item(db: Session, item_id, uphold: bool, moderator_account_id, reason) -> None:

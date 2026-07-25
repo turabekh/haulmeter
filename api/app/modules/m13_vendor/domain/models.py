@@ -336,4 +336,11 @@ class ContentReport(Base):
     )
     note: Mapped[str | None] = mapped_column(String(300), nullable=True)
     upheld: Mapped[bool | None] = mapped_column(Boolean, nullable=True)  # None until decided
+    # a moderator's third verdict: the report itself was the abuse. Counts toward the
+    # REPORTER's record, not the reported party's (Admin Console 2.0 decision 4c).
+    frivolous: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # a report from the vendor's own owner/member is RECORDED (so a moderator can see
+    # the attempt) but excluded from the distinct-driver hide count — dropping it
+    # silently would hide the abuse from the only person able to act on it
+    self_reported: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
