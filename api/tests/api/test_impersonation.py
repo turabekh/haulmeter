@@ -294,3 +294,164 @@ def test_the_detail_page_carries_everything_about_one_vendor(client, db, live):
     assert body["upheld_reports"] == 0
     assert body["profile_gaps"] == []
     assert "audit" in body
+
+
+# --- E-D5 mode (a): assisted edit FROM THE CONSOLE, no impersonation ---
+# The mode that was missing from the first pass. Same writes, same laws, same
+# vendor-visible note — the only difference is that the admin never has to put on
+# the vendor's screen to make a small correction on the phone.
+def test_a_console_edit_is_attributed_without_impersonating(client, db, live):
+    headers = _admin(client, db)
+    vendor, _ = _vendor(client, db)
+
+    resp = client.patch(
+        f"/admin/vendors/{vendor.id}",
+        json={"languages": ["uz", "ru"], "metro": "orlando-fl"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["languages"] == ["uz", "ru"]
+
+    entries = client.get("/admin/audit?action=assisted_profile_edit", headers=headers).json()
+    assert entries[0]["actor"] == "ops@example.com"
+    assert entries[0]["before"]["languages"] == ["uz"]
+    assert entries[0]["after"]["metro"] == "orlando-fl"
+    # explicitly NOT an impersonated write — the two modes are distinguishable
+    assert entries[0]["detail"]["impersonated"] is False
+
+
+def test_a_console_edit_surfaces_to_the_vendor_too(client, db, live):
+    # the vendor-visible note is derived from the audit log, so mode (a) shows up on
+    # their portal with no extra plumbing — that is the payoff of deriving it
+    headers = _admin(client, db)
+    vendor, vendor_headers = _vendor(client, db)
+    client.patch(f"/admin/vendors/{vendor.id}", json={"languages": ["en"]}, headers=headers)
+
+    theirs = client.get("/vendor/profile", headers=vendor_headers).json()
+    assert theirs["assisted"]
+    assert theirs["assisted"][0]["action"] == "profile_edit"
+
+
+def test_the_profile_edit_reports_what_still_blocks_publishing(client, db, live):
+    # an operator fixing a profile by phone should know when they are DONE rather
+    # than guessing
+    headers = _admin(client, db)
+    account = identity.register_account(db, "gaps@x.com", "pw-123456")
+    vendor = m13.register_vendor(
+        db, account.id, "Gap Cook", m13.VendorType.food_mobile, metro="waco-tx"
+    )
+
+    first = client.patch(
+        f"/admin/vendors/{vendor.id}", json={"languages": ["uz"]}, headers=headers
+    ).json()
+    assert first["profile_gaps"] == ["halal_disclosure"]
+
+    done = client.patch(
+        f"/admin/vendors/{vendor.id}",
+        json={"halal_answered": True, "halal_disclosure": "No halal claim"},
+        headers=headers,
+    ).json()
+    assert done["profile_gaps"] == []
+
+
+def test_a_console_publish_still_obeys_the_publish_floor(client, db, live):
+    # attribution, never exemption — the same 422 the vendor would get
+    headers = _admin(client, db)
+    account = identity.register_account(db, "floor@x.com", "pw-123456")
+    vendor = m13.register_vendor(
+        db, account.id, "Floor Cook", m13.VendorType.food_mobile, metro="waco-tx"
+    )
+    fac = facility.create_facility(db, facility.FacilityType.truck_stop, "Floor Stop", *DALLAS)
+
+    start = datetime.now(UTC)
+    resp = client.post(
+        f"/admin/vendors/{vendor.id}/appearances",
+        json={
+            "facility_id": str(fac.id),
+            "starts_at": start.isoformat(),
+            "ends_at": (start + timedelta(hours=3)).isoformat(),
+            "offerings": [{"name": "Osh", "price_cents": 1200}],
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 422
+    assert set(resp.json()["detail"]["missing"]) >= {"languages", "halal_disclosure"}
+
+
+def test_a_console_publish_and_cancel_are_both_attributed(client, db, live):
+    headers = _admin(client, db)
+    vendor, _ = _vendor(client, db)
+    fac = facility.create_facility(db, facility.FacilityType.truck_stop, "Console Stop", *DALLAS)
+
+    start = datetime.now(UTC)
+    created = client.post(
+        f"/admin/vendors/{vendor.id}/appearances",
+        json={
+            "facility_id": str(fac.id),
+            "starts_at": start.isoformat(),
+            "ends_at": (start + timedelta(hours=3)).isoformat(),
+            "offerings": [{"name": "Osh", "price_cents": 1200}],
+            "property_approved": True,
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201
+    appearance_id = created.json()["appearance_ids"][0]
+
+    client.delete(f"/admin/vendors/{vendor.id}/appearances/{appearance_id}", headers=headers)
+
+    actions = {a["action"] for a in client.get("/admin/audit", headers=headers).json()}
+    assert {"assisted_appearance_publish", "assisted_appearance_cancel"} <= actions
+
+
+def test_a_console_promotion_is_attributed_and_reports_delivery_honestly(client, db, live):
+    headers = _admin(client, db)
+    vendor, _ = _vendor(client, db)
+
+    start = datetime.now(UTC) - timedelta(minutes=5)
+    resp = client.post(
+        f"/admin/vendors/{vendor.id}/promotions",
+        json={
+            "text": "Free chai with any plate",
+            "starts_at": start.isoformat(),
+            "ends_at": (start + timedelta(hours=6)).isoformat(),
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 201
+    # nobody opted in, and the console says so rather than implying reach
+    assert resp.json()["alerts_delivered"] == 0
+
+    entries = client.get("/admin/audit?action=assisted_promotion_create", headers=headers).json()
+    assert entries[0]["actor"] == "ops@example.com"
+
+
+def test_an_admin_cannot_touch_another_vendors_appearance_by_id(client, db, live):
+    # the vendor id in the path is the tenancy boundary, not a decoration
+    headers = _admin(client, db)
+    mine, _ = _vendor(client, db, "one@x.com", "One Cook")
+    theirs, _ = _vendor(client, db, "two@x.com", "Two Cook")
+    fac = facility.create_facility(db, facility.FacilityType.truck_stop, "Shared Stop", *DALLAS)
+
+    start = datetime.now(UTC)
+    appearance_id = client.post(
+        f"/admin/vendors/{mine.id}/appearances",
+        json={
+            "facility_id": str(fac.id),
+            "starts_at": start.isoformat(),
+            "ends_at": (start + timedelta(hours=3)).isoformat(),
+            "offerings": [{"name": "Osh", "price_cents": 1200}],
+        },
+        headers=headers,
+    ).json()["appearance_ids"][0]
+
+    resp = client.delete(f"/admin/vendors/{theirs.id}/appearances/{appearance_id}", headers=headers)
+    assert resp.status_code == 404
+
+
+def test_assisted_edits_require_admin(client, db, live):
+    vendor, vendor_headers = _vendor(client, db)
+    resp = client.patch(
+        f"/admin/vendors/{vendor.id}", json={"languages": ["en"]}, headers=vendor_headers
+    )
+    assert resp.status_code == 403

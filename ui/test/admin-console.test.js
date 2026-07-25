@@ -833,3 +833,132 @@ describe("Facility editor (decision 7)", () => {
     expect(buttons.join(" ")).not.toContain("Delete");
   });
 });
+
+// --- E-D5 mode (a): the console-side vendor form ---
+import AdminVendors from "../src/surfaces/admin/AdminVendors.vue";
+
+describe("Vendors — assisted edit from the console (E-D5 mode a)", () => {
+  const ROW = {
+    vendor_id: "v-1",
+    name: "Osh Express",
+    metro: "dallas-tx",
+    verify_status: "unverified",
+    status: "active",
+    shows_up: { confirmed: 0, published: 0 },
+    consecutive_no_shows: 0,
+    documents: [],
+  };
+  const DETAIL = {
+    vendor_id: "v-1",
+    name: "Osh Express",
+    metro: "dallas-tx",
+    contact_phone: "",
+    languages: ["uz"],
+    halal_disclosure: null,
+    verify_status: "unverified",
+    status: "active",
+    publish_suspended: false,
+    consecutive_no_shows: 0,
+    profile_gaps: ["halal_disclosure"],
+    shows_up: { confirmed: 0, published: 0 },
+    reviews: { average: null, reviewers: 0 },
+    upheld_reports: 0,
+    documents: [],
+    appearances: [],
+    promotions: [],
+    audit: [],
+  };
+
+  function vendorStub(detail = DETAIL) {
+    return stubFetch({
+      "/admin/vendors": [ROW],
+      "/admin/claims": [],
+      "/admin/vendors/v-1/detail": detail,
+      "PATCH /admin/vendors/v-1": { ...detail, profile_gaps: [] },
+    });
+  }
+
+  it("offers a registration form with the fields that make a vendor publishable", async () => {
+    // a form capturing only a name creates a vendor blocked by the Q-4 floor the
+    // moment they try to publish — worse than no form at all
+    vendorStub();
+    const w = mount(AdminVendors);
+    await flushPromises();
+
+    const placeholders = w.findAll("input").map((i) => i.attributes("placeholder"));
+    expect(placeholders).toContain("Metro");
+    expect(placeholders.join(" ")).toContain("Languages");
+    expect(placeholders.join(" ")).toContain("Halal sourcing");
+  });
+
+  it("says whether a vendor can actually publish yet", async () => {
+    vendorStub();
+    const w = mount(AdminVendors);
+    await flushPromises();
+    await w.findAll(".btn").find((b) => b.text() === "Open").trigger("click");
+    await flushPromises();
+
+    expect(w.find(".vendor__blocked").text()).toContain("halal_disclosure");
+    expect(w.find(".vendor__ready").exists()).toBe(false);
+  });
+
+  it("tells the operator their edits are visible to the vendor", async () => {
+    vendorStub();
+    const w = mount(AdminVendors);
+    await flushPromises();
+    await w.findAll(".btn").find((b) => b.text() === "Open").trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain("recorded as support acting for this vendor");
+    expect(w.text()).toContain("they can see them");
+  });
+
+  it("edits the profile directly, without impersonating", async () => {
+    const fetchStub = vendorStub();
+    const w = mount(AdminVendors);
+    await flushPromises();
+    await w.findAll(".btn").find((b) => b.text() === "Open").trigger("click");
+    await flushPromises();
+
+    // scoped to the DETAIL panel's form: the registration form above shares the
+    // placeholder, and editing the wrong one is exactly the mistake to guard against
+    const editForm = w.find(".vendor__form--edit");
+    const halal = editForm
+      .findAll("input")
+      .find((i) => i.attributes("placeholder")?.includes("Halal"));
+    await halal.setValue("Halal butcher in Dallas");
+    await w.findAll(".btn").find((b) => b.text() === "Save vendor").trigger("click");
+    await flushPromises();
+
+    const call = fetchStub.mock.calls.find(
+      (c) => String(c[0]).endsWith("/admin/vendors/v-1") && c[1]?.method === "PATCH",
+    );
+    expect(call).toBeTruthy();
+    const body = JSON.parse(call[1].body);
+    expect(body.halal_disclosure).toBe("Halal butcher in Dallas");
+    // answering at all is what the floor checks — "none" is a valid answer
+    expect(body.halal_answered).toBe(true);
+    // and no impersonation session was started to do it
+    expect(fetchStub.mock.calls.some((c) => String(c[0]).includes("/impersonate"))).toBe(false);
+  });
+
+  it("marks a vendor ready once nothing blocks them", async () => {
+    vendorStub({ ...DETAIL, profile_gaps: [] });
+    const w = mount(AdminVendors);
+    await flushPromises();
+    await w.findAll(".btn").find((b) => b.text() === "Open").trigger("click");
+    await flushPromises();
+
+    expect(w.find(".vendor__ready").exists()).toBe(true);
+    expect(w.find(".vendor__blocked").exists()).toBe(false);
+  });
+
+  it("still offers view-as for the cases a form cannot answer", async () => {
+    // the two modes coexist: edit for a quick correction, view-as for "my screen
+    // looks wrong"
+    vendorStub();
+    const w = mount(AdminVendors);
+    await flushPromises();
+    expect(w.findAll(".btn").some((b) => b.text() === "View as vendor")).toBe(true);
+  });
+});

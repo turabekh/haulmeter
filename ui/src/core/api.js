@@ -1124,3 +1124,14 @@ export const editFacility = (id, body) => adminSend(`/facilities/${id}`, "PATCH"
 export const mergeFacility = (id, duplicateId) =>
   adminSend(`/facilities/${id}/merge`, "POST", { duplicate_id: duplicateId });
 export const facilityDuplicates = (id) => adminGet(`/facilities/${id}/duplicates`);
+
+// E-D5 mode (a): assisted edits made from the console, without impersonating
+export const editVendorProfile = (id, body) => adminSend(`/vendors/${id}`, "PATCH", body);
+export const assistPublishAppearance = (id, body) =>
+  adminSend(`/vendors/${id}/appearances`, "POST", body);
+export const assistCancelAppearance = (id, appearanceId) =>
+  adminSend(`/vendors/${id}/appearances/${appearanceId}`, "DELETE");
+export const assistCreatePromotion = (id, body) =>
+  adminSend(`/vendors/${id}/promotions`, "POST", body);
+export const assistCancelPromotion = (id, promotionId) =>
+  adminSend(`/vendors/${id}/promotions/${promotionId}`, "DELETE");

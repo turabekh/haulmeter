@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
+from app.foundation.f08_notifications import public as notify
 from app.foundation.f13_flags import public as flags
 from app.foundation.f14_admin import public as admin
 from app.modules.m13_vendor import public as m13
@@ -1467,3 +1468,212 @@ def facility_duplicates(
         for candidate in facility.find_duplicate_candidates(db, fac.name, lat, lon)
         if candidate.id != fac.id
     ]
+
+
+# --- E-D5 mode (a): assisted edit from the console, attributed ---
+# AI-CONTEXT: the SAME writes the vendor portal offers, made directly from the
+# console without impersonating. Attribution is the point of the mode: each write
+# records an `assisted_*` action naming the admin as actor and the vendor as target,
+# which is exactly what the vendor's own portal reads to show "edited by Haulmeter
+# support" — so a console edit surfaces to them with no extra plumbing.
+#
+# Every M13 law applies unchanged. `publish_appearance` runs the Q-4 floor and the
+# suspension gate here as it does everywhere else: an admin editing on someone's
+# behalf gets attribution, never exemption.
+class VendorProfileIn(BaseModel):
+    name: str | None = None
+    metro: str | None = None
+    contact_phone: str | None = None
+    categories: list[str] | None = None
+    languages: list[str] | None = None
+    halal_disclosure: str | None = None
+    halal_answered: bool | None = None
+
+
+class AssistedOfferingIn(BaseModel):
+    name: str
+    price_cents: int
+    portions: int | None = None
+
+
+class AssistedAppearanceIn(BaseModel):
+    facility_id: uuid.UUID
+    starts_at: datetime
+    ends_at: datetime
+    offerings: list[AssistedOfferingIn]
+    property_approved: bool = False
+    weekly: list[int] | None = None
+
+
+class AssistedPromotionIn(BaseModel):
+    text: str
+    starts_at: datetime
+    ends_at: datetime
+
+
+def _load_vendor(db: Session, vendor_id: uuid.UUID):
+    vendor = m13.resolve_vendor(db, vendor_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    return vendor
+
+
+def _record_assisted(db: Session, actor, vendor, action: str, before, after) -> None:
+    admin.record_action(
+        db,
+        f"assisted_{action}",
+        actor_account_id=actor.id,
+        target_kind="vendor",
+        target_ref=vendor.id,
+        target_key=vendor.name,
+        detail={"on_behalf_of": str(vendor.owner_account_id), "impersonated": False},
+        before=before,
+        after=after,
+    )
+
+
+def _vendor_profile_out(vendor) -> dict:
+    return {
+        "name": vendor.name,
+        "metro": vendor.metro,
+        "contact_phone": vendor.contact_phone,
+        "categories": list(vendor.categories or []),
+        "languages": list(vendor.languages or []),
+        "halal_disclosure": vendor.halal_disclosure,
+        "halal_answered": vendor.halal_answered,
+    }
+
+
+@router.patch("/vendors/{vendor_id}")
+def edit_vendor_profile(
+    vendor_id: uuid.UUID,
+    body: VendorProfileIn,
+    actor: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    vendor = _load_vendor(db, vendor_id)
+    before = _vendor_profile_out(vendor)
+    if body.name is not None:
+        vendor.name = body.name.strip()
+    if body.metro is not None:
+        vendor.metro = body.metro.strip()
+    if body.contact_phone is not None:
+        vendor.contact_phone = "".join(ch for ch in body.contact_phone if ch.isdigit())[-10:]
+    if body.categories is not None:
+        vendor.categories = body.categories
+    if body.languages is not None:
+        vendor.languages = body.languages
+    if body.halal_disclosure is not None:
+        vendor.halal_disclosure = body.halal_disclosure
+    if body.halal_answered is not None:
+        vendor.halal_answered = body.halal_answered
+    db.flush()
+    after = _vendor_profile_out(vendor)
+    _record_assisted(db, actor, vendor, "profile_edit", before, after)
+    # what still blocks publishing, so an operator fixing a profile by phone knows
+    # when they are done rather than guessing
+    return {**after, "profile_gaps": m13.profile_gaps(vendor)}
+
+
+@router.post("/vendors/{vendor_id}/appearances", status_code=201)
+def assist_publish_appearance(
+    vendor_id: uuid.UUID,
+    body: AssistedAppearanceIn,
+    actor: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    vendor = _load_vendor(db, vendor_id)
+    try:
+        created = m13.publish_appearance(
+            db,
+            vendor,
+            body.facility_id,
+            body.starts_at,
+            body.ends_at,
+            [m13.OfferingIn(o.name, o.price_cents, o.portions) for o in body.offerings],
+            property_approved=body.property_approved,
+            weekly=body.weekly,
+        )
+    except m13.ListingIncomplete as exc:
+        # the Q-4 floor refuses an admin exactly as it refuses the vendor
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            {"error": "listing_incomplete", "missing": exc.missing},
+        ) from exc
+    except m13.PublishSuspended as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"error": "publish_suspended"}) from exc
+    _record_assisted(
+        db,
+        actor,
+        vendor,
+        "appearance_publish",
+        None,
+        {"appearance_ids": [str(a.id) for a in created], "facility_id": str(body.facility_id)},
+    )
+    return {"appearance_ids": [str(a.id) for a in created]}
+
+
+@router.delete("/vendors/{vendor_id}/appearances/{appearance_id}")
+def assist_cancel_appearance(
+    vendor_id: uuid.UUID,
+    appearance_id: uuid.UUID,
+    whole_series: bool = False,
+    actor: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    vendor = _load_vendor(db, vendor_id)
+    appearance = db.get(m13.Appearance, appearance_id)
+    if appearance is None or appearance.vendor_id != vendor.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "appearance not found")
+    gateway = notify.RecordingNotificationGateway()
+    cancelled = m13.cancel_appearance(db, appearance, gateway=gateway, whole_series=whole_series)
+    _record_assisted(
+        db,
+        actor,
+        vendor,
+        "appearance_cancel",
+        {"status": "scheduled"},
+        {"cancelled": [str(a.id) for a in cancelled]},
+    )
+    return {"cancelled": [str(a.id) for a in cancelled], "alerts_sent": len(gateway.sent)}
+
+
+@router.post("/vendors/{vendor_id}/promotions", status_code=201)
+def assist_create_promotion(
+    vendor_id: uuid.UUID,
+    body: AssistedPromotionIn,
+    actor: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    vendor = _load_vendor(db, vendor_id)
+    try:
+        promotion = m13.create_promotion(db, vendor, body.text, body.starts_at, body.ends_at)
+    except m13.InvalidPromotion as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    _record_assisted(db, actor, vendor, "promotion_create", None, {"text": promotion.text})
+    gateway = notify.RecordingNotificationGateway()
+    sent = m13.notify_promotion(db, promotion, gateway)
+    delivered = sum(1 for n in sent if n.status == notify.NotificationStatus.sent)
+    return {
+        "promotion_id": str(promotion.id),
+        "alerts_delivered": delivered,
+        "alerts_suppressed": len(sent) - delivered,
+    }
+
+
+@router.delete("/vendors/{vendor_id}/promotions/{promotion_id}")
+def assist_cancel_promotion(
+    vendor_id: uuid.UUID,
+    promotion_id: uuid.UUID,
+    actor: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    vendor = _load_vendor(db, vendor_id)
+    promotion = db.get(m13.Promotion, promotion_id)
+    if promotion is None or promotion.vendor_id != vendor.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "promotion not found")
+    m13.cancel_promotion(db, promotion)
+    _record_assisted(
+        db, actor, vendor, "promotion_cancel", {"status": "active"}, {"status": "cancelled"}
+    )
+    return {"promotion_id": str(promotion.id), "status": promotion.status.value}

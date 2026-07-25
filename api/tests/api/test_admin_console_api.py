@@ -438,14 +438,29 @@ def test_every_mutating_admin_endpoint_writes_an_audit_entry(client, db):
         "/admin/facilities": "facility_create",
         "/admin/facilities/{facility_id}": "facility_edit",
         "/admin/facilities/{facility_id}/merge": "facility_merge",
+        # E-D5 mode (a): assisted edits made from the console, without impersonating
+        "/admin/vendors/{vendor_id}": "assisted_profile_edit",
+        "/admin/vendors/{vendor_id}/appearances": "assisted_appearance_publish",
+        "/admin/vendors/{vendor_id}/appearances/{appearance_id}": "assisted_appearance_cancel",
+        "/admin/vendors/{vendor_id}/promotions": "assisted_promotion_create",
+        "/admin/vendors/{vendor_id}/promotions/{promotion_id}": "assisted_promotion_cancel",
     }
     unaudited = sorted(mutating - set(covered))
     assert not unaudited, f"mutating admin endpoints with no audit action mapped: {unaudited}"
 
-    # and each mapped action is one record_action actually knows how to emit
+    # and each mapped action is one the codebase can actually emit, so a typo in the
+    # table above is caught rather than silently accepted. Some action names are
+    # COMPOSED (`f"assisted_{action}"`), so a bare literal search would reject a
+    # correct mapping — for those we check that the template exists and that the
+    # suffix is passed somewhere.
     source = __import__("inspect").getsource(admin_router)
     from app.modules.m13_vendor.domain import claims as m13_claims
 
     domain_source = __import__("inspect").getsource(m13_claims)
+    haystack = source + domain_source
     for route, action in covered.items():
-        assert action in source or action in domain_source, f"{route} emits no {action}"
+        if action in haystack:
+            continue
+        suffix = action.removeprefix("assisted_")
+        composed = 'f"assisted_{action}"' in haystack and f'"{suffix}"' in haystack
+        assert composed, f"{route} emits no {action}"
