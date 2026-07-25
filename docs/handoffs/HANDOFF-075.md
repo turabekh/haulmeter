@@ -16,7 +16,7 @@ PRD §7 F13/F14, §17 → this file → HANDOFF-074 (2.0b) → 073 (2.0a).
 | Thing | Value |
 |---|---|
 | Migrations | head **0043_f01_impersonation** |
-| Tests | **pytest 739 · vitest 229 · ruff clean · import-linter 30/30** |
+| Tests | **pytest 747 · vitest 235 · ruff clean · import-linter 30/30** |
 | `make ci` | **PASSES COLD** |
 | Console sections | 8 — Overview · Flags & Config · Vendors · Moderation · Accounts · Data & Ingest · Modules · Audit |
 
@@ -40,6 +40,26 @@ consequence of the shape rather than of anyone remembering a rule.
 | **No bypass** | A test publishes on an incomplete vendor's behalf while impersonating and gets the Q-4 floor's 422 with the same missing fields the vendor would see. |
 
 Driver impersonation is refused **in the domain** (`start_impersonation` raises), not merely unrouted.
+
+### Assisted edits — BOTH approved modes
+
+**Correction to this handoff's first version:** it claimed E-D5 complete when only
+mode (b) was built. Decision 5 approved two modes and the first pass shipped one,
+with the attribution machinery gated on impersonation so there was no console-side
+edit to attribute. Both now exist (commit `51adaa9`).
+
+| Mode | Path | Attribution |
+|---|---|---|
+| **(a) Assisted edit** | `PATCH /admin/vendors/{id}`, plus appearance and promotion create/cancel on behalf | `assisted_*` with the admin as actor, `impersonated: false` |
+| **(b) Impersonation** | "View as vendor" → the vendor portal | `assisted_*` with the admin as actor, `impersonated: true` |
+
+Both surface to the vendor as "edited by Haulmeter support" — the derivation keys on
+action prefix and `target_ref`, so it does not care how the write arrived. Neither
+bypasses the Q-4 floor; a test covers each.
+
+Registration now captures metro, phone, languages and halal disclosure. The first
+version sent only a name guessed from the account email, producing a vendor blocked
+by the publish floor the moment they tried to use it.
 
 ### Assisted edits, attributed and visible
 `assisted_*` audit actions carry before→after naming the admin; the vendor sees "Edited by Haulmeter
@@ -121,6 +141,7 @@ Commit messages end with `Co-Authored-By: Claude Opus 5 (1M context) <noreply@an
 
 ```
 (this commit) docs: HANDOFF-075 + design-prd §23 (E-D5 impersonation/assisted, decision 7)
+51adaa9 E-D5 mode (a): assisted vendor edit from the console, and a registration form that works
 5242930 Admin Console 2.0c UI: impersonation banner, vendor detail, facility editor
 11cde42 Decision 7: console-native facility management with provenance-respecting writes
 d5f0402 E-D5: scoped vendor impersonation and attributed assisted edits
