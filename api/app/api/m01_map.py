@@ -190,3 +190,31 @@ def report(
         "submission_id": str(submission.id),
         "presence_proven": submission.presence_proven,
     }
+
+
+@router.get("/scales-ahead")
+def scales_ahead(
+    lat: float,
+    lon: float,
+    heading_deg: float = 0,
+    max_distance_m: float = 64000,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """E3.1: weigh stations on the heading, freshest crowd status first. Returns an
+    empty list while the layer flag is off — a driver never downloads a layer they
+    have not been given."""
+    return [
+        {
+            "facility_id": str(s["facility_id"]),
+            "name": s["name"],
+            "facility_type": s["facility_type"],
+            "distance_m": s["distance_m"],
+            # None means nobody has reported recently. "Unknown" is the honest state
+            # for a scale nobody has passed, and the client says so (§11.7).
+            "status": s["status"],
+            "reported_at": s["reported_at"].isoformat() if s["reported_at"] else None,
+            "sample_size": s["sample_size"],
+        }
+        for s in m1.scales_ahead(db, account.id, lat, lon, heading_deg, max_distance_m)
+    ]

@@ -8,8 +8,10 @@ behind the F13 flag `m01_map`. Consumed by later modules and the UI layer.
 from .domain.enums import NavProvider, Preset
 from .domain.service import (
     FLAG_KEY,
+    MAX_CORRIDOR_SCALES,
     MODULE,
     OVERLAY_PIN_CAP,
+    WEIGH_STATION_FLAG,
     ParkingPrediction,
     corridor_view,
     map_overlay,
@@ -21,10 +23,14 @@ from .domain.service import (
     queue_status_offline,
     record_map_open,
     register_module,
+    scales_ahead,
     submit_status,
 )
 
 __all__ = [
+    "scales_ahead",
+    "WEIGH_STATION_FLAG",
+    "MAX_CORRIDOR_SCALES",
     "NavProvider",
     "Preset",
     "FLAG_KEY",

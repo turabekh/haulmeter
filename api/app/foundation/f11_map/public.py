@@ -20,6 +20,7 @@ from .domain.service import (
     fuel_price_badge,
     overlay_pins,
     overlay_pins_bbox,
+    status_signal_for,
 )
 
 __all__ = [
@@ -34,5 +35,6 @@ __all__ = [
     "corridor",
     "fuel_price_badge",
     "overlay_pins",
+    "status_signal_for",
     "overlay_pins_bbox",
 ]

@@ -1,0 +1,35 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-89.5010, 43.1200] },
+      "properties": { "@id": "node/801", "amenity": "weighbridge", "name": "I-90 WEIGH STATION EB" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-89.5110, 43.1300] },
+      "properties": { "@id": "node/802", "amenity": "weigh_station", "name": "US-51 Scale" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-89.5210, 43.1400] },
+      "properties": {
+        "@id": "node/803",
+        "amenity": "weighbridge",
+        "operator": "CAT Scale",
+        "name": "CAT Scale at Pilot 442"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-89.5310, 43.1500] },
+      "properties": { "@id": "node/804", "amenity": "vehicle_inspection", "name": "State Safety Inspection" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-89.3999, 43.0700] },
+      "properties": { "@id": "node/805", "amenity": "weighbridge", "name": "Rest Area I-94 EB" }
+    }
+  ]
+}

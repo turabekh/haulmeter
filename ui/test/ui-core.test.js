@@ -33,7 +33,11 @@ describe("driver state machine (design-prd §5, SM-4)", () => {
 
 describe("presentation (design-prd §11)", () => {
   it("maps parking status to token + label (color never alone)", () => {
-    expect(statusPresentation("empty")).toEqual({ token: "--ledger-500", label: "Empty" });
+    expect(statusPresentation("empty")).toEqual({
+      token: "--ledger-500",
+      label: "Empty",
+      labelKey: "map.status.empty",
+    });
     expect(statusPresentation("full").token).toBe("--flare-500");
     expect(statusPresentation(null).label).toBe("Unknown");
   });

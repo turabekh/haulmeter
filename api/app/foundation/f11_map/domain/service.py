@@ -116,8 +116,24 @@ def fuel_price_badge(db: Session, facility) -> Badge | None:
 DEFAULT_BADGE_PROVIDERS = [fuel_price_badge]
 
 
+# AI-CONTEXT: which crowd signal a pin's status comes from depends on what the
+# facility IS. A truck stop's status is how full it is; a weigh station's is whether
+# it is open. Reading parking fullness off a scale would render a status that means
+# nothing about it — the signal has to follow the kind.
+_STATUS_SIGNAL = {
+    "weigh_station": crowd.SignalType.weigh_station_status,
+    "scale": crowd.SignalType.weigh_station_status,
+}
+_DEFAULT_STATUS_SIGNAL = crowd.SignalType.parking_fullness
+
+
+def status_signal_for(facility_type: str):
+    return _STATUS_SIGNAL.get(facility_type, _DEFAULT_STATUS_SIGNAL)
+
+
 def _parking_status(db: Session, facility):
-    belief = crowd.get_belief(db, facility.id, crowd.SignalType.parking_fullness)
+    signal = status_signal_for(facility.facility_type.value)
+    belief = crowd.get_belief(db, facility.id, signal)
     if belief is None:
         return None, None, None
     value = belief.value or {}

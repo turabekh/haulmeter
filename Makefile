@@ -93,6 +93,7 @@ osm-extract:
 	  apt-get update -qq && apt-get install -y -qq --no-install-recommends osmium-tool >/dev/null && \
 	  osmium tags-filter /data/$(STATE).osm.pbf \
 	    nwr/highway=rest_area,services nwr/amenity=truck_stop nwr/hgv nwr/access=hgv \
+	    nwr/amenity=weighbridge,weigh_station \
 	    -o /data/$(STATE)-filtered.osm.pbf --overwrite && \
 	  osmium export /data/$(STATE)-filtered.osm.pbf -o /data/$(STATE).geojson --overwrite'
 	@echo "wrote api/data/osm/$(STATE).geojson"

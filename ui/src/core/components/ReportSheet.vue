@@ -1,22 +1,32 @@
-<!-- AI-CONTEXT: One-tap parking-status contribution (M1-FR7, design-prd §10.1
+<!-- AI-CONTEXT: One-tap crowd-status contribution (M1-FR7, design-prd §10.1
      report chip). Big glove-friendly targets (§6.5), one decision per step (S2
      dock task). Geofence-presence proof + points are enforced server-side (F10);
-     this is the capture UI. Emits the chosen status. -->
-<script setup>
-import { useI18n } from "../i18n.js";
+     this is the capture UI. Emits the chosen status.
 
+     The vocabulary is a PROP, not a constant: E3.1 asks a weigh station whether it
+     is open, and asking it how full its parking is would collect a reading that
+     means nothing about it. Callers get their option set from
+     `presentation.statusReportFor(facilityType)` so the question, the buttons and
+     the signal posted to F10 can never drift apart. -->
+<script setup>
+import { computed } from "vue";
+import { useI18n } from "../i18n.js";
+import { statusReportFor } from "../presentation.js";
+
+const props = defineProps({
+  facilityType: { type: String, default: null },
+});
 const emit = defineEmits(["report"]);
 const { t } = useI18n();
-const options = [
-  { status: "empty", token: "--ledger-500" },
-  { status: "some", token: "--marker-500" },
-  { status: "full", token: "--flare-500" },
-];
+// computed, not read once: the sheet outlives a single target, so a driver who
+// reports a scale and then a truck stop must not be shown the scale's question
+const spec = computed(() => statusReportFor(props.facilityType));
+const options = computed(() => spec.value.options);
 </script>
 
 <template>
   <div class="report">
-    <p class="report__q">{{ t("map.report.question") }}</p>
+    <p class="report__q">{{ t(spec.questionKey) }}</p>
     <button
       v-for="o in options"
       :key="o.status"

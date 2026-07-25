@@ -264,6 +264,10 @@ SERVICE_REPAIR = "truck_repair"
 SERVICE_MOBILE_REPAIR = "mobile_repair"
 SERVICE_TOWING = "towing"
 SERVICE_PARTS = "parts"
+# E3.1: a truck scale. Carried as a SERVICE as well as a kind so that a weighbridge
+# mapped inside an existing truck stop enriches that facility (E3.2's union rule)
+# instead of planting a second pin on top of it.
+SERVICE_SCALE = "scale"
 
 _OSM_SERVICE_RULES = [
     (lambda t: t.get("shop") == "tyres" or t.get("service:vehicle:tyres") == "yes", SERVICE_TIRE),
@@ -283,6 +287,10 @@ _OSM_SERVICE_RULES = [
         lambda t: t.get("shop") == "truck_parts" or t.get("service:vehicle:parts") == "yes",
         SERVICE_PARTS,
     ),
+    # E3.1: a weighbridge is also a SERVICE, which is what lets one mapped inside an
+    # existing truck stop enrich that facility (E3.2's union rule) instead of
+    # planting a second pin on top of it.
+    (lambda t: _osm_is_weighbridge(t), SERVICE_SCALE),
 ]
 # SERVICE_TOWING has no dependable OSM tag — it arrives from an admin edit or a
 # claiming service-center vendor (M13-FR7), never from the extract.
@@ -293,6 +301,31 @@ def osm_services(tags: dict) -> list[str]:
     return [name for rule, name in _OSM_SERVICE_RULES if rule(tags)]
 
 
+# AI-CONTEXT: E3.1 weigh-station tags, taken from real OSM usage (taginfo, Jul 2026)
+# rather than from the documentation's aspirations:
+#   amenity=weighbridge    12,178 uses  -> the tag that actually carries these
+#   amenity=weigh_station      38 uses  -> marginal but real, cheap to accept
+#   highway=weigh_station       0 uses  -> DOES NOT EXIST; a rule for it would be dead code
+#   amenity=vehicle_inspection 13,344   -> deliberately NOT mapped: MOT/state safety
+#                                          inspection, nothing to do with weighing
+_OSM_WEIGHBRIDGE_VALUES = ("weighbridge", "weigh_station")
+# commercial scale brands. In the US the CAT Scale network dominates truck-stop
+# weighing; a branded scale is a service a driver PAYS for, not an enforcement stop
+# they are compelled into, and the two mean opposite things on a map.
+_COMMERCIAL_SCALE_OPERATORS = ("cat scale", "certified scale", "truckers choice")
+
+
+def _osm_is_weighbridge(tags: dict) -> bool:
+    return tags.get("amenity") in _OSM_WEIGHBRIDGE_VALUES
+
+
+def _osm_is_commercial_scale(tags: dict) -> bool:
+    operator = " ".join(
+        str(tags.get(key, "")) for key in ("operator", "brand", "name")
+    ).lower()
+    return any(brand in operator for brand in _COMMERCIAL_SCALE_OPERATORS)
+
+
 _OSM_TYPE_RULES = [
     (lambda t: t.get("highway") in ("rest_area", "services"), FacilityType.rest_area),
     (lambda t: t.get("amenity") == "truck_stop", FacilityType.truck_stop),
@@ -301,6 +334,13 @@ _OSM_TYPE_RULES = [
     # a service POI only counts as a truck facility when it admits heavy goods
     # vehicles — otherwise every neighbourhood car wash lands in the registry.
     (lambda t: bool(osm_services(t)) and _osm_hgv(t), FacilityType.repair),
+    # E3.1: a weighbridge. Commercial (CAT-scale style) and public enforcement
+    # scales are different facts to a driver — one is a service, the other is a
+    # stop you cannot skip — so they get different kinds. NOT hgv-gated: an
+    # enforcement scale exists precisely FOR heavy vehicles whether or not the
+    # mapper tagged access, and gating it would drop most of them.
+    (lambda t: _osm_is_weighbridge(t) and _osm_is_commercial_scale(t), FacilityType.scale),
+    (lambda t: _osm_is_weighbridge(t), FacilityType.weigh_station),
 ]
 
 

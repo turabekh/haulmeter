@@ -22,6 +22,7 @@ import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { SAMPLE_PINS, SAMPLE_CORRIDOR, sampleHandoffs } from "../core/fixtures.js";
 import { withFoodBadges, foodBadgeFacilityIds } from "../core/vendors.js";
+import { statusReportFor } from "../core/presentation.js";
 import {
   fetchOverlay,
   fetchNearbyHandoffs,
@@ -36,6 +37,7 @@ import {
   muteVendor,
   suggestACook,
   fetchCorridorVendors,
+  fetchScalesAhead,
   fetchFacilityPromotions,
   reviewVendor,
   reportVendor,
@@ -47,7 +49,10 @@ const router = useRouter();
 
 const preset = ref("drive");
 const PRESET_TYPES = {
-  drive: ["truck_stop", "rest_area", "fuel_station"],
+  // E3.1: scales ride the Drive preset, which is the preset for moving forward —
+  // exactly when a weigh station is a decision. They are absent from Tonight and
+  // Work, where they would be noise (§11.1 keeps the map quiet).
+  drive: ["truck_stop", "rest_area", "fuel_station", "weigh_station", "scale"],
   tonight: ["truck_stop", "rest_area", "parking_property"],
   work: ["shipper_receiver"],
   fuel: ["fuel_station"],
@@ -167,8 +172,21 @@ async function loadCorridorFood() {
     corridorFood.value = [];
   }
 }
+// E3.1: scales ahead, server-capped at two. Empty while the layer flag is off.
+const corridorScales = ref([]);
+async function loadScalesAhead() {
+  try {
+    const ahead = await fetchScalesAhead({ lat: geo.value.lat, lon: geo.value.lon });
+    corridorScales.value = Array.isArray(ahead) ? ahead : [];
+  } catch {
+    corridorScales.value = [];
+  }
+}
 watch(isDriving, (driving) => {
-  if (driving) loadCorridorFood();
+  if (driving) {
+    loadCorridorFood();
+    loadScalesAhead();
+  }
 });
 
 async function loadFacilityVendors(facilityId) {
@@ -334,14 +352,17 @@ function fuel(pin) {
   });
 }
 async function submitReport(status) {
-  // M1-FR7: post the parking status (server enforces geofence-presence proof +
-  // points, F10/M1), then refresh the overlay so the pin's color updates live.
+  // M1-FR7: post the status (server enforces geofence-presence proof + points,
+  // F10/M1), then refresh the overlay so the pin's color updates live. The SIGNAL
+  // follows the facility kind, from the same helper that chose the question — a
+  // scale's answer must not be filed as a parking reading.
   const target = reportTarget.value;
   reporting.value = false;
   if (!target) return;
   try {
-    await postReport(target.facility_id, "parking_fullness", { status });
+    await postReport(target.facility_id, statusReportFor(target.facility_type).signal, { status });
     await loadOverlay();
+    if (isDriving.value) await loadScalesAhead();
   } catch {
     /* offline -> the report is queued (F12) and syncs on reconnect */
   }
@@ -373,7 +394,7 @@ async function submitPrice(cents) {
 <template>
   <div class="map">
     <template v-if="isDriving">
-      <CorridorStack :entries="SAMPLE_CORRIDOR" :vendors="corridorFood" />
+      <CorridorStack :entries="SAMPLE_CORRIDOR" :vendors="corridorFood" :scales="corridorScales" />
     </template>
     <template v-else>
       <PresetChips v-model="preset" />
@@ -462,7 +483,7 @@ async function submitPrice(cents) {
     </BottomSheet>
 
     <BottomSheet :open="reporting" :title="t('map.report')" @close="reporting = false">
-      <ReportSheet @report="submitReport" />
+      <ReportSheet :facility-type="reportTarget?.facility_type" @report="submitReport" />
     </BottomSheet>
 
     <BottomSheet :open="pricingReport" :title="t('fuel.report.title')" @close="pricingReport = false">

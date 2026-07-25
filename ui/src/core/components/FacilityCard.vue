@@ -15,7 +15,7 @@ import { computed } from "vue";
 import { Navigation, SquareParking, Fuel, UtensilsCrossed } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import StatusPill from "./StatusPill.vue";
-import { freshnessLabel, isStale } from "../presentation.js";
+import { freshnessLabel, isStale, SCALE_TYPES } from "../presentation.js";
 import { formatMoney } from "../meter.js";
 import { useI18n } from "../i18n.js";
 import {
@@ -109,10 +109,16 @@ const fuelEstimateOnly = computed(() => isFuel.value && fuelNet.value?.source ==
 const freeLot = computed(() =>
   ["truck_stop", "rest_area"].includes(props.pin.facility_type),
 );
-// parking full/empty reporting only makes sense where there IS parking — never
-// on a fuel station or a receiver dock (their crowd signal is price / dock-time)
+// status reporting only makes sense where the facility HAS a status a passing driver
+// can see — never on a fuel station or a receiver dock (their crowd signal is price /
+// dock-time). E3.1 adds scales, which are asked whether they are open rather than how
+// full they are; ReportSheet derives that from the type, so the affordance is shared.
 const reportable = computed(() =>
-  ["truck_stop", "rest_area", "parking_property"].includes(props.pin.facility_type),
+  ["truck_stop", "rest_area", "parking_property"].includes(props.pin.facility_type) ||
+  SCALE_TYPES.has(props.pin.facility_type),
+);
+const unknownScale = computed(
+  () => SCALE_TYPES.has(props.pin.facility_type) && !props.pin.status,
 );
 
 // Q-6: at most two here; the rest stay reachable behind "all vendors" in the sheet.
@@ -136,6 +142,10 @@ function vendorLine(entry) {
       <StatusPill v-if="pin.status" :status="pin.status" :hollow="stale" />
       <span v-if="availability" class="fac__avail">{{ availability }}</span>
       <span v-if="fresh" class="fac__fresh">{{ fresh }}</span>
+      <!-- §11.7: for a scale, "nobody has said" is a fact worth stating. Silence on a
+           card whose whole purpose is open-or-closed reads as "closed" to a tired
+           driver, which is exactly the reading that would send them past a live one. -->
+      <span v-else-if="unknownScale" class="fac__fresh">{{ t("facility.no_report") }}</span>
     </div>
 
     <!-- M7: NET price leads for a fuel-network station; savings called out (§12.2).

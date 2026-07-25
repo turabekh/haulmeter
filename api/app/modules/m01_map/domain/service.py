@@ -24,13 +24,24 @@ from .enums import NavProvider, Preset
 
 FLAG_KEY = "m01_map"
 MODULE = "m01"
+# AI-CONTEXT: E3.1 — the weigh-station layer activates separately from the map
+# itself. No NEW ingest source ships (no verified authoritative enforcement dataset
+# exists; see HANDOFF-076), so the OSM pull is governed by the existing
+# f02_ingest_osm flag and this gates only what a DRIVER sees.
+WEIGH_STATION_FLAG = "m01_weigh_stations"
+# scales are sparse; a corridor stack is for the next few decisions, not a listing
+MAX_CORRIDOR_SCALES = 2
 
 # design-prd §11.3: presets ARE the interface. Each maps to the layers it shows.
 PRESET_TYPES: dict[Preset, list] = {
+    # Drive is the preset for moving forward, which is exactly when a scale matters,
+    # so weigh stations live here rather than behind a new chip (§22: compose).
     Preset.drive: [
         facility.FacilityType.truck_stop,
         facility.FacilityType.rest_area,
         facility.FacilityType.fuel_station,
+        facility.FacilityType.weigh_station,
+        facility.FacilityType.scale,
     ],
     Preset.tonight: [
         facility.FacilityType.truck_stop,
@@ -54,7 +65,24 @@ class ParkingPrediction:
 
 def register_module(db: Session) -> None:
     flags.register_flag(db, FLAG_KEY, description="M1 Road Intelligence Map")
+    flags.register_flag(
+        db, WEIGH_STATION_FLAG, description="M1 Weigh-station layer (E3.1, OSM-sourced)"
+    )
     admin.register_admin_view(db, "m01.map", MODULE, "Road Intelligence Map", "/admin/m01/map")
+
+
+def _preset_types(db: Session, preset: Preset) -> list:
+    """The weigh-station layer is flag-gated, so an un-activated layer contributes no
+    pins rather than being filtered out client-side — a driver never downloads a
+    layer they cannot see."""
+    types = list(PRESET_TYPES[preset])
+    if not flags.is_enabled(db, WEIGH_STATION_FLAG):
+        types = [
+            t
+            for t in types
+            if t not in (facility.FacilityType.weigh_station, facility.FacilityType.scale)
+        ]
+    return types
 
 
 def map_overlay(
@@ -67,7 +95,7 @@ def map_overlay(
     required_amenities: list[str] | None = None,
 ):
     pins = mapsvc.overlay_pins(
-        db, center_lat, center_lon, radius_m, facility_types=PRESET_TYPES[preset]
+        db, center_lat, center_lon, radius_m, facility_types=_preset_types(db, preset)
     )
     if required_amenities:
         pins = [p for p in pins if _has_amenities(db, p, required_amenities)]
@@ -128,7 +156,7 @@ def map_overlay_bbox(
     required_amenities: list[str] | None = None,
 ):
     pins = mapsvc.overlay_pins_bbox(
-        db, min_lat, min_lon, max_lat, max_lon, facility_types=PRESET_TYPES[preset]
+        db, min_lat, min_lon, max_lat, max_lon, facility_types=_preset_types(db, preset)
     )
     if required_amenities:
         pins = [p for p in pins if _has_amenities(db, p, required_amenities)]
@@ -182,8 +210,51 @@ def corridor_view(
         origin_lon,
         heading_deg,
         max_distance_m,
-        facility_types=PRESET_TYPES[preset],
+        facility_types=_preset_types(db, preset),
     )
+
+
+def scales_ahead(
+    db: Session,
+    account_id,
+    origin_lat: float,
+    origin_lon: float,
+    heading_deg: float,
+    max_distance_m: float = 64000,
+    limit: int = MAX_CORRIDOR_SCALES,
+) -> list[dict]:
+    """E3.1: "scale ahead", with the freshest crowd status. Returns nothing at all
+    while the layer is off — an un-activated layer is silent, not empty-shaped."""
+    if not flags.is_enabled(db, WEIGH_STATION_FLAG):
+        return []
+    entries = mapsvc.corridor(
+        db,
+        origin_lat,
+        origin_lon,
+        heading_deg,
+        max_distance_m,
+        facility_types=[facility.FacilityType.weigh_station, facility.FacilityType.scale],
+    )
+    out = []
+    for entry in entries[:limit]:
+        belief = crowd.get_belief(
+            db, entry.facility_id, crowd.SignalType.weigh_station_status
+        )
+        value = (belief.value or {}) if belief is not None else {}
+        out.append(
+            {
+                "facility_id": entry.facility_id,
+                "name": entry.name,
+                "facility_type": entry.facility_type,
+                "distance_m": entry.distance_m,
+                # None when nobody has reported: "unknown" is the honest state for a
+                # scale nobody has passed recently, and the UI says so (§11.7)
+                "status": value.get("status"),
+                "reported_at": belief.freshest_at if belief is not None else None,
+                "sample_size": belief.sample_size if belief is not None else 0,
+            }
+        )
+    return out
 
 
 def predict_parking_fill(db: Session, facility_id, hour_of_day: int) -> ParkingPrediction:

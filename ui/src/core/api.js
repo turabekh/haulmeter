@@ -850,6 +850,17 @@ export async function fetchCorridorVendors({ lat, lon, headingDeg = 0 } = {}) {
   return resp.json();
 }
 
+// E3.1: weigh stations on the current heading. The server returns an empty list while
+// the layer flag is off, so there is no client-side gate to keep in sync — a driver
+// simply never receives a layer they have not been given.
+export async function fetchScalesAhead({ lat, lon, headingDeg = 0 } = {}) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const q = new URLSearchParams({ lat, lon, heading_deg: headingDeg });
+  const resp = await fetch(`${API_BASE}/map/scales-ahead?${q}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`scales ahead failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function confirmVendor(vendorId, facilityId, { present = true, soldOut = false } = {}) {
   // F12: a confirmation made in a dead zone queues and applies exactly once on
   // reconnect, like every other crowd contribution

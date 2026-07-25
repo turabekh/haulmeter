@@ -4,12 +4,18 @@
 <script setup>
 import { computed } from "vue";
 import { statusPresentation } from "../presentation.js";
+import { useI18n } from "../i18n.js";
 
 const props = defineProps({
   status: { type: String, default: null },
   hollow: { type: Boolean, default: false },
 });
+const { t } = useI18n();
 const p = computed(() => statusPresentation(props.status));
+// the label is what makes the color legible to a colorblind driver (C-1), so it has
+// to survive translation — a pill that reads "Closed" to a Punjabi speaker is a pill
+// that only carries color. `label` stays as the fallback for a missing key.
+const label = computed(() => (p.value.labelKey ? t(p.value.labelKey) : p.value.label));
 </script>
 
 <template>
@@ -18,7 +24,7 @@ const p = computed(() => statusPresentation(props.status));
     :class="{ 'pill--hollow': hollow }"
     :style="{ '--pill-color': `var(${p.token})` }"
   >
-    {{ p.label }}
+    {{ label }}
   </span>
 </template>
 
