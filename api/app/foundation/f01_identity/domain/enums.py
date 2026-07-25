@@ -13,6 +13,7 @@ class Role(enum.Enum):
     fleet_admin = "fleet_admin"
     property_owner = "property_owner"
     platform_admin = "platform_admin"
+    vendor = "vendor"
 
 
 class OrgType(enum.Enum):

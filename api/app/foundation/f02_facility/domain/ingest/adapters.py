@@ -160,9 +160,7 @@ def parse_tpims_static(records: list[dict]) -> list[StagedRecord]:
         if lat is None or lon is None:
             continue
         name = normalize_name(r.get("name") or "") or f"Truck parking {r.get('siteId')}"
-        ftype = (
-            FacilityType.truck_stop if r.get("ownership") == "PR" else FacilityType.rest_area
-        )
+        ftype = FacilityType.truck_stop if r.get("ownership") == "PR" else FacilityType.rest_area
         out.append(
             StagedRecord(
                 source_kind=SourceKind.tpims,
@@ -254,11 +252,55 @@ def _osm_hgv(tags: dict) -> bool:
     )
 
 
+# AI-CONTEXT: E3.2 service-center granularity (PRD extension §E3, owner decision
+# Q12 = ATTRIBUTES, not new kinds). A wash / tire bay / repair yard is the `repair`
+# kind carrying a `services` list, because real sites are composite (a truck stop
+# WITH a tire bay keeps both facts) and design-prd §11.1 says extra signals render
+# as badges on existing pins, never as more pins. M13-FR7 reads the same list, so
+# the service list has exactly one source of truth.
+SERVICE_TIRE = "tire"
+SERVICE_WASH = "wash"
+SERVICE_REPAIR = "truck_repair"
+SERVICE_MOBILE_REPAIR = "mobile_repair"
+SERVICE_TOWING = "towing"
+SERVICE_PARTS = "parts"
+
+_OSM_SERVICE_RULES = [
+    (lambda t: t.get("shop") == "tyres" or t.get("service:vehicle:tyres") == "yes", SERVICE_TIRE),
+    (
+        lambda t: t.get("amenity") == "car_wash" or t.get("service:vehicle:car_wash") == "yes",
+        SERVICE_WASH,
+    ),
+    (
+        lambda t: (
+            t.get("shop") in ("truck_repair", "car_repair")
+            or t.get("service:vehicle:truck_repair") == "yes"
+        ),
+        SERVICE_REPAIR,
+    ),
+    (lambda t: t.get("service:vehicle:mobile_repair") == "yes", SERVICE_MOBILE_REPAIR),
+    (
+        lambda t: t.get("shop") == "truck_parts" or t.get("service:vehicle:parts") == "yes",
+        SERVICE_PARTS,
+    ),
+]
+# SERVICE_TOWING has no dependable OSM tag — it arrives from an admin edit or a
+# claiming service-center vendor (M13-FR7), never from the extract.
+
+
+def osm_services(tags: dict) -> list[str]:
+    # every matching service, not the first — a yard that washes AND does tires is both
+    return [name for rule, name in _OSM_SERVICE_RULES if rule(tags)]
+
+
 _OSM_TYPE_RULES = [
     (lambda t: t.get("highway") in ("rest_area", "services"), FacilityType.rest_area),
     (lambda t: t.get("amenity") == "truck_stop", FacilityType.truck_stop),
     (lambda t: t.get("amenity") == "fuel" and _osm_hgv(t), FacilityType.fuel_station),
     (lambda t: t.get("amenity") == "parking" and _osm_hgv(t), FacilityType.parking_property),
+    # a service POI only counts as a truck facility when it admits heavy goods
+    # vehicles — otherwise every neighbourhood car wash lands in the registry.
+    (lambda t: bool(osm_services(t)) and _osm_hgv(t), FacilityType.repair),
 ]
 
 
@@ -302,6 +344,12 @@ def parse_osm(geojson: dict) -> list[StagedRecord]:
             amenities.append("showers")
         if tags.get("hgv") in ("yes", "designated") or tags.get("access") == "hgv":
             amenities.append("truck_parking")
+        attributes = {"amenities": amenities, "osm_tags": tags}
+        # E3.2: services ride alongside the kind, so a truck stop with a tire bay
+        # keeps BOTH facts (the kind stays truck_stop; the service list gains "tire").
+        services = osm_services(tags)
+        if services:
+            attributes["services"] = services
         out.append(
             StagedRecord(
                 source_kind=SourceKind.osm,
@@ -310,7 +358,7 @@ def parse_osm(geojson: dict) -> list[StagedRecord]:
                 lat=float(lat),
                 lon=float(lon),
                 facility_type=ftype,
-                attributes={"amenities": amenities, "osm_tags": tags},
+                attributes=attributes,
                 raw_payload=tags,
             )
         )

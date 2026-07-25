@@ -28,6 +28,7 @@ def _profile_out(profile: identity.DriverProfile | None) -> dict:
             "legal_name": None,
             "verify_status": identity.VerifyStatus.unverified.value,
             "verified": False,
+            **_equipment_out(None),
         }
     return {
         "authority": profile.authority_type.value if profile.authority_type else None,
@@ -36,6 +37,20 @@ def _profile_out(profile: identity.DriverProfile | None) -> dict:
         "legal_name": profile.legal_name,
         "verify_status": profile.authority_verify_status.value,
         "verified": profile.authority_verify_status == identity.VerifyStatus.verified,
+        **_equipment_out(profile),
+    }
+
+
+def _equipment_out(profile: identity.DriverProfile | None) -> dict:
+    # E2: self-reported equipment. Always present in the payload (nulls when unset)
+    # so the client renders one stable section rather than a shifting shape.
+    if profile is None:
+        return {"plate_state": None, "plate_number": None, "unit_number": None, "vin": None}
+    return {
+        "plate_state": profile.plate_state,
+        "plate_number": profile.plate_number,
+        "unit_number": profile.unit_number,
+        "vin": profile.vin,
     }
 
 
@@ -95,6 +110,38 @@ def me(
         "verification_enabled": flags.is_enabled(db, identity.AUTHORITY_VERIFICATION_FLAG),
         **_profile_out(profile),
     }
+
+
+class EquipmentIn(BaseModel):
+    # E2: every field optional — a driver fills what they have. Blank clears.
+    plate_state: str | None = None
+    plate_number: str | None = None
+    unit_number: str | None = None
+    vin: str | None = None
+
+
+@router.patch("/equipment")
+def update_equipment(
+    body: EquipmentIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    # AI-CONTEXT: E2 self-reported equipment. The VIN is format-checked (ISO-3779)
+    # so a typo is caught at entry, but nothing is decoded and no claim of
+    # verification is made anywhere in the payload or the UI (§11.7).
+    try:
+        vin = identity.validate_vin(body.vin)
+    except identity.InvalidVin as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    profile = identity.upsert_driver_profile(
+        db,
+        account,
+        plate_state=(body.plate_state or "").strip().upper()[:2] or None,
+        plate_number=(body.plate_number or "").strip().upper() or None,
+        unit_number=(body.unit_number or "").strip() or None,
+        vin=vin,
+    )
+    return _equipment_out(profile)
 
 
 @router.post("/verify-authority")

@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, time
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     Enum,
@@ -40,6 +41,32 @@ class NotificationPrefs(Base):
     timezone: Mapped[str] = mapped_column(String(60), default="UTC")
     quiet_start: Mapped[time] = mapped_column(Time, default=time(22, 0))
     quiet_end: Mapped[time] = mapped_column(Time, default=time(6, 0))
+
+
+class NotificationClassPref(Base):
+    """AI-CONTEXT: per-account opt-in for an OPT-IN notification class (design-prd
+    §23 E-D1). Absence of a row means NOT opted in — the class defaults OFF and a
+    driver's silence is never read as consent. `muted_subjects` holds the one-tap
+    per-subject mutes (e.g. a specific vendor) that the class's anti-spam laws
+    require. The class definitions themselves live in code (service.py), like the
+    tier table; only the per-driver choice is data."""
+
+    __tablename__ = "notification_class_pref"
+    __table_args__ = (
+        UniqueConstraint("account_id", "class_key", name="uq_class_pref_account_class"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="CASCADE"), index=True
+    )
+    class_key: Mapped[str] = mapped_column(String(60), index=True)
+    opted_in: Mapped[bool] = mapped_column(Boolean, default=False)
+    muted_subjects: Mapped[list] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Notification(Base):

@@ -158,6 +158,13 @@ class DriverProfile(Base):
     gross_weight_lbs: Mapped[int | None] = mapped_column(nullable=True)
     trailer_type: Mapped[str | None] = mapped_column(String(60), nullable=True)
     equipment_type: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # AI-CONTEXT: E2 equipment registration — SELF-REPORTED, never verified (§11.7).
+    # Plate + unit ride on M6 bookings and M13-FR7 service callouts; VIN is
+    # format-validated only (no decode service, PRD extension §E2).
+    plate_state: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    plate_number: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    unit_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    vin: Mapped[str | None] = mapped_column(String(17), nullable=True)
     home_timezone: Mapped[str] = mapped_column(String(60), default="UTC")
     locale: Mapped[str] = mapped_column(String(12), default="en")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

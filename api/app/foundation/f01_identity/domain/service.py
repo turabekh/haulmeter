@@ -32,6 +32,53 @@ class AuthMethodNotEnabled(Exception):
     pass
 
 
+class InvalidVin(Exception):
+    pass
+
+
+# AI-CONTEXT: E2 — VIN is FORMAT-validated only (ISO-3779: 17 chars, no I/O/Q, the
+# position-9 check digit). No decode service is called and no vehicle fact is
+# inferred, so the profile never implies a verification that didn't happen (§11.7).
+_VIN_LENGTH = 17
+_VIN_FORBIDDEN = set("IOQ")
+_VIN_TRANSLITERATION = {
+    **{str(d): d for d in range(10)},
+    "A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7, "H": 8,
+    "J": 1, "K": 2, "L": 3, "M": 4, "N": 5, "P": 7, "R": 9,
+    "S": 2, "T": 3, "U": 4, "V": 5, "W": 6, "X": 7, "Y": 8, "Z": 9,
+}  # fmt: skip
+_VIN_WEIGHTS = (8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2)
+
+
+def normalize_vin(vin: str | None) -> str | None:
+    if vin is None:
+        return None
+    cleaned = vin.strip().upper().replace("-", "").replace(" ", "")
+    return cleaned or None
+
+
+def validate_vin(vin: str | None) -> str | None:
+    """Returns the normalized VIN, or None when unset. Raises InvalidVin on a bad one."""
+    cleaned = normalize_vin(vin)
+    if cleaned is None:
+        return None
+    if len(cleaned) != _VIN_LENGTH:
+        raise InvalidVin("a VIN is 17 characters")
+    if any(ch not in _VIN_TRANSLITERATION for ch in cleaned):
+        bad = sorted({ch for ch in cleaned if ch not in _VIN_TRANSLITERATION})
+        reason = (
+            "I, O and Q are never used in a VIN"
+            if _VIN_FORBIDDEN & set(bad)
+            else "invalid characters"
+        )
+        raise InvalidVin(reason)
+    total = sum(_VIN_TRANSLITERATION[ch] * w for ch, w in zip(cleaned, _VIN_WEIGHTS, strict=True))
+    expected = "X" if total % 11 == 10 else str(total % 11)
+    if cleaned[8] != expected:
+        raise InvalidVin("check digit does not match")
+    return cleaned
+
+
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
 

@@ -27,6 +27,9 @@ AMENITY_PRIORITY = {
     SourceKind.osm: 1,
     SourceKind.user_checkin: 0,
 }
+# list-valued attributes merged by UNION across sources rather than overwritten
+# by the highest-priority one (E3.2 — see _recompute_canonical)
+UNION_KEYS = frozenset({"services"})
 # capacity/spot counts: NTAD is authoritative (PRD §12)
 CAPACITY_PRIORITY = {
     SourceKind.ntad: 3,
@@ -62,7 +65,16 @@ def _recompute_canonical(db: Session, facility: Facility) -> None:
     merged: dict = {}
     for src in sorted(sources, key=lambda s: AMENITY_PRIORITY.get(s.source_kind, 0)):
         for key, value in (src.attributes or {}).items():
-            if value is not None and value != []:
+            if value is None or value == []:
+                continue
+            if key in UNION_KEYS:
+                # E3.2: a service list is ADDITIVE across sources, not overwritten —
+                # an OSM extract knowing "tire" and an admin edit knowing "towing"
+                # both describe the same yard, so the higher-priority source must not
+                # erase the other's knowledge. A deliberate exception to
+                # overwrite-by-priority, in the same spirit as the capacity rule below.
+                merged[key] = sorted({*merged.get(key, []), *value})
+            else:
                 merged[key] = value
     cap_source = max(
         (s for s in sources if (s.attributes or {}).get("capacity") is not None),
@@ -168,6 +180,7 @@ def ingest_records(
 __all__ = [
     "AMENITY_PRIORITY",
     "CAPACITY_PRIORITY",
+    "UNION_KEYS",
     "IngestStats",
     "ingest_records",
     "stage_record",

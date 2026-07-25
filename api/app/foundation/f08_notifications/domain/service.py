@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -16,6 +17,7 @@ from .enums import (
 from .gateway import NotificationGateway
 from .models import (
     Notification,
+    NotificationClassPref,
     NotificationPrefs,
     NotificationTemplate,
     OutboundMessage,
@@ -26,7 +28,46 @@ MAX_UNPROMPTED_P1_PER_DAY = 2
 BUDGET_WINDOW = timedelta(hours=24)
 
 
+# AI-CONTEXT: OPT-IN notification classes (design-prd §23 E-D1). A class is a named
+# bundle of interruption laws stricter than the tier alone: it is off until the
+# driver turns it on, it carries its own daily cap on top of the §13.1 budget, it
+# can require route/favorite relevance, and it can be muted per subject. Classes are
+# code-defined (like the tier table) so the laws are reviewable in one place; only
+# the per-driver choice is data (NotificationClassPref).
+@dataclass(frozen=True)
+class NotificationClassSpec:
+    key: str
+    tier: NotificationTier
+    max_per_day: int
+    opt_in_default: bool = False
+    route_relevant_only: bool = True
+
+
+VENDOR_ALERT_CLASS = "vendor_alert"
+
+NOTIFICATION_CLASSES: dict[str, NotificationClassSpec] = {
+    # M13-FR6 anti-spam laws are PART of the class definition: opt-in only, at most
+    # one vendor push per driver per day, route/favorite-relevant facilities only,
+    # quiet hours respected (inherited from P1), one-tap mute per vendor.
+    VENDOR_ALERT_CLASS: NotificationClassSpec(
+        key=VENDOR_ALERT_CLASS,
+        tier=NotificationTier.P1,
+        max_per_day=1,
+        opt_in_default=False,
+        route_relevant_only=True,
+    ),
+}
+
+
+def get_class(key: str) -> NotificationClassSpec | None:
+    return NOTIFICATION_CLASSES.get(key)
+
+
 class MissingDeepLink(Exception):
+    pass
+
+
+class NotRouteRelevant(Exception):
     pass
 
 
@@ -65,6 +106,71 @@ def p1_budget_used(db: Session, account_id, now: datetime) -> int:
     )
 
 
+# --- Opt-in class preferences (E-D1) ---
+def get_class_pref(db: Session, account_id, class_key: str) -> NotificationClassPref | None:
+    return db.scalar(
+        select(NotificationClassPref).where(
+            NotificationClassPref.account_id == account_id,
+            NotificationClassPref.class_key == class_key,
+        )
+    )
+
+
+def set_class_opt_in(
+    db: Session, account_id, class_key: str, opted_in: bool
+) -> NotificationClassPref:
+    pref = get_class_pref(db, account_id, class_key)
+    if pref is None:
+        pref = NotificationClassPref(account_id=account_id, class_key=class_key)
+        db.add(pref)
+    pref.opted_in = opted_in
+    db.flush()
+    return pref
+
+
+def is_opted_in(db: Session, account_id, class_key: str) -> bool:
+    spec = get_class(class_key)
+    if spec is None:
+        return True  # not a governed class — ordinary tier rules apply
+    pref = get_class_pref(db, account_id, class_key)
+    if pref is None:
+        return spec.opt_in_default  # no row = never asked = OFF for an opt-in class
+    return pref.opted_in
+
+
+def mute_subject(
+    db: Session, account_id, class_key: str, subject_ref: str
+) -> NotificationClassPref:
+    # one-tap mute for a single vendor without leaving the whole class
+    pref = get_class_pref(db, account_id, class_key)
+    if pref is None:
+        pref = NotificationClassPref(account_id=account_id, class_key=class_key)
+        db.add(pref)
+    pref.muted_subjects = sorted({*(pref.muted_subjects or []), str(subject_ref)})
+    db.flush()
+    return pref
+
+
+def is_subject_muted(db: Session, account_id, class_key: str, subject_ref: str | None) -> bool:
+    if subject_ref is None:
+        return False
+    pref = get_class_pref(db, account_id, class_key)
+    return bool(pref and str(subject_ref) in (pref.muted_subjects or []))
+
+
+def class_sends_today(db: Session, account_id, class_key: str, now: datetime) -> int:
+    return db.scalar(
+        select(func.count())
+        .select_from(Notification)
+        .where(
+            Notification.account_id == account_id,
+            Notification.category == class_key,
+            Notification.status == NotificationStatus.sent,
+            Notification.dispatched_at >= now - BUDGET_WINDOW,
+        )
+    )
+
+
 def _push_channel(driver_state: DriverState) -> NotificationChannel:
     return (
         NotificationChannel.audio
@@ -85,6 +191,7 @@ def dispatch(
     now: datetime | None = None,
     driver_state: DriverState = DriverState.idle,
     to_ref: str | None = None,
+    subject_ref: str | None = None,
 ) -> Notification:
     if not deep_link:
         raise MissingDeepLink(
@@ -118,6 +225,18 @@ def dispatch(
         notification.dispatched_at = now
         db.flush()
         return notification
+
+    # Opt-in class laws (E-D1) apply BEFORE any tier logic: a class the driver never
+    # turned on must not reach them at all, whatever tier it claims. `category` names
+    # the class; categories with no registered class are unaffected.
+    spec = get_class(category)
+    if spec is not None:
+        if not is_opted_in(db, account_id, category):
+            return _suppress(SuppressReason.not_opted_in)
+        if is_subject_muted(db, account_id, category, subject_ref):
+            return _suppress(SuppressReason.muted)
+        if class_sends_today(db, account_id, category, now) >= spec.max_per_day:
+            return _suppress(SuppressReason.budget)
 
     if tier == NotificationTier.P2:
         notification.status = NotificationStatus.digested

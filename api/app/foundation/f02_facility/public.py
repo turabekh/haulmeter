@@ -9,12 +9,19 @@ from .domain.enums import FacilityStatus, FacilityType, SourceKind
 from .domain.ingest import adapters as _adapters
 from .domain.ingest.adapters import (
     LOW,
+    SERVICE_MOBILE_REPAIR,
+    SERVICE_PARTS,
+    SERVICE_REPAIR,
+    SERVICE_TIRE,
+    SERVICE_TOWING,
+    SERVICE_WASH,
     ChainLocatorAdapter,
     DynamicStatus,
     StagedRecord,
     derive_parking_status,
     has_usable_reading,
     iter_ntad_pages,
+    osm_services,
     parse_ntad,
     parse_osm,
     parse_tpims_dynamic,
@@ -23,6 +30,7 @@ from .domain.ingest.adapters import (
 from .domain.ingest.pipeline import (
     AMENITY_PRIORITY,
     CAPACITY_PRIORITY,
+    UNION_KEYS,
     IngestStats,
     ingest_records,
     upsert_record,
@@ -49,6 +57,14 @@ from .domain.service import (
 ingest = _adapters
 
 __all__ = [
+    "SERVICE_MOBILE_REPAIR",
+    "SERVICE_PARTS",
+    "SERVICE_REPAIR",
+    "SERVICE_TIRE",
+    "SERVICE_TOWING",
+    "SERVICE_WASH",
+    "UNION_KEYS",
+    "osm_services",
     "Facility",
     "FacilitySource",
     "SourceRecord",

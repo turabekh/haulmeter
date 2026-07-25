@@ -38,6 +38,12 @@ class Submission(Base):
         ForeignKey(FACILITY_FK, ondelete="CASCADE"), index=True
     )
     signal_type: Mapped[SignalType] = mapped_column(SIGNAL_TYPE_ENUM, index=True)
+    # AI-CONTEXT: what the signal is ABOUT within the facility, when a facility-wide
+    # reading isn't the unit of truth. Parking/fuel/weigh-station describe the whole
+    # site and leave this EMPTY; a vendor-presence signal names the vendor, so two
+    # cooks at one truck stop can't tally against each other. Empty string (never
+    # NULL) so the belief uniqueness constraint keeps biting on facility-wide rows.
+    subject_ref: Mapped[str] = mapped_column(String(64), default="", server_default="", index=True)
     value: Mapped[dict] = mapped_column(JSON, default=dict)
     presence_proven: Mapped[bool] = mapped_column(default=False)
     # an authoritative feed (TPIMS) outranks crowd at equal freshness (PRD §12)
@@ -71,7 +77,9 @@ class ContributorTrust(Base):
 class Belief(Base):
     __tablename__ = "belief"
     __table_args__ = (
-        UniqueConstraint("facility_id", "signal_type", name="uq_belief_facility_signal"),
+        UniqueConstraint(
+            "facility_id", "signal_type", "subject_ref", name="uq_belief_facility_signal"
+        ),
         {"schema": SCHEMA},
     )
 
@@ -80,6 +88,8 @@ class Belief(Base):
         ForeignKey(FACILITY_FK, ondelete="CASCADE"), index=True
     )
     signal_type: Mapped[SignalType] = mapped_column(SIGNAL_TYPE_ENUM)
+    # see Submission.subject_ref — empty for facility-wide beliefs
+    subject_ref: Mapped[str] = mapped_column(String(64), default="", server_default="")
     value: Mapped[dict] = mapped_column(JSON, default=dict)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     sample_size: Mapped[int] = mapped_column(Integer, default=0)

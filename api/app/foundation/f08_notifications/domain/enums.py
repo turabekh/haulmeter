@@ -26,6 +26,9 @@ class SuppressReason(enum.Enum):
     budget = "budget"
     quiet_hours = "quiet_hours"
     resting = "resting"
+    # opt-in notification classes (design-prd §23 E-D1)
+    not_opted_in = "not_opted_in"
+    muted = "muted"
 
 
 class DriverState(enum.Enum):

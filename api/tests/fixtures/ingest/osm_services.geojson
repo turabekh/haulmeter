@@ -1,0 +1,43 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.1000, 38.6000] },
+      "properties": { "@id": "node/901", "shop": "tyres", "hgv": "yes", "name": "I-70 TRUCK TIRE" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.1100, 38.6100] },
+      "properties": { "@id": "node/902", "amenity": "car_wash", "hgv": "designated", "name": "Blue Beacon Wash" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.1200, 38.6200] },
+      "properties": {
+        "@id": "node/903",
+        "shop": "truck_repair",
+        "service:vehicle:tyres": "yes",
+        "service:vehicle:mobile_repair": "yes",
+        "access": "hgv",
+        "name": "Gateway Truck Service"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.1300, 38.6300] },
+      "properties": {
+        "@id": "node/904",
+        "amenity": "truck_stop",
+        "service:vehicle:tyres": "yes",
+        "hgv": "yes",
+        "name": "Petro Stopping Center"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.1400, 38.6400] },
+      "properties": { "@id": "node/905", "amenity": "car_wash", "name": "Sudsy Car Wash" }
+    }
+  ]
+}

@@ -23,6 +23,9 @@ HALF_LIFE_SECONDS: dict[SignalType, float] = {
     SignalType.weigh_station_status: 7200,  # 2 hours
     SignalType.fuel_price: 86400,  # 24 hours
     SignalType.facility_attribute: 2592000,  # 30 days
+    # a cook is at a lot for a few hours; presence goes stale fast, sold-out faster
+    SignalType.vendor_present: 5400,  # 90 min
+    SignalType.vendor_sold_out: 3600,  # 1 hour
 }
 
 POINTS_PER_SIGNAL: dict[SignalType, int] = {
@@ -30,6 +33,8 @@ POINTS_PER_SIGNAL: dict[SignalType, int] = {
     SignalType.weigh_station_status: 5,
     SignalType.fuel_price: 3,
     SignalType.facility_attribute: 10,
+    SignalType.vendor_present: 5,
+    SignalType.vendor_sold_out: 5,
 }
 
 # Points-farming cooldown (F13-tunable): after a driver earns points for a signal
@@ -45,6 +50,8 @@ FRESH_THRESHOLD_SECONDS: dict[SignalType, float] = {
     SignalType.weigh_station_status: 3600,
     SignalType.fuel_price: 43200,
     SignalType.facility_attribute: 604800,
+    SignalType.vendor_present: 2700,  # 45 min
+    SignalType.vendor_sold_out: 1800,
 }
 AUTHORITATIVE_TRUST = 5.0  # above any crowd trust_weight
 
@@ -119,7 +126,12 @@ def _award_cooldown_seconds(db: Session) -> float:
 
 
 def _in_award_cooldown(
-    db: Session, account_id, facility_id, signal_type: SignalType, at: datetime
+    db: Session,
+    account_id,
+    facility_id,
+    signal_type: SignalType,
+    at: datetime,
+    subject_ref: str = "",
 ) -> bool:
     # blocked if this driver already EARNED points for this signal at this facility
     # within the cooldown window; anchoring on `awarded` (not on any recorded row)
@@ -134,6 +146,7 @@ def _in_award_cooldown(
             Submission.account_id == account_id,
             Submission.facility_id == facility_id,
             Submission.signal_type == signal_type,
+            Submission.subject_ref == subject_ref,
             Submission.awarded.is_(True),
             Submission.submitted_at >= since,
             Submission.submitted_at <= at,
@@ -152,6 +165,7 @@ def submit(
     value: dict,
     submitted_at: datetime,
     award: bool = True,
+    subject_ref: str = "",
 ) -> Submission:
     if facility_registry.get_facility(db, facility_id) is None:
         raise FacilityNotFound(str(facility_id))
@@ -162,6 +176,7 @@ def submit(
         account_id=account_id,
         facility_id=facility_id,
         signal_type=signal_type,
+        subject_ref=subject_ref,
         value=value,
         presence_proven=presence_proven,
         trust_weight=trust.score,
@@ -176,7 +191,9 @@ def submit(
     if (
         presence_proven
         and award
-        and not _in_award_cooldown(db, account_id, facility_id, signal_type, submitted_at)
+        and not _in_award_cooldown(
+            db, account_id, facility_id, signal_type, submitted_at, subject_ref
+        )
     ):
         issue_points(db, account_id, POINTS_PER_SIGNAL.get(signal_type, 0))
         submission.awarded = True
@@ -192,6 +209,7 @@ def submit_authoritative(
     submitted_at: datetime,
     source: str,
     trust_data: bool = True,
+    subject_ref: str = "",
 ) -> Submission | None:
     # an authoritative feed (e.g. TPIMS). No driver, no points, no geofence proof —
     # but a real source + real timestamp. Honors the feed's trust flag (condition A):
@@ -205,6 +223,7 @@ def submit_authoritative(
         account_id=None,
         facility_id=facility_id,
         signal_type=signal_type,
+        subject_ref=subject_ref,
         value=value,
         presence_proven=True,
         authoritative=True,
@@ -245,7 +264,7 @@ def _decay_weight(age_seconds: float, signal_type: SignalType) -> float:
 
 
 def aggregate_belief(
-    db: Session, facility_id, signal_type: SignalType, as_of: datetime
+    db: Session, facility_id, signal_type: SignalType, as_of: datetime, subject_ref: str = ""
 ) -> BeliefResult | None:
     window = HALF_LIFE_SECONDS[signal_type] * AGGREGATION_WINDOW_HALFLIVES
     submissions = list(
@@ -253,6 +272,7 @@ def aggregate_belief(
             select(Submission).where(
                 Submission.facility_id == facility_id,
                 Submission.signal_type == signal_type,
+                Submission.subject_ref == subject_ref,
             )
         )
     )
@@ -314,16 +334,14 @@ def aggregate_belief(
 
 
 def update_belief(
-    db: Session, facility_id, signal_type: SignalType, as_of: datetime
+    db: Session, facility_id, signal_type: SignalType, as_of: datetime, subject_ref: str = ""
 ) -> Belief | None:
-    result = aggregate_belief(db, facility_id, signal_type, as_of)
+    result = aggregate_belief(db, facility_id, signal_type, as_of, subject_ref)
     if result is None:
         return None
-    belief = db.scalar(
-        select(Belief).where(Belief.facility_id == facility_id, Belief.signal_type == signal_type)
-    )
+    belief = get_belief(db, facility_id, signal_type, subject_ref)
     if belief is None:
-        belief = Belief(facility_id=facility_id, signal_type=signal_type)
+        belief = Belief(facility_id=facility_id, signal_type=signal_type, subject_ref=subject_ref)
         db.add(belief)
     belief.value = result.value
     belief.confidence = result.confidence
@@ -334,7 +352,29 @@ def update_belief(
     return belief
 
 
-def get_belief(db: Session, facility_id, signal_type: SignalType) -> Belief | None:
+def get_belief(
+    db: Session, facility_id, signal_type: SignalType, subject_ref: str = ""
+) -> Belief | None:
     return db.scalar(
-        select(Belief).where(Belief.facility_id == facility_id, Belief.signal_type == signal_type)
+        select(Belief).where(
+            Belief.facility_id == facility_id,
+            Belief.signal_type == signal_type,
+            Belief.subject_ref == subject_ref,
+        )
+    )
+
+
+def beliefs_for_signal(db: Session, facility_ids, signal_type: SignalType) -> list[Belief]:
+    # every subject's belief across a set of facilities in one query — the map
+    # overlay needs "which vendors are believed present here" without an N+1.
+    ids = list(facility_ids)
+    if not ids:
+        return []
+    return list(
+        db.scalars(
+            select(Belief).where(
+                Belief.facility_id.in_(ids),
+                Belief.signal_type == signal_type,
+            )
+        )
     )
