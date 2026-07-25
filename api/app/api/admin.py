@@ -1239,3 +1239,231 @@ def vendor_detail(
             for a in admin.list_actions(db, target_ref=vendor.id, limit=25)
         ],
     }
+
+
+# --- Decision 7: facility manual management ---
+# AI-CONTEXT: an admin edit is another SOURCE, not an overwrite. It goes through the
+# same F2 pipeline every ingest uses, so what NTAD/OSM/TPIMS recorded keeps its
+# provenance and the existing priority + union rules decide the canonical value. An
+# operator correcting a name does not silently erase what a feed said.
+class FacilityIn(BaseModel):
+    name: str
+    facility_type: str
+    lat: float
+    lon: float
+    services: list[str] = []
+    capacity: int | None = None
+    address: str | None = None
+    is_dev: bool = False
+
+
+class FacilityPatchIn(BaseModel):
+    name: str | None = None
+    services: list[str] | None = None
+    capacity: int | None = None
+    address: str | None = None
+    is_dev: bool | None = None
+
+
+class MergeIn(BaseModel):
+    duplicate_id: uuid.UUID
+
+
+def _facility_out(db: Session, fac) -> dict:
+    from app.foundation.f02_facility import public as facility
+
+    lat, lon = facility.coordinates(db, fac)
+    return {
+        "facility_id": str(fac.id),
+        "name": fac.name,
+        "facility_type": fac.facility_type.value,
+        "status": fac.status.value,
+        "lat": lat,
+        "lon": lon,
+        "address": fac.address,
+        "attributes": fac.attributes or {},
+        "confidence": fac.confidence,
+        "is_dev": fac.is_dev,
+        # provenance is shown, always: an operator editing a facility should see
+        # which feeds already have a claim on it
+        "sources": sorted({s.source_kind.value for s in fac.sources}),
+    }
+
+
+def _admin_source(db: Session, fac, **attributes):
+    """Write an admin's facts as an `admin` SOURCE record through the ingest
+    pipeline. The pipeline's existing rules then merge it — union for services,
+    priority elsewhere — so an admin edit adds to what is known without deleting
+    another source's claim."""
+    from app.foundation.f02_facility import public as facility
+
+    lat, lon = facility.coordinates(db, fac)
+    record = facility.StagedRecord(
+        source_kind=facility.SourceKind.admin,
+        external_ref=f"admin/{fac.id}",
+        name=attributes.pop("name", None) or fac.name,
+        lat=lat,
+        lon=lon,
+        facility_type=fac.facility_type,
+        attributes={k: v for k, v in attributes.items() if v is not None},
+    )
+    merged, _ = facility.upsert_record(db, record, batch_id="admin-edit")
+    return merged
+
+
+@router.get("/facilities")
+def list_facilities(
+    q: str | None = None,
+    _admin: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    from app.foundation.f02_facility import public as facility
+
+    stmt = select(facility.Facility).where(
+        facility.Facility.status != facility.FacilityStatus.merged
+    )
+    if q:
+        stmt = stmt.where(func.lower(facility.Facility.name).like(f"%{q.strip().lower()}%"))
+    return [
+        _facility_out(db, f) for f in db.scalars(stmt.order_by(facility.Facility.name).limit(50))
+    ]
+
+
+@router.post("/facilities", status_code=201)
+def create_facility(
+    body: FacilityIn,
+    actor: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.foundation.f02_facility import public as facility
+
+    try:
+        kind = facility.FacilityType(body.facility_type)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown facility type") from exc
+    attributes = {}
+    if body.services:
+        attributes["services"] = body.services
+    if body.capacity is not None:
+        attributes["capacity"] = body.capacity
+    fac = facility.create_facility(
+        db,
+        kind,
+        body.name,
+        body.lat,
+        body.lon,
+        source_kind=facility.SourceKind.admin,
+        address=body.address,
+        attributes=attributes,
+        is_dev=body.is_dev,
+    )
+    admin.record_action(
+        db,
+        "facility_create",
+        actor_account_id=actor.id,
+        target_kind="facility",
+        target_ref=fac.id,
+        target_key=fac.name,
+        after={"name": fac.name, "type": kind.value, "is_dev": fac.is_dev},
+    )
+    return _facility_out(db, fac)
+
+
+@router.patch("/facilities/{facility_id}")
+def edit_facility(
+    facility_id: uuid.UUID,
+    body: FacilityPatchIn,
+    actor: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.foundation.f02_facility import public as facility
+
+    fac = facility.get_facility(db, facility_id)
+    if fac is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "facility not found")
+    before = _facility_out(db, fac)
+    if body.is_dev is not None:
+        fac.is_dev = body.is_dev
+    _admin_source(
+        db,
+        fac,
+        name=body.name,
+        services=body.services,
+        capacity=body.capacity,
+    )
+    if body.address is not None:
+        fac.address = body.address
+    if body.name is not None:
+        # ATTRIBUTES are arbitrated by the pipeline (union for services, priority
+        # elsewhere), but the canonical NAME has no such rule — the pipeline sets it
+        # once at creation and never revisits it, so nothing would apply an admin's
+        # correction. Setting it here is therefore the only way an operator can fix a
+        # name, and it is safe: no ingest path renames an existing facility. The
+        # admin source recorded above keeps the provenance visible either way.
+        fac.name = body.name.strip()
+    db.flush()
+    after = _facility_out(db, fac)
+    admin.record_action(
+        db,
+        "facility_edit",
+        actor_account_id=actor.id,
+        target_kind="facility",
+        target_ref=fac.id,
+        target_key=fac.name,
+        before={"name": before["name"], "attributes": before["attributes"]},
+        after={"name": after["name"], "attributes": after["attributes"]},
+    )
+    return after
+
+
+@router.post("/facilities/{facility_id}/merge")
+def merge_facility(
+    facility_id: uuid.UUID,
+    body: MergeIn,
+    actor: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """The duplicate's sources move to the canonical record and the duplicate is
+    marked merged — it is never deleted, so a stale reference still resolves."""
+    from app.foundation.f02_facility import public as facility
+
+    canonical = facility.get_facility(db, facility_id)
+    duplicate = facility.get_facility(db, body.duplicate_id)
+    if canonical is None or duplicate is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "facility not found")
+    if canonical.id == duplicate.id:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "cannot merge into itself")
+    facility.merge_facilities(db, canonical, duplicate)
+    admin.record_action(
+        db,
+        "facility_merge",
+        actor_account_id=actor.id,
+        target_kind="facility",
+        target_ref=canonical.id,
+        target_key=canonical.name,
+        detail={"duplicate_id": str(duplicate.id)},
+        before={"duplicate": duplicate.name},
+        after={"merged_into": canonical.name},
+    )
+    return _facility_out(db, canonical)
+
+
+@router.get("/facilities/{facility_id}/duplicates")
+def facility_duplicates(
+    facility_id: uuid.UUID,
+    _admin: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    # the same blocking + fuzzy match the ingest pipeline uses, so what an operator
+    # is shown is what the pipeline itself would have considered a duplicate
+    from app.foundation.f02_facility import public as facility
+
+    fac = facility.get_facility(db, facility_id)
+    if fac is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "facility not found")
+    lat, lon = facility.coordinates(db, fac)
+    return [
+        _facility_out(db, candidate)
+        for candidate in facility.find_duplicate_candidates(db, fac.name, lat, lon)
+        if candidate.id != fac.id
+    ]
