@@ -30,6 +30,7 @@ const SECTIONS = [
   { key: "flags", to: "/admin/flags", label: "admin.nav.flags" },
   { key: "vendors", to: "/admin/vendors", label: "admin.nav.vendors", count: "vendor_verification" },
   { key: "moderation", to: "/admin/moderation", label: "admin.nav.moderation", count: "moderation" },
+  { key: "accounts", to: "/admin/accounts", label: "admin.nav.accounts" },
   { key: "data", to: "/admin/data", label: "admin.nav.data" },
   { key: "modules", to: "/admin/modules", label: "admin.nav.modules" },
   { key: "audit", to: "/admin/audit", label: "admin.nav.audit" },

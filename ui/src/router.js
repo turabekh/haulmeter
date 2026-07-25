@@ -23,6 +23,7 @@ import AdminOverview from "./surfaces/admin/AdminOverview.vue";
 import AdminFlags from "./surfaces/admin/AdminFlags.vue";
 import AdminVendors from "./surfaces/admin/AdminVendors.vue";
 import AdminModeration from "./surfaces/admin/AdminModeration.vue";
+import AdminAccounts from "./surfaces/admin/AdminAccounts.vue";
 import AdminData from "./surfaces/admin/AdminData.vue";
 import AdminModules from "./surfaces/admin/AdminModules.vue";
 import AdminAudit from "./surfaces/admin/AdminAudit.vue";
@@ -76,6 +77,7 @@ export const routes = [
       { path: "flags", name: "admin-flags", component: AdminFlags },
       { path: "vendors", name: "admin-vendors", component: AdminVendors },
       { path: "moderation", name: "admin-moderation", component: AdminModeration },
+      { path: "accounts", name: "admin-accounts", component: AdminAccounts },
       { path: "data", name: "admin-data", component: AdminData },
       { path: "modules", name: "admin-modules", component: AdminModules },
       { path: "audit", name: "admin-audit", component: AdminAudit },

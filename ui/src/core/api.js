@@ -1033,3 +1033,41 @@ export async function decideClaim(claimId, approve, reason = null) {
 }
 
 export const fetchAdminVendors = () => adminGet("/vendors");
+
+// --- Admin Console 2.0b: accounts, gates, vendor registration ---
+async function adminSend(path, method, body) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/admin${path}`, {
+    method,
+    headers: headers(),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const err = new Error(`${path} ${resp.status}`);
+    err.status = resp.status;
+    try {
+      err.detail = (await resp.json()).detail;
+    } catch {
+      /* no body */
+    }
+    throw err;
+  }
+  return resp.json();
+}
+
+export function fetchAccounts({ q, role } = {}) {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (role) params.set("role", role);
+  const qs = params.toString();
+  return adminGet(`/accounts${qs ? `?${qs}` : ""}`);
+}
+export const fetchAccount = (id) => adminGet(`/accounts/${id}`);
+export const createAccount = (body) => adminSend("/accounts", "POST", body);
+export const editAccount = (id, body) => adminSend(`/accounts/${id}`, "PATCH", body);
+export const resetCredential = (id) => adminSend(`/accounts/${id}/reset-credential`, "POST");
+export const deactivateAccount = (id) => adminSend(`/accounts/${id}/deactivate`, "POST");
+export const reactivateAccount = (id) => adminSend(`/accounts/${id}/reactivate`, "POST");
+export const changeRole = (id, body) => adminSend(`/accounts/${id}/roles`, "POST", body);
+export const setFlagGate = (key, body) => adminSend(`/flags/${key}/gates`, "POST", body);
+export const registerVendorAsAdmin = (body) => adminSend("/vendors", "POST", body);

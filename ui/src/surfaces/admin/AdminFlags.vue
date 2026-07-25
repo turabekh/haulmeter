@@ -17,6 +17,7 @@ import {
   fetchConfig,
   fetchConfigScopes,
   saveConfig,
+  setFlagGate,
 } from "../../core/api.js";
 
 const { t } = useI18n();
@@ -66,6 +67,11 @@ function request(flag) {
     return;
   }
   apply(flag, !flag.enabled);
+}
+
+async function toggleGate(flag, gate) {
+  await setFlagGate(flag.key, { name: gate.name, satisfied: !gate.satisfied });
+  await load();
 }
 
 async function loadConfig() {
@@ -122,9 +128,16 @@ onMounted(async () => {
                 </span>
               </td>
               <td class="table__muted">
-                <span v-for="g in f.gates" :key="g.name">
-                  {{ g.name }}{{ g.satisfied ? " ✓" : " ✗" }}
-                </span>
+                <!-- a gate can be WITHDRAWN as well as met: an activation
+                     precondition that only ever ticks is a one-way ratchet -->
+                <div v-for="g in f.gates" :key="g.name" class="gate">
+                  <span :style="{ color: g.satisfied ? 'var(--ledger-500)' : 'var(--marker-500)' }">
+                    {{ g.name }}{{ g.satisfied ? " ✓" : " ✗" }}
+                  </span>
+                  <button class="link" type="button" @click="toggleGate(f, g)">
+                    {{ g.satisfied ? t("admin.gate.withdraw") : t("admin.gate.satisfy") }}
+                  </button>
+                </div>
               </td>
               <td>
                 <!-- ACTION: what pressing it does, never doubling as the state -->
@@ -197,6 +210,16 @@ onMounted(async () => {
 }
 .flags__group {
   margin-top: var(--s-4);
+}
+.gate {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.link {
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-caption-size);
 }
 .flags__family {
   margin: 0;

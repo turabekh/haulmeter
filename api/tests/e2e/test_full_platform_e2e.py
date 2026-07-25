@@ -10,6 +10,8 @@ North Star (Driver Dollars Delivered) reflecting the journey end to end.
 
 from datetime import UTC, date, datetime, timedelta
 
+import pytest
+
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
@@ -367,3 +369,43 @@ def test_full_platform_synthetic_end_to_end(db):
 
     # and the moderation SLA is legible to whoever opens the console next
     assert all(not q.overdue for q in m13.queue_with_sla(db, now=T0))
+
+    # --- Admin Console 2.0b: the phone-onboarding path end to end. An operator
+    # creates an account while the cook is on the line, registers them as a vendor,
+    # and every step is attributable afterwards. ---
+    new_account, temporary = identity.admin_create_account(
+        db, "newcook@example.com", identity.Role.vendor, display_name="New Cook"
+    )
+    assert identity.must_change_credential(db, new_account) is True
+    # the temporary credential works exactly once as a way in, then must be replaced
+    assert identity.authenticate(db, "newcook@example.com", temporary) is not None
+
+    onboarded = m13.register_vendor(
+        db,
+        new_account.id,
+        "Samarkand Plov",
+        m13.VendorType.food_mobile,
+        metro="orlando-fl",
+        languages=["uz"],
+        halal_answered=True,
+    )
+    admin_f14.record_action(
+        db,
+        "vendor_register",
+        actor_account_id=operator.id,
+        target_kind="vendor",
+        target_ref=onboarded.id,
+        target_key=onboarded.name,
+        after={"name": onboarded.name},
+    )
+    # every M13 law still applies to an admin-created vendor — no bypass
+    assert m13.profile_complete(onboarded) is True
+    assert admin_f14.last_action_for(db, "vendor_register", onboarded.name).actor_account_id == (
+        operator.id
+    )
+
+    # deactivation locks the door without erasing anything behind it
+    identity.deactivate_account(db, new_account)
+    with pytest.raises(identity.AccountInactive):
+        identity.authenticate(db, "newcook@example.com", temporary)
+    assert m13.resolve_vendor(db, onboarded.id) is not None

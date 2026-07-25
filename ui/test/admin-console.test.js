@@ -112,7 +112,8 @@ describe("Admin shell — sectioned portal (§23 E-D4)", () => {
     await flushPromises();
 
     const labels = w.findAll(".rail__item").map((a) => a.text());
-    expect(labels.length).toBe(7);
+    expect(labels.length).toBe(8);
+    expect(labels.join(" ")).toContain("Accounts");
     expect(labels.join(" ")).toContain("Overview");
     expect(labels.join(" ")).toContain("Moderation");
     expect(labels.join(" ")).toContain("Audit");
@@ -163,6 +164,7 @@ describe("Admin shell — sectioned portal (§23 E-D4)", () => {
       "flags",
       "vendors",
       "moderation",
+      "accounts",
       "data",
       "modules",
       "audit",
@@ -558,5 +560,128 @@ describe("Audit — what it changed FROM", () => {
     const w = mount(AdminAudit);
     await flushPromises();
     expect(w.text()).toContain("No operator actions yet.");
+  });
+});
+
+// --- E-D6 Accounts: the powers, and the copy that states their limits ---
+import AdminAccounts from "../src/surfaces/admin/AdminAccounts.vue";
+
+const ACCOUNT = {
+  account_id: "a-1",
+  email: "bek@example.com",
+  display_name: "Bek",
+  active: true,
+  deactivated_at: null,
+  must_change_credential: false,
+  roles: ["driver"],
+  created_at: "2026-07-26T08:00:00Z",
+  profile: { legal_name: "Bek T", mc_number: "778899", plate_state: "FL", plate_number: "4XN2291" },
+  audit: [{ action: "account_create", created_at: "2026-07-26T08:00:00Z", before: null, after: {} }],
+};
+
+describe("Accounts — powers and their limits (E-D6)", () => {
+  it("says in place why there is no delete button", async () => {
+    // an operator should not hunt for a control that will never exist
+    stubFetch({ "/admin/accounts": [ACCOUNT] });
+    const w = mount(AdminAccounts);
+    await flushPromises();
+    expect(w.text()).toContain("Accounts are never deleted");
+    expect(w.text()).toContain("money, claims and evidence");
+  });
+
+  it("shows account state as colour AND label", async () => {
+    stubFetch({ "/admin/accounts": [ACCOUNT, { ...ACCOUNT, account_id: "a-2", active: false }] });
+    const w = mount(AdminAccounts);
+    await flushPromises();
+    const pills = w.findAll(".pill").map((p) => p.text());
+    expect(pills).toContain("Active");
+    expect(pills).toContain("Deactivated");
+  });
+
+  it("warns that a temporary password is shown only once", async () => {
+    const fetchStub = stubFetch({
+      "/admin/accounts": [],
+      "POST /admin/accounts": { ...ACCOUNT, temporary_password: "tmp-abc123" },
+      "/admin/accounts/a-1": ACCOUNT,
+    });
+    const w = mount(AdminAccounts);
+    await flushPromises();
+
+    await w.findAll(".field__input")[1].setValue("new@example.com");
+    await w.findAll(".btn--accent")[0].trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain("tmp-abc123");
+    expect(w.text()).toContain("it is not shown again");
+    expect(fetchStub.mock.calls.some((c) => String(c[0]).endsWith("/admin/accounts"))).toBe(true);
+  });
+
+  it("confirms before granting platform admin, and names the consequence", async () => {
+    const fetchStub = stubFetch({
+      "/admin/accounts": [ACCOUNT],
+      "/admin/accounts/a-1": ACCOUNT,
+    });
+    const w = mount(AdminAccounts);
+    await flushPromises();
+    await w.find(".link").trigger("click");
+    await flushPromises();
+
+    await w.findAll(".btn").find((b) => b.text().includes("Grant platform admin")).trigger("click");
+
+    // nothing sent yet — the operator is told what it means first
+    expect(fetchStub.mock.calls.some((c) => String(c[0]).includes("/roles"))).toBe(false);
+    expect(w.find(".confirm").exists()).toBe(true);
+    expect(w.text()).toContain("every power in this console");
+  });
+
+  it("sends the admin grant only after confirmation", async () => {
+    const fetchStub = stubFetch({
+      "/admin/accounts": [ACCOUNT],
+      "/admin/accounts/a-1": ACCOUNT,
+      "POST /admin/accounts/a-1/roles": { ...ACCOUNT, roles: ["driver", "platform_admin"] },
+    });
+    const w = mount(AdminAccounts);
+    await flushPromises();
+    await w.find(".link").trigger("click");
+    await flushPromises();
+    await w.findAll(".btn").find((b) => b.text().includes("Grant platform admin")).trigger("click");
+    await w.findAll(".btn").find((b) => b.text().includes("Yes")).trigger("click");
+    await flushPromises();
+
+    const call = fetchStub.mock.calls.find((c) => String(c[0]).includes("/roles"));
+    expect(JSON.parse(call[1].body)).toEqual({
+      role: "platform_admin",
+      grant: true,
+      confirm: true,
+    });
+  });
+
+  it("offers no admin-grant button to someone who already has it", async () => {
+    stubFetch({
+      "/admin/accounts": [ACCOUNT],
+      "/admin/accounts/a-1": { ...ACCOUNT, roles: ["driver", "platform_admin"] },
+    });
+    const w = mount(AdminAccounts);
+    await flushPromises();
+    await w.find(".link").trigger("click");
+    await flushPromises();
+    expect(w.findAll(".btn").some((b) => b.text().includes("Grant platform admin"))).toBe(false);
+  });
+
+  it("shows what support has already done to this account", async () => {
+    stubFetch({ "/admin/accounts": [ACCOUNT], "/admin/accounts/a-1": ACCOUNT });
+    const w = mount(AdminAccounts);
+    await flushPromises();
+    await w.find(".link").trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain("What support has done here");
+    expect(w.text()).toContain("account_create");
+  });
+
+  it("says so plainly when nothing matches", async () => {
+    stubFetch({ "/admin/accounts": [] });
+    const w = mount(AdminAccounts);
+    await flushPromises();
+    expect(w.text()).toContain("No accounts match.");
   });
 });
