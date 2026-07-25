@@ -121,3 +121,37 @@ export function showsUpLabel(showsUp) {
   if (!showsUp || !showsUp.published) return null;
   return { confirmed: showsUp.confirmed, published: showsUp.published };
 }
+
+// FR5: the review pair, never a bare average. `reviewers` is the honest
+// denominator — "4.6" alone invites overreading three opinions (§11.7).
+export function reviewSummary(reviews) {
+  if (!reviews || !reviews.reviewers) return null;
+  return { average: reviews.average, reviewers: reviews.reviewers };
+}
+
+// FR6 / Q-3: promoted content is a LABELLED slot, never merged into the ranked
+// list. This helper exists so a component cannot concatenate the two by habit —
+// it returns them as separate keys and refuses to produce a combined array.
+export function splitPromoted(entries, promotions) {
+  return { organic: asList(entries), promoted: asList(promotions) };
+}
+
+// the report reasons a driver may pick, in the order they are offered. Kept here
+// rather than in a component so every surface offers the same list.
+export const REPORT_REASONS = [
+  "spam",
+  "offensive",
+  "false_information",
+  "false_property_attestation",
+  "impersonation",
+  "other",
+];
+
+export function reasonLabelKey(reason) {
+  return REPORT_REASONS.includes(reason) ? `vendor.reason.${reason}` : "vendor.reason.other";
+}
+
+// FR7: a service list renders as localized labels, never as raw ingest tokens
+export function serviceLabelKey(service) {
+  return `service.${service}`;
+}

@@ -21,6 +21,7 @@ import FleetWorkspaceSurface from "./surfaces/FleetWorkspaceSurface.vue";
 import AdminConsoleSurface from "./surfaces/AdminConsoleSurface.vue";
 import PublicScorecardSurface from "./surfaces/PublicScorecardSurface.vue";
 import OwnerPortalSurface from "./surfaces/OwnerPortalSurface.vue";
+import VendorPortalSurface from "./surfaces/VendorPortalSurface.vue";
 import { isAuthenticated } from "./core/api.js";
 
 // DEV-ONLY: the /dev directory ships ONLY in development builds. Vite replaces
@@ -59,6 +60,8 @@ export const routes = [
   { path: "/fleet", name: "fleet", component: FleetWorkspaceSurface, meta: { chrome: false, portal: true } },
   { path: "/admin", name: "admin", component: AdminConsoleSurface, meta: { chrome: false, portal: true } },
   { path: "/owner", name: "owner", component: OwnerPortalSurface, meta: { chrome: false, portal: true } },
+  // §18 fourth portal (§23 E-D3): the vendor manages their week at a desk
+  { path: "/vendor-portal", name: "vendor-portal", component: VendorPortalSurface, meta: { chrome: false, portal: true } },
   // §18 PUBLIC portal — no login (meta.public bypasses the auth guard)
   { path: "/scorecard", name: "scorecard", component: PublicScorecardSurface, meta: { public: true, chrome: false, portal: true } },
   ...devRoutes, // /dev — development builds only (see above)

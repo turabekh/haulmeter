@@ -36,6 +36,9 @@ import {
   muteVendor,
   suggestACook,
   fetchCorridorVendors,
+  fetchFacilityPromotions,
+  reviewVendor,
+  reportVendor,
 } from "../core/api.js";
 
 const { isDriving } = useDriverState();
@@ -140,6 +143,8 @@ const rawPins = computed(() => {
 // cache is dropped rather than shown, since dead content is what Q-1 forbids.
 const vendorEntries = ref([]);
 const facilityVendors = ref([]);
+// kept in its own ref, never merged into facilityVendors (Q-3)
+const facilityPromotions = ref([]);
 const vendorSheet = ref(null);
 const vendorTarget = ref(null);
 
@@ -168,8 +173,12 @@ watch(isDriving, (driving) => {
 
 async function loadFacilityVendors(facilityId) {
   try {
-    const found = await fetchVendorsAt(facilityId, { allVendors: true });
+    const [found, promoted] = await Promise.all([
+      fetchVendorsAt(facilityId, { allVendors: true }),
+      fetchFacilityPromotions(facilityId).catch(() => []),
+    ]);
     facilityVendors.value = Array.isArray(found) ? found : [];
+    facilityPromotions.value = Array.isArray(promoted) ? promoted : [];
   } catch {
     // offline / flag off: fall back to whatever the viewport cache knows
     facilityVendors.value = vendorEntries.value.filter((e) => e.facility_id === facilityId);
@@ -215,6 +224,23 @@ async function reportVendorSoldOut() {
   }
 }
 
+async function submitVendorReview({ rating, text }) {
+  const entry = vendorTarget.value;
+  if (!entry) return;
+  try {
+    await reviewVendor(entry.vendor_id, rating, text);
+    vendorSheet.value = await fetchVendorSheet(entry.vendor_id); // reflect the new pair
+  } catch {
+    /* too soon / offline — the sheet already says when they can return */
+  }
+}
+
+async function reportThisVendor(reason) {
+  const entry = vendorTarget.value;
+  vendorSheet.value = null;
+  if (entry) await reportVendor(entry.vendor_id, reason).catch(() => {});
+}
+
 async function muteThisVendor() {
   const entry = vendorTarget.value;
   vendorSheet.value = null;
@@ -225,6 +251,7 @@ const selected = ref(null);
 function onPinTap(pin) {
   selected.value = pin;
   facilityVendors.value = [];
+  facilityPromotions.value = [];
   loadFacilityVendors(pin.facility_id);
 }
 const reporting = ref(false);
@@ -405,6 +432,7 @@ async function submitPrice(cents) {
         v-if="selected"
         :pin="selected"
         :vendors="facilityVendors"
+        :promotions="facilityPromotions"
         @vendor="openVendor"
         @navigate="navigate"
         @report="report"
@@ -428,6 +456,8 @@ async function submitPrice(cents) {
         @not-here="confirmVendorPresence(false)"
         @sold-out="reportVendorSoldOut"
         @mute="muteThisVendor"
+        @review="submitVendorReview"
+        @report="reportThisVendor"
       />
     </BottomSheet>
 

@@ -32,6 +32,9 @@ const props = defineProps({
   // server. Q-7: an EMPTY list means the section does not render at all — no
   // "nothing here yet!" filler on a card a driver reads in ten seconds.
   vendors: { type: Array, default: () => [] },
+  // FR6 / Q-3: promoted content arrives as a SEPARATE prop and renders in its own
+  // labelled container below the ranked list. It is never spliced into `vendors`.
+  promotions: { type: Array, default: () => [] },
 });
 const emit = defineEmits([
   "navigate",
@@ -192,6 +195,13 @@ function vendorLine(entry) {
       >
         {{ t("vendor.all") }} ({{ vendors.length }})
       </button>
+
+      <!-- the labelled slot. Below the organic list, its own container, always
+           carrying the label — never blended into the ranking above (Q-3). -->
+      <div v-for="p in promotions" :key="p.promotion_id" class="promo">
+        <span class="promo__label">{{ t("vendor.promoted") }}</span>
+        <span class="promo__text">{{ p.vendor_name }} · {{ p.text }}</span>
+      </div>
     </section>
 
     <!-- contextual lead action -->
@@ -379,6 +389,31 @@ function vendorLine(entry) {
   border-radius: var(--r-pill);
   background: var(--ink-2, var(--line-1));
   color: var(--text-2);
+}
+/* the promoted slot reads quieter than the organic rows above it: caption type,
+   secondary text, and the label carries the marker token already in the system */
+.promo {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+}
+.promo__label {
+  flex: 0 0 auto;
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--ink-2, var(--line-1));
+  color: var(--marker-500);
+  font-size: var(--type-caption-size);
+  font-weight: 500;
+}
+.promo__text {
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
 }
 .cta {
   display: flex;

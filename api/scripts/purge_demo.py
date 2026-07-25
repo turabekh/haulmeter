@@ -27,6 +27,9 @@ FACILITY_DEPENDENTS = [
     # from the appearance; the vendor row itself is dropped separately (below) since
     # it is keyed to an account, not a facility.
     "m13.appearance",
+    # Session B: reviews, promotions, claims and reports all hang off a demo
+    # vendor (cascade) or a demo facility (here). Both routes are covered.
+    "m13.facility_claim",
     "f03.geofence_event",
     "f03.geofence_presence",
     "f03.geofence_arming",

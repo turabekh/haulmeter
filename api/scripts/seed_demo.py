@@ -117,6 +117,18 @@ def _seed_demo_vendor(db, loves):
     location.arm_geofence(db, driver.id, loves.id)
     location.evaluate_ping(db, driver.id, flat, flon, occurred_at=NOW)
     m13.confirm_presence(db, driver.id, vendor.id, loves.id, True, now=NOW)
+
+    # a review and a live promotion so the Session-B surfaces have something to
+    # render locally — both ride the demo vendor, so purge-demo removes them
+    m13.submit_review(db, vendor, driver.id, 5, "Best osh on I-35", now=NOW)
+    m13.create_promotion(
+        db,
+        vendor,
+        "Free chai with any plate tonight",
+        NOW - timedelta(minutes=30),
+        NOW + timedelta(hours=6),
+        now=NOW,
+    )
     return vendor
 
 

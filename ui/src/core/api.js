@@ -897,3 +897,74 @@ export async function saveEquipment({ plateState, plateNumber, unitNumber, vin }
   if (!resp.ok) throw new Error(`equipment save failed: ${resp.status}`);
   return resp.json();
 }
+
+// --- M13 Session B: reviews, promotions, reports, service centres ---
+
+export async function fetchFacilityPromotions(facilityId) {
+  // a SEPARATE call from fetchVendorsAt on purpose: the ranked list and the
+  // promoted slot never arrive together, so the UI cannot blend them (Q-3)
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/vendors/promotions/at/${facilityId}`, {
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`promotions failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function reviewVendor(vendorId, rating, text = null) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/vendors/${vendorId}/review`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ rating, text }),
+  });
+  if (resp.status === 409) throw new Error("review_too_soon");
+  if (!resp.ok) throw new Error(`review failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function reportVendor(vendorId, reason, note = null) {
+  return queuedPost(`/vendors/${vendorId}/report`, { reason, note });
+}
+
+export async function reportReview(reviewId, reason, note = null) {
+  return queuedPost(`/vendors/reviews/${reviewId}/report`, { reason, note });
+}
+
+export async function fetchServiceCenter(facilityId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/vendors/service-center/${facilityId}`, {
+    headers: headers(),
+  });
+  if (resp.status === 404) return null; // unclaimed facilities stay plain POIs
+  if (!resp.ok) throw new Error(`service center failed: ${resp.status}`);
+  return resp.json();
+}
+
+// --- FR8 vendor portal (§18) ---
+async function portalGet(path) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/vendor${path}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`${path} ${resp.status}`);
+  return resp.json();
+}
+
+async function portalSend(path, method, body) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/vendor${path}`, {
+    method,
+    headers: headers(),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(`${path} ${resp.status}`);
+  return resp.json();
+}
+
+export const fetchVendorProfile = () => portalGet("/profile");
+export const fetchVendorSchedule = () => portalGet("/appearances");
+export const fetchVendorPromotions = () => portalGet("/promotions");
+export const fetchVendorAnalytics = () => portalGet("/analytics");
+export const saveVendorProfile = (body) => portalSend("/profile", "PATCH", body);
+export const createVendorPromotion = (body) => portalSend("/promotions", "POST", body);
+export const cancelVendorPromotion = (id) => portalSend(`/promotions/${id}`, "DELETE");
+export const cancelVendorAppearance = (id) => portalSend(`/appearances/${id}`, "DELETE");

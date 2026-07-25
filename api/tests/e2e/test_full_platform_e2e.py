@@ -251,3 +251,85 @@ def test_full_platform_synthetic_end_to_end(db):
     assert cook.consecutive_no_shows == 0
     # and Q-1 holds: a finished dinner is off the map
     assert m13.vendors_at_facility(db, truckstop.id, now=dinner + timedelta(hours=5)) == []
+
+    # --- M13 Session B: the cook promotes -> the driver sees a LABELLED slot ->
+    # reviews -> a hostile review is reported and hides -> an admin resolves it ->
+    # a service centre claims its facility. Still no money anywhere. ---
+    tomorrow = dinner + timedelta(days=1)
+    m13.publish_appearance(
+        db,
+        cook,
+        truckstop.id,
+        tomorrow,
+        tomorrow + timedelta(hours=4),
+        [m13.OfferingIn("Osh", 1200)],
+        property_approved=True,
+        now=tomorrow,
+    )
+    promo = m13.create_promotion(
+        db, cook, "Free chai with any plate", tomorrow, tomorrow + timedelta(hours=6), now=tomorrow
+    )
+
+    at_stop = tomorrow + timedelta(minutes=30)
+    ranked = m13.vendors_at_facility(db, truckstop.id, now=at_stop)
+    slots = m13.promotions_for_facility(db, truckstop.id, now=at_stop)
+    # Q-3: the promotion is in its OWN payload, labelled, never in the ranked list
+    assert [s["text"] for s in slots] == ["Free chai with any plate"]
+    assert slots[0]["promoted"] is True
+    assert all(not hasattr(e, "promotion") for e in ranked)
+
+    # FR5: the driver leaves a review; the count is people, not opinions
+    m13.submit_review(db, cook, driver.id, 5, "Best osh on I-35", now=at_stop)
+    assert m13.review_summary(db, cook.id).reviewers == 1
+
+    # Q-8: a hostile review is reported and hides on the first report
+    hostile_author = identity.register_account(db, "hostile@example.com", "pw-123456")
+    hostile = m13.submit_review(db, cook, hostile_author.id, 1, "made it up", now=at_stop)
+    m13.report_content(
+        db,
+        m13.CONTENT_REVIEW,
+        hostile.id,
+        cook.id,
+        driver.id,
+        m13.ModerationReason.false_information,
+        now=at_stop,
+    )
+    assert hostile.status == m13.ReviewStatus.hidden_pending
+    assert m13.review_summary(db, cook.id).reviewers == 1  # the hidden one is out
+
+    # ...and an admin resolves it inside the 72h SLA
+    queue = m13.queue_with_sla(db, now=at_stop + timedelta(hours=2))
+    assert any(q.item.content_ref == hostile.id and not q.overdue for q in queue)
+    m13.resolve_report(
+        db, m13.CONTENT_REVIEW, hostile.id, uphold=True, moderator_account_id=owner.id, now=at_stop
+    )
+    assert hostile.status == m13.ReviewStatus.removed
+
+    # FR7: a service centre claims the repair facility ingestion already knows about
+    repair = facility.create_facility(
+        db, facility.FacilityType.repair, "Gateway Truck Service", 32.85, -96.7970
+    )
+    repair.attributes = {"services": [facility.SERVICE_TIRE]}
+    shop_account = identity.register_account(db, "gateway@example.com", "pw-123456")
+    shop = m13.register_vendor(
+        db,
+        shop_account.id,
+        "Gateway Truck Service",
+        m13.VendorType.service_center,
+        metro="dallas-tx",
+        languages=["en"],
+        halal_answered=True,
+    )
+    claim = m13.submit_claim(
+        db, shop, repair.id, "Gateway Truck Service", shop_account.id, b"%PDF license", "l.pdf"
+    )
+    m13.decide_claim(db, claim, approve=True, moderator_account_id=owner.id)
+    m13.curate_claim(db, claim, services_added=["towing"], hours="24/7", phone="2145550123")
+
+    claimed = m13.claimed_facility_view(db, repair.id)
+    # E3.2: the ingested "tire" SURVIVES the claimant's curation
+    assert set(claimed.services) == {"tire", "towing"}
+    assert claimed.hours == "24/7"
+
+    # the Phase A line still holds at the end of the whole day
+    assert promo.status == m13.PromotionStatus.active

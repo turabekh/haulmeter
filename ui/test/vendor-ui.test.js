@@ -7,7 +7,7 @@
 // · Forbidden #11 / §13.4 — no interactive prompt while DRIVING.
 // · §6 — tokens only; no hardcoded colour or size reaches the screen.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mount } from "@vue/test-utils";
+import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import FacilityCard from "../src/core/components/FacilityCard.vue";
 import VendorSheet from "../src/core/components/VendorSheet.vue";
@@ -15,6 +15,7 @@ import CorridorStack from "../src/core/components/CorridorStack.vue";
 import PresetChips from "../src/core/components/PresetChips.vue";
 import MapCanvas from "../src/core/components/MapCanvas.vue";
 import { routes } from "../src/router.js";
+import { setToken, logout } from "../src/core/api.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 import {
   cardVendors,
@@ -284,5 +285,267 @@ describe("Food preset chip (§23 E-D2)", () => {
     const food = w.findAll(".chip")[4];
     expect(food.classes()).toContain("chip");
     expect(food.classes()).toContain("chip--active");
+  });
+});
+
+// --- Session B: promoted slots, reviews, reporting, the portal ---
+import VendorPortalSurface from "../src/surfaces/VendorPortalSurface.vue";
+import { splitPromoted, reviewSummary, reasonLabelKey, REPORT_REASONS } from "../src/core/vendors.js";
+
+const PROMO = {
+  promotion_id: "p-1",
+  vendor_id: "v-1",
+  vendor_name: "Osh Express",
+  text: "Free chai with any plate",
+  promoted: true,
+};
+
+describe("promoted slots (FR6 / Q-3)", () => {
+  it("keeps organic and promoted apart — there is no combined array to render", () => {
+    const split = splitPromoted([entry()], [PROMO]);
+    expect(split.organic).toHaveLength(1);
+    expect(split.promoted).toHaveLength(1);
+    // the helper deliberately returns two keys; a caller that wants one list has
+    // to concatenate deliberately rather than by habit
+    expect(Array.isArray(split)).toBe(false);
+  });
+
+  it("renders a promotion in a labelled container on the facility card", () => {
+    const w = mount(FacilityCard, {
+      props: { pin: PIN, vendors: [entry()], promotions: [PROMO] },
+      global: { plugins: [testRouter()] },
+    });
+    const slot = w.find(".promo");
+    expect(slot.exists()).toBe(true);
+    expect(slot.find(".promo__label").text()).toBe("Promoted");
+    expect(slot.text()).toContain("Free chai with any plate");
+  });
+
+  it("never renders a promotion inside the ranked vendor rows", () => {
+    const w = mount(FacilityCard, {
+      props: { pin: PIN, vendors: [entry()], promotions: [PROMO] },
+      global: { plugins: [testRouter()] },
+    });
+    for (const row of w.findAll(".vendor")) {
+      expect(row.text()).not.toContain("Free chai");
+    }
+  });
+
+  it("renders no slot at all when nothing is promoted", () => {
+    const w = mount(FacilityCard, {
+      props: { pin: PIN, vendors: [entry()], promotions: [] },
+      global: { plugins: [testRouter()] },
+    });
+    expect(w.find(".promo").exists()).toBe(false);
+  });
+
+  it("labels the promotion on the vendor sheet too", () => {
+    const w = mount(VendorSheet, {
+      props: {
+        sheet: {
+          name: "Osh Express",
+          verify_status: "unverified",
+          appearances: [entry()],
+          promotions: [{ promotion_id: "p-1", text: "Two somsa for $6", promoted: true }],
+        },
+      },
+    });
+    expect(w.find(".vs__promo-label").text()).toBe("Promoted");
+  });
+});
+
+describe("reviews on the sheet (FR5 / §11.7)", () => {
+  const reviewed = {
+    name: "Osh Express",
+    verify_status: "verified",
+    appearances: [entry()],
+    reviews: {
+      average: 4.5,
+      reviewers: 12,
+      items: [{ rating: 5, text: "Best osh on I-35", created_at: "2026-07-26T12:00:00Z" }],
+    },
+    can_review: true,
+  };
+
+  beforeEach(() => useDriverState().setState(DriverState.IDLE));
+
+  it("always shows the reviewer count beside the average", () => {
+    // an average with no denominator invites overreading a handful of opinions
+    const w = mount(VendorSheet, { props: { sheet: reviewed } });
+    expect(w.text()).toContain("4.5");
+    expect(w.text()).toContain("12 drivers");
+  });
+
+  it("says plainly when there are no reviews rather than showing a zero", () => {
+    const w = mount(VendorSheet, {
+      props: { sheet: { ...reviewed, reviews: { average: null, reviewers: 0, items: [] } } },
+    });
+    expect(w.text()).toContain("No reviews yet");
+    expect(w.text()).not.toContain("0.0");
+  });
+
+  it("emits a rating the driver picked", async () => {
+    const w = mount(VendorSheet, { props: { sheet: reviewed } });
+    await w.findAll(".vs__star")[4].trigger("click");
+    await w.find(".vs__rate .cta").trigger("click");
+    expect(w.emitted().review[0][0].rating).toBe(5);
+  });
+
+  it("will not send a review with no rating", async () => {
+    const w = mount(VendorSheet, { props: { sheet: reviewed } });
+    expect(w.find(".vs__rate .cta").attributes("disabled")).toBeDefined();
+  });
+
+  it("explains the wait instead of offering a form the server would reject", () => {
+    const w = mount(VendorSheet, { props: { sheet: { ...reviewed, can_review: false } } });
+    expect(w.find(".vs__rate").exists()).toBe(false);
+    expect(w.text()).toContain("review again in a week");
+  });
+
+  it("hides the review form while DRIVING", () => {
+    useDriverState().setState(DriverState.DRIVING);
+    const w = mount(VendorSheet, { props: { sheet: reviewed } });
+    expect(w.find(".vs__rate").exists()).toBe(false);
+    // the reviews themselves stay readable at a glance
+    expect(w.text()).toContain("12 drivers");
+    useDriverState().setState(DriverState.IDLE);
+  });
+
+  it("summarises nothing when there are no reviewers", () => {
+    expect(reviewSummary({ average: null, reviewers: 0 })).toBeNull();
+    expect(reviewSummary(undefined)).toBeNull();
+  });
+});
+
+describe("report affordance (Q-8)", () => {
+  const sheet = { name: "Osh Express", verify_status: "unverified", appearances: [entry()] };
+
+  beforeEach(() => useDriverState().setState(DriverState.IDLE));
+
+  it("offers every reason a driver may pick", async () => {
+    const w = mount(VendorSheet, { props: { sheet } });
+    const reportButton = w.findAll(".cta--tertiary").at(-1);
+    await reportButton.trigger("click");
+    expect(w.findAll(".vs__reason")).toHaveLength(REPORT_REASONS.length);
+  });
+
+  it("includes the false-attestation reason Q11 depends on", () => {
+    // the ranking boost a self-attestation earns is only defensible because a
+    // driver can say "he isn't allowed to be here"
+    expect(REPORT_REASONS).toContain("false_property_attestation");
+    expect(reasonLabelKey("false_property_attestation")).toBe(
+      "vendor.reason.false_property_attestation",
+    );
+  });
+
+  it("emits the chosen reason and closes the list", async () => {
+    const w = mount(VendorSheet, { props: { sheet } });
+    await w.findAll(".cta--tertiary").at(-1).trigger("click");
+    await w.findAll(".vs__reason")[1].trigger("click");
+    expect(w.emitted().report[0][0]).toBe("offensive");
+    expect(w.findAll(".vs__reason")).toHaveLength(0);
+  });
+
+  it("is not reachable while DRIVING", () => {
+    useDriverState().setState(DriverState.DRIVING);
+    const w = mount(VendorSheet, { props: { sheet } });
+    expect(w.findAll(".cta--tertiary")).toHaveLength(0);
+    useDriverState().setState(DriverState.IDLE);
+  });
+
+  it("falls back to 'other' for an unknown reason rather than showing a raw token", () => {
+    expect(reasonLabelKey("nonsense")).toBe("vendor.reason.other");
+  });
+});
+
+describe("VendorPortalSurface (§18 fourth portal)", () => {
+  const PROFILE = {
+    vendor_id: "v-1",
+    name: "Osh Express",
+    verify_status: "documents_on_file",
+    languages: ["uz", "ru"],
+    halal_disclosure: "Halal butcher",
+    publish_suspended: false,
+    consecutive_no_shows: 0,
+    profile_gaps: [],
+    documents: [],
+  };
+  const ANALYTICS = {
+    sheet_views: 42,
+    confirmations: 7,
+    shows_up: { confirmed: 19, published: 20 },
+    reviews: { average: 4.5, reviewers: 12 },
+    publish_suspended: false,
+  };
+
+  function mockPortal(overrides = {}) {
+    const data = {
+      "/vendor/profile": PROFILE,
+      "/vendor/appearances": [],
+      "/vendor/promotions": [],
+      "/vendor/analytics": ANALYTICS,
+      ...overrides,
+    };
+    global.fetch = vi.fn((url) => {
+      const path = String(url).replace("http://localhost:8008", "").split("?")[0];
+      return Promise.resolve({
+        ok: path in data,
+        status: path in data ? 200 : 404,
+        json: () => Promise.resolve(data[path] ?? {}),
+      });
+    });
+  }
+
+  beforeEach(() => setToken("portal-token"));
+  afterEach(() => {
+    logout();
+    vi.restoreAllMocks();
+  });
+
+  it("shows the same show-up pair a driver sees — no vanity variant", async () => {
+    mockPortal();
+    const w = mount(VendorPortalSurface);
+    await flushPromises();
+    // 19/20 is exactly what VendorSheet renders for the same vendor
+    expect(w.text()).toContain("19/20");
+    expect(w.text()).not.toMatch(/95%/);
+  });
+
+  it("states a suspension plainly at the top", async () => {
+    mockPortal({ "/vendor/profile": { ...PROFILE, publish_suspended: true } });
+    const w = mount(VendorPortalSurface);
+    await flushPromises();
+    expect(w.find(".portal__alert").exists()).toBe(true);
+    expect(w.text()).toContain("Publishing is paused");
+  });
+
+  it("names exactly what still blocks publishing", async () => {
+    mockPortal({
+      "/vendor/profile": { ...PROFILE, profile_gaps: ["languages", "halal_disclosure"] },
+    });
+    const w = mount(VendorPortalSurface);
+    await flushPromises();
+    expect(w.find(".portal__gaps").text()).toContain("languages");
+  });
+
+  it("shows a quiet empty state rather than a blank panel", async () => {
+    mockPortal();
+    const w = mount(VendorPortalSurface);
+    await flushPromises();
+    expect(w.text()).toContain("Nothing scheduled yet.");
+    expect(w.text()).toContain("No promotions running.");
+  });
+
+  it("explains itself to someone who is not a vendor", async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 404, json: () => ({}) }));
+    const w = mount(VendorPortalSurface);
+    await flushPromises();
+    expect(w.text()).toContain("vendor portal");
+  });
+
+  it("is a portal route, not a driver-app tab", () => {
+    const route = routes.find((r) => r.name === "vendor-portal");
+    expect(route.meta.portal).toBe(true);
+    expect(route.meta.chrome).toBe(false);
   });
 });
