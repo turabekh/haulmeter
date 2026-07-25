@@ -96,6 +96,16 @@ class AuthSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     client_skew_ms: Mapped[int | None] = mapped_column(nullable=True)
+    # AI-CONTEXT: scoped impersonation (§23 E-D5). The session belongs to the ADMIN
+    # (`account_id`) and names the vendor it acts for (`impersonating_account_id`),
+    # never the other way round. That ordering is the whole safety property: every
+    # write attributes to the admin structurally rather than by convention, and a
+    # token carrying this column is refused by `current_account`, so it can never
+    # reach a driver endpoint however it is passed around.
+    impersonating_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(f"{SCHEMA}.account.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Organization(Base):

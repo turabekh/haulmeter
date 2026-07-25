@@ -433,6 +433,8 @@ def test_every_mutating_admin_endpoint_writes_an_audit_entry(client, db):
         "/admin/accounts/{account_id}/roles": "account_role",
         "/admin/flags/{key}/gates": "flag_gate",
         "/admin/vendors": "vendor_register",
+        "/admin/vendors/{vendor_id}/impersonate": "impersonation_start",
+        "/admin/impersonation/end": "impersonation_end",
     }
     unaudited = sorted(mutating - set(covered))
     assert not unaudited, f"mutating admin endpoints with no audit action mapped: {unaudited}"

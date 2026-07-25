@@ -18,9 +18,11 @@ from .domain.models import (
 )
 from .domain.service import (
     AUTHORITY_VERIFICATION_FLAG,
+    IMPERSONATION_TTL,
     AccountInactive,
     AuthMethodNotEnabled,
     EmailAlreadyRegistered,
+    ImpersonationNotPermitted,
     InvalidVin,
     add_auth_method,
     add_membership,
@@ -32,6 +34,7 @@ from .domain.service import (
     create_organization,
     create_session,
     deactivate_account,
+    end_impersonation,
     has_role,
     must_change_credential,
     normalize_vin,
@@ -39,10 +42,12 @@ from .domain.service import (
     register_account,
     register_authority_verification,
     reset_credential,
+    resolve_impersonation,
     resolve_session,
     revoke_role,
     search_accounts,
     set_display_name,
+    start_impersonation,
     upsert_driver_profile,
     validate_vin,
     verify_authority,
@@ -55,6 +60,11 @@ from .domain.verifier import (
 )
 
 __all__ = [
+    "start_impersonation",
+    "resolve_impersonation",
+    "end_impersonation",
+    "IMPERSONATION_TTL",
+    "ImpersonationNotPermitted",
     "set_display_name",
     "search_accounts",
     "revoke_role",

@@ -1107,3 +1107,135 @@ def register_vendor(
         "verify_status": vendor.verify_status.value,
         "profile_gaps": m13.profile_gaps(vendor),
     }
+
+
+# --- E-D5: scoped impersonation ("view as vendor") ---
+@router.post("/vendors/{vendor_id}/impersonate")
+def impersonate_vendor(
+    vendor_id: uuid.UUID,
+    actor: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Open the vendor portal exactly as this vendor sees it. The returned token is
+    an ADMIN session that names the vendor — so every write it makes attributes to
+    the admin — and it is refused by ordinary authentication, so it can never reach
+    a driver endpoint. Time-boxed: a support session left open is an unlocked door."""
+    vendor = m13.resolve_vendor(db, vendor_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    owner = db.get(identity.Account, vendor.owner_account_id)
+    if owner is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor has no owner account")
+    try:
+        session = identity.start_impersonation(
+            db, actor, owner, is_vendor=m13.is_member(db, vendor.id, owner.id)
+        )
+    except identity.ImpersonationNotPermitted as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "vendors only") from exc
+    except identity.AccountInactive as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "account is deactivated") from exc
+    admin.record_action(
+        db,
+        "impersonation_start",
+        actor_account_id=actor.id,
+        target_kind="vendor",
+        target_ref=vendor.id,
+        target_key=vendor.name,
+        after={"expires_at": session.expires_at.isoformat(), "subject": str(owner.id)},
+    )
+    return {
+        "token": session.token,
+        "vendor_id": str(vendor.id),
+        "vendor_name": vendor.name,
+        "expires_at": session.expires_at.isoformat(),
+        "ttl_minutes": int(identity.IMPERSONATION_TTL.total_seconds() // 60),
+    }
+
+
+class EndImpersonationIn(BaseModel):
+    token: str
+
+
+@router.post("/impersonation/end")
+def end_impersonation(
+    body: EndImpersonationIn,
+    actor: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    session = identity.end_impersonation(db, body.token)
+    if session is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not an impersonation session")
+    admin.record_action(
+        db,
+        "impersonation_end",
+        actor_account_id=actor.id,
+        target_kind="account",
+        target_ref=session.impersonating_account_id,
+        after={"ended_at": session.ended_at.isoformat()},
+    )
+    return {"ended": True}
+
+
+@router.get("/vendors/{vendor_id}/detail")
+def vendor_detail(
+    vendor_id: uuid.UUID,
+    _admin: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Everything about one vendor on one page — profile, schedule, promotions,
+    reviews, strikes, documents, and what support has already done here."""
+    vendor = m13.resolve_vendor(db, vendor_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    score = m13.reliability(db, vendor.id)
+    reviews = m13.review_summary(db, vendor.id)
+    return {
+        "vendor_id": str(vendor.id),
+        "name": vendor.name,
+        "vendor_type": vendor.vendor_type.value,
+        "metro": vendor.metro,
+        "contact_phone": vendor.contact_phone,
+        "languages": vendor.languages,
+        "halal_disclosure": vendor.halal_disclosure,
+        "verify_status": vendor.verify_status.value,
+        "status": vendor.status.value,
+        "publish_suspended": vendor.publish_suspended,
+        "consecutive_no_shows": vendor.consecutive_no_shows,
+        "profile_gaps": m13.profile_gaps(vendor),
+        "owner_account_id": str(vendor.owner_account_id),
+        "shows_up": {"confirmed": score.confirmed, "published": score.published},
+        "reviews": {"average": reviews.average, "reviewers": reviews.reviewers},
+        "upheld_reports": m13.upheld_report_count(db, vendor.id),
+        "documents": [
+            {"kind": d.doc_kind.value, "review_status": d.review_status.value}
+            for d in vendor.documents
+        ],
+        "appearances": [
+            {
+                "appearance_id": str(a.id),
+                "facility_id": str(a.facility_id),
+                "starts_at": a.starts_at.isoformat(),
+                "status": a.status.value,
+                "confirmed": a.confirmed,
+            }
+            for a in db.scalars(
+                select(m13.Appearance)
+                .where(m13.Appearance.vendor_id == vendor.id)
+                .order_by(m13.Appearance.starts_at.desc())
+                .limit(20)
+            )
+        ],
+        "promotions": [
+            {"promotion_id": str(p.id), "text": p.text, "status": p.status.value}
+            for p in db.scalars(select(m13.Promotion).where(m13.Promotion.vendor_id == vendor.id))
+        ],
+        "audit": [
+            {
+                "action": a.action,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+                "before": a.before,
+                "after": a.after,
+            }
+            for a in admin.list_actions(db, target_ref=vendor.id, limit=25)
+        ],
+    }

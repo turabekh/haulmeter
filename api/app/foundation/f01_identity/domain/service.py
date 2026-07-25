@@ -182,6 +182,10 @@ def resolve_session(db: Session, token: str) -> Account | None:
         expires_at = expires_at.replace(tzinfo=UTC)
     if expires_at <= datetime.now(UTC):
         return None
+    # an impersonation token is not an ordinary session and must never be treated as
+    # one — this is what stops it reaching a driver endpoint (E-D5)
+    if session.impersonating_account_id is not None:
+        return None
     return db.get(Account, session.account_id)
 
 
@@ -408,3 +412,72 @@ def set_display_name(db: Session, account: Account, display_name: str | None) ->
     account.display_name = (display_name or "").strip() or None
     db.flush()
     return account
+
+
+# --- Scoped impersonation (§23 E-D5): "view as vendor" ---
+# AI-CONTEXT: an admin sees the vendor portal exactly as that vendor sees it, which
+# is the point — "my screen looks wrong" is unanswerable otherwise. The safety
+# properties are structural, not procedural:
+#   · the session belongs to the ADMIN and merely NAMES the vendor, so every write
+#     attributes to the admin without anyone remembering to do so;
+#   · it is time-boxed, because a support session left open is an unlocked door;
+#   · `resolve_session` refuses it for ordinary auth, so it cannot reach a driver
+#     endpoint even if the token leaks into one.
+# Driver impersonation is not merely unimplemented — `start_impersonation` refuses
+# any account that is not a vendor member (E-D5).
+IMPERSONATION_TTL = timedelta(minutes=30)
+
+
+class ImpersonationNotPermitted(Exception):
+    """The target is not a vendor. Driver accounts are never impersonated (E-D5)."""
+
+
+def start_impersonation(
+    db: Session,
+    admin: Account,
+    target: Account,
+    is_vendor: bool,
+    ttl: timedelta = IMPERSONATION_TTL,
+) -> AuthSession:
+    if not is_vendor:
+        raise ImpersonationNotPermitted(str(target.id))
+    if not target.active:
+        raise AccountInactive(str(target.id))
+    session = AuthSession(
+        account_id=admin.id,
+        impersonating_account_id=target.id,
+        token=secrets.token_urlsafe(48),
+        expires_at=datetime.now(UTC) + ttl,
+    )
+    db.add(session)
+    db.flush()
+    return session
+
+
+def end_impersonation(db: Session, token: str, now: datetime | None = None) -> AuthSession | None:
+    session = db.scalar(select(AuthSession).where(AuthSession.token == token))
+    if session is None or session.impersonating_account_id is None:
+        return None
+    session.ended_at = now or datetime.now(UTC)
+    session.expires_at = session.ended_at  # dead immediately, not merely marked
+    db.flush()
+    return session
+
+
+def resolve_impersonation(db: Session, token: str) -> tuple[Account, Account] | None:
+    """Returns (actor_admin, subject_vendor_account) for a live impersonation token.
+    Ordinary sessions return None here and impersonation tokens return None from
+    `resolve_session` — the two paths never overlap."""
+    session = db.scalar(select(AuthSession).where(AuthSession.token == token))
+    if session is None or session.impersonating_account_id is None:
+        return None
+    expires_at = session.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if expires_at <= datetime.now(UTC):
+        return None
+    actor = db.get(Account, session.account_id)
+    subject = db.get(Account, session.impersonating_account_id)
+    if actor is None or subject is None:
+        return None
+    return actor, subject
