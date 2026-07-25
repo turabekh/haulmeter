@@ -983,7 +983,19 @@ async function portalSend(path, method, body) {
     headers: portalHeaders(),
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!resp.ok) throw new Error(`${path} ${resp.status}`);
+  if (!resp.ok) {
+    // the Q-4 floor answers a refused publish with the EXACT missing fields, so a
+    // cook can fix them in one pass. Throwing away the body would turn that into
+    // "something went wrong", which is the failure the floor exists to avoid.
+    const err = new Error(`${path} ${resp.status}`);
+    err.status = resp.status;
+    try {
+      err.detail = (await resp.json())?.detail ?? null;
+    } catch {
+      err.detail = null;
+    }
+    throw err;
+  }
   return resp.json();
 }
 
@@ -994,7 +1006,49 @@ export const fetchVendorAnalytics = () => portalGet("/analytics");
 export const saveVendorProfile = (body) => portalSend("/profile", "PATCH", body);
 export const createVendorPromotion = (body) => portalSend("/promotions", "POST", body);
 export const cancelVendorPromotion = (id) => portalSend(`/promotions/${id}`, "DELETE");
-export const cancelVendorAppearance = (id) => portalSend(`/appearances/${id}`, "DELETE");
+// whole_series cancels every remaining occurrence of a weekly schedule, and the
+// server notifies the drivers who were told about each one
+export const cancelVendorAppearance = (id, wholeSeries = false) =>
+  portalSend(`/appearances/${id}${wholeSeries ? "?whole_series=true" : ""}`, "DELETE");
+
+// the standing menu. Editing a price here changes what is advertised NEXT — every
+// published window keeps its own snapshot (see m13 menu.py).
+export const fetchVendorMenu = (includeInactive = false) =>
+  portalGet(`/menu${includeInactive ? "?include_inactive=true" : ""}`);
+export const addVendorMenuItem = (body) => portalSend("/menu", "POST", body);
+export const saveVendorMenuItem = (id, body) => portalSend(`/menu/${id}`, "PATCH", body);
+export const retireVendorMenuItem = (id) => portalSend(`/menu/${id}`, "DELETE");
+
+export const publishVendorAppearance = (body) => portalSend("/appearances", "POST", body);
+export const editVendorPromotion = (id, body) => portalSend(`/promotions/${id}`, "PATCH", body);
+// the vendor's own documents. Named apart from the ADMIN reader below, which takes
+// a vendor id — one asks "mine", the other asks "theirs".
+export const fetchMyDocuments = () => portalGet("/documents");
+export const uploadVendorDocument = (body) => portalSend("/documents", "POST", body);
+export const fetchVendorReputation = () => portalGet("/reputation");
+
+// self-serve signup (owner decision: open, guarded by the Q-4 floor and the tier
+// ladder rather than by an approval queue). Not a portal path — it is the ordinary
+// M13 route a signed-in account uses to become a vendor.
+export async function registerVendor(body) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/vendors/register`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const err = new Error(`register ${resp.status}`);
+    err.status = resp.status;
+    try {
+      err.detail = (await resp.json())?.detail ?? null;
+    } catch {
+      err.detail = null;
+    }
+    throw err;
+  }
+  return resp.json();
+}
 
 // --- Admin Console 2.0 sections ---
 async function adminGet(path) {

@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import PortalActor, get_db, portal_actor
+from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f14_admin import public as admin
 from app.modules.m13_vendor import public as m13
@@ -33,11 +34,21 @@ router = APIRouter(prefix="/vendor", tags=["vendor-portal"])
 
 class ProfileIn(BaseModel):
     name: str | None = None
+    vendor_type: str | None = None
+    metro: str | None = None
     categories: list[str] | None = None
     languages: list[str] | None = None
     halal_disclosure: str | None = None
     halal_answered: bool | None = None
     contact_phone: str | None = None
+
+
+class MenuItemIn(BaseModel):
+    name: str | None = None
+    price_cents: int | None = None
+    portions: int | None = None
+    is_active: bool | None = None
+    sort_order: int | None = None
 
 
 class OfferingIn(BaseModel):
@@ -50,9 +61,19 @@ class AppearanceIn(BaseModel):
     facility_id: uuid.UUID
     starts_at: datetime
     ends_at: datetime
-    offerings: list[OfferingIn]
+    # what to advertise. Either typed in directly, or named from the standing menu —
+    # `menu_item_ids: []` means "everything currently on the menu". Whichever route,
+    # publishing SNAPSHOTS the values, so a later menu edit cannot reach back into a
+    # window a driver already read.
+    offerings: list[OfferingIn] = []
+    menu_item_ids: list[uuid.UUID] | None = None
     property_approved: bool = False
     weekly: list[int] | None = None
+
+
+class PromotionEditIn(BaseModel):
+    text: str | None = None
+    ends_at: datetime | None = None
 
 
 class PromotionIn(BaseModel):
@@ -191,6 +212,15 @@ def update_profile(
     }
     if body.name is not None:
         vendor.name = body.name.strip()
+    if body.vendor_type is not None:
+        try:
+            vendor.vendor_type = m13.VendorType(body.vendor_type)
+        except ValueError as exc:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown vendor type"
+            ) from exc
+    if body.metro is not None:
+        vendor.metro = body.metro.strip()
     if body.categories is not None:
         vendor.categories = body.categories
     if body.languages is not None:
@@ -249,15 +279,24 @@ def list_appearances(
 ) -> list[dict]:
     _require_active(db)
     vendor = _my_vendor(db, who)
-    rows = db.scalars(
-        select(m13.Appearance)
-        .where(m13.Appearance.vendor_id == vendor.id)
-        .order_by(m13.Appearance.starts_at.desc())
+    rows = list(
+        db.scalars(
+            select(m13.Appearance)
+            .where(m13.Appearance.vendor_id == vendor.id)
+            .order_by(m13.Appearance.starts_at.desc())
+        )
     )
+    names = {}
+    for a in rows:
+        if a.facility_id not in names:
+            fac = facility_registry.get_facility(db, a.facility_id)
+            names[a.facility_id] = fac.name if fac else None
     return [
         {
             "appearance_id": str(a.id),
             "facility_id": str(a.facility_id),
+            # a cook reads a place, not a UUID
+            "facility_name": names.get(a.facility_id),
             "starts_at": a.starts_at.isoformat(),
             "ends_at": a.ends_at.isoformat(),
             "status": a.status.value,
@@ -281,6 +320,12 @@ def create_appearance(
 ) -> dict:
     _require_active(db)
     vendor = _my_vendor(db, who)
+    # the menu is a convenience for the cook, not a second source of truth: it is
+    # resolved to VALUES here and snapshotted by publish_appearance below, so a price
+    # edited tomorrow cannot change what this window advertised.
+    offerings = [m13.OfferingIn(o.name, o.price_cents, o.portions) for o in body.offerings]
+    if body.menu_item_ids is not None:
+        offerings += m13.menu_as_offerings(db, vendor.id, body.menu_item_ids or None)
     try:
         created = m13.publish_appearance(
             db,
@@ -288,7 +333,7 @@ def create_appearance(
             body.facility_id,
             body.starts_at,
             body.ends_at,
-            [m13.OfferingIn(o.name, o.price_cents, o.portions) for o in body.offerings],
+            offerings,
             property_approved=body.property_approved,
             weekly=body.weekly,
         )
@@ -505,7 +550,11 @@ def analytics(
         )
     )
     return {
-        "sheet_views": admin.count_events(db, "vendor_sheet_view"),
+        # scoped to THIS vendor. It was not: every vendor was shown the platform-wide
+        # total as their own, which is the §11.7 failure this file's header forbids.
+        "sheet_views": admin.count_events(
+            db, "vendor_sheet_view", properties_match={"vendor_id": str(vendor.id)}
+        ),
         "confirmations": confirmed,
         # the SAME pair a driver sees on the sheet. No vanity variant, no percentage
         # rounded in the vendor's favour — one number, one meaning, both audiences.
@@ -513,3 +562,207 @@ def analytics(
         "reviews": {"average": summary.average, "reviewers": summary.reviewers},
         "publish_suspended": vendor.publish_suspended,
     }
+
+
+# --- the standing menu ---
+#
+# AI-CONTEXT: what the vendor SELLS, kept once instead of retyped per appearance.
+# Publishing snapshots these values into per-appearance offerings, so editing a price
+# here changes what is advertised NEXT and never what a driver was already shown.
+# `price_cents` is information only — Phase A sells nothing (§E1.1).
+def _menu_row(item) -> dict:
+    return {
+        "item_id": str(item.id),
+        "name": item.name,
+        "price_cents": item.price_cents,
+        "portions": item.portions,
+        "is_active": item.is_active,
+        "sort_order": item.sort_order,
+    }
+
+
+@router.get("/menu")
+def list_menu(
+    include_inactive: bool = False,
+    who: PortalActor = Depends(portal_actor),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    _require_active(db)
+    vendor = _my_vendor(db, who)
+    return [_menu_row(i) for i in m13.list_menu(db, vendor.id, include_inactive=include_inactive)]
+
+
+@router.post("/menu", status_code=201)
+def add_menu_item(
+    body: MenuItemIn,
+    who: PortalActor = Depends(portal_actor),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_active(db)
+    vendor = _my_vendor(db, who)
+    try:
+        item = m13.add_menu_item(
+            db, vendor, body.name or "", body.price_cents, body.portions, body.sort_order
+        )
+    except m13.InvalidMenuItem as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    _assisted(db, who, vendor, "menu_add", None, _menu_row(item))
+    return _menu_row(item)
+
+
+@router.patch("/menu/{item_id}")
+def edit_menu_item(
+    item_id: uuid.UUID,
+    body: MenuItemIn,
+    who: PortalActor = Depends(portal_actor),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_active(db)
+    vendor = _my_vendor(db, who)
+    try:
+        before = _menu_row(
+            next(
+                i
+                for i in m13.list_menu(db, vendor.id, include_inactive=True)
+                if i.id == item_id
+            )
+        )
+        item = m13.update_menu_item(
+            db,
+            vendor,
+            item_id,
+            name=body.name,
+            price_cents=body.price_cents,
+            portions=body.portions,
+            is_active=body.is_active,
+            sort_order=body.sort_order,
+        )
+    except StopIteration as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such menu item") from exc
+    except m13.InvalidMenuItem as exc:
+        # the domain scopes by vendor in the QUERY, so another tenant's item is
+        # indistinguishable from one that does not exist
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    _assisted(db, who, vendor, "menu_edit", before, _menu_row(item))
+    return _menu_row(item)
+
+
+@router.delete("/menu/{item_id}")
+def retire_menu_item(
+    item_id: uuid.UUID,
+    who: PortalActor = Depends(portal_actor),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Retires rather than deletes. Past appearances hold their own snapshots either
+    way, but a seasonal dish comes back and its price should come back with it."""
+    _require_active(db)
+    vendor = _my_vendor(db, who)
+    try:
+        item = m13.remove_menu_item(db, vendor, item_id)
+    except m13.InvalidMenuItem as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    _assisted(db, who, vendor, "menu_retire", {"is_active": True}, _menu_row(item))
+    return _menu_row(item)
+
+
+# --- verification ---
+@router.get("/documents")
+def list_documents(
+    who: PortalActor = Depends(portal_actor),
+    db: Session = Depends(get_db),
+) -> dict:
+    """The verification ladder, stated for what it is. `documents_on_file` means
+    EXACTLY that paperwork was received — never that anyone inspected a kitchen
+    (§23, the tier decision) — and the portal says so rather than implying more."""
+    _require_active(db)
+    vendor = _my_vendor(db, who)
+    return {
+        "verify_status": vendor.verify_status.value,
+        "documents": [
+            {
+                "document_id": str(d.id),
+                "kind": d.doc_kind.value,
+                "review_status": d.review_status.value,
+                "at": d.created_at.isoformat() if d.created_at else None,
+            }
+            for d in sorted(vendor.documents, key=lambda d: d.created_at or datetime.min)
+        ],
+        "kinds": [k.value for k in m13.DocumentKind],
+    }
+
+
+# --- reputation ---
+@router.get("/reputation")
+def reputation(
+    who: PortalActor = Depends(portal_actor),
+    db: Session = Depends(get_db),
+) -> dict:
+    """What drivers actually said, in the numbers drivers actually see.
+
+    No vanity variant: the show-up pair is the raw fraction, the rating carries its
+    reviewer count, and an unreviewed vendor reads "no reviews yet" rather than 0.0.
+    Upheld reports are shown because a vendor who cannot see them cannot fix them —
+    and because a suspension that arrives without warning is the failure this portal
+    exists to prevent."""
+    _require_active(db)
+    vendor = _my_vendor(db, who)
+    summary = m13.review_summary(db, vendor.id)
+    score = m13.reliability(db, vendor.id)
+    return {
+        "shows_up": {"confirmed": score.confirmed, "published": score.published},
+        "rating": {"average": summary.average, "reviewers": summary.reviewers},
+        "reviews": [
+            {
+                "review_id": str(r.id),
+                "rating": r.rating,
+                "text": r.text,
+                "at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in m13.list_reviews(db, vendor.id)
+        ],
+        # the count that drives suspension, so the number and its consequence are in
+        # the same place
+        "upheld_reports": m13.upheld_report_count(db, vendor.id),
+        "consecutive_no_shows": vendor.consecutive_no_shows,
+        "publish_suspended": vendor.publish_suspended,
+    }
+
+
+@router.patch("/promotions/{promotion_id}")
+def edit_promotion(
+    promotion_id: uuid.UUID,
+    body: PromotionEditIn,
+    who: PortalActor = Depends(portal_actor),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Text and end date only. A promotion cannot be re-pointed at a different vendor
+    or given a longer reach after the fact — the alert budget was already spent on
+    the terms it was created with."""
+    _require_active(db)
+    vendor = _my_vendor(db, who)
+    promo = db.get(m13.Promotion, promotion_id)
+    if promo is None or promo.vendor_id != vendor.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "promotion not found")
+    if promo.status != m13.PromotionStatus.active:
+        raise HTTPException(status.HTTP_409_CONFLICT, "only an active promotion can be edited")
+    before = {"text": promo.text, "ends_at": promo.ends_at.isoformat() if promo.ends_at else None}
+    if body.text is not None:
+        text = body.text.strip()
+        if not text or len(text) > m13.MAX_PROMOTION_CHARS:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"between 1 and {m13.MAX_PROMOTION_CHARS} characters",
+            )
+        promo.text = text
+    if body.ends_at is not None:
+        if body.ends_at <= promo.starts_at:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "the window must end after it starts"
+            )
+        promo.ends_at = body.ends_at
+    db.flush()
+    after = {"text": promo.text, "ends_at": promo.ends_at.isoformat() if promo.ends_at else None}
+    _assisted(db, who, vendor, "promotion_edit", before, after)
+    # editing does NOT re-send: the vendor_alert budget was spent when it was created,
+    # and an edit that pushed again would be a way around the one-per-day cap
+    return {"promotion_id": str(promo.id), **after, "alerts_delivered": 0}

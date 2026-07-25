@@ -44,7 +44,16 @@ def count_events(
     since: datetime | None = None,
     until: datetime | None = None,
     module: str | None = None,
+    properties_match: dict | None = None,
 ) -> int:
+    """AI-CONTEXT: `properties_match` narrows to events whose recorded properties
+    carry these exact values — the difference between "how many vendor sheets were
+    viewed" and "how many times was MY sheet viewed".
+
+    It exists because the vendor portal reported the first as though it were the
+    second: every vendor was shown the platform-wide total as their own view count.
+    A number that flatters its reader is the §11.7 failure the portal's own header
+    forbids, and the events already carried what was needed to be right."""
     stmt = (
         select(func.count())
         .select_from(AnalyticsEvent)
@@ -56,6 +65,8 @@ def count_events(
         stmt = stmt.where(AnalyticsEvent.occurred_at >= since)
     if until is not None:
         stmt = stmt.where(AnalyticsEvent.occurred_at <= until)
+    for key, value in (properties_match or {}).items():
+        stmt = stmt.where(AnalyticsEvent.properties[key].as_string() == str(value))
     return db.scalar(stmt)
 
 

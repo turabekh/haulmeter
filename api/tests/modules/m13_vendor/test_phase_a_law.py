@@ -46,13 +46,22 @@ def test_m13_declares_no_payment_or_order_surface():
 # every table M13 is allowed to own. The allowlist form is deliberate: an
 # unexpected table fails here even if its name looks innocent. Session B added
 # vendor_review (FR5), promotion (FR6), facility_claim (FR7) and content_report
-# (Q-8) — none of them money tables.
+# (Q-8); the portal session added menu_item — none of them money tables.
+#
+# `menu_item` is the one worth pausing on, because it holds prices. It is the
+# vendor's STANDING menu: what they sell and for how much, kept once instead of
+# retyped for every appearance. It carries the same kind of number `offering`
+# already carried and for the same reason — a driver deciding whether to detour
+# needs to know what a plate costs. There is no order, no basket, no total, and
+# nothing in this module can act on the figure. Adding it here was a deliberate
+# decision, which is exactly what this allowlist exists to force.
 ALLOWED_TABLES = {
     "vendor",
     "vendor_member",
     "vendor_document",
     "appearance",
     "offering",
+    "menu_item",
     "vendor_review",
     "promotion",
     "facility_claim",

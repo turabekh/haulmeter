@@ -101,6 +101,9 @@ class Vendor(Base):
     documents: Mapped[list["VendorDocument"]] = relationship(
         back_populates="vendor", cascade="all, delete-orphan"
     )
+    menu_items: Mapped[list["MenuItem"]] = relationship(
+        back_populates="vendor", cascade="all, delete-orphan"
+    )
 
 
 class VendorMember(Base):
@@ -194,8 +197,16 @@ class Appearance(Base):
 
 
 class Offering(Base):
-    """A menu line. `price_cents` is INFORMATION ONLY — Phase A processes no
-    payments and the platform sells nothing (PRD extension §E1.1)."""
+    """A menu line AS PUBLISHED for one appearance. `price_cents` is INFORMATION
+    ONLY — Phase A processes no payments and the platform sells nothing (PRD
+    extension §E1.1).
+
+    AI-CONTEXT: this stays keyed to the APPEARANCE, not to the vendor, and that is
+    the point. It is a SNAPSHOT of what was advertised for that window. A cook who
+    raises a price today must not silently rewrite what a driver was shown last
+    Tuesday — the past is what the reliability and review record are about, and a
+    menu that rewrote history would make both unauditable. `MenuItem` below is the
+    editable list; publishing COPIES it into rows here."""
 
     __tablename__ = "offering"
     __table_args__ = {"schema": SCHEMA}
@@ -209,6 +220,41 @@ class Offering(Base):
     portions: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     appearance: Mapped[Appearance] = relationship(back_populates="offerings")
+
+
+class MenuItem(Base):
+    """AI-CONTEXT: the vendor's STANDING menu — what they usually sell, and for how
+    much. Offerings hung off appearances alone, so a cook retyped every dish and
+    every price for every window; this is the list they keep.
+
+    It is deliberately NOT what a driver reads. Publishing copies these rows into
+    per-appearance `Offering` snapshots, so editing the menu changes what will be
+    advertised NEXT, never what was advertised before. `price_cents` is information
+    only, exactly as on Offering — nothing here moves money."""
+
+    __tablename__ = "menu_item"
+    __table_args__ = (
+        UniqueConstraint("vendor_id", "name", name="uq_menu_item_vendor_name"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    vendor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.vendor.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(120))
+    price_cents: Mapped[int] = mapped_column(Integer)
+    # how many the cook usually brings; carried onto the appearance as the starting
+    # portion count. None means "they don't count portions", not "zero".
+    portions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # off the menu without losing it — a seasonal dish comes back, and deleting it
+    # would take its price history with it
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    vendor: Mapped[Vendor] = relationship(back_populates="menu_items")
 
 
 class VendorReview(Base):

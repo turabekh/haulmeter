@@ -14,7 +14,7 @@ import VendorSheet from "../src/core/components/VendorSheet.vue";
 import CorridorStack from "../src/core/components/CorridorStack.vue";
 import PresetChips from "../src/core/components/PresetChips.vue";
 import MapCanvas from "../src/core/components/MapCanvas.vue";
-import { routes } from "../src/router.js";
+import { routes, installAuthGuard } from "../src/router.js";
 import { setToken, logout } from "../src/core/api.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 import {
@@ -289,7 +289,8 @@ describe("Food preset chip (§23 E-D2)", () => {
 });
 
 // --- Session B: promoted slots, reviews, reporting, the portal ---
-import VendorPortalSurface from "../src/surfaces/VendorPortalSurface.vue";
+import VendorPortalShell from "../src/surfaces/vendor/VendorPortalShell.vue";
+import VendorOverview from "../src/surfaces/vendor/VendorOverview.vue";
 import { splitPromoted, reviewSummary, reasonLabelKey, REPORT_REASONS } from "../src/core/vendors.js";
 
 const PROMO = {
@@ -458,7 +459,7 @@ describe("report affordance (Q-8)", () => {
   });
 });
 
-describe("VendorPortalSurface (§18 fourth portal)", () => {
+describe("Vendor portal shell (§18 fourth portal)", () => {
   const PROFILE = {
     vendor_id: "v-1",
     name: "Osh Express",
@@ -469,6 +470,7 @@ describe("VendorPortalSurface (§18 fourth portal)", () => {
     consecutive_no_shows: 0,
     profile_gaps: [],
     documents: [],
+    assisted: [],
   };
   const ANALYTICS = {
     sheet_views: 42,
@@ -484,6 +486,7 @@ describe("VendorPortalSurface (§18 fourth portal)", () => {
       "/vendor/appearances": [],
       "/vendor/promotions": [],
       "/vendor/analytics": ANALYTICS,
+      "/vendor/menu": [],
       ...overrides,
     };
     global.fetch = vi.fn((url) => {
@@ -496,24 +499,22 @@ describe("VendorPortalSurface (§18 fourth portal)", () => {
     });
   }
 
+  function mountShell() {
+    return mount(VendorPortalShell, {
+      global: { plugins: [createRouter({ history: createMemoryHistory(), routes })] },
+    });
+  }
+
   beforeEach(() => setToken("portal-token"));
   afterEach(() => {
     logout();
     vi.restoreAllMocks();
   });
 
-  it("shows the same show-up pair a driver sees — no vanity variant", async () => {
-    mockPortal();
-    const w = mount(VendorPortalSurface);
-    await flushPromises();
-    // 19/20 is exactly what VendorSheet renders for the same vendor
-    expect(w.text()).toContain("19/20");
-    expect(w.text()).not.toMatch(/95%/);
-  });
-
-  it("states a suspension plainly at the top", async () => {
+  // the shell carries what a cook must not have to go looking for
+  it("states a suspension plainly, wherever they are standing", async () => {
     mockPortal({ "/vendor/profile": { ...PROFILE, publish_suspended: true } });
-    const w = mount(VendorPortalSurface);
+    const w = mountShell();
     await flushPromises();
     expect(w.find(".portal__alert").exists()).toBe(true);
     expect(w.text()).toContain("Publishing is paused");
@@ -523,29 +524,80 @@ describe("VendorPortalSurface (§18 fourth portal)", () => {
     mockPortal({
       "/vendor/profile": { ...PROFILE, profile_gaps: ["languages", "halal_disclosure"] },
     });
-    const w = mount(VendorPortalSurface);
+    const w = mountShell();
     await flushPromises();
-    expect(w.find(".portal__gaps").text()).toContain("languages");
-  });
-
-  it("shows a quiet empty state rather than a blank panel", async () => {
-    mockPortal();
-    const w = mount(VendorPortalSurface);
-    await flushPromises();
-    expect(w.text()).toContain("Nothing scheduled yet.");
-    expect(w.text()).toContain("No promotions running.");
+    expect(w.find(".portal__gaps").exists()).toBe(true);
   });
 
   it("explains itself to someone who is not a vendor", async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 404, json: () => ({}) }));
-    const w = mount(VendorPortalSurface);
+    const w = mountShell();
     await flushPromises();
     expect(w.text()).toContain("vendor portal");
   });
 
+  it("offers every section on the rail", async () => {
+    mockPortal();
+    const w = mountShell();
+    await flushPromises();
+    const labels = w.findAll(".rail__item").map((a) => a.text());
+    expect(labels).toHaveLength(6);
+    expect(labels).toContain("My week");
+    expect(labels).toContain("Menu & prices");
+  });
+
+  // the overview carries the figures, and they are the DRIVER's figures
+  it("shows the same show-up pair a driver sees — no vanity variant", async () => {
+    mockPortal();
+    const w = mount(VendorOverview, {
+      global: { plugins: [createRouter({ history: createMemoryHistory(), routes })] },
+    });
+    await flushPromises();
+    // 19 / 20 is exactly what VendorSheet renders for the same vendor
+    expect(w.text()).toMatch(/19\s*\/\s*20/);
+    expect(w.text()).not.toMatch(/95%/);
+  });
+
+  it("shows a quiet empty state rather than a blank panel", async () => {
+    mockPortal();
+    const w = mount(VendorOverview, {
+      global: { plugins: [createRouter({ history: createMemoryHistory(), routes })] },
+    });
+    await flushPromises();
+    expect(w.text()).toContain("Nothing scheduled yet.");
+  });
+
   it("is a portal route, not a driver-app tab", () => {
-    const route = routes.find((r) => r.name === "vendor-portal");
+    // the sections are children now, so the portal meta lives on the parent
+    const route = routes.find((r) => r.path === "/vendor-portal");
     expect(route.meta.portal).toBe(true);
     expect(route.meta.chrome).toBe(false);
+    expect(route.children.map((c) => c.name)).toContain("vendor-portal");
+  });
+
+  it("has a PUBLIC way in, because a cook without an account cannot be behind the gate", () => {
+    const join = routes.find((r) => r.name === "vendor-join");
+    expect(join.meta.public).toBe(true);
+    expect(join.meta.portal).toBe(true);
+  });
+
+  it("sends an unauthenticated visitor to the portal's own door, not the driver login", () => {
+    // the driver login is mobile-first, asks for an authority number, and lands on
+    // the trucking map afterwards — all three are wrong for a cook
+    const router = { beforeEach: (fn) => (router._guard = fn) };
+    installAuthGuard(router);
+    logout();
+    expect(router._guard({ path: "/vendor-portal/menu", meta: {}, query: {} })).toEqual({
+      name: "vendor-join",
+    });
+  });
+
+  it("brings everyone else back where they were going after the driver login", () => {
+    const router = { beforeEach: (fn) => (router._guard = fn) };
+    installAuthGuard(router);
+    logout();
+    expect(
+      router._guard({ path: "/money", fullPath: "/money", meta: {}, query: {} }),
+    ).toEqual({ name: "login", query: { next: "/money" } });
   });
 });

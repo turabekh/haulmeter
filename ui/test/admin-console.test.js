@@ -687,7 +687,8 @@ describe("Accounts — powers and their limits (E-D6)", () => {
 });
 
 // --- E-D5 impersonation banner + decision 7 facility editor ---
-import VendorPortalSurface from "../src/surfaces/VendorPortalSurface.vue";
+import VendorPortalShell from "../src/surfaces/vendor/VendorPortalShell.vue";
+import VendorOverview from "../src/surfaces/vendor/VendorOverview.vue";
 import AdminData from "../src/surfaces/admin/AdminData.vue";
 import { setImpersonation } from "../src/core/api.js";
 
@@ -718,14 +719,20 @@ describe("Impersonation banner (E-D5)", () => {
       "/vendor/appearances": [],
       "/vendor/promotions": [],
       "/vendor/analytics": ANALYTICS,
+      "/vendor/menu": [],
     });
   }
+
+  // the banner lives in the SHELL so it is present on every section; the assisted
+  // note lives on the overview, where a cook lands
+  const mountShell = () => mount(VendorPortalShell, { global: { plugins: [testRouter()] } });
+  const mountOverview = () => mount(VendorOverview, { global: { plugins: [testRouter()] } });
 
   afterEach(() => setImpersonation(null));
 
   it("shows nothing when the operator is not impersonating", async () => {
     portalStub();
-    const w = mount(VendorPortalSurface);
+    const w = mountShell();
     await flushPromises();
     expect(w.find(".viewas").exists()).toBe(false);
   });
@@ -735,7 +742,7 @@ describe("Impersonation banner (E-D5)", () => {
     // edits will look like the vendor's
     setImpersonation({ token: "imp-1", vendor_name: "Osh Express", vendor_id: "v-1" });
     portalStub();
-    const w = mount(VendorPortalSurface);
+    const w = mountShell();
     await flushPromises();
 
     const banner = w.find(".viewas");
@@ -748,14 +755,14 @@ describe("Impersonation banner (E-D5)", () => {
   it("tells the vendor when support has edited their things", async () => {
     // derived server-side from the audit log, so there is one source of truth
     portalStub({ ...PROFILE, assisted: [{ action: "profile_edit", at: "2026-07-26T09:00:00Z" }] });
-    const w = mount(VendorPortalSurface);
+    const w = mountOverview();
     await flushPromises();
     expect(w.text()).toContain("Edited by Haulmeter support");
   });
 
   it("says nothing about support when support has not touched anything", async () => {
     portalStub();
-    const w = mount(VendorPortalSurface);
+    const w = mountOverview();
     await flushPromises();
     expect(w.text()).not.toContain("Edited by Haulmeter support");
   });

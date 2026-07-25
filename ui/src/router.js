@@ -29,7 +29,15 @@ import AdminModules from "./surfaces/admin/AdminModules.vue";
 import AdminAudit from "./surfaces/admin/AdminAudit.vue";
 import PublicScorecardSurface from "./surfaces/PublicScorecardSurface.vue";
 import OwnerPortalSurface from "./surfaces/OwnerPortalSurface.vue";
-import VendorPortalSurface from "./surfaces/VendorPortalSurface.vue";
+import VendorPortalShell from "./surfaces/vendor/VendorPortalShell.vue";
+import VendorOverview from "./surfaces/vendor/VendorOverview.vue";
+import VendorWeek from "./surfaces/vendor/VendorWeek.vue";
+import VendorMenu from "./surfaces/vendor/VendorMenu.vue";
+import VendorPromotions from "./surfaces/vendor/VendorPromotions.vue";
+import VendorVerification from "./surfaces/vendor/VendorVerification.vue";
+import VendorReputation from "./surfaces/vendor/VendorReputation.vue";
+import VendorProfile from "./surfaces/vendor/VendorProfile.vue";
+import VendorJoinSurface from "./surfaces/vendor/VendorJoinSurface.vue";
 import { isAuthenticated } from "./core/api.js";
 
 // DEV-ONLY: the /dev directory ships ONLY in development builds. Vite replaces
@@ -84,8 +92,33 @@ export const routes = [
     ],
   },
   { path: "/owner", name: "owner", component: OwnerPortalSurface, meta: { chrome: false, portal: true } },
-  // §18 fourth portal (§23 E-D3): the vendor manages their week at a desk
-  { path: "/vendor-portal", name: "vendor-portal", component: VendorPortalSurface, meta: { chrome: false, portal: true } },
+  // §18 fourth portal (§23 E-D3): the vendor manages their week at a desk.
+  // Sections are router CHILDREN behind the rail approved for the admin console
+  // (§23 E-D4), reused rather than reinvented — §22.2 makes navigation structure a
+  // never-improvise category, and this is the same portal family.
+  {
+    path: "/vendor-portal",
+    component: VendorPortalShell,
+    meta: { chrome: false, portal: true },
+    children: [
+      { path: "", name: "vendor-portal", component: VendorOverview },
+      { path: "week", name: "vendor-week", component: VendorWeek },
+      { path: "menu", name: "vendor-menu", component: VendorMenu },
+      { path: "promotions", name: "vendor-promotions", component: VendorPromotions },
+      { path: "verification", name: "vendor-verification", component: VendorVerification },
+      { path: "reputation", name: "vendor-reputation", component: VendorReputation },
+      { path: "profile", name: "vendor-profile", component: VendorProfile },
+    ],
+  },
+  // the way IN. Public, because a cook who has not signed up yet cannot be behind
+  // the gate — and the DRIVER login is the wrong door for them (mobile-first, asks
+  // for an authority number, lands on the trucking map).
+  {
+    path: "/vendor-portal/join",
+    name: "vendor-join",
+    component: VendorJoinSurface,
+    meta: { public: true, chrome: false, portal: true },
+  },
   // §18 PUBLIC portal — no login (meta.public bypasses the auth guard)
   { path: "/scorecard", name: "scorecard", component: PublicScorecardSurface, meta: { public: true, chrome: false, portal: true } },
   ...devRoutes, // /dev — development builds only (see above)
@@ -95,8 +128,19 @@ export const routes = [
 // never sit on /login. Public routes (login) bypass the check.
 export function installAuthGuard(router) {
   router.beforeEach((to) => {
-    if (!to.meta.public && !isAuthenticated.value) return { name: "login" };
-    if (to.name === "login" && isAuthenticated.value) return { name: "map" };
+    if (!to.meta.public && !isAuthenticated.value) {
+      // a cook who lands on the portal without a session belongs at the portal's
+      // own door, not the driver login — that door asks for an authority number
+      // and drops them on the trucking map afterwards
+      if (to.path.startsWith("/vendor-portal")) return { name: "vendor-join" };
+      // everyone else goes to the driver login, and comes BACK here afterwards
+      // rather than being dumped on the map having forgotten where they were going
+      return { name: "login", query: { next: to.fullPath } };
+    }
+    if (to.name === "login" && isAuthenticated.value) {
+      const next = typeof to.query.next === "string" ? to.query.next : null;
+      return next && next.startsWith("/") ? next : { name: "map" };
+    }
     return true;
   });
 }
