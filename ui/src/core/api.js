@@ -809,14 +809,29 @@ export function cachedAppearances() {
   }
 }
 
-export async function fetchVendorAppearances({ bbox, signal } = {}) {
+// AI-CONTEXT: §11.3 food filters ride the SAME bbox request. They narrow what the
+// server already decided is discoverable; the client never filters locally, because a
+// client that held everything and hid some of it would be one bug away from showing a
+// driver a lapsed listing.
+function withFilters(params, filters) {
+  for (const key of ["q", "language", "halal"]) {
+    const value = filters?.[key];
+    if (value) params.set(key, value);
+  }
+  return params;
+}
+
+export async function fetchVendorAppearances({ bbox, filters, signal } = {}) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
-  const q = new URLSearchParams({
-    min_lat: bbox.min_lat,
-    min_lon: bbox.min_lon,
-    max_lat: bbox.max_lat,
-    max_lon: bbox.max_lon,
-  });
+  const q = withFilters(
+    new URLSearchParams({
+      min_lat: bbox.min_lat,
+      min_lon: bbox.min_lon,
+      max_lat: bbox.max_lat,
+      max_lon: bbox.max_lon,
+    }),
+    filters,
+  );
   const resp = await fetch(`${API_BASE}/vendors/appearances?${q}`, {
     headers: headers(),
     signal,
@@ -842,9 +857,11 @@ export async function fetchVendorSheet(vendorId) {
   return resp.json();
 }
 
-export async function fetchCorridorVendors({ lat, lon, headingDeg = 0 } = {}) {
+export async function fetchCorridorVendors({ lat, lon, headingDeg = 0, filters } = {}) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
-  const q = new URLSearchParams({ lat, lon, heading_deg: headingDeg });
+  // filters chosen while stopped keep applying while moving (§11.4 — no keyboard
+  // at speed, so the choice has to have been made earlier to be useful at all)
+  const q = withFilters(new URLSearchParams({ lat, lon, heading_deg: headingDeg }), filters);
   const resp = await fetch(`${API_BASE}/vendors/corridor?${q}`, { headers: headers() });
   if (!resp.ok) throw new Error(`vendor corridor failed: ${resp.status}`);
   return resp.json();

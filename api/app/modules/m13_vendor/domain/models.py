@@ -23,6 +23,7 @@ from .enums import (
     ClaimStatus,
     DocumentKind,
     DocumentReviewStatus,
+    HalalClaim,
     MemberRole,
     ModerationReason,
     PromotionScope,
@@ -64,6 +65,15 @@ class Vendor(Base):
     # vendor can honestly decline to claim halal without being blocked.
     halal_disclosure: Mapped[str | None] = mapped_column(Text, nullable=True)
     halal_answered: Mapped[bool] = mapped_column(Boolean, default=False)
+    # the same answer in a form a driver can FILTER on. The sentence above is still
+    # what gets shown, verbatim — this exists so discovery does not require the
+    # platform to parse it and thereby make a halal claim of its own (§23).
+    halal_claim: Mapped[HalalClaim] = mapped_column(
+        Enum(HalalClaim, name="halal_claim", schema=SCHEMA),
+        default=HalalClaim.not_claimed,
+        server_default=HalalClaim.not_claimed.value,
+        index=True,
+    )
 
     verify_status: Mapped[VendorVerifyStatus] = mapped_column(
         Enum(VendorVerifyStatus, name="vendor_verify_status", schema=SCHEMA),

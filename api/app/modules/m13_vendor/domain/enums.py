@@ -27,6 +27,29 @@ class MemberRole(enum.Enum):
     helper = "helper"
 
 
+class HalalClaim(enum.Enum):
+    """AI-CONTEXT: what the VENDOR claims about halal, structured so it can be
+    filtered on — and nothing more.
+
+    The free-text `halal_disclosure` stays and is still shown verbatim; §23 already
+    settled that the platform makes no halal claim of its own, and parsing a cook's
+    sentence to decide who counts would be exactly that. This field is the cook's own
+    answer to a closed question, which is a different act from us interpreting them.
+
+    Each rung means precisely what it says, like the verification ladder:
+    · not_claimed   — the vendor does not claim halal. A complete, honest answer.
+    · self_declared — the VENDOR says halal. Nobody has checked. The driver-facing
+                      label carries "vendor says", never a bare "Halal".
+    · certified     — a halal certificate is on file AND approved. Reachable only
+                      when an approved halal_cert document exists, so it cannot be
+                      self-awarded (see `allowed_halal_claim`).
+    """
+
+    not_claimed = "not_claimed"
+    self_declared = "self_declared"
+    certified = "certified"
+
+
 class DocumentKind(enum.Enum):
     license = "license"
     insurance = "insurance"

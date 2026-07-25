@@ -81,6 +81,8 @@ def _entry_out(entry: m13.VendorEntry) -> dict:
         "vendor_type": entry.vendor.vendor_type.value,
         "verify_status": entry.vendor.verify_status.value,
         "languages": entry.vendor.languages,
+        # the RUNG, so the label can say "vendor says halal" rather than "halal"
+        "halal_claim": entry.vendor.halal_claim.value,
         "facility_id": str(entry.appearance.facility_id),
         "starts_at": entry.appearance.starts_at.isoformat(),
         "ends_at": entry.appearance.ends_at.isoformat(),
@@ -125,11 +127,21 @@ def appearances(
     min_lon: float,
     max_lat: float,
     max_lon: float,
+    # §11.3 "More filters". These NARROW what is already discoverable and can never
+    # widen it — the quality laws run first, the filter runs on their output.
+    q: str | None = None,
+    language: str | None = None,
+    halal: str | None = None,
     _account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     _require_active(db)
-    return [_entry_out(e) for e in m13.appearances_in_bbox(db, min_lat, min_lon, max_lat, max_lon)]
+    return [
+        _entry_out(e)
+        for e in m13.appearances_in_bbox(
+            db, min_lat, min_lon, max_lat, max_lon, q=q, language=language, halal=halal
+        )
+    ]
 
 
 @router.get("/corridor")
@@ -138,13 +150,21 @@ def corridor(
     lon: float,
     heading_deg: float = 0,
     max_distance_m: float = 64000,
+    # filters chosen while STOPPED keep applying while moving — that is what makes
+    # them worth persisting, since no keyboard is available at speed (§11.4)
+    q: str | None = None,
+    language: str | None = None,
+    halal: str | None = None,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     _require_active(db)
     return [
         _entry_out(e)
-        for e in m13.corridor_vendors(db, account.id, lat, lon, heading_deg, max_distance_m)
+        for e in m13.corridor_vendors(
+            db, account.id, lat, lon, heading_deg, max_distance_m, q=q, language=language,
+            halal=halal,
+        )
     ]
 
 
@@ -191,6 +211,8 @@ def vendor_sheet(
         "categories": vendor.categories,
         "languages": vendor.languages,
         "halal_disclosure": vendor.halal_disclosure,
+        # the rung names WHO is claiming; the sentence above is the vendor's words
+        "halal_claim": vendor.halal_claim.value,
         # the raw pair, not a percentage: a fraction carries its own sample size,
         # and "95%" over two appearances would overstate what we actually know
         "shows_up": {"confirmed": score.confirmed, "published": score.published},

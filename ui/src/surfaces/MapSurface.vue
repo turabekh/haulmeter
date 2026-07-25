@@ -6,13 +6,14 @@
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
-import { CircleDot, Mic } from "lucide-vue-next";
+import { CircleDot, Mic, SlidersHorizontal } from "lucide-vue-next";
 import MapCanvas from "../core/components/MapCanvas.vue";
 import PresetChips from "../core/components/PresetChips.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import FacilityCard from "../core/components/FacilityCard.vue";
 import CorridorStack from "../core/components/CorridorStack.vue";
 import ReportSheet from "../core/components/ReportSheet.vue";
+import MoreFiltersSheet from "../core/components/MoreFiltersSheet.vue";
 import PriceReportSheet from "../core/components/PriceReportSheet.vue";
 import VoiceSheet from "../core/components/VoiceSheet.vue";
 import SleepSheet from "../core/components/SleepSheet.vue";
@@ -131,7 +132,11 @@ const pins = computed(() => {
 
 // Q-7: the Food chip over an empty viewport shows ONE quiet line plus the
 // recruitment affordance — never a scolding or celebratory empty state (§15.3).
+// With a filter applied the two states are DIFFERENT facts: "no cooks work here" and
+// "your filter hid them" call for different next actions, and telling a driver the
+// first when the second is true would make them stop looking.
 const foodEmpty = computed(() => preset.value === "food" && pins.value.length === 0);
+const filteredEmpty = computed(() => foodEmpty.value && filtersActive.value);
 
 const rawPins = computed(() => {
   if (livePins.value) return livePins.value; // API already preset-filtered
@@ -142,6 +147,37 @@ const rawPins = computed(() => {
   }
   return list;
 });
+
+// §11.3: the ONE "More filters" sheet. Persisted like the preset is, because the
+// choice has to survive into DRIVING — no keyboard is available at speed, so a
+// filter is only useful if it was set while stopped and kept applying afterwards.
+const FILTERS_KEY = "longhaul.food_filters";
+const EMPTY_FILTERS = { q: "", language: "", halal: "" };
+function loadFilters() {
+  try {
+    return { ...EMPTY_FILTERS, ...(JSON.parse(localStorage.getItem(FILTERS_KEY)) || {}) };
+  } catch {
+    return { ...EMPTY_FILTERS };
+  }
+}
+const filters = ref(loadFilters());
+const filtering = ref(false);
+const filtersActive = computed(
+  () => !!(filters.value.q || filters.value.language || filters.value.halal),
+);
+watch(
+  filters,
+  (v) => {
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify(v));
+    } catch {
+      /* private mode — the filter stays for this session only */
+    }
+    loadVendors();
+    if (isDriving.value) loadCorridorFood();
+  },
+  { deep: true },
+);
 
 // M13-FR3: appearances in view drive the pins' food badge and the card section.
 // Offline (§15.1): today's cache renders the food layer in a dead zone; a stale
@@ -155,7 +191,7 @@ const vendorTarget = ref(null);
 
 async function loadVendors(bbox = lastBbox) {
   try {
-    const entries = await fetchVendorAppearances({ bbox });
+    const entries = await fetchVendorAppearances({ bbox, filters: filters.value });
     vendorEntries.value = Array.isArray(entries) ? entries : cachedAppearances();
   } catch {
     vendorEntries.value = cachedAppearances(); // dead zone / flag off / no session
@@ -166,7 +202,11 @@ async function loadVendors(bbox = lastBbox) {
 const corridorFood = ref([]);
 async function loadCorridorFood() {
   try {
-    const ahead = await fetchCorridorVendors({ lat: geo.value.lat, lon: geo.value.lon });
+    const ahead = await fetchCorridorVendors({
+      lat: geo.value.lat,
+      lon: geo.value.lon,
+      filters: filters.value, // set while stopped, honoured while moving
+    });
     corridorFood.value = Array.isArray(ahead) ? ahead : [];
   } catch {
     corridorFood.value = [];
@@ -406,8 +446,30 @@ async function submitPrice(cents) {
       <button v-if="handoffs.length" class="relay-banner" type="button" @click="relaying = true">
         {{ handoffs.length }} {{ t("handoff.nearby") }}
       </button>
+      <!-- §11.3: presets stay the interface; ONE filters sheet sits behind the Food
+           chip, and only there — the other presets have nothing to narrow yet. -->
+      <button
+        v-if="preset === 'food'"
+        class="filters-chip"
+        :class="{ 'filters-chip--on': filtersActive }"
+        type="button"
+        @click="filtering = true"
+      >
+        <SlidersHorizontal :size="16" :stroke-width="2" aria-hidden="true" />
+        {{ t("filters.button") }}
+      </button>
+
+      <!-- two different facts, two different next actions: nobody cooks here, or
+           your filter hid them. Saying the first when the second is true would make
+           a driver stop looking. -->
+      <p v-if="filteredEmpty" class="food-empty">
+        {{ t("filters.none_match") }}
+        <button class="food-empty__cta" type="button" @click="filters = { ...EMPTY_FILTERS }">
+          {{ t("filters.clear") }}
+        </button>
+      </p>
       <!-- Q-7: one quiet line + the recruitment affordance. No filler, no scolding. -->
-      <p v-if="foodEmpty" class="food-empty">
+      <p v-else-if="foodEmpty" class="food-empty">
         {{ t("vendor.none_nearby") }}
         <button
           v-if="!suggested"
@@ -480,6 +542,16 @@ async function submitPrice(cents) {
         @review="submitVendorReview"
         @report="reportThisVendor"
       />
+    </BottomSheet>
+
+    <!-- IDLE only. Forbidden #11 bans keyboard input while moving, and §11.4 replaces
+         free exploration with the corridor — filters already set keep applying. -->
+    <BottomSheet
+      :open="filtering && !isDriving"
+      :title="t('filters.title')"
+      @close="filtering = false"
+    >
+      <MoreFiltersSheet v-model="filters" @close="filtering = false" />
     </BottomSheet>
 
     <BottomSheet :open="reporting" :title="t('map.report')" @close="reporting = false">
@@ -581,6 +653,24 @@ async function submitPrice(cents) {
   position: relative;
   flex: 1 1 auto;
   min-height: 240px;
+}
+/* the same pill the preset row uses — no new component pattern (§22.2) */
+.filters-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 40px;
+  margin: 0 var(--s-4) var(--s-2);
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+}
+.filters-chip--on {
+  border-color: var(--shield-500);
+  color: var(--shield-500);
 }
 .report-chip {
   position: absolute;

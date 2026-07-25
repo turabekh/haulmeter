@@ -18,6 +18,8 @@ const busy = ref(false);
 const saved = ref(false);
 const error = ref(null);
 
+const CLAIMS = ["not_claimed", "self_declared", "certified"];
+
 const form = reactive({
   name: "",
   vendor_type: "food_mobile",
@@ -26,6 +28,7 @@ const form = reactive({
   categories: "",
   languages: "",
   halal_disclosure: "",
+  halal_claim: "not_claimed",
 });
 
 const gaps = computed(() => profile.value?.profile_gaps ?? []);
@@ -39,7 +42,14 @@ function fill(p) {
   form.categories = (p.categories || []).join(", ");
   form.languages = (p.languages || []).join(", ");
   form.halal_disclosure = p.halal_disclosure || "";
+  form.halal_claim = p.halal_claim || "not_claimed";
 }
+
+// only the rungs the SERVER will honour. `certified` appears once an approved halal
+// certificate exists, so the control never promises something taken back on save.
+const claimsAvailable = computed(
+  () => profile.value?.halal_claims_available ?? ["not_claimed", "self_declared"],
+);
 
 function csv(text) {
   return text
@@ -62,6 +72,7 @@ async function save() {
         categories: csv(form.categories),
         languages: csv(form.languages),
         halal_disclosure: form.halal_disclosure.trim(),
+        halal_claim: form.halal_claim,
         // answering at all is what the floor checks — "no halal claim" is a complete
         // answer and a blank is not, so saving marks it answered
         halal_answered: true,
@@ -143,6 +154,27 @@ onMounted(async () => {
         <span class="field__hint">{{ t("vendor.join.halal_hint") }}</span>
       </label>
 
+      <!-- the same answer as a closed question, so drivers can FILTER on it. The
+           sentence above is still what they read; this is what they search by, and
+           keeping them separate is what stops the platform interpreting a cook (§23). -->
+      <fieldset class="field">
+        <legend class="field__label">{{ t("vendor.halal_claim_label") }}</legend>
+        <div class="types">
+          <button
+            v-for="c in CLAIMS"
+            :key="c"
+            type="button"
+            class="type"
+            :class="{ 'type--on': form.halal_claim === c }"
+            :disabled="!claimsAvailable.includes(c)"
+            @click="form.halal_claim = c"
+          >
+            {{ t(`vendor.halal_claim.${c}`) }}
+          </button>
+        </div>
+        <span class="field__hint">{{ t("vendor.halal_claim_hint") }}</span>
+      </fieldset>
+
       <button class="cta" type="submit" :disabled="busy">{{ t("portal.vendor.save") }}</button>
       <p v-if="saved" class="ok">{{ t("vendor.saved") }}</p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -205,6 +237,7 @@ onMounted(async () => {
 }
 .types {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
 }
 .type {
@@ -219,6 +252,11 @@ onMounted(async () => {
 .type--on {
   border-color: var(--shield-500);
   color: var(--shield-500);
+}
+/* a rung the server will not honour is shown but not selectable — hiding it would
+   leave a cook wondering how anyone gets certified */
+.type:disabled {
+  opacity: 0.45;
 }
 .cta {
   min-height: 48px;

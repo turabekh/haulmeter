@@ -37,6 +37,7 @@ from .enums import (
     AppearanceStatus,
     DocumentKind,
     DocumentReviewStatus,
+    HalalClaim,
     MemberRole,
     VendorStatus,
     VendorType,
@@ -873,8 +874,76 @@ def vendors_at_facility(
     return ranked[:limit] if limit else ranked
 
 
+# AI-CONTEXT: §11.3 "presets over filters, one More-filters sheet". These narrow
+# what is ALREADY discoverable; none of them can widen it. A filter is applied to the
+# output of `_discoverable` + `rank_entries`, never in place of either, so no filter
+# can surface a lapsed appearance, a suspended vendor, or anything the §E1.9 quality
+# laws exclude — the worst a filter can do is show a driver less.
+#
+# `q` matches the vendor's name and their DISH names, because "tamales" is what a
+# driver types, not the name of the cook. It is bounded by the caller's viewport or
+# corridor exactly as the unfiltered query is: an unbounded food search would be
+# expensive and useless at 3am, and an empty result must mean "none in this view".
+def _matches_query(entry: "VendorEntry", needle: str) -> bool:
+    haystack = " ".join(
+        [entry.vendor.name, *(o.name for o in entry.offerings)]
+    ).casefold()
+    return needle.casefold() in haystack
+
+
+def _matches_language(entry: "VendorEntry", language: str) -> bool:
+    return language.casefold() in {str(x).casefold() for x in (entry.vendor.languages or [])}
+
+
+def _matches_halal(entry: "VendorEntry", halal: str) -> bool:
+    """`self_declared` includes `certified`, because a driver asking for halal wants
+    both rungs — the label is what distinguishes them, not the filter."""
+    claim = entry.vendor.halal_claim
+    if halal == HalalClaim.certified.value:
+        return claim == HalalClaim.certified
+    return claim in (HalalClaim.self_declared, HalalClaim.certified)
+
+
+def apply_filters(
+    entries: list["VendorEntry"],
+    q: str | None = None,
+    language: str | None = None,
+    halal: str | None = None,
+) -> list["VendorEntry"]:
+    out = entries
+    if q and q.strip():
+        out = [e for e in out if _matches_query(e, q.strip())]
+    if language:
+        out = [e for e in out if _matches_language(e, language)]
+    if halal:
+        out = [e for e in out if _matches_halal(e, halal)]
+    return out
+
+
+def allowed_halal_claim(db: Session, vendor: Vendor, wanted: HalalClaim) -> HalalClaim:
+    """`certified` cannot be self-awarded. It requires an APPROVED halal_cert document,
+    exactly as `verified` requires reviewed paperwork — a rung a vendor could simply
+    select would mean nothing to the driver reading it (§23 tiers)."""
+    if wanted != HalalClaim.certified:
+        return wanted
+    approved = any(
+        d.doc_kind == DocumentKind.halal_cert
+        and d.review_status == DocumentReviewStatus.approved
+        for d in vendor.documents
+    )
+    return HalalClaim.certified if approved else HalalClaim.self_declared
+
+
 def appearances_in_bbox(
-    db: Session, min_lat, min_lon, max_lat, max_lon, now: datetime | None = None
+    db: Session,
+    min_lat,
+    min_lon,
+    max_lat,
+    max_lon,
+    now: datetime | None = None,
+    q: str | None = None,
+    language: str | None = None,
+    halal: str | None = None,
 ) -> list[VendorEntry]:
     """Feeds the map's food badge. Bounded by the viewport, so a continental pan
     returns the facilities in view and nothing more."""
@@ -888,7 +957,8 @@ def appearances_in_bbox(
         select(Appearance).where(Appearance.facility_id.in_(list(facilities)), *_discoverable(now))
     )
     entries = [e for a in rows if (e := _entry_for(db, a, now)) is not None]
-    return rank_entries(entries)
+    # ranked FIRST, then narrowed: a filter must not be able to reorder anything (Q-3)
+    return apply_filters(rank_entries(entries), q=q, language=language, halal=halal)
 
 
 def corridor_vendors(
@@ -900,6 +970,9 @@ def corridor_vendors(
     max_distance_m: float = 64000,
     now: datetime | None = None,
     limit: int = MAX_CORRIDOR_VENDORS,
+    q: str | None = None,
+    language: str | None = None,
+    halal: str | None = None,
 ) -> list[VendorEntry]:
     """Appearances ahead on the driver's heading. The corridor geometry itself comes
     from M1's public interface (M8 exposes no corridor primitive), so M13 adds the
@@ -917,7 +990,10 @@ def corridor_vendors(
         for a in rows
         if (e := _entry_for(db, a, now, distance_m=distances.get(a.facility_id))) is not None
     ]
-    return rank_entries(entries)[:limit]
+    # filters set while STOPPED still shape what the corridor shows while moving —
+    # that is the whole point of them persisting (§11.4: no keyboard while driving)
+    narrowed = apply_filters(rank_entries(entries), q=q, language=language, halal=halal)
+    return narrowed[:limit]
 
 
 def vendor_detail(db: Session, vendor_id, now: datetime | None = None) -> dict | None:

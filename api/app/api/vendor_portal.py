@@ -40,6 +40,7 @@ class ProfileIn(BaseModel):
     languages: list[str] | None = None
     halal_disclosure: str | None = None
     halal_answered: bool | None = None
+    halal_claim: str | None = None
     contact_phone: str | None = None
 
 
@@ -170,6 +171,15 @@ def profile(
         "languages": vendor.languages,
         "halal_disclosure": vendor.halal_disclosure,
         "halal_answered": vendor.halal_answered,
+        "halal_claim": vendor.halal_claim.value,
+        # what the cook may SELECT right now. `certified` appears only once an
+        # approved certificate exists, so the control cannot promise a rung the
+        # server will silently take back.
+        "halal_claims_available": [
+            c.value
+            for c in m13.HalalClaim
+            if m13.allowed_halal_claim(db, vendor, c) == c
+        ],
         "verify_status": vendor.verify_status.value,
         "status": vendor.status.value,
         # said plainly, with the count that caused it — a vendor should never
@@ -229,6 +239,18 @@ def update_profile(
         vendor.halal_disclosure = body.halal_disclosure
     if body.halal_answered is not None:
         vendor.halal_answered = body.halal_answered
+    if body.halal_claim is not None:
+        try:
+            wanted = m13.HalalClaim(body.halal_claim)
+        except ValueError as exc:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown halal claim"
+            ) from exc
+        # `certified` is not self-awardable: it needs an approved halal_cert on file,
+        # exactly as `verified` needs reviewed paperwork. An unsupported claim is
+        # DOWNGRADED rather than refused, because "vendor says halal" is still true
+        # and refusing would leave the cook unable to say anything at all.
+        vendor.halal_claim = m13.allowed_halal_claim(db, vendor, wanted)
     if body.contact_phone is not None:
         vendor.contact_phone = "".join(ch for ch in body.contact_phone if ch.isdigit())[-10:]
     db.flush()

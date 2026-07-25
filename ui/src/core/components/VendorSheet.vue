@@ -116,7 +116,11 @@ const presence = computed(() =>
       {{ t("vendor.languages") }}: {{ sheet.languages.join(" · ") }}
     </p>
 
-    <!-- the vendor's own words, verbatim — we make no halal claim of our own -->
+    <!-- the RUNG names who is speaking; the sentence beneath is the vendor's own
+         words, verbatim. Neither is the platform claiming anything (§23). -->
+    <p v-if="sheet.halal_claim && sheet.halal_claim !== 'not_claimed'" class="vs__meta">
+      {{ t(`vendor.halal_claim.${sheet.halal_claim}`) }}
+    </p>
     <p class="vs__meta">
       {{ t("vendor.halal") }}:
       {{ sheet.halal_disclosure || t("vendor.halal_none") }}
