@@ -1,6 +1,6 @@
 # PRD Extension E1 — M13 Vendor Network + Platform Additions
 
-**Status:** PROPOSAL — awaiting owner approval. On approval: fold §E4 entries into PRD §17, amend PRD §6 build order (M13), log design-prd §23 proposals E-D1..E-D3.
+**Status:** **APPROVED 2026-07-25 (owner).** Folded in: PRD §6 build-order amendment (M13), PRD §17 Q9–Q13 (Q12 resolved — attributes, not kinds), design-prd §23 entries E-D1/E-D2/E-D3 plus two derived honesty rulings. **Session A (E2 + E3.2 + M13-FR1..FR4) is BUILT** — see `docs/handoffs/HANDOFF-071.md`. Session B (FR5–FR8) is the next task; FR9/Phase B remains unscheduled.
 **Amends:** `docs/trucker-platform-prd.md` v1.0 · **Date:** 24 July 2026
 **Origin:** proven physical operation (containerized home-cooked food sold at FL truck stops to Uzbek / former-USSR drivers) + direct driver feature requests.
 

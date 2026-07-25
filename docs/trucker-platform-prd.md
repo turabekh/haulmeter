@@ -64,6 +64,8 @@ The strategic engine is a data flywheel: every detention event logged is also a 
 - **Module boundaries are enforced mechanically** (import-linter, core/UI split): a module may depend on Common Ground services and on the public interfaces of earlier modules only. No lateral imports, no reach-ins.
 - **Sequencing rationale:** M1–M2 create the daily surface and the facility keystone; M3–M5 are the differentiating recovery/protection engine that runs on that surface; M6–M7 add the transaction layers (parking, fuel) that require external supply/partners and therefore benefit from an existing audience; M8–M9 are intelligence layers that consume data accumulated by M2/M3 (and bootstrap on heuristics until then); M10–M12 are network, AI-UX, and B2B layers that multiply everything before them.
 
+**Build-order amendment (2026-07-25, owner):** the module list extends to **M13 Vendor Network** (PRD Extension E1, `docs/prd-extension-m13-vendor-network.md`), built after M12 under the same law — its own F13 flag `m13_vendor` (default OFF), its own Definition of Done, tests alongside every change. M13 Phase A is **discovery-only: zero payment code paths are reachable**, which is what keeps the platform a directory while informal vendors formalize; Phase B (`m13_orders`, pre-order/prepay) is explicitly NOT scheduled and its flag does not exist.
+
 The remainder of this document specifies the Common Ground (Section 7) and each module (Section 8) separately and completely.
 
 ---
@@ -493,6 +495,11 @@ Supporting platform metrics: DAU/MAU ≥ 40%; W8 driver retention; % of stops wi
 6. **Brand name = "Haulmeter"** (decided 2026-07-22, owner; design-prd §23). "LONGHAUL" was the internal placeholder. Trademark clearance + domain acquisition remain the open real-world step.
 7. Points redemption rate and earn-table calibration (F13 config; tune with live data).
 8. TPIMS feed coverage/format survey per state (engineering spike during F2 build).
+9. **Truck routing/navigation:** keep the M1-FR8 deep-link law, or license truck-attribute routing (Mapbox/HERE truck profiles — recurring cost, major scope)? Driver-requested; not blocking M13.
+10. **Promotion economics (M13-FR6):** free forever vs paid placement at scale. Vendor-side only; never driver-side. Note that Q-3 puts pay-to-rank in *discovery* permanently out of scope — any paid placement must be a labelled slot, never blended into organic order.
+11. **Property permission policy (M13-FR2):** is the `property_approved` attestation sufficient, or must ranked placement require uploaded written consent? (durability + platform posture).
+12. **Service-center taxonomy (E3.2) — RESOLVED 2026-07-25 (owner): ATTRIBUTES, not new facility kinds.** A wash / tire bay / repair yard rides as a `services` list on the facility, because real sites are composite (a truck stop with a tire bay keeps both facts, which a `tire_shop` kind would erase), because design-prd §11.1 says extra signals render as badges on existing pins rather than more pins, and because M13-FR7 reads the same list — one source of truth. `services` merges by union across sources.
+13. **Phase B trigger (`m13_orders`):** what opens it — N verified vendors? a signed payment partner? per-state legal review? Until answered, the flag is not created.
 
 ---
 
