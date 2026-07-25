@@ -19,6 +19,7 @@ from app.api import (
     m10_community,
     m11_voice,
     m12_fleet,
+    m13_vendor,
     owner,
     public,
 )
@@ -85,6 +86,7 @@ app.include_router(m09_money.router)
 app.include_router(m10_community.router)
 app.include_router(m11_voice.router)
 app.include_router(m12_fleet.router)
+app.include_router(m13_vendor.router)
 
 
 @app.get("/health")

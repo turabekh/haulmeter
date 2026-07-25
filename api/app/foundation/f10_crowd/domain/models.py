@@ -48,7 +48,9 @@ class Submission(Base):
     presence_proven: Mapped[bool] = mapped_column(default=False)
     # an authoritative feed (TPIMS) outranks crowd at equal freshness (PRD §12)
     authoritative: Mapped[bool] = mapped_column(default=False)
-    source: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # 80 chars: a feed name is short ("tpims"), but a subject-scoped source carries
+    # an id ("vendor:<uuid>" is 43) — provenance is never truncated to fit
+    source: Mapped[str | None] = mapped_column(String(80), nullable=True)
     trust_weight: Mapped[float] = mapped_column(Float, default=1.0)
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     received_at: Mapped[datetime] = mapped_column(

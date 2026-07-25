@@ -33,6 +33,7 @@ MODEL_MODULES = [
     "app.modules.m09_money.domain.models",
     "app.modules.m10_community.domain.models",
     "app.modules.m12_fleet.domain.models",
+    "app.modules.m13_vendor.domain.models",
 ]
 
 
