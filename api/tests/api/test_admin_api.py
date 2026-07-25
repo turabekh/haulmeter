@@ -308,3 +308,105 @@ def test_an_unknown_verify_status_is_rejected(client, db):
         headers=headers,
     )
     assert resp.status_code == 422
+
+
+# --- Q-8: the moderation queue shows its own SLA ---
+def _report_a_review(db, client):
+    from app.modules.m13_vendor import public as m13
+
+    vendor = _seed_vendor(db, "slacook@example.com", "SLA Cook")
+    author = identity.register_account(db, "slaauthor@example.com", "pw-123456")
+    reporter = identity.register_account(db, "slareporter@example.com", "pw-123456")
+    review = m13.submit_review(db, vendor, author.id, 1, "junk")
+    m13.report_content(
+        db, m13.CONTENT_REVIEW, review.id, vendor.id, reporter.id, m13.ModerationReason.offensive
+    )
+    return vendor, review
+
+
+def test_the_queue_reports_age_overdue_and_report_count(client, db):
+    account_id, headers = _register(client, "slaadmin@example.com")
+    _make_admin(db, account_id)
+    _report_a_review(db, client)
+
+    rows = client.get("/admin/moderation", headers=headers).json()
+    row = next(r for r in rows if r["content_kind"] == "vendor_review")
+    assert row["sla_hours"] == 72
+    assert row["overdue"] is False  # just reported
+    assert row["reports"] == 1
+    assert row["age_hours"] >= 0
+
+
+def test_an_admin_resolves_a_report_and_it_is_audited(client, db):
+    from app.modules.m13_vendor import public as m13
+
+    account_id, headers = _register(client, "resolveadmin@example.com")
+    _make_admin(db, account_id)
+    _, review = _report_a_review(db, client)
+
+    resp = client.post(
+        f"/admin/moderation/report/vendor_review/{review.id}/resolve",
+        json={"approve": True, "reason": "abusive"},
+        headers=headers,
+    )
+    assert resp.json()["upheld"] is True
+    assert review.status == m13.ReviewStatus.removed
+
+    audit = client.get("/admin/audit", headers=headers).json()
+    entry = next(a for a in audit if a["action"] == "report_resolve")
+    assert entry["actor"] == "resolveadmin@example.com"
+
+
+def test_dismissing_a_report_restores_the_content(client, db):
+    from app.modules.m13_vendor import public as m13
+
+    account_id, headers = _register(client, "dismissadmin@example.com")
+    _make_admin(db, account_id)
+    _, review = _report_a_review(db, client)
+
+    client.post(
+        f"/admin/moderation/report/vendor_review/{review.id}/resolve",
+        json={"approve": False},
+        headers=headers,
+    )
+    assert review.status == m13.ReviewStatus.visible
+
+
+def test_the_overdue_view_is_empty_when_nothing_is_late(client, db):
+    account_id, headers = _register(client, "overdueadmin@example.com")
+    _make_admin(db, account_id)
+    _report_a_review(db, client)
+
+    assert client.get("/admin/moderation/overdue", headers=headers).json() == []
+
+
+def test_an_admin_decides_a_facility_claim(client, db):
+    from app.foundation.f02_facility import public as facility
+    from app.modules.m13_vendor import public as m13
+
+    account_id, headers = _register(client, "claimadmin@example.com")
+    _make_admin(db, account_id)
+    owner = identity.register_account(db, "claimshop@example.com", "pw-123456")
+    vendor = m13.register_vendor(
+        db,
+        owner.id,
+        "Gateway Truck Service",
+        m13.VendorType.service_center,
+        metro="joplin-mo",
+        languages=["en"],
+        halal_answered=True,
+    )
+    fac = facility.create_facility(
+        db, facility.FacilityType.repair, "Gateway Truck Service", 37.084, -94.513
+    )
+    fac.attributes = {"services": [facility.SERVICE_TIRE]}
+    claim = m13.submit_claim(db, vendor, fac.id, "Gateway Truck Service", owner.id)
+
+    resp = client.post(f"/admin/claims/{claim.id}/decide", json={"approve": True}, headers=headers)
+    assert resp.json()["status"] == "approved"
+    assert m13.claimed_facility_view(db, fac.id).vendor_name == "Gateway Truck Service"
+
+
+def test_vendor_moderation_requires_admin(client, db):
+    _, headers = _register(client, "notmod@example.com")
+    assert client.get("/admin/moderation/overdue", headers=headers).status_code == 403

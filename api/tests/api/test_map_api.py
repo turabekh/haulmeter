@@ -149,9 +149,13 @@ def test_overlay_freshness_carries_feed_source_for_tpims(client, db):
     fac = facility.create_facility(db, facility.FacilityType.rest_area, "IL Rest", *DALLAS)
     now = datetime.now(UTC)
     crowd.submit_authoritative(
-        db, fac.id, crowd.SignalType.parking_fullness,
+        db,
+        fac.id,
+        crowd.SignalType.parking_fullness,
         {"status": "some", "available": "Low", "trend": None, "source": "tpims"},
-        submitted_at=now, source="tpims", trust_data=True,
+        submitted_at=now,
+        source="tpims",
+        trust_data=True,
     )
     crowd.update_belief(db, fac.id, crowd.SignalType.parking_fullness, as_of=now)
     pins = client.get(

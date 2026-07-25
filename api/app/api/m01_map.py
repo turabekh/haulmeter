@@ -77,8 +77,14 @@ def overlay(
     preset_enum = m1.Preset(preset)
     if None not in (min_lat, min_lon, max_lat, max_lon):
         view = m1.map_overlay_view_bbox(
-            db, account.id, min_lat, min_lon, max_lat, max_lon,
-            preset=preset_enum, required_amenities=required,
+            db,
+            account.id,
+            min_lat,
+            min_lon,
+            max_lat,
+            max_lon,
+            preset=preset_enum,
+            required_amenities=required,
         )
     elif None not in (lat, lon):
         view = m1.map_overlay_view(

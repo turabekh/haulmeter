@@ -6,6 +6,7 @@ the only mutations are flag toggles and moderation decisions.
 """
 
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -120,15 +121,83 @@ def moderation_queue(
     _admin: identity.Account = Depends(current_admin),
     db: Session = Depends(get_db),
 ) -> list[dict]:
+    # Q-8: the 72h promise is only real if a moderator can SEE what is late, so age
+    # and the overdue flag ride on every row, oldest first.
     return [
         {
-            "id": str(i.id),
-            "content_kind": i.content_kind,
-            "content_ref": str(i.content_ref),
-            "status": i.status.value,
+            "id": str(q.item.id),
+            "content_kind": q.item.content_kind,
+            "content_ref": str(q.item.content_ref),
+            "status": q.item.status.value,
+            "age_hours": q.age_hours,
+            "overdue": q.overdue,
+            "sla_hours": admin.MODERATION_SLA_HOURS,
+            "reports": m13.distinct_reporters(db, q.item.content_kind, q.item.content_ref),
         }
-        for i in admin.list_pending_moderation(db)
+        for q in m13.queue_with_sla(db)
     ]
+
+
+@router.post("/moderation/report/{content_kind}/{content_ref}/resolve")
+def resolve_report(
+    content_kind: str,
+    content_ref: uuid.UUID,
+    body: DecideIn,
+    account: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    # `approve` here means the REPORT was upheld: the content stays down. Naming it
+    # that way keeps one verb across the whole moderation surface.
+    result = m13.resolve_report(
+        db,
+        content_kind,
+        content_ref,
+        uphold=body.approve,
+        moderator_account_id=account.id,
+        reason=body.reason,
+    )
+    admin.record_action(
+        db,
+        "report_resolve",
+        actor_account_id=account.id,
+        target_kind=content_kind,
+        detail={"content_ref": str(content_ref), "upheld": body.approve},
+    )
+    return result
+
+
+@router.get("/moderation/overdue")
+def overdue_queue(
+    _admin: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    items = admin.overdue_moderation(db, datetime.now(UTC))
+    return [
+        {"id": str(i.id), "content_kind": i.content_kind, "content_ref": str(i.content_ref)}
+        for i in items
+    ]
+
+
+@router.post("/claims/{claim_id}/decide")
+def decide_claim(
+    claim_id: uuid.UUID,
+    body: DecideIn,
+    account: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    claim = db.get(m13.FacilityClaim, claim_id)
+    if claim is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "claim not found")
+    try:
+        m13.decide_claim(
+            db, claim, body.approve, moderator_account_id=account.id, reason=body.reason
+        )
+    except m13.AlreadyClaimed as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"error": "already_claimed", "claim_id": str(exc.claim.id)},
+        ) from exc
+    return {"claim_id": str(claim.id), "status": claim.status.value}
 
 
 @router.get("/analytics")

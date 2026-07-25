@@ -27,6 +27,10 @@ from app.modules.m13_vendor import public as m13
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
 
+# how many reviews ride on the sheet payload; the rest are a paging concern for a
+# later session. A phone at 360 dp cannot usefully render more in one sheet anyway.
+REVIEW_PAGE = 10
+
 
 class OfferingIn(BaseModel):
     name: str
@@ -160,7 +164,7 @@ def at_facility(
 @router.get("/{vendor_id}")
 def vendor_sheet(
     vendor_id: uuid.UUID,
-    _account: identity.Account = Depends(current_account),
+    account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
     _require_active(db)
@@ -169,6 +173,16 @@ def vendor_sheet(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
     vendor = detail["vendor"]
     score = detail["reliability"]
+    summary = m13.review_summary(db, vendor.id)
+    # FR8 analytics: a sheet view is the vendor's "someone looked at me" number
+    admin.emit(
+        db,
+        "vendor_sheet_view",
+        module=m13.MODULE,
+        occurred_at=datetime.now(UTC),
+        account_id=account.id,
+        properties={"vendor_id": str(vendor.id)},
+    )
     return {
         "vendor_id": str(vendor.id),
         "name": vendor.name,
@@ -182,6 +196,27 @@ def vendor_sheet(
         "shows_up": {"confirmed": score.confirmed, "published": score.published},
         "in_discovery": detail["in_discovery"],
         "appearances": [_entry_out(e) for e in detail["appearances"]],
+        # FR5: the raw pair again — `reviewers` is the honest denominator, and an
+        # average without it invites overreading a handful of opinions (§11.7)
+        "reviews": {
+            "average": summary.average,
+            "reviewers": summary.reviewers,
+            "items": [
+                {
+                    "rating": r.rating,
+                    "text": r.text,
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in m13.list_reviews(db, vendor.id)[:REVIEW_PAGE]
+            ],
+        },
+        # FR6: promotions ride in their own key, never mixed into `appearances` —
+        # the client renders them in a LABELLED slot (Q-3 / §21.3)
+        "promotions": [
+            {"promotion_id": str(p.id), "text": p.text, "promoted": True}
+            for p in m13.active_promotions(db, vendor.id)
+        ],
+        "can_review": m13.can_review(db, vendor.id, account.id),
     }
 
 
@@ -348,4 +383,150 @@ def self_report(
     return {
         "source": belief.source if belief else None,
         "present": belief.present if belief else None,
+    }
+
+
+# --- FR5: reviews (driver side) ---
+class ReviewIn(BaseModel):
+    rating: int
+    text: str | None = None
+
+
+class ReportIn(BaseModel):
+    reason: str
+    note: str | None = None
+
+
+@router.post("/{vendor_id}/review", status_code=201)
+def review_vendor(
+    vendor_id: uuid.UUID,
+    body: ReviewIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_active(db)
+    vendor = m13.resolve_vendor(db, vendor_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    try:
+        review = m13.submit_review(db, vendor, account.id, body.rating, body.text)
+    except m13.InvalidRating as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    except m13.ReviewTooSoon as exc:
+        # §12.4: say WHEN they can come back, not just "no"
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"error": "review_too_soon", "next_allowed_at": exc.next_allowed_at.isoformat()},
+        ) from exc
+    summary = m13.review_summary(db, vendor.id)
+    return {
+        "review_id": str(review.id),
+        "rating": review.rating,
+        "average": summary.average,
+        "reviewers": summary.reviewers,
+    }
+
+
+# --- Q-8: the driver-facing report affordance ---
+def _report(db: Session, kind: str, ref, vendor_id, account_id, body: ReportIn) -> dict:
+    try:
+        reason = m13.ModerationReason(body.reason)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown reason") from exc
+    try:
+        outcome = m13.report_content(db, kind, ref, vendor_id, account_id, reason, body.note)
+    except m13.AlreadyReported as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "already reported") from exc
+    except m13.NotReportable as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "not reportable") from exc
+    # `hidden` is deliberately reported back: a driver who reports something is owed
+    # an honest answer about whether anything happened yet (§12.4)
+    return {"reported": True, "hidden": outcome.hidden, "reports": outcome.distinct_reports}
+
+
+@router.post("/{vendor_id}/report")
+def report_vendor(
+    vendor_id: uuid.UUID,
+    body: ReportIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_active(db)
+    if m13.resolve_vendor(db, vendor_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    return _report(db, m13.CONTENT_VENDOR, vendor_id, vendor_id, account.id, body)
+
+
+@router.post("/reviews/{review_id}/report")
+def report_review(
+    review_id: uuid.UUID,
+    body: ReportIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_active(db)
+    review = db.get(m13.VendorReview, review_id)
+    if review is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "review not found")
+    return _report(db, m13.CONTENT_REVIEW, review.id, review.vendor_id, account.id, body)
+
+
+@router.post("/promotions/{promotion_id}/report")
+def report_promotion(
+    promotion_id: uuid.UUID,
+    body: ReportIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_active(db)
+    promotion = db.get(m13.Promotion, promotion_id)
+    if promotion is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "promotion not found")
+    return _report(db, m13.CONTENT_PROMOTION, promotion.id, promotion.vendor_id, account.id, body)
+
+
+# --- FR6: the labelled slot's contents for a facility (driver side) ---
+@router.get("/promotions/at/{facility_id}")
+def facility_promotions(
+    facility_id: uuid.UUID,
+    _account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    # a SEPARATE endpoint from /vendors/at/{id} on purpose: the ranked list and the
+    # promoted slot never travel together, so a client cannot blend them by accident
+    _require_active(db)
+    return [
+        {
+            "promotion_id": str(p["promotion_id"]),
+            "vendor_id": str(p["vendor_id"]),
+            "vendor_name": p["vendor_name"],
+            "text": p["text"],
+            "ends_at": p["ends_at"].isoformat(),
+            "promoted": True,
+        }
+        for p in m13.promotions_for_facility(db, facility_id)
+    ]
+
+
+# --- FR7: what a driver sees for a claimed service centre ---
+@router.get("/service-center/{facility_id}")
+def service_center(
+    facility_id: uuid.UUID,
+    _account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_active(db)
+    view = m13.claimed_facility_view(db, facility_id)
+    if view is None:
+        # unclaimed facilities stay plain POIs — there is nothing extra to say
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not a claimed service center")
+    return {
+        "facility_id": str(view.facility_id),
+        "name": view.name,
+        "vendor_id": str(view.vendor_id),
+        "vendor_name": view.vendor_name,
+        "verify_status": view.verify_status,
+        "services": view.services,
+        "hours": view.hours,
+        "phone": view.phone,
     }

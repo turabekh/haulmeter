@@ -300,9 +300,10 @@ def test_evidence_photo_serves_the_captured_image_bytes(client, db):
         "/auth/register", json={"email": "peeker@example.com", "password": "pw-123456"}
     ).json()["token"]
     hi = {"Authorization": f"Bearer {intruder}"}
-    assert client.get(
-        f"/load/{stop_id}/evidence/photo/{photo['artifact_id']}", headers=hi
-    ).status_code == 403
+    assert (
+        client.get(f"/load/{stop_id}/evidence/photo/{photo['artifact_id']}", headers=hi).status_code
+        == 403
+    )
 
 
 def test_evidence_photo_404_for_unknown_artifact(client, db):
