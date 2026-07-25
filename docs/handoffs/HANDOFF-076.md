@@ -4,7 +4,9 @@
 **Date:** 26 July 2026 · **Stack:** UP (api :8008 · ui :9008 · worker · postgres :5438 · redis · minio · mailpit).
 **State in one line:** extension-PRD **§E3.1 is closed** and **trucker request #4** is answered —
 weigh stations are ingested from OSM, reported open/closed by drivers through the ordinary F10 crowd
-pipeline, and surfaced on the Drive preset and the corridor behind their own flag.
+pipeline, and surfaced on the Drive preset and the corridor. **The pull has run for four states and
+the layer is LIVE** (`m01_weigh_stations` enabled): 106 enforcement scales + 15 standalone commercial
+ones, with 244 existing facilities carrying a scale badge instead of a duplicate pin.
 
 **Read order each session:** `HANDOFF.md` (pointer → this file) → PRD §6/§7 → design-prd §11/§16/§22/§23
 → this file → HANDOFF-075 (Admin Console 2.0c).
@@ -16,10 +18,10 @@ pipeline, and surfaced on the Drive preset and the corridor behind their own fla
 | Thing | Value |
 |---|---|
 | Migrations | head **0043_f01_impersonation** (E3.1 added none) |
-| Tests | **pytest 775 · vitest 256 · ruff clean · import-linter 30/30** |
+| Tests | **pytest 787 · vitest 256 · ruff clean · import-linter 30/30** |
 | `make ci` | **PASSES COLD** |
-| New flag | `m01_weigh_stations` — registered, **default OFF** |
-| Live ingest run | **none** — see §3 |
+| New flag | `m01_weigh_stations` — **ENABLED** in dev after the pull (§4) |
+| Live ingest | WI · IN · IA · MN — **106 weigh_station + 15 scale pins** (§4) |
 
 ---
 
@@ -108,40 +110,112 @@ its translated label, so a driver who cannot separate the two hues still reads "
 Anyone who finds this inversion and "fixes" it will make the layer actively dangerous. Hence the
 §23 entry, the comment at the definition, and `ui/test/weigh-station-ui.test.js`.
 
-## 4. What was NOT done, and why
+## 4. The pull — and the gap it exposed
 
-- **No live OSM pull was run.** The extract filter changed, so a real pull needs an osmium run against
-  a fresh extract — that is a decision about bandwidth and timing, not a code change. **Ingest counts
-  are therefore unknown**; nothing in this handoff claims otherwise.
-- **`m01_weigh_stations` is OFF.** Turning it on before a real pull would show drivers an empty layer.
-  The intended order is: pull → inspect the count in the admin console's Data & Ingest section → enable.
+Four states still had their Geofabrik `.pbf` locally, so they were re-filtered with the new osmium
+rule without re-downloading ~900 MB. **Kansas, Kentucky, Michigan and Ohio have only the old GeoJSON**
+(their pbfs were deleted) and still need a fresh download before their scales exist.
+
+| | staged | created | matched | weighbridges in extract |
+|---|---|---|---|---|
+| Wisconsin | 515 | 98 | 417 | 100 |
+| Indiana | 619 | 108 | 511 | 116 |
+| Iowa | 564 | 94 | 470 | 99 |
+| Minnesota | 402 | 61 | 341 | 61 |
+
+The old filter had incidentally caught 0–4 weighbridges per state through the `hgv` rules. The layer
+is **not** thin — the worry recorded in §6 of the first draft of this handoff is answered.
+
+### What went wrong, and what it cost
+
+**The composite rule did not fire for the case that dominates.** The plan and the first version of
+this handoff both claimed a weighbridge inside a truck stop "enriches it rather than plants a second
+pin — no new code." That is true only when the two records SAY the same thing: the F2 dedupe matches
+on fuzzy NAME, and "Cat Scale" resembles "Pilot Travel Center" not at all. The fixture happened to
+name its weighbridge after the host, so the test passed and proved nothing about real data.
+
+Measured: **253 commercial scales, 239 within 150 m of a facility that already had a pin** (169 within
+50 m), and 6 merged. The rest were second pins stacked on Pilots, Love's and rest areas — precisely
+what design-prd §11.1 forbids.
+
+The fix is a **co-located amenity** flag on `StagedRecord`: a record that describes a thing AT a site
+rather than a site merges into the nearest destination by **proximity alone**. Two rules stop it
+becoming a general proximity merge that would collapse the Pilot and the Love's across the road:
+
+- only a record the **adapter** marked co-located may take the path, and
+- only a **destination** may host one, so amenities never chain into each other.
+
+150 m is the measured figure — it covers 239 of the 253 while a truck-stop lot is itself ~200 m across.
+A **public weigh station is deliberately not co-located**: it is a destination a driver navigates to,
+and 69 of the 103 stood more than 2 km from anything.
+
+**Two further bugs, both mine, found only by looking at the data after the fix:**
+
+1. **A tenant overwrote its host's identity.** The re-ingest path replaces a source's attributes
+   wholesale, so narrowing the contribution only at merge time was undone by the very next pull —
+   **203 truck stops briefly advertised catscale.com**. The narrowing now runs on every write, from
+   one function (`_contribution`).
+2. **A CAT scale filed itself as a REPAIR SHOP.** Making a weighbridge a SERVICE also made it match
+   the catch-all `some service + hgv -> repair` rule sitting *above* the weighbridge rules. Specific
+   now outranks catch-all, and `colocated_amenity` is derived from the **resolved type** so the flag
+   and the kind cannot disagree again.
+
+Neither would have been caught by the fixtures. Both have tests now.
+
+### After repair and re-ingest
+
+`make repair-scales` (`DRY_RUN=0` to apply) fixes rows written before the rule existed — a re-ingest
+cannot, because an already-seen `(source, external_ref)` takes the update-in-place branch and never
+revisits which facility it belongs to. It merges rather than deletes, so every `facility_id` anyone
+already holds still resolves. Idempotent; a second run finds nothing.
+
+| | before | after |
+|---|---|---|
+| pins for scales | 356 | **121** (106 enforcement + 15 standalone commercial) |
+| existing facilities carrying a scale badge | 6 | **244** |
+| hosts wearing a tenant's identity | 203 | **0** |
+
+Verified over HTTP: the Drive preset returns weigh stations as `small_square` pins with `status: null`
+(nobody has reported yet — the honest state), Tonight and Work return none, and `/map/scales-ahead`
+returns the corridor line.
+
+## 5. What was NOT done, and why
+
+- **Four states only.** KS, KY, MI, OH need a fresh Geofabrik download before their scales exist.
 - **F10's 2h half-life was not retuned** (the brief said it stands). A test now asserts the half-life
   and the point value so they cannot drift silently.
 - **No migration.** E3.1 needed no schema change; it composes existing tables.
+- **`merge_facilities` does not recompute the survivor's attributes.** The repair script calls
+  `_recompute_canonical` itself. This means the admin console's own merge (decision 7) probably leaves
+  the survivor's attributes stale — **worth checking before relying on it**. Not fixed here because it
+  touches the console's merge path and deserves its own change.
 
-## 5. Exact next task — recommendation
+## 6. Exact next task — recommendation
 
-**Run the OSM pull and decide on the flag.** It is the only thing standing between this layer and
-drivers, and it is a ten-minute operation now that everything downstream is tested. Concretely: fresh
-extract → `make` osmium filter → ingest → read the count in Data & Ingest → enable
-`m01_weigh_stations` if the count is sane.
+**Founding-vendor onboarding.** It has been the standing recommendation since HANDOFF-072, every tool
+it needs exists, and it is still the first real data this platform will hold.
 
-**Then: founding-vendor onboarding.** It has been the standing recommendation since HANDOFF-072 and
-every tool it needs exists. It is still the first real data this platform will hold.
+**Or, if you'd rather finish the map first:** pull the four remaining states (KS, KY, MI, OH). Each
+needs a ~200–300 MB Geofabrik download, then `make osm-extract STATE=<x>` and `make ingest-osm`. The
+co-located rule now applies from the first write, so no repair pass will be needed for them.
 
 **Alternatives:** TPIMS second-state activation; §17 Q9 truck routing, the largest open product decision.
 
-## 6. Blockers / questions
+## 7. Blockers / questions
 
 - **Still no git remote** — four sessions running. Six commits sit locally on `main`. Add one and I'll push.
-- **Coverage of the OSM weigh-station layer is unknown until a pull runs.** 12,178 `weighbridge` uses
-  is worldwide, not US. If the US count comes back thin, the honest options are to ship it thin
-  (a sparse layer that is *correct* still beats a dense one that is wrong) or to revisit whether a
-  state-by-state authoritative source is worth the per-state effort — **not** to relax the tag rules,
-  which is how `vehicle_inspection` would end up on the map.
+- **Coverage is answered for four states and unknown for the rest.** WI/IN/IA/MN yielded 61–116
+  weighbridges each, so the layer is real. If a later state comes back thin, the honest options are
+  to ship it thin (a sparse layer that is *correct* beats a dense one that is wrong) or to revisit a
+  state-by-state authoritative source — **not** to relax the tag rules, which is how
+  `vehicle_inspection` would end up on the map.
+- **One false positive seen in the real data:** a `weighbridge` named "Tractor Pull Weigh Scale". One
+  in 103 is tolerable and no tag rule would catch it; noting it so nobody is surprised.
+- **`merge_facilities` may leave the survivor's attributes stale** (§5) — check before relying on the
+  console's merge.
 - §17 Q15 (deactivation conduct policy) and Q16 (hard delete) remain open from HANDOFF-075.
 
-## 7. Working rules (unchanged — non-negotiable)
+## 8. Working rules (unchanged — non-negotiable)
 
 Docker-only (dev = CI parity) · **local commits only, NEVER push** (no remote configured) · plan-first ·
 **tests with every change** · live pulls never in CI (fixtures drive tests) · **AI-CONTEXT comments only** ·
@@ -151,23 +225,28 @@ Commit messages end with `Co-Authored-By: Claude Opus 5 (1M context) <noreply@an
 
 `test_phase_a_law.py` untouched and green.
 
-## 8. Commits this session (local only, on `main`)
+## 9. Commits this session (local only, on `main`)
 
 ```
-(this commit) docs: HANDOFF-076 + design-prd §23 (inverted scale colours, layer flag)
+(this commit) docs: HANDOFF-076 — the pull, the counts, and what it exposed
+624cec2 F2: co-located amenities merge into the site they stand in, by proximity
 6b27cd6 E3.1: weigh stations — OSM ingestion, driver open/closed reporting, map + corridor
 ```
 
-## 9. Key files touched
+## 10. Key files touched
 
 ```
 F02      api/app/foundation/f02_facility/domain/ingest/adapters.py (SERVICE_SCALE,
-         weighbridge type + service rules, the vehicle_inspection negative) · public.py
+         weighbridge type + service rules, the vehicle_inspection negative,
+         colocated_amenity, weighbridge outranks the repair catch-all) · public.py
+         .../domain/ingest/pipeline.py (_contribution, the co-located merge branch)
+         .../domain/service.py (colocated_host, COLOCATED_RADIUS_M/HOST_TYPES)
 F11      api/app/foundation/f11_map/domain/service.py (status_signal_for) · public.py
 M01      api/app/modules/m01_map/domain/service.py (WEIGH_STATION_FLAG,
          MAX_CORRIDOR_SCALES, _preset_types, scales_ahead) · public.py
 API      api/app/api/m01_map.py (GET /map/scales-ahead)
-BUILD    Makefile (osmium filter += amenity=weighbridge,weigh_station)
+BUILD    Makefile (osmium filter += amenity=weighbridge,weigh_station; repair-scales)
+SCRIPT   api/scripts/repair_colocated_scales.py (NEW, one-off, dry-run by default)
 TESTS    api/tests/foundation/f02_facility/test_ingest_weigh.py (NEW)
          api/tests/modules/m01_map/test_weigh_stations.py (NEW)
          api/tests/api/test_weigh_station_api.py (NEW, end-to-end)
@@ -179,9 +258,10 @@ UI       ui/src/core/presentation.js (WEIGH_STATUS, SCALE_TYPES, statusReportFor
 DOCS     design-prd.md §23 ×2 · HANDOFF-076.md · HANDOFF.md
 ```
 
-## 10. Ports / env
+## 11. Ports / env
 
-**No port or env changes. No migration.** One new F13 flag, `m01_weigh_stations`, default OFF.
+**No port or env changes. No migration.** One new F13 flag, `m01_weigh_stations` — default OFF in
+code, **enabled in the dev DB** after the pull.
 
 Operational note carried forward: `make ci` leaves Postgres running, so `make up` straight afterwards
 fails preflight. `make down && make up` is the sequence.
