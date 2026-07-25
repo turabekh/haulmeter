@@ -60,7 +60,10 @@ const emailTaken = ref(false);
 
 function fail(e, step) {
   const taken = e?.status === 409 || e?.message === "email_taken";
-  if (step === "account" && taken) return t("auth.error_taken");
+  // NOT the driver app's `auth.error_taken`: that one ends "Log in instead", which
+  // both duplicates the button underneath it and says "log in" where this portal
+  // says "sign in". The message states the FACT; the button carries the action.
+  if (step === "account" && taken) return t("vendor.join.email_taken");
   if (step === "business" && taken) return t("vendor.join.duplicate");
   if (e?.status === 401 || e?.message?.includes("401")) return t("auth.error_invalid");
   if (typeof e?.detail === "string") return e.detail;

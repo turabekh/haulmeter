@@ -533,6 +533,7 @@
   "vendor.join.business": "About your business",
   "vendor.join.create_account": "Create an account",
   "vendor.join.duplicate": "A business with these details is already registered.",
+  "vendor.join.email_taken": "That email already has an account.",
   "vendor.join.error": "That did not work. Check the details and try again.",
   "vendor.join.finish": "Finish",
   "vendor.join.free": "It is free. We take no commission and sell nothing here.",

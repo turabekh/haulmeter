@@ -533,6 +533,7 @@
   "vendor.join.business": "О вашем деле",
   "vendor.join.create_account": "Создать аккаунт",
   "vendor.join.duplicate": "Дело с такими данными уже зарегистрировано.",
+  "vendor.join.email_taken": "У этой почты уже есть аккаунт.",
   "vendor.join.error": "Не получилось. Проверьте данные и попробуйте снова.",
   "vendor.join.finish": "Готово",
   "vendor.join.free": "Это бесплатно. Мы не берём комиссию и ничего здесь не продаём.",

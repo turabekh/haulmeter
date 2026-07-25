@@ -533,6 +533,7 @@
   "vendor.join.business": "Ishingiz haqida",
   "vendor.join.create_account": "Hisob yaratish",
   "vendor.join.duplicate": "Bu ma'lumotlar bilan ish allaqachon ro'yxatdan o'tgan.",
+  "vendor.join.email_taken": "Bu email allaqachon ro'yxatdan o'tgan.",
   "vendor.join.error": "Bo'lmadi. Ma'lumotlarni tekshirib, qayta urinib ko'ring.",
   "vendor.join.finish": "Tugatish",
   "vendor.join.free": "Bepul. Komissiya olmaymiz va bu yerda hech narsa sotmaymiz.",

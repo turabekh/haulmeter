@@ -361,8 +361,13 @@ describe("Signing up (§18 door, owner decision: open)", () => {
     await w.vm.createAccount();
     await flushPromises();
 
-    expect(w.find(".join__error").text()).toBe(en["auth.error_taken"]);
-    expect(w.find(".join__error").text()).not.toBe(en["vendor.join.duplicate"]);
+    const msg = w.find(".join__error").text();
+    expect(msg).toBe(en["vendor.join.email_taken"]);
+    expect(msg).not.toBe(en["vendor.join.duplicate"]);
+    // the message states the fact and stops. It must not instruct the user to do the
+    // thing the button beneath it already does, nor use a different verb for it.
+    expect(msg.toLowerCase()).not.toContain("log in");
+    expect(msg.toLowerCase()).not.toContain("sign in");
     // and the fix is offered, not described
     const out = w.findAll(".cta").find((b) => b.text() === en["vendor.join.signin"]);
     expect(out).toBeDefined();
