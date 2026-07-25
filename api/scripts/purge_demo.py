@@ -23,6 +23,10 @@ from app.foundation.f02_facility.domain.models import FacilitySource  # noqa: E4
 # records keyed directly to a facility_id, deleted before the facility itself.
 # Order is child-safe: none of these reference each other (verified FK graph).
 FACILITY_DEPENDENTS = [
+    # M13: a demo vendor's appearances hang off a demo facility. Offerings cascade
+    # from the appearance; the vendor row itself is dropped separately (below) since
+    # it is keyed to an account, not a facility.
+    "m13.appearance",
     "f03.geofence_event",
     "f03.geofence_presence",
     "f03.geofence_arming",
@@ -69,9 +73,15 @@ def main() -> None:
         if load_ids:
             _delete_in(db, "DELETE FROM f05.stop WHERE load_id IN :ids", load_ids)
             _delete_in(db, "DELETE FROM f05.load WHERE id IN :ids", load_ids)
+        # DEV_SEED vendors are self-identifying (is_dev), like DEV_SEED facilities —
+        # their appearances went with the facilities above, so this drops the profiles
+        vendors = db.execute(text("DELETE FROM m13.vendor WHERE is_dev = true")).rowcount
         purged = _delete_in(db, "DELETE FROM f02.facility WHERE id IN :ids", ids)
         db.commit()
-        print(f"purged {purged} admin-only facilities + {len(load_ids)} demo loads (test subtree)")
+        print(
+            f"purged {purged} admin-only facilities + {len(load_ids)} demo loads "
+            f"+ {vendors} demo vendors (test subtree)"
+        )
     finally:
         db.close()
 

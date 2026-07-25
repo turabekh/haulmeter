@@ -17,10 +17,26 @@ import PriceReportSheet from "../core/components/PriceReportSheet.vue";
 import VoiceSheet from "../core/components/VoiceSheet.vue";
 import SleepSheet from "../core/components/SleepSheet.vue";
 import HandoffSheet from "../core/components/HandoffSheet.vue";
+import VendorSheet from "../core/components/VendorSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { SAMPLE_PINS, SAMPLE_CORRIDOR, sampleHandoffs } from "../core/fixtures.js";
-import { fetchOverlay, fetchNearbyHandoffs, broadcastHandoff, report as postReport, confirmFuelPrice } from "../core/api.js";
+import { withFoodBadges, foodBadgeFacilityIds } from "../core/vendors.js";
+import {
+  fetchOverlay,
+  fetchNearbyHandoffs,
+  broadcastHandoff,
+  report as postReport,
+  confirmFuelPrice,
+  fetchVendorAppearances,
+  cachedAppearances,
+  fetchVendorsAt,
+  fetchVendorSheet,
+  confirmVendor,
+  muteVendor,
+  suggestACook,
+  fetchCorridorVendors,
+} from "../core/api.js";
 
 const { isDriving } = useDriverState();
 const { t } = useI18n();
@@ -32,6 +48,9 @@ const PRESET_TYPES = {
   tonight: ["truck_stop", "rest_area", "parking_property"],
   work: ["shipper_receiver"],
   fuel: ["fuel_station"],
+  // M13: Food is a filter over the lots vendors actually work, not a new layer —
+  // §11.1 caps active layers at two, and the badge does the signalling.
+  food: ["truck_stop", "rest_area", "parking_property"],
 };
 const PARKING_RANK = { empty: 0, some: 1, null: 2, full: 3 };
 
@@ -80,12 +99,33 @@ async function loadOverlay(bbox = lastBbox) {
 // before we hit the API; the AbortController cancels any fetch a newer move outran.
 function onBounds(bbox) {
   clearTimeout(boundsTimer);
-  boundsTimer = setTimeout(() => loadOverlay(bbox), 300);
+  boundsTimer = setTimeout(() => {
+    loadOverlay(bbox);
+    loadVendors(bbox);
+  }, 300);
 }
-onMounted(() => loadOverlay()); // continental clusters until the map reports bounds
+onMounted(() => {
+  loadOverlay(); // continental clusters until the map reports bounds
+  loadVendors();
+});
 watch(preset, () => loadOverlay()); // preset flip refetches the current viewport
 
 const pins = computed(() => {
+  // Food narrows the view to lots a driver can actually eat at tonight; every other
+  // preset keeps its pins and just gains the badge (§11.1 — signals ride on pins).
+  const flagged = foodBadgeFacilityIds(vendorEntries.value);
+  const base =
+    preset.value === "food"
+      ? rawPins.value.filter((p) => flagged.has(p.facility_id))
+      : rawPins.value;
+  return withFoodBadges(base, vendorEntries.value);
+});
+
+// Q-7: the Food chip over an empty viewport shows ONE quiet line plus the
+// recruitment affordance — never a scolding or celebratory empty state (§15.3).
+const foodEmpty = computed(() => preset.value === "food" && pins.value.length === 0);
+
+const rawPins = computed(() => {
   if (livePins.value) return livePins.value; // API already preset-filtered
   const types = PRESET_TYPES[preset.value];
   let list = SAMPLE_PINS.filter((p) => types.includes(p.facility_type));
@@ -95,8 +135,106 @@ const pins = computed(() => {
   return list;
 });
 
+// M13-FR3: appearances in view drive the pins' food badge and the card section.
+// Offline (§15.1): today's cache renders the food layer in a dead zone; a stale
+// cache is dropped rather than shown, since dead content is what Q-1 forbids.
+const vendorEntries = ref([]);
+const facilityVendors = ref([]);
+const vendorSheet = ref(null);
+const vendorTarget = ref(null);
+
+async function loadVendors(bbox = lastBbox) {
+  try {
+    const entries = await fetchVendorAppearances({ bbox });
+    vendorEntries.value = Array.isArray(entries) ? entries : cachedAppearances();
+  } catch {
+    vendorEntries.value = cachedAppearances(); // dead zone / flag off / no session
+  }
+}
+
+// DRIVING: food ahead on the current heading, capped at three (Q-6)
+const corridorFood = ref([]);
+async function loadCorridorFood() {
+  try {
+    const ahead = await fetchCorridorVendors({ lat: geo.value.lat, lon: geo.value.lon });
+    corridorFood.value = Array.isArray(ahead) ? ahead : [];
+  } catch {
+    corridorFood.value = [];
+  }
+}
+watch(isDriving, (driving) => {
+  if (driving) loadCorridorFood();
+});
+
+async function loadFacilityVendors(facilityId) {
+  try {
+    const found = await fetchVendorsAt(facilityId, { allVendors: true });
+    facilityVendors.value = Array.isArray(found) ? found : [];
+  } catch {
+    // offline / flag off: fall back to whatever the viewport cache knows
+    facilityVendors.value = vendorEntries.value.filter((e) => e.facility_id === facilityId);
+  }
+}
+
+async function openVendor(entry) {
+  // `null` is the card's "all vendors" affordance — the sheet lists the rest
+  if (entry === null) {
+    selected.value = null;
+    return;
+  }
+  vendorTarget.value = entry;
+  selected.value = null;
+  try {
+    vendorSheet.value = await fetchVendorSheet(entry.vendor_id);
+  } catch {
+    vendorSheet.value = null;
+  }
+}
+
+async function confirmVendorPresence(present) {
+  const entry = vendorTarget.value;
+  vendorSheet.value = null;
+  if (!entry) return;
+  try {
+    await confirmVendor(entry.vendor_id, entry.facility_id, { present });
+    await loadVendors();
+  } catch {
+    /* offline -> queued (F12) and syncs on reconnect */
+  }
+}
+
+async function reportVendorSoldOut() {
+  const entry = vendorTarget.value;
+  vendorSheet.value = null;
+  if (!entry) return;
+  try {
+    await confirmVendor(entry.vendor_id, entry.facility_id, { soldOut: true });
+    await loadVendors();
+  } catch {
+    /* offline -> queued */
+  }
+}
+
+async function muteThisVendor() {
+  const entry = vendorTarget.value;
+  vendorSheet.value = null;
+  if (entry) await muteVendor(entry.vendor_id).catch(() => {});
+}
+
 const selected = ref(null);
+function onPinTap(pin) {
+  selected.value = pin;
+  facilityVendors.value = [];
+  loadFacilityVendors(pin.facility_id);
+}
 const reporting = ref(false);
+// Q-7 recruitment affordance: records where a driver wants food (the demand half of
+// the vendor recruitment loop) and says so plainly. It promises nothing beyond that.
+const suggested = ref(false);
+async function suggestCook() {
+  suggested.value = true;
+  await suggestACook(geo.value.lat, geo.value.lon).catch(() => {});
+}
 const pricingReport = ref(false); // the diesel-price report sheet (M7-FR5)
 const listening = ref(false);
 const solving = ref(false);
@@ -208,7 +346,7 @@ async function submitPrice(cents) {
 <template>
   <div class="map">
     <template v-if="isDriving">
-      <CorridorStack :entries="SAMPLE_CORRIDOR" />
+      <CorridorStack :entries="SAMPLE_CORRIDOR" :vendors="corridorFood" />
     </template>
     <template v-else>
       <PresetChips v-model="preset" />
@@ -220,8 +358,27 @@ async function submitPrice(cents) {
       <button v-if="handoffs.length" class="relay-banner" type="button" @click="relaying = true">
         {{ handoffs.length }} {{ t("handoff.nearby") }}
       </button>
+      <!-- Q-7: one quiet line + the recruitment affordance. No filler, no scolding. -->
+      <p v-if="foodEmpty" class="food-empty">
+        {{ t("vendor.none_nearby") }}
+        <button
+          v-if="!suggested"
+          class="food-empty__cta"
+          type="button"
+          @click="suggestCook"
+        >
+          {{ t("vendor.suggest") }}
+        </button>
+        <span v-else class="food-empty__done">{{ t("vendor.suggest_thanks") }}</span>
+      </p>
       <div class="map__canvas">
-        <MapCanvas :pins="pins" :clusters="clusters" @pin-tap="selected = $event" @located="onLocated" @bounds="onBounds" />
+        <MapCanvas
+          :pins="pins"
+          :clusters="clusters"
+          @pin-tap="onPinTap"
+          @located="onLocated"
+          @bounds="onBounds"
+        />
         <button class="report-chip" type="button" :aria-label="t('map.report')" @click="reportChip">
           <CircleDot :size="24" :stroke-width="2" aria-hidden="true" />
         </button>
@@ -247,12 +404,30 @@ async function submitPrice(cents) {
       <FacilityCard
         v-if="selected"
         :pin="selected"
+        :vendors="facilityVendors"
+        @vendor="openVendor"
         @navigate="navigate"
         @report="report"
         @report-price="reportPrice"
         @book="book"
         @fuel="fuel"
         @handoff="handoff"
+      />
+    </BottomSheet>
+
+    <BottomSheet
+      :open="!!vendorSheet"
+      :title="vendorSheet?.name || ''"
+      hide-title
+      @close="vendorSheet = null"
+    >
+      <VendorSheet
+        v-if="vendorSheet"
+        :sheet="vendorSheet"
+        @confirm="confirmVendorPresence(true)"
+        @not-here="confirmVendorPresence(false)"
+        @sold-out="reportVendorSoldOut"
+        @mute="muteThisVendor"
       />
     </BottomSheet>
 
@@ -279,6 +454,29 @@ async function submitPrice(cents) {
 </template>
 
 <style scoped>
+/* Q-7 / §15.3: one quiet sentence and one action. Deliberately not a card, not a
+   banner, not an illustration — an empty stretch of road is not an event. */
+.food-empty {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  padding: var(--s-2) var(--s-4);
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+}
+.food-empty__cta {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+}
+.food-empty__done {
+  color: var(--text-3);
+}
 .map {
   display: flex;
   flex-direction: column;

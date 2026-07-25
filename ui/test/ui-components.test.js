@@ -58,10 +58,12 @@ describe("TabBar (design-prd §4 NAV-1)", () => {
 });
 
 describe("PresetChips (design-prd §11.3)", () => {
-  it("offers the four presets and emits selection", async () => {
+  it("offers the five presets and emits selection", async () => {
+    // four §11.3 presets + Food (M13 / §23 E-D2, owner-approved)
     const w = mount(PresetChips, { props: { modelValue: "drive" } });
     const chips = w.findAll(".chip");
-    expect(chips).toHaveLength(4);
+    expect(chips).toHaveLength(5);
+    expect(chips[4].text()).toBe("Food");
     await chips[1].trigger("click");
     expect(w.emitted()["update:modelValue"][0]).toEqual(["tonight"]);
   });

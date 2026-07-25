@@ -10,7 +10,7 @@
      (and tests) never load the ~200 KB library. -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
-import { Truck, TreePine, SquareParking, Fuel, Warehouse, Circle } from "lucide-vue-next";
+import { Truck, TreePine, SquareParking, Fuel, Warehouse, Circle, UtensilsCrossed } from "lucide-vue-next";
 import { statusPresentation, isStale } from "../presentation.js";
 import { useI18n } from "../i18n.js";
 
@@ -212,6 +212,12 @@ function stale(pin) {
       <span class="pin__puck">
         <component :is="iconFor(pin)" :size="15" :stroke-width="2.5" aria-hidden="true" />
       </span>
+      <!-- §11.2 badge slot, first use (M13 / §23 E-D2). §11.1 is the reason this is
+           a badge and not a second pin: extra signals ride on the pins that already
+           exist. Icon + the marker token, never colour alone (C-1). -->
+      <span v-if="pin.has_food" class="pin__badge" :aria-label="t('map.preset.food')">
+        <UtensilsCrossed :size="10" :stroke-width="3" aria-hidden="true" />
+      </span>
     </button>
     <!-- §11.5: at density the server clusters; a count bubble (dominant status color),
          tap zooms in. -->
@@ -301,6 +307,23 @@ function stale(pin) {
 }
 .pin:focus-visible {
   outline: none;
+}
+/* the badge rides the puck's top-right shoulder. The puck is 28 dp centred in the
+   pin's 44 dp hit area, so these offsets overlap it rather than floating in the
+   corner of the (invisible) hit box. The 44 dp target itself is unchanged (§11.2). */
+.pin__badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--ink-0);
+  background: var(--marker-500);
+  color: var(--ink-0);
 }
 .pin--stale .pin__puck {
   background: #fff;

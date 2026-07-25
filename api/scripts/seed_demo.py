@@ -18,6 +18,7 @@ from app.foundation.f10_crowd import public as crowd
 from app.modules.m02_facility_intel import public as m2
 from app.modules.m06_parking import public as m6
 from app.modules.m07_fuel import public as m7
+from app.modules.m13_vendor import public as m13
 
 CENTER = (32.7767, -96.7970)  # downtown Dallas — spoof your browser GPS here
 MARKER = "Love's Travel Stop #212 (demo)"
@@ -74,6 +75,49 @@ def _crowd_fuel(db, fac, prices):
         location.evaluate_ping(db, drv.id, flat, flon, occurred_at=NOW)  # presence proof
         m7.confirm_price(db, drv.id, fac.id, cents, submitted_at=NOW)
         location.disarm_geofence(db, drv.id, fac.id, occurred_at=NOW)
+
+
+def _seed_demo_vendor(db, loves):
+    """AI-CONTEXT: a DEV_SEED food vendor so the M13 layer is browsable locally.
+    Rides the is_dev pattern like every other demo row, so `make purge-demo` removes
+    it. The FOUNDING FL vendor is registered through the admin console against real
+    consent — no real person's name, phone, or kitchen is ever hardcoded here."""
+    account = _seed_account(db, "demo-vendor@seed.local")
+    vendor = m13.register_vendor(
+        db,
+        account.id,
+        "Osh Express (demo)",
+        m13.VendorType.food_mobile,
+        metro="dallas-tx",
+        categories=["uzbek", "halal"],
+        languages=["uz", "ru", "en"],
+        halal_disclosure="Demo record — no real supplier claim.",
+        halal_answered=True,
+        is_dev=True,
+        allow_duplicate=True,
+    )
+    m13.publish_appearance(
+        db,
+        vendor,
+        loves.id,
+        NOW - timedelta(hours=1),
+        NOW + timedelta(hours=4),
+        [
+            m13.OfferingIn("Osh", 1200, portions=40),
+            m13.OfferingIn("Somsa", 400, portions=60),
+            m13.OfferingIn("Chai", 150),
+        ],
+        property_approved=True,
+        now=NOW,
+    )
+    # one crowd confirmation so the demo shows the "N drivers" honesty label rather
+    # than an empty presence line
+    driver = _seed_account(db, "demo-vendor-confirm@seed.local")
+    flat, flon = facility.coordinates(db, loves)
+    location.arm_geofence(db, driver.id, loves.id)
+    location.evaluate_ping(db, driver.id, flat, flon, occurred_at=NOW)
+    m13.confirm_presence(db, driver.id, vendor.id, loves.id, True, now=NOW)
+    return vendor
 
 
 def _make_dev_driver_owner_operator(db):
@@ -187,6 +231,9 @@ def main():
     _parking(db, seeder, ta, "empty")
     rest = _facility(db, facility.FacilityType.rest_area, "I-35 Rest Area (demo)", -0.018, -0.008)
     _parking(db, seeder, rest, "some")
+
+    # M13: a demo food vendor working the Love's lot tonight
+    _seed_demo_vendor(db, loves)
 
     # bookable parking property (M6) + spots
     prop = m6.create_property(

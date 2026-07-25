@@ -28,6 +28,7 @@ from app.modules.m09_money import public as m9
 from app.modules.m10_community import public as m10
 from app.modules.m11_voice import public as m11
 from app.modules.m12_fleet import public as m12
+from app.modules.m13_vendor import public as m13
 
 RECEIVER = (32.7767, -96.7970)
 TRUCKSTOP = (32.80, -96.7970)
@@ -39,7 +40,7 @@ MONTH = date(2026, 7, 1)
 
 def test_full_platform_synthetic_end_to_end(db):
     # every module registers together (F13 flags + F14 admin views + F9 prompts)
-    for mod in (m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12):
+    for mod in (m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13):
         mod.register_module(db)
 
     # --- F1/F2: an owner-operator (can invoice) + the day's facilities ---
@@ -197,3 +198,56 @@ def test_full_platform_synthetic_end_to_end(db):
     assert bench is None  # one sample is below the privacy floor — suppressed, never leaked
     tms_load = m12.push_load(db, driver.id, external_ref="TMS-42", rate_cents=200000)
     assert tms_load.source == loads.LoadSource.tms_push
+
+    # --- M13: a cook schedules -> the driver finds him on the corridor ahead ->
+    # confirms he's there -> the show-up rate that makes the next detour
+    # trustworthy actually moves. Discovery only: no money changes hands. ---
+    cook_account = identity.register_account(db, "cook@example.com", "pw-123456")
+    cook = m13.register_vendor(
+        db,
+        cook_account.id,
+        "Osh Express",
+        m13.VendorType.food_mobile,
+        metro="dallas-tx",
+        languages=["uz", "ru"],
+        halal_disclosure="Halal butcher in Dallas",
+        halal_answered=True,
+    )
+    dinner = T0 + timedelta(hours=6)
+    appearance = m13.publish_appearance(
+        db,
+        cook,
+        truckstop.id,
+        dinner,
+        dinner + timedelta(hours=4),
+        [m13.OfferingIn("Osh", 1200, portions=40), m13.OfferingIn("Somsa", 400)],
+        property_approved=True,
+        now=dinner,
+    )[0]
+
+    # the truck stop is due north of the receiver, so a northbound driver sees it
+    ahead = m13.corridor_vendors(db, driver.id, *RECEIVER, heading_deg=0, now=dinner)
+    assert [e.vendor.id for e in ahead] == [cook.id]
+    assert ahead[0].offerings[0].price_cents == 1200
+
+    # the driver is already geofence-present at the truck stop from the M10 handoff
+    location.evaluate_ping(db, driver.id, *TRUCKSTOP, occurred_at=dinner + timedelta(minutes=30))
+    m13.confirm_presence(
+        db, driver.id, cook.id, truckstop.id, True, now=dinner + timedelta(minutes=30)
+    )
+    belief = m13.presence(db, cook.id, truckstop.id)
+    assert belief.present is True
+    assert belief.source == "crowd"  # a driver said it, so it counts as drivers (§11.7)
+
+    # confirmed-and-live now outranks everything else at that facility (Q-3)
+    at_stop = m13.vendors_at_facility(db, truckstop.id, now=dinner + timedelta(hours=1))
+    assert at_stop[0].bucket == m13.BUCKET_LIVE_CONFIRMED
+
+    # the window closes and the crowd's confirmation becomes public reliability (Q-2)
+    m13.sweep_appearances(db, now=dinner + timedelta(hours=5))
+    assert appearance.status == m13.AppearanceStatus.done
+    score = m13.reliability(db, cook.id)
+    assert (score.confirmed, score.published) == (1, 1)
+    assert cook.consecutive_no_shows == 0
+    # and Q-1 holds: a finished dinner is off the map
+    assert m13.vendors_at_facility(db, truckstop.id, now=dinner + timedelta(hours=5)) == []

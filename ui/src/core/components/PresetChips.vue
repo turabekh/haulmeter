@@ -9,11 +9,16 @@ const props = defineProps({
 });
 const emit = defineEmits(["update:modelValue"]);
 const { t } = useI18n();
+// M13 / §23 E-D2: "Food" joins the four §11.3 presets as an approved addition —
+// composed from the existing chip, no new visual class. The row already scrolls
+// horizontally, so the fifth chip costs nothing at 360 dp. (NAV-1 governs TABS and
+// is untouched: this is a filter row, not navigation.)
 const presets = [
   { key: "drive", label: "map.preset.drive" },
   { key: "tonight", label: "map.preset.tonight" },
   { key: "work", label: "map.preset.work" },
   { key: "fuel", label: "map.preset.fuel" },
+  { key: "food", label: "map.preset.food" },
 ];
 </script>
 

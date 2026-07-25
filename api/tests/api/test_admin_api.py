@@ -216,3 +216,95 @@ def test_admin_analytics_and_config_require_admin(client, db):
         client.post("/admin/config", json={"key": "x", "value": 1}, headers=headers).status_code
         == 403
     )
+
+
+# --- M13 vendor management (Session A: API + this console only, no portal yet) ---
+def _seed_vendor(db, email="cook@example.com", name="Osh Express"):
+    from app.modules.m13_vendor import public as m13
+
+    account = identity.register_account(db, email, "pw-123456")
+    return m13.register_vendor(
+        db,
+        account.id,
+        name,
+        m13.VendorType.food_mobile,
+        metro="dallas-tx",
+        languages=["uz"],
+        halal_answered=True,
+    )
+
+
+def test_vendor_list_requires_admin(client, db):
+    _, headers = _register(client, "notadmin@example.com")
+    assert client.get("/admin/vendors", headers=headers).status_code == 403
+
+
+def test_admin_sees_the_facts_needed_to_act_on_a_vendor(client, db):
+    account_id, headers = _register(client, "vadmin@example.com")
+    _make_admin(db, account_id)
+    vendor = _seed_vendor(db)
+
+    rows = client.get("/admin/vendors", headers=headers).json()
+    row = next(r for r in rows if r["vendor_id"] == str(vendor.id))
+    assert row["verify_status"] == "unverified"
+    assert row["publish_suspended"] is False
+    assert row["shows_up"] == {"confirmed": 0, "published": 0}
+
+
+def test_admin_can_advance_the_verification_ladder(client, db):
+    account_id, headers = _register(client, "vadmin2@example.com")
+    _make_admin(db, account_id)
+    vendor = _seed_vendor(db, "cook2@example.com", "Samarkand Plov")
+
+    resp = client.post(
+        f"/admin/vendors/{vendor.id}/decide",
+        json={"verify_status": "verified"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["verify_status"] == "verified"
+
+
+def test_admin_can_suspend_and_reinstate_a_vendor(client, db):
+    account_id, headers = _register(client, "vadmin3@example.com")
+    _make_admin(db, account_id)
+    vendor = _seed_vendor(db, "cook3@example.com", "Tandoor Express")
+
+    suspended = client.post(
+        f"/admin/vendors/{vendor.id}/decide", json={"suspended": True}, headers=headers
+    ).json()
+    assert suspended["status"] == "suspended"
+
+    back = client.post(
+        f"/admin/vendors/{vendor.id}/decide", json={"suspended": False}, headers=headers
+    ).json()
+    assert back["status"] == "active"
+    assert back["publish_suspended"] is False
+
+
+def test_a_verification_decision_is_attributed_in_the_audit_log(client, db):
+    # every operator mutation is attributable — trust is the product (Q-8 spirit)
+    account_id, headers = _register(client, "vadmin4@example.com")
+    _make_admin(db, account_id)
+    vendor = _seed_vendor(db, "cook4@example.com", "Lagman House")
+    client.post(
+        f"/admin/vendors/{vendor.id}/decide", json={"verify_status": "verified"}, headers=headers
+    )
+
+    audit = client.get("/admin/audit", headers=headers).json()
+    entry = next(a for a in audit if a["action"] == "vendor_verify")
+    assert entry["actor"] == "vadmin4@example.com"
+    assert entry["detail"]["status"] == "verified"
+
+
+def test_an_unknown_verify_status_is_rejected(client, db):
+    account_id, headers = _register(client, "vadmin5@example.com")
+    _make_admin(db, account_id)
+    vendor = _seed_vendor(db, "cook5@example.com", "Chaikhana")
+
+    resp = client.post(
+        f"/admin/vendors/{vendor.id}/decide",
+        json={"verify_status": "totally_legit"},
+        headers=headers,
+    )
+    assert resp.status_code == 422

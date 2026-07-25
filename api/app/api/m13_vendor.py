@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f08_notifications import public as notify
+from app.foundation.f14_admin import public as admin
 from app.modules.m13_vendor import public as m13
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
@@ -61,6 +62,11 @@ class ConfirmIn(BaseModel):
 
 class AlertPrefIn(BaseModel):
     opted_in: bool
+
+
+class SuggestIn(BaseModel):
+    lat: float
+    lon: float
 
 
 def _entry_out(entry: m13.VendorEntry) -> dict:
@@ -202,6 +208,28 @@ def confirm(
         "sample_size": belief.sample_size if belief else 0,
         "sold_out": m13.is_sold_out(db, vendor_id, body.facility_id),
     }
+
+
+@router.post("/suggest")
+def suggest_a_cook(
+    body: SuggestIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    # Q-7: the empty state's affordance has to GO somewhere or it is a dead control.
+    # It records where drivers want food, which is the demand half of the vendor
+    # recruitment loop — the F14 console reads it to target outreach. No vendor is
+    # created and nothing is promised to the driver beyond "noted".
+    _require_active(db)
+    admin.emit(
+        db,
+        "vendor_suggested",
+        module=m13.MODULE,
+        occurred_at=datetime.now(UTC),
+        account_id=account.id,
+        properties={"lat": body.lat, "lon": body.lon},
+    )
+    return {"recorded": True}
 
 
 @router.put("/alerts/opt-in")

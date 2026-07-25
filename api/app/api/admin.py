@@ -16,6 +16,7 @@ from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f13_flags import public as flags
 from app.foundation.f14_admin import public as admin
+from app.modules.m13_vendor import public as m13
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -29,6 +30,11 @@ def current_admin(account: identity.Account = Depends(current_account)) -> ident
 class DecideIn(BaseModel):
     approve: bool
     reason: str | None = None
+
+
+class VendorDecisionIn(BaseModel):
+    verify_status: str | None = None
+    suspended: bool | None = None
 
 
 class ConfigIn(BaseModel):
@@ -210,3 +216,70 @@ def decide(
     decision = admin.ModerationStatus.approved if body.approve else admin.ModerationStatus.rejected
     admin.decide_moderation(db, item, decision, moderator_account_id=account.id, reason=body.reason)
     return {"id": str(item.id), "status": item.status.value}
+
+
+# --- M13 vendor moderation (the Session-A vendor management surface) ---
+@router.get("/vendors")
+def vendor_list(
+    _admin: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    # AI-CONTEXT: vendor management is API + this console only until the vendor
+    # portal lands in Session B. The operator needs exactly three facts to act:
+    # who they are, where they stand on the ladder, and whether the no-show
+    # counter has suspended their publishing (Q-2).
+    rows = db.scalars(select(m13.Vendor).order_by(m13.Vendor.created_at.desc()))
+    out = []
+    for vendor in rows:
+        score = m13.reliability(db, vendor.id)
+        out.append(
+            {
+                "vendor_id": str(vendor.id),
+                "name": vendor.name,
+                "vendor_type": vendor.vendor_type.value,
+                "metro": vendor.metro,
+                "verify_status": vendor.verify_status.value,
+                "status": vendor.status.value,
+                "publish_suspended": vendor.publish_suspended,
+                "consecutive_no_shows": vendor.consecutive_no_shows,
+                "shows_up": {"confirmed": score.confirmed, "published": score.published},
+                "is_dev": vendor.is_dev,
+                "documents": [
+                    {"kind": d.doc_kind.value, "review_status": d.review_status.value}
+                    for d in vendor.documents
+                ],
+            }
+        )
+    return out
+
+
+@router.post("/vendors/{vendor_id}/decide")
+def decide_vendor(
+    vendor_id: uuid.UUID,
+    body: VendorDecisionIn,
+    account: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    vendor = m13.resolve_vendor(db, vendor_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    if body.verify_status is not None:
+        try:
+            m13.set_verification(
+                db,
+                vendor,
+                m13.VendorVerifyStatus(body.verify_status),
+                moderator_account_id=account.id,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown verify status"
+            ) from exc
+    if body.suspended is not None:
+        m13.suspend_vendor(db, vendor, body.suspended, moderator_account_id=account.id)
+    return {
+        "vendor_id": str(vendor.id),
+        "verify_status": vendor.verify_status.value,
+        "status": vendor.status.value,
+        "publish_suspended": vendor.publish_suspended,
+    }

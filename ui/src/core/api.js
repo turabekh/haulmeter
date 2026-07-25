@@ -779,3 +779,121 @@ export async function submitReview(facilityId, ratings, text) {
   // F12: a review written offline queues and syncs on reconnect
   return queuedPost(`/facility/${facilityId}/review`, { ratings, text });
 }
+
+// --- M13 Vendor Network (discovery only; no payment path exists) ---
+
+// AI-CONTEXT: today's appearances are cached to the phone so the food layer still
+// renders in a dead zone (§15.1 — offline is a mode, not an error). The cache is
+// scoped to the day it was written: stale food data is exactly the "dead content"
+// Q-1 exists to prevent, so an old cache is dropped rather than shown.
+const VENDOR_CACHE_KEY = "longhaul.vendor_appearances";
+
+function cacheAppearances(entries) {
+  try {
+    localStorage.setItem(
+      VENDOR_CACHE_KEY,
+      JSON.stringify({ day: new Date().toDateString(), entries }),
+    );
+  } catch {
+    /* best-effort */
+  }
+}
+
+export function cachedAppearances() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(VENDOR_CACHE_KEY));
+    if (!raw || raw.day !== new Date().toDateString()) return [];
+    return raw.entries || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchVendorAppearances({ bbox, signal } = {}) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const q = new URLSearchParams({
+    min_lat: bbox.min_lat,
+    min_lon: bbox.min_lon,
+    max_lat: bbox.max_lat,
+    max_lon: bbox.max_lon,
+  });
+  const resp = await fetch(`${API_BASE}/vendors/appearances?${q}`, {
+    headers: headers(),
+    signal,
+  });
+  if (!resp.ok) throw new Error(`vendor appearances failed: ${resp.status}`);
+  const entries = await resp.json();
+  cacheAppearances(entries);
+  return entries;
+}
+
+export async function fetchVendorsAt(facilityId, { allVendors = false } = {}) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const q = allVendors ? "?all_vendors=true" : "";
+  const resp = await fetch(`${API_BASE}/vendors/at/${facilityId}${q}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`vendors at facility failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchVendorSheet(vendorId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/vendors/${vendorId}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`vendor sheet failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchCorridorVendors({ lat, lon, headingDeg = 0 } = {}) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const q = new URLSearchParams({ lat, lon, heading_deg: headingDeg });
+  const resp = await fetch(`${API_BASE}/vendors/corridor?${q}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`vendor corridor failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function confirmVendor(vendorId, facilityId, { present = true, soldOut = false } = {}) {
+  // F12: a confirmation made in a dead zone queues and applies exactly once on
+  // reconnect, like every other crowd contribution
+  return queuedPost(`/vendors/${vendorId}/confirm`, {
+    facility_id: facilityId,
+    present,
+    sold_out: soldOut,
+  });
+}
+
+export async function setFoodAlerts(optedIn) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/vendors/alerts/opt-in`, {
+    method: "PUT",
+    headers: headers(),
+    body: JSON.stringify({ opted_in: optedIn }),
+  });
+  if (!resp.ok) throw new Error(`alert pref failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function muteVendor(vendorId) {
+  return queuedPost(`/vendors/${vendorId}/mute`, {});
+}
+
+export async function suggestACook(lat, lon) {
+  // Q-7: the empty state's affordance records WHERE drivers want food — the demand
+  // half of the vendor recruitment loop. Queued offline like any other contribution.
+  return queuedPost("/vendors/suggest", { lat, lon });
+}
+
+export async function saveEquipment({ plateState, plateNumber, unitNumber, vin } = {}) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/auth/equipment`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({
+      plate_state: plateState,
+      plate_number: plateNumber,
+      unit_number: unitNumber,
+      vin,
+    }),
+  });
+  if (resp.status === 422) throw new Error("invalid_vin");
+  if (!resp.ok) throw new Error(`equipment save failed: ${resp.status}`);
+  return resp.json();
+}

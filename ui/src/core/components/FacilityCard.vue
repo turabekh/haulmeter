@@ -12,17 +12,36 @@
      (M7-FR5), so real per-station prices displace the regional baseline over time. -->
 <script setup>
 import { computed } from "vue";
-import { Navigation, SquareParking, Fuel } from "lucide-vue-next";
+import { Navigation, SquareParking, Fuel, UtensilsCrossed } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import StatusPill from "./StatusPill.vue";
 import { freshnessLabel, isStale } from "../presentation.js";
 import { formatMoney } from "../meter.js";
 import { useI18n } from "../i18n.js";
+import {
+  bucketLabelKey,
+  cardVendors,
+  presenceLabel,
+  untilLabel,
+  verificationPresentation,
+} from "../vendors.js";
 
 const props = defineProps({
   pin: { type: Object, required: true },
+  // M13-FR3: vendors discoverable at this facility, already Q-3 ranked by the
+  // server. Q-7: an EMPTY list means the section does not render at all — no
+  // "nothing here yet!" filler on a card a driver reads in ten seconds.
+  vendors: { type: Array, default: () => [] },
 });
-const emit = defineEmits(["navigate", "report", "report-price", "book", "fuel", "handoff"]);
+const emit = defineEmits([
+  "navigate",
+  "report",
+  "report-price",
+  "book",
+  "fuel",
+  "handoff",
+  "vendor",
+]);
 const { t } = useI18n();
 const router = useRouter();
 
@@ -92,6 +111,19 @@ const freeLot = computed(() =>
 const reportable = computed(() =>
   ["truck_stop", "rest_area", "parking_property"].includes(props.pin.facility_type),
 );
+
+// Q-6: at most two here; the rest stay reachable behind "all vendors" in the sheet.
+// The server already caps, but a card that rendered whatever it was handed would be
+// one API change away from making the map louder — and food enriches pins, it never
+// decorates the canvas.
+const shownVendors = computed(() => cardVendors(props.vendors));
+const moreVendors = computed(() => Math.max(0, props.vendors.length - shownVendors.value.length));
+
+function vendorLine(entry) {
+  // §11.7: "3 drivers · 20m" for a crowd confirmation, "vendor says here" for the
+  // vendor's own claim. presenceLabel refuses to produce a count for the latter.
+  return presenceLabel(entry.presence, now, { vendorSays: t("vendor.says_here") });
+}
 </script>
 
 <template>
@@ -125,6 +157,42 @@ const reportable = computed(() =>
     <!-- M7-FR5 empty state: only a regional estimate here -> invite the first real
          report (§15.3), keeping the regional line above as secondary context -->
     <p v-if="fuelEstimateOnly" class="fac__nudge">{{ t("fuel.be_first") }}</p>
+
+    <!-- M13-FR3 vendor section. Q-7: absent entirely when there is nothing to show,
+         so an ordinary truck stop's card is exactly as quiet as it was before. -->
+    <section v-if="shownVendors.length" class="fac__vendors">
+      <h4 class="fac__vendors-title">
+        <UtensilsCrossed :size="16" :stroke-width="2" aria-hidden="true" />
+        {{ t("vendor.section_title") }}
+      </h4>
+      <button
+        v-for="v in shownVendors"
+        :key="v.vendor_id"
+        class="vendor"
+        type="button"
+        @click="emit('vendor', v)"
+      >
+        <span class="vendor__name">{{ v.name }}</span>
+        <span class="vendor__when">
+          {{ t(bucketLabelKey(v.bucket)) }} · {{ t("vendor.until") }} {{ untilLabel(v.ends_at) }}
+        </span>
+        <span class="vendor__meta">
+          <span :style="{ color: `var(${verificationPresentation(v.verify_status).token})` }">
+            {{ t(verificationPresentation(v.verify_status).labelKey) }}
+          </span>
+          <span v-if="vendorLine(v)" class="vendor__fresh">{{ vendorLine(v) }}</span>
+          <span v-if="v.sold_out" class="vendor__soldout">{{ t("vendor.sold_out") }}</span>
+        </span>
+      </button>
+      <button
+        v-if="moreVendors"
+        class="cta cta--tertiary"
+        type="button"
+        @click="emit('vendor', null)"
+      >
+        {{ t("vendor.all") }} ({{ vendors.length }})
+      </button>
+    </section>
 
     <!-- contextual lead action -->
     <button v-if="bookable" class="cta" type="button" @click="emit('book', pin)">
@@ -259,6 +327,58 @@ const reportable = computed(() =>
   color: var(--on-accent);
   font-size: var(--type-caption-size);
   font-weight: 500;
+}
+/* M13: the food section is a quiet list, not a second card — it must never
+   compete with the facility's own status line or its primary action (§7.4) */
+.fac__vendors {
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line-1);
+}
+.fac__vendors-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-2);
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.vendor {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-height: 64px;
+  padding: var(--s-2) 0;
+  background: transparent;
+  text-align: left;
+}
+.vendor__name {
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.vendor__when {
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  font-variant-numeric: tabular-nums;
+}
+.vendor__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--type-caption-size);
+}
+.vendor__fresh {
+  color: var(--text-3);
+}
+.vendor__soldout {
+  margin-left: auto;
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--ink-2, var(--line-1));
+  color: var(--text-2);
 }
 .cta {
   display: flex;
