@@ -119,15 +119,34 @@ def _record_failure(db, run, job: Job, exc: Exception, backoff: float) -> None:
 
 
 def _startup() -> None:
-    db = SessionLocal()
+    # AI-CONTEXT: register EVERY model before any job runs. A job touches only its
+    # own tables, but those tables carry cross-schema foreign keys (f10.submission ->
+    # f01.account), and SQLAlchemy cannot configure a mapper whose FK target was
+    # never imported. Importing a subset left tpims_dynamic raising
+    # NoReferencedTableError on every tick — silently, because the worker logged only
+    # to stdout. This is the same registration the migrations and purge scripts do.
     try:
+        import db_registry
+
+        db_registry.import_all_models()
+    except Exception as exc:
+        _log(f"model registration failed: {exc!r}")
+
+    # session creation is INSIDE the guard: a database that is a few seconds late
+    # coming up must leave the worker running to retry on the next tick, not kill it
+    # at boot. The jobs are all flag-gated and idempotent, so a skipped startup
+    # registration costs nothing but a cycle.
+    db = None
+    try:
+        db = SessionLocal()
         ingest_flags.register_ingest_flags(db)
         sources.register_source_config(db)
         db.commit()
     except Exception as exc:
         _log(f"startup registration skipped: {exc!r}")
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 
 def main() -> None:
