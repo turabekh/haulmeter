@@ -2,7 +2,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci \
-        seed purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract
+        seed purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales
 
 STATE ?= wisconsin
 # osmium-tool is packaged in Debian/Ubuntu; install it in a slim base at run time
@@ -82,6 +82,11 @@ ingest-eia:
 # reads api/data/osm/$(STATE).geojson (produced by `make osm-extract`)
 ingest-osm:
 	$(COMPOSE) exec api python -m scripts.ingest_osm /app/data/osm/$(STATE).geojson
+
+# one-off repair for facilities ingested before the co-located-amenity rule existed.
+# Prints what it would do; DRY_RUN=0 applies. Idempotent.
+repair-scales:
+	$(COMPOSE) exec api python -m scripts.repair_colocated_scales
 
 # OSM extract: download a Geofabrik state pbf (host curl), then osmium-filter +
 # export truck-relevant features in a container. Output -> api/data/osm/ (gitignored).

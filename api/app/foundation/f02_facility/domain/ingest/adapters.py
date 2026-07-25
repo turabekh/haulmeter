@@ -29,6 +29,14 @@ class StagedRecord:
     facility_type: FacilityType
     attributes: dict = field(default_factory=dict)
     raw_payload: dict = field(default_factory=dict)
+    # AI-CONTEXT: this record describes an AMENITY AT a site rather than a site of
+    # its own — a CAT scale in a Pilot's lot, not a place a driver navigates to as a
+    # destination. Such a record merges into whatever facility it stands in, by
+    # PROXIMITY alone, because its name ("Cat Scale") will never resemble its host's
+    # ("Pilot") and the ordinary fuzzy-name dedupe therefore cannot see the two are
+    # one place. Set by the adapter, which is the only layer that knows the tags.
+    # See `colocated_host` in ..service.
+    colocated_amenity: bool = False
 
 
 @dataclass
@@ -326,21 +334,50 @@ def _osm_is_commercial_scale(tags: dict) -> bool:
     return any(brand in operator for brand in _COMMERCIAL_SCALE_OPERATORS)
 
 
+# AI-CONTEXT: measured, not assumed. The first Wisconsin/Indiana/Iowa/Minnesota pull
+# produced 253 commercial scales, of which 239 stood within 150 m of a facility that
+# already had a pin (169 within 50 m) — every one of them a second pin on top of a
+# Pilot, a Love's or a rest area. A branded scale is an amenity AT a truck stop, so
+# it is marked co-located and merges into its host by proximity.
+#
+# A PUBLIC weigh station is deliberately NOT co-located: it is a destination in its
+# own right, a driver navigates to it, and 69 of the 103 found stood more than 2 km
+# from anything else. The 22 that sit beside a rest area really are separate places
+# that happen to be adjacent, and collapsing them would lose the scale entirely.
+#
+# Takes the RESOLVED type, not the tags alone. The two were derived independently at
+# first, and a weighbridge that another rule had claimed came out flagged co-located
+# while typed something else entirely — which made `_contribution` compare two kinds
+# that happened to be equal and let the tenant's identity through. Deriving one from
+# the other means they cannot disagree again.
+_COLOCATED_AMENITY_TYPES = frozenset({FacilityType.scale})
+
+
+def _osm_is_colocated_amenity(tags: dict, ftype: FacilityType) -> bool:
+    return ftype in _COLOCATED_AMENITY_TYPES and _osm_is_commercial_scale(tags)
+
+
 _OSM_TYPE_RULES = [
     (lambda t: t.get("highway") in ("rest_area", "services"), FacilityType.rest_area),
     (lambda t: t.get("amenity") == "truck_stop", FacilityType.truck_stop),
     (lambda t: t.get("amenity") == "fuel" and _osm_hgv(t), FacilityType.fuel_station),
     (lambda t: t.get("amenity") == "parking" and _osm_hgv(t), FacilityType.parking_property),
-    # a service POI only counts as a truck facility when it admits heavy goods
-    # vehicles — otherwise every neighbourhood car wash lands in the registry.
-    (lambda t: bool(osm_services(t)) and _osm_hgv(t), FacilityType.repair),
     # E3.1: a weighbridge. Commercial (CAT-scale style) and public enforcement
     # scales are different facts to a driver — one is a service, the other is a
     # stop you cannot skip — so they get different kinds. NOT hgv-gated: an
     # enforcement scale exists precisely FOR heavy vehicles whether or not the
     # mapper tagged access, and gating it would drop most of them.
+    #
+    # These sit ABOVE the generic repair rule deliberately. Making a weighbridge a
+    # SERVICE (so it can enrich its host) also made it match "some service + hgv",
+    # and with the order reversed a CAT scale tagged hgv=designated filed itself as
+    # a REPAIR SHOP — found in the first real pull. A specific, unambiguous tag must
+    # outrank a catch-all.
     (lambda t: _osm_is_weighbridge(t) and _osm_is_commercial_scale(t), FacilityType.scale),
     (lambda t: _osm_is_weighbridge(t), FacilityType.weigh_station),
+    # a service POI only counts as a truck facility when it admits heavy goods
+    # vehicles — otherwise every neighbourhood car wash lands in the registry.
+    (lambda t: bool(osm_services(t)) and _osm_hgv(t), FacilityType.repair),
 ]
 
 
@@ -400,6 +437,7 @@ def parse_osm(geojson: dict) -> list[StagedRecord]:
                 facility_type=ftype,
                 attributes=attributes,
                 raw_payload=tags,
+                colocated_amenity=_osm_is_colocated_amenity(tags, ftype),
             )
         )
     return out

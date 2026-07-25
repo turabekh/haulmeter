@@ -14,7 +14,13 @@ from sqlalchemy.orm import Session
 from .. import geohash as geohash_util
 from ..enums import SourceKind
 from ..models import Facility, FacilitySource, SourceRecord
-from ..service import add_source, create_facility, find_duplicate_candidates, resolve_canonical
+from ..service import (
+    add_source,
+    colocated_host,
+    create_facility,
+    find_duplicate_candidates,
+    resolve_canonical,
+)
 from .adapters import StagedRecord
 
 # amenity/attribute conflicts: higher priority wins per key (PRD §12)
@@ -88,6 +94,25 @@ def _recompute_canonical(db: Session, facility: Facility) -> None:
     db.flush()
 
 
+def _contribution(rec: StagedRecord, facility: Facility) -> dict:
+    """What this record may say about the facility it landed on.
+
+    AI-CONTEXT: a co-located amenity that merged into a HOST contributes only what it
+    knows about the SITE — its own name, tags, phone and website describe the scale,
+    and letting them through would dress a Pilot in its tenant's identity. Landing on
+    its own pin (nothing nearby, or fuzzy-matched to another scale) it contributes
+    everything, because there it IS the place.
+
+    This is applied on EVERY write, not only the first merge, because the re-ingest
+    path replaces a source's attributes wholesale — narrowing once at merge time was
+    silently undone by the next pull, which is how 203 truck stops briefly ended up
+    advertising catscale.com.
+    """
+    if rec.colocated_amenity and facility.facility_type != rec.facility_type:
+        return {k: v for k, v in rec.attributes.items() if k in UNION_KEYS}
+    return rec.attributes
+
+
 def stage_record(db: Session, rec: StagedRecord, batch_id: str | None = None) -> SourceRecord:
     # idempotent staging row keyed on (source_kind, external_ref); raw retained
     existing = db.scalar(
@@ -127,14 +152,23 @@ def upsert_record(
     )
     if existing_src is not None:
         facility = resolve_canonical(db, existing_src.facility_id)
-        existing_src.attributes = rec.attributes
+        existing_src.attributes = _contribution(rec, facility)
         outcome = "updated"
     else:
         # 2. cross-source dedupe: same geohash block + fuzzy name -> same physical site
         candidates = find_duplicate_candidates(db, rec.name, rec.lat, rec.lon)
+        host = colocated_host(db, rec.lat, rec.lon) if rec.colocated_amenity else None
         if candidates:
             facility = candidates[0]
             add_source(db, facility, rec.source_kind, rec.external_ref, rec.attributes)
+            outcome = "matched"
+        elif host is not None:
+            # 2b. an amenity standing inside a destination is a FACT ABOUT that
+            # destination, not a second place.
+            facility = host
+            add_source(
+                db, facility, rec.source_kind, rec.external_ref, _contribution(rec, facility)
+            )
             outcome = "matched"
         else:
             # 3. new canonical facility (authoritative source -> confirmed)

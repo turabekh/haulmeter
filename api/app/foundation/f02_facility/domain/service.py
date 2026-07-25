@@ -113,6 +113,46 @@ def find_duplicate_candidates(db: Session, name: str, lat: float, lon: float) ->
     return list(db.scalars(stmt))
 
 
+# AI-CONTEXT: a co-located amenity merges into the site it stands in by PROXIMITY
+# alone (see StagedRecord.colocated_amenity). Two rules keep this from becoming a
+# general proximity merge, which would collapse the Pilot and the Love's across the
+# road into one pin:
+#   · only a record the ADAPTER marked co-located may take this path, and
+#   · only a DESTINATION may host one, so amenities never chain into each other.
+# 150 m is the measured figure, not a guess: it covers 239 of the 253 commercial
+# scales in the first four-state pull while a truck-stop lot is itself ~200 m across,
+# so the radius stays inside "the same site" rather than reaching the next exit.
+COLOCATED_RADIUS_M = 150.0
+COLOCATED_HOST_TYPES = frozenset(
+    {
+        FacilityType.truck_stop,
+        FacilityType.rest_area,
+        FacilityType.fuel_station,
+        FacilityType.parking_property,
+        FacilityType.repair,
+        FacilityType.shipper_receiver,
+    }
+)
+
+
+def colocated_host(
+    db: Session, lat: float, lon: float, radius_m: float = COLOCATED_RADIUS_M
+) -> Facility | None:
+    """The nearest destination facility this amenity stands in, or None if it stands
+    alone — in which case it earns a pin of its own."""
+    point = cast(_point(lat, lon), Geography)
+    stmt = (
+        select(Facility)
+        .where(Facility.status != FacilityStatus.merged)
+        .where(~Facility.is_dev)
+        .where(Facility.facility_type.in_(COLOCATED_HOST_TYPES))
+        .where(func.ST_DWithin(cast(Facility.geom, Geography), point, radius_m))
+        .order_by(func.ST_Distance(cast(Facility.geom, Geography), point))
+        .limit(1)
+    )
+    return db.scalars(stmt).first()
+
+
 def merge_facilities(db: Session, canonical: Facility, duplicate: Facility) -> Facility:
     for source in list(duplicate.sources):
         source.facility_id = canonical.id

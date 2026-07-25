@@ -3,17 +3,43 @@
   "features": [
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-89.5010, 43.1200] },
-      "properties": { "@id": "node/801", "amenity": "weighbridge", "name": "I-90 WEIGH STATION EB" }
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -89.501,
+          43.12
+        ]
+      },
+      "properties": {
+        "@id": "node/801",
+        "amenity": "weighbridge",
+        "name": "I-90 WEIGH STATION EB"
+      }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-89.5110, 43.1300] },
-      "properties": { "@id": "node/802", "amenity": "weigh_station", "name": "US-51 Scale" }
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -89.511,
+          43.13
+        ]
+      },
+      "properties": {
+        "@id": "node/802",
+        "amenity": "weigh_station",
+        "name": "US-51 Scale"
+      }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-89.5210, 43.1400] },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -89.521,
+          43.14
+        ]
+      },
       "properties": {
         "@id": "node/803",
         "amenity": "weighbridge",
@@ -23,13 +49,69 @@
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-89.5310, 43.1500] },
-      "properties": { "@id": "node/804", "amenity": "vehicle_inspection", "name": "State Safety Inspection" }
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -89.531,
+          43.15
+        ]
+      },
+      "properties": {
+        "@id": "node/804",
+        "amenity": "vehicle_inspection",
+        "name": "State Safety Inspection"
+      }
     },
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [-89.3999, 43.0700] },
-      "properties": { "@id": "node/805", "amenity": "weighbridge", "name": "Rest Area I-94 EB" }
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -89.3999,
+          43.07
+        ]
+      },
+      "properties": {
+        "@id": "node/805",
+        "amenity": "weighbridge",
+        "name": "Rest Area I-94 EB"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -89.6,
+          43.2
+        ]
+      },
+      "properties": {
+        "@id": "node/806",
+        "amenity": "weighbridge",
+        "brand": "CAT Scale",
+        "name": "CAT Scale",
+        "operator": "Kwik Trip",
+        "ref": "1818",
+        "website": "https://catscale.com/cat-scale-locator/?single=1818"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -90.5,
+          44.5
+        ]
+      },
+      "properties": {
+        "@id": "node/807",
+        "amenity": "weighbridge",
+        "brand": "CAT Scale",
+        "name": "CAT Scale",
+        "operator": "Independent Truck Plaza"
+      }
     }
   ]
 }

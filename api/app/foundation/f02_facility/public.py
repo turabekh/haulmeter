@@ -39,6 +39,7 @@ from .domain.ingest.pipeline import (
 from .domain.models import Facility, FacilitySource, SourceRecord
 from .domain.service import (
     add_source,
+    colocated_host,
     confirm_with_second_signal,
     contains_point,
     coordinates,
@@ -80,6 +81,7 @@ __all__ = [
     "create_candidate_from_checkin",
     "create_facility",
     "facility_for_source",
+    "colocated_host",
     "find_duplicate_candidates",
     "get_facility",
     "in_bbox",
