@@ -16,6 +16,7 @@ from app.foundation.f03_location import public as location
 from app.foundation.f05_load import public as loads
 from app.foundation.f07_ledger import public as ledger
 from app.foundation.f09_ai_gateway import public as ai
+from app.foundation.f13_flags import public as flags
 from app.modules.m01_map import public as m1
 from app.modules.m02_facility_intel import public as m2
 from app.modules.m03_detention import public as m3
@@ -333,3 +334,36 @@ def test_full_platform_synthetic_end_to_end(db):
 
     # the Phase A line still holds at the end of the whole day
     assert promo.status == m13.PromotionStatus.active
+
+    # --- Admin Console 2.0: the operator's loop. An admin glances at the overview,
+    # sees the work waiting, toggles a flag, and the change is attributable
+    # afterwards with the value it replaced. ---
+    from app.foundation.f14_admin import public as admin_f14
+
+    operator = identity.register_account(db, "operator@example.com", "pw-123456")
+    identity.attach_role(db, operator, identity.Role.platform_admin)
+
+    # the worker's telemetry is what makes "did the feeds run?" answerable
+    run = admin_f14.start_job_run(db, "tpims_dynamic", T0)
+    admin_f14.finish_job_run(db, run, T0, ok=True, summary={"applied": 12})
+    assert admin_f14.latest_job_runs(db)["tpims_dynamic"].ok is True
+
+    was_enabled = flags.is_enabled(db, m13.FLAG_KEY)
+    flags.enable(db, m13.FLAG_KEY)
+    admin_f14.record_action(
+        db,
+        "flag_enable",
+        actor_account_id=operator.id,
+        target_kind="flag",
+        target_key=m13.FLAG_KEY,
+        before={"enabled": was_enabled},
+        after={"enabled": True},
+    )
+
+    entry = admin_f14.last_action_for(db, "flag_enable", m13.FLAG_KEY)
+    assert entry.actor_account_id == operator.id
+    assert entry.before == {"enabled": False}  # what it was, not merely that it changed
+    assert entry.after == {"enabled": True}
+
+    # and the moderation SLA is legible to whoever opens the console next
+    assert all(not q.overdue for q in m13.queue_with_sla(db, now=T0))

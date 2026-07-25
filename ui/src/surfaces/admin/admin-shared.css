@@ -1,0 +1,103 @@
+/* AI-CONTEXT: shared §18 portal chrome for the admin sections. One file so the
+   seven sections cannot drift apart visually; tokens only, no raw values. */
+.panel {
+  background: var(--ink-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
+  padding: var(--s-4);
+  margin-bottom: var(--s-4);
+}
+.panel__title {
+  margin: 0 0 var(--s-3);
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.panel__empty,
+.panel__note {
+  margin: var(--s-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table td,
+.table th {
+  padding: var(--s-3) var(--s-2);
+  border-top: 1px solid var(--line-1);
+  font-size: var(--type-body-size);
+  text-align: left;
+  vertical-align: top;
+}
+.table__name {
+  color: var(--text-1);
+}
+.table__figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.table__muted {
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 2px var(--s-2);
+  border-radius: var(--r-pill);
+  border: 1px solid currentColor;
+  font-size: var(--type-caption-size);
+  font-weight: 500;
+}
+.stats {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-5);
+  margin: 0;
+  padding: 0;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.stat__figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--type-title-size);
+}
+.stat__label {
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+}
+.btn {
+  min-height: 48px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-control);
+  border: 1px solid var(--line-1);
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--type-label-size);
+}
+.btn--accent {
+  background: var(--accent-fill);
+  border-color: transparent;
+  color: var(--on-accent);
+}
+.btn--danger {
+  border-color: var(--flare-500);
+  color: var(--flare-500);
+}
+.field__input {
+  min-height: 48px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+  background: var(--ink-2, var(--ink-0));
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+}

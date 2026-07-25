@@ -968,3 +968,68 @@ export const saveVendorProfile = (body) => portalSend("/profile", "PATCH", body)
 export const createVendorPromotion = (body) => portalSend("/promotions", "POST", body);
 export const cancelVendorPromotion = (id) => portalSend(`/promotions/${id}`, "DELETE");
 export const cancelVendorAppearance = (id) => portalSend(`/appearances/${id}`, "DELETE");
+
+// --- Admin Console 2.0 sections ---
+async function adminGet(path) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/admin${path}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`${path} ${resp.status}`);
+  return resp.json();
+}
+
+export const fetchAdminOverview = () => adminGet("/overview");
+export const fetchAdminIngest = () => adminGet("/ingest");
+export const fetchJobHistory = (job) => adminGet(`/jobs/${job}`);
+export const fetchConfigScopes = () => adminGet("/config/scopes");
+export const fetchVendorDocuments = (id) => adminGet(`/vendors/${id}/documents`);
+export const fetchAdminClaims = (disputedOnly = false) =>
+  adminGet(`/claims${disputedOnly ? "?disputed_only=true" : ""}`);
+export const fetchReporterRecord = (id) => adminGet(`/reporters/${id}`);
+
+export function fetchAuditFiltered({ action, targetKind, targetKey, limit } = {}) {
+  const q = new URLSearchParams();
+  if (action) q.set("action", action);
+  if (targetKind) q.set("target_kind", targetKind);
+  if (targetKey) q.set("target_key", targetKey);
+  if (limit) q.set("limit", limit);
+  const qs = q.toString();
+  return adminGet(`/audit${qs ? `?${qs}` : ""}`);
+}
+
+export async function resolveReport(contentKind, contentRef, { approve, frivolous = false, reason = null }) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(
+    `${API_BASE}/admin/moderation/report/${contentKind}/${contentRef}/resolve`,
+    {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ approve, frivolous, reason }),
+    },
+  );
+  if (!resp.ok) throw new Error(`resolve failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function decideVendor(vendorId, body) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/admin/vendors/${vendorId}/decide`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(`vendor decide failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function decideClaim(claimId, approve, reason = null) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/admin/claims/${claimId}/decide`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ approve, reason }),
+  });
+  if (!resp.ok) throw new Error(`claim decide failed: ${resp.status}`);
+  return resp.json();
+}
+
+export const fetchAdminVendors = () => adminGet("/vendors");

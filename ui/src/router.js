@@ -18,7 +18,14 @@ import EvidenceSurface from "./surfaces/EvidenceSurface.vue";
 import AuthSurface from "./surfaces/AuthSurface.vue";
 import MoreSurface from "./surfaces/MoreSurface.vue";
 import FleetWorkspaceSurface from "./surfaces/FleetWorkspaceSurface.vue";
-import AdminConsoleSurface from "./surfaces/AdminConsoleSurface.vue";
+import AdminShell from "./surfaces/admin/AdminShell.vue";
+import AdminOverview from "./surfaces/admin/AdminOverview.vue";
+import AdminFlags from "./surfaces/admin/AdminFlags.vue";
+import AdminVendors from "./surfaces/admin/AdminVendors.vue";
+import AdminModeration from "./surfaces/admin/AdminModeration.vue";
+import AdminData from "./surfaces/admin/AdminData.vue";
+import AdminModules from "./surfaces/admin/AdminModules.vue";
+import AdminAudit from "./surfaces/admin/AdminAudit.vue";
 import PublicScorecardSurface from "./surfaces/PublicScorecardSurface.vue";
 import OwnerPortalSurface from "./surfaces/OwnerPortalSurface.vue";
 import VendorPortalSurface from "./surfaces/VendorPortalSurface.vue";
@@ -58,7 +65,22 @@ export const routes = [
   { path: "/more", name: "more", component: MoreSurface },
   // §18 web-first portal — no tab chrome, wider frame; auth required (fleet owner)
   { path: "/fleet", name: "fleet", component: FleetWorkspaceSurface, meta: { chrome: false, portal: true } },
-  { path: "/admin", name: "admin", component: AdminConsoleSurface, meta: { chrome: false, portal: true } },
+  // Admin Console 2.0 (§23 E-D4): sections are router CHILDREN so a queue can be
+  // bookmarked, browser back behaves, and each section fetches only its own data.
+  {
+    path: "/admin",
+    component: AdminShell,
+    meta: { chrome: false, portal: true },
+    children: [
+      { path: "", name: "admin", component: AdminOverview },
+      { path: "flags", name: "admin-flags", component: AdminFlags },
+      { path: "vendors", name: "admin-vendors", component: AdminVendors },
+      { path: "moderation", name: "admin-moderation", component: AdminModeration },
+      { path: "data", name: "admin-data", component: AdminData },
+      { path: "modules", name: "admin-modules", component: AdminModules },
+      { path: "audit", name: "admin-audit", component: AdminAudit },
+    ],
+  },
   { path: "/owner", name: "owner", component: OwnerPortalSurface, meta: { chrome: false, portal: true } },
   // §18 fourth portal (§23 E-D3): the vendor manages their week at a desk
   { path: "/vendor-portal", name: "vendor-portal", component: VendorPortalSurface, meta: { chrome: false, portal: true } },
