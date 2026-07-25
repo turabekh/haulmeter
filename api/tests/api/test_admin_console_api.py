@@ -424,6 +424,15 @@ def test_every_mutating_admin_endpoint_writes_an_audit_entry(client, db):
         "/admin/moderation/report/{content_kind}/{content_ref}/resolve": "report_resolve",
         "/admin/vendors/{vendor_id}/decide": "vendor_decide",
         "/admin/claims/{claim_id}/decide": "facility_claim_decide",
+        # E-D6 account management — every power audited with before->after
+        "/admin/accounts": "account_create",
+        "/admin/accounts/{account_id}": "account_edit",
+        "/admin/accounts/{account_id}/reset-credential": "account_credential_reset",
+        "/admin/accounts/{account_id}/deactivate": "account_deactivate",
+        "/admin/accounts/{account_id}/reactivate": "account_reactivate",
+        "/admin/accounts/{account_id}/roles": "account_role",
+        "/admin/flags/{key}/gates": "flag_gate",
+        "/admin/vendors": "vendor_register",
     }
     unaudited = sorted(mutating - set(covered))
     assert not unaudited, f"mutating admin endpoints with no audit action mapped: {unaudited}"

@@ -57,6 +57,27 @@ def satisfy_gate(db: Session, gate: ValidationGate, note: str | None = None) -> 
     return gate
 
 
+def unsatisfy_gate(db: Session, gate: ValidationGate, note: str | None = None) -> ValidationGate:
+    """AI-CONTEXT: a gate can be withdrawn as well as met. An activation
+    precondition that could only ever be ticked is a one-way ratchet — if a legal
+    review lapses or an insurance policy expires, the gate must be able to go back,
+    and `enable` will then refuse until it is met again."""
+    gate.satisfied = False
+    gate.satisfied_at = None
+    if note is not None:
+        gate.note = note
+    db.flush()
+    return gate
+
+
+def get_gate(db: Session, flag_key: str, name: str) -> ValidationGate | None:
+    return db.scalar(
+        select(ValidationGate).where(
+            ValidationGate.flag_key == flag_key, ValidationGate.name == name
+        )
+    )
+
+
 def can_activate(db: Session, flag_key: str) -> bool:
     flag = db.get(FeatureFlag, flag_key)
     if flag is None:

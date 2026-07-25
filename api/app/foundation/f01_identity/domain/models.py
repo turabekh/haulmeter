@@ -2,12 +2,14 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +26,16 @@ class Account(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # AI-CONTEXT: deactivation, never deletion. An account references money, claims
+    # and evidence; erasing one would tear holes in records a third party may need to
+    # verify. Deactivating blocks login and hides driver-facing presence while every
+    # row it points at survives intact. Hard delete is a data-retention WORKFLOW
+    # (PRD §17 Q16), not a button.
+    active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), index=True
+    )
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -41,6 +53,12 @@ class Account(Base):
 
 
 class AuthMethod(Base):
+    """AI-CONTEXT: `must_change` carries the credential-reset flow. An admin can
+    issue a TEMPORARY password and nothing else — they never see or set a permanent
+    one, and the driver is forced to replace it at next login. Support that can read
+    a password is support that can be impersonated by anyone who social-engineers it.
+    """
+
     __tablename__ = "auth_method"
     __table_args__ = (
         UniqueConstraint("method_type", "identifier", name="uq_auth_method_type_identifier"),
@@ -57,6 +75,9 @@ class AuthMethod(Base):
     identifier: Mapped[str] = mapped_column(String(320))
     secret_ref: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     is_primary: Mapped[bool] = mapped_column(default=False)
+    # set when an admin issues a temporary credential; cleared when the holder
+    # replaces it. Login is allowed but the client must force the change.
+    must_change: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

@@ -1,7 +1,7 @@
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .auth_methods import get_handler
@@ -146,9 +146,14 @@ def authenticate(db: Session, email: str, password: str) -> Account | None:
     handler = get_handler(MethodType.password)
     if not handler.verify(method.secret_ref, password):
         return None
+    account = db.get(Account, method.account_id)
+    # a deactivated account fails CLOSED, and distinctly from a wrong password: the
+    # console and the logs must be able to tell "switched off" from "bad credentials"
+    if account is not None and not account.active:
+        raise AccountInactive(str(account.id))
     method.last_used_at = datetime.now(UTC)
     db.flush()
-    return db.get(Account, method.account_id)
+    return account
 
 
 def create_session(
@@ -249,3 +254,157 @@ def verify_authority(
         authority_verify_status=(VerifyStatus.verified if verified else VerifyStatus.failed),
         authority_verified_at=(datetime.now(UTC) if verified else None),
     )
+
+
+# --- Admin account management (Admin Console 2.0, design-prd §23 E-D6) ---
+# AI-CONTEXT: the operator's account powers, and their deliberate limits. An admin
+# can create, edit, reset a credential and deactivate — never read a password, never
+# set a permanent one, and never delete. Accounts reference money, claims and
+# evidence, so erasure is a data-retention WORKFLOW (PRD §17 Q16), not a button.
+TEMP_PASSWORD_BYTES = 9
+
+
+class AccountInactive(Exception):
+    """Login refused: the account is deactivated. Distinct from bad credentials so
+    the console and the logs can tell "wrong password" from "switched off"."""
+
+
+def search_accounts(
+    db: Session, query: str | None = None, role: Role | None = None, limit: int = 50
+) -> list[Account]:
+    """One search box over the facts an operator actually has on the phone: an email,
+    a name, an MC/DOT number, or a plate. A directory that only matches email is
+    useless to someone holding a driver's paperwork."""
+    stmt = select(Account)
+    if query:
+        term = f"%{query.strip().lower()}%"
+        stmt = (
+            stmt.outerjoin(DriverProfile, DriverProfile.account_id == Account.id)
+            .where(
+                func.lower(Account.email).like(term)
+                | func.lower(func.coalesce(Account.display_name, "")).like(term)
+                | func.lower(func.coalesce(DriverProfile.mc_number, "")).like(term)
+                | func.lower(func.coalesce(DriverProfile.dot_number, "")).like(term)
+                | func.lower(func.coalesce(DriverProfile.plate_number, "")).like(term)
+                | func.lower(func.coalesce(DriverProfile.legal_name, "")).like(term)
+            )
+            .distinct()
+        )
+    if role is not None:
+        stmt = stmt.join(RoleAttachment, RoleAttachment.account_id == Account.id).where(
+            RoleAttachment.role == role
+        )
+    return list(db.scalars(stmt.order_by(Account.created_at.desc()).limit(limit)))
+
+
+def admin_create_account(
+    db: Session, email: str, role: Role = Role.driver, display_name: str | None = None
+) -> tuple[Account, str]:
+    """The phone-onboarding case: an operator creates the account while the driver is
+    on the line. Returns the account and a TEMPORARY password — the only password an
+    admin ever handles — which the holder must replace at first login."""
+    account = register_account(db, email, _temp_password())
+    temporary = reset_credential(db, account)
+    if display_name:
+        account.display_name = display_name.strip()
+    attach_role(db, account, role)
+    db.expire(account, ["roles"])
+    db.flush()
+    return account, temporary
+
+
+def _temp_password() -> str:
+    return secrets.token_urlsafe(TEMP_PASSWORD_BYTES)
+
+
+def reset_credential(db: Session, account: Account) -> str:
+    """Issue a temporary password and force its replacement. The permanent password
+    is never seen, set or recoverable by anyone but its owner — support that can read
+    a password is support that can be social-engineered into surrendering one."""
+    temporary = _temp_password()
+    handler = get_handler(MethodType.password)
+    method = db.scalar(
+        select(AuthMethod).where(
+            AuthMethod.account_id == account.id, AuthMethod.method_type == MethodType.password
+        )
+    )
+    if method is None:
+        method = AuthMethod(
+            account_id=account.id,
+            method_type=MethodType.password,
+            identifier=_normalize_email(account.email),
+            is_primary=True,
+        )
+        db.add(method)
+    method.secret_ref = handler.build_secret_ref(temporary)
+    method.must_change = True
+    db.flush()
+    return temporary
+
+
+def complete_credential_change(db: Session, account: Account, new_password: str) -> AuthMethod:
+    method = db.scalar(
+        select(AuthMethod).where(
+            AuthMethod.account_id == account.id, AuthMethod.method_type == MethodType.password
+        )
+    )
+    handler = get_handler(MethodType.password)
+    method.secret_ref = handler.build_secret_ref(new_password)
+    method.must_change = False
+    db.flush()
+    return method
+
+
+def must_change_credential(db: Session, account: Account) -> bool:
+    method = db.scalar(
+        select(AuthMethod).where(
+            AuthMethod.account_id == account.id, AuthMethod.method_type == MethodType.password
+        )
+    )
+    return bool(method and method.must_change)
+
+
+def deactivate_account(db: Session, account: Account, now: datetime | None = None) -> Account:
+    """Blocks login and hides driver-facing presence. Every row the account points at
+    survives — this is a door being locked, not a record being erased."""
+    account.active = False
+    account.deactivated_at = now or datetime.now(UTC)
+    # live sessions die with the account, or deactivation would take up to 30 days
+    # to bite on anyone already signed in
+    for session in db.scalars(select(AuthSession).where(AuthSession.account_id == account.id)):
+        db.delete(session)
+    db.flush()
+    return account
+
+
+def reactivate_account(db: Session, account: Account) -> Account:
+    account.active = True
+    account.deactivated_at = None
+    db.flush()
+    return account
+
+
+def revoke_role(db: Session, account: Account, role: Role, org_id=None) -> bool:
+    attachment = db.scalar(
+        select(RoleAttachment).where(
+            RoleAttachment.account_id == account.id,
+            RoleAttachment.role == role,
+            RoleAttachment.org_id == org_id,
+        )
+    )
+    if attachment is None:
+        return False
+    db.delete(attachment)
+    db.expire(account, ["roles"])
+    db.flush()
+    return True
+
+
+def has_role(db: Session, account: Account, role: Role) -> bool:
+    return any(r.role == role for r in account.roles)
+
+
+def set_display_name(db: Session, account: Account, display_name: str | None) -> Account:
+    account.display_name = (display_name or "").strip() or None
+    db.flush()
+    return account

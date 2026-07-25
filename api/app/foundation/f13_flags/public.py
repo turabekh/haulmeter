@@ -16,12 +16,14 @@ from .domain.service import (
     disable,
     enable,
     get_config,
+    get_gate,
     get_scope,
     is_enabled,
     kill,
     register_flag,
     satisfy_gate,
     set_config,
+    unsatisfy_gate,
 )
 
 __all__ = [
@@ -36,10 +38,12 @@ __all__ = [
     "disable",
     "enable",
     "get_config",
+    "get_gate",
     "get_scope",
     "is_enabled",
     "kill",
     "register_flag",
     "satisfy_gate",
     "set_config",
+    "unsatisfy_gate",
 ]
