@@ -349,6 +349,28 @@ describe("Signing up (§18 door, owner decision: open)", () => {
     expect(w.find(".cta").attributes("disabled")).toBeUndefined();
   });
 
+  it("tells a cook their email already has an account, and offers the way out", async () => {
+    // a 409 means two different things on this route. At the ACCOUNT step it means
+    // "sign in instead" — saying "a business with these details exists" would send
+    // them looking for a problem they do not have.
+    stub({ "POST /auth/register": { __status: 409 } });
+    const w = withRouter(VendorJoinSurface);
+    w.vm.step = "signup";
+    w.vm.account.email = "cook@example.com";
+    w.vm.account.password = "pw-123456";
+    await w.vm.createAccount();
+    await flushPromises();
+
+    expect(w.find(".join__error").text()).toBe(en["auth.error_taken"]);
+    expect(w.find(".join__error").text()).not.toBe(en["vendor.join.duplicate"]);
+    // and the fix is offered, not described
+    const out = w.findAll(".cta").find((b) => b.text() === en["vendor.join.signin"]);
+    expect(out).toBeDefined();
+    await out.trigger("click");
+    expect(w.vm.step).toBe("signin");
+    expect(w.vm.account.email).toBe("cook@example.com"); // not retyped
+  });
+
   it("explains a duplicate rather than showing a status code", async () => {
     stub({ "POST /vendors/register": { __status: 409, detail: { error: "duplicate_vendor" } } });
     const w = withRouter(VendorJoinSurface);

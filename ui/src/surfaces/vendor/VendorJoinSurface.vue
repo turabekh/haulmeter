@@ -49,11 +49,30 @@ const ready = computed(
   () => business.name.trim().length > 0 && business.languages.trim().length > 0,
 );
 
-function fail(e) {
-  if (e?.status === 409) return t("vendor.join.duplicate");
+// AI-CONTEXT: a 409 means two DIFFERENT things on this one route, and saying the
+// wrong one sends a cook looking for a problem they do not have:
+//   · creating an account -> that email already has one. The fix is to sign in, and
+//     it is one tap away, so the message offers it instead of describing it.
+//   · describing the business -> Q-5, a vendor with these details already exists.
+// `register()` signals the first as the message "email_taken" rather than a status,
+// so both shapes are checked here.
+const emailTaken = ref(false);
+
+function fail(e, step) {
+  const taken = e?.status === 409 || e?.message === "email_taken";
+  if (step === "account" && taken) return t("auth.error_taken");
+  if (step === "business" && taken) return t("vendor.join.duplicate");
   if (e?.status === 401 || e?.message?.includes("401")) return t("auth.error_invalid");
   if (typeof e?.detail === "string") return e.detail;
   return t("vendor.join.error");
+}
+
+function toSignIn() {
+  // carry the email across: retyping it is the one thing they have already done
+  step.value = "signin";
+  emailTaken.value = false;
+  error.value = null;
+  account.password = "";
 }
 
 async function signIn() {
@@ -65,7 +84,7 @@ async function signIn() {
     // describe the business, which is the only thing still missing
     router.push("/vendor-portal");
   } catch (e) {
-    error.value = fail(e);
+    error.value = fail(e, "signin");
   } finally {
     busy.value = false;
   }
@@ -74,11 +93,13 @@ async function signIn() {
 async function createAccount() {
   busy.value = true;
   error.value = null;
+  emailTaken.value = false;
   try {
     await register(account.email.trim(), account.password);
     step.value = "business";
   } catch (e) {
-    error.value = fail(e);
+    emailTaken.value = e?.status === 409 || e?.message === "email_taken";
+    error.value = fail(e, "account");
   } finally {
     busy.value = false;
   }
@@ -104,7 +125,7 @@ async function createBusiness() {
     });
     router.push("/vendor-portal");
   } catch (e) {
-    error.value = fail(e);
+    error.value = fail(e, "business");
   } finally {
     busy.value = false;
   }
@@ -219,6 +240,10 @@ async function createBusiness() {
       </template>
 
       <p v-if="error" class="join__error" role="alert">{{ error }}</p>
+      <!-- the fix is one tap, so offer it rather than describing it -->
+      <button v-if="emailTaken" class="cta" type="button" @click="toSignIn">
+        {{ t("vendor.join.signin") }}
+      </button>
     </form>
   </div>
 </template>
