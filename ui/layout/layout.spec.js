@@ -69,7 +69,8 @@ async function prepare(page, { theme, pseudo }) {
     ([t, p]) => {
       try {
         localStorage.setItem("longhaul.theme", t);
-        if (p) localStorage.setItem("longhaul.locale", "xx-XL");
+        if (p === "xx-XL") localStorage.setItem("longhaul.locale", "xx-XL");
+        else if (p) localStorage.setItem("longhaul.locale", p);
         localStorage.setItem(
           "longhaul.session",
           JSON.stringify({
@@ -94,8 +95,13 @@ async function settle(page) {
 
 for (const [name, path] of SURFACES) {
   for (const theme of THEMES) {
-    for (const pseudo of [false, true]) {
-      const label = `${name} · ${theme}${pseudo ? " · xx-XL" : ""}`;
+    // `pa` joins the matrix because §6.2's "metrics-compatible line-height tokens
+    // verified" is a LAYOUT claim, and this harness is the only thing that can
+    // answer it. Gurmukhi carries matras above AND below the baseline, so a line
+    // height tuned for Latin is exactly the kind of thing that clips silently — and
+    // "verified" was asserted in the constitution without anyone rendering it.
+    for (const pseudo of [false, "xx-XL", "pa"]) {
+      const label = `${name} · ${theme}${pseudo ? ` · ${pseudo}` : ""}`;
 
       test(`${label} — no horizontal overflow at 360 dp`, async ({ page }) => {
         await prepare(page, { theme, pseudo });
@@ -155,6 +161,30 @@ for (const [name, path] of SURFACES) {
 
         expect(small, `§6.2 says nothing smaller than 13 dp exists: ${small.join(" | ")}`)
           .toEqual([]);
+      });
+
+      test(`${label} — text is not clipped by its line box`, async ({ page }) => {
+        await prepare(page, { theme, pseudo });
+        await page.setViewportSize({ width: 360, height: 800 });
+        await page.goto(`${BASE}${path}`);
+        await settle(page);
+        await page.evaluate(() => document.fonts && document.fonts.ready);
+
+        const clipped = await page.evaluate(() => {
+          const found = [];
+          for (const el of document.querySelectorAll("body *")) {
+            if (!el.childElementCount && el.textContent && el.textContent.trim()) {
+              const style = getComputedStyle(el);
+              if (style.overflow === "visible") continue; // nothing to clip against
+              if (el.scrollHeight > el.clientHeight + 1) {
+                found.push(`${el.tagName.toLowerCase()}.${el.className} ${el.scrollHeight}>${el.clientHeight}`);
+              }
+            }
+          }
+          return found;
+        });
+
+        expect(clipped, `clipped text: ${clipped.join(" | ")}`).toEqual([]);
       });
 
       test(`${label} — interactive targets meet the glove spec`, async ({ page }) => {

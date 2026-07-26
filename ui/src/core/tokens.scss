@@ -45,6 +45,22 @@
   font-weight: 600;
   font-display: swap;
 }
+/* AI-CONTEXT: §6.2 — "Noto Sans Gurmukhi mapped as the family for `pa` locale;
+   metrics-compatible line-height tokens verified". That sentence was false in all
+   three of its parts: the font was never vendored, `--font-gurmukhi` was declared
+   and applied to NOTHING, and no metrics check was ever performed. Punjabi rendered
+   in IBM Plex Sans, which has no Gurmukhi coverage at all, so one of six launch
+   locales fell through to whatever the device happened to have.
+
+   A variable TTF rather than woff2: Google ships this family variable-only, and the
+   one file covers every weight the scale uses. Only the APP needs it — F15 keeps
+   counterparty artifacts English, so the evidence pack never renders Gurmukhi. */
+@font-face {
+  font-family: "Noto Sans Gurmukhi";
+  src: url("/fonts/NotoSansGurmukhi.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-display: swap;
+}
 
 // AI-CONTEXT: §6.1 Color — dark-first surfaces
 $ink-0: #0E1319;
@@ -217,6 +233,17 @@ $icon-lg: 28px;
   --flare-500: #C5343A;
   --on-accent: #FFFFFF;
   --accent-fill: #22509E;
+}
+
+/* the mapping §6.2 asserted and never made. Gurmukhi carries matras above AND below
+   the baseline, so the family is applied at the ROOT for `pa` and inherits
+   everywhere — a per-component opt-in would leave whichever screen someone forgot
+   rendering in a face with no Punjabi glyphs. Line-height tokens are unchanged and
+   theme-invariant; the verification that they hold is a LAYOUT question, and the
+   §22.3 harness is what can finally answer it. */
+:root:lang(pa),
+:lang(pa) {
+  --font-sans: #{$font-gurmukhi};
 }
 
 @media (prefers-color-scheme: light) {
