@@ -6,7 +6,13 @@ survive a dispute. Consumed by M3, M4, M5, M9, M12.
 """
 
 from .domain.enums import ArtifactType, PackTemplate, RecordType
-from .domain.models import ChainAnchor, EvidenceArtifact, EvidenceLog, EvidenceRecord
+from .domain.models import (
+    ChainAnchor,
+    EvidenceArtifact,
+    EvidenceLog,
+    EvidenceRecord,
+    SharedPack,
+)
 from .domain.render import PackContext
 from .domain.service import (
     ChainVerification,
@@ -21,12 +27,31 @@ from .domain.service import (
     stop_evidence,
     verify_chain,
 )
+from .domain.sharing import (
+    CONFIG_SHARE_DAYS,
+    DEFAULT_SHARE_DAYS,
+    ShareNotFound,
+    open_share,
+    resolve_share,
+    revoke_share,
+    share_pack,
+    shares_for_log,
+)
 
 __all__ = [
     "ChainAnchor",
     "EvidenceArtifact",
     "EvidenceLog",
     "EvidenceRecord",
+    "SharedPack",
+    "ShareNotFound",
+    "CONFIG_SHARE_DAYS",
+    "DEFAULT_SHARE_DAYS",
+    "open_share",
+    "resolve_share",
+    "revoke_share",
+    "share_pack",
+    "shares_for_log",
     "ArtifactType",
     "PackTemplate",
     "RecordType",

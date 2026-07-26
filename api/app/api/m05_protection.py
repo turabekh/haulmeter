@@ -7,12 +7,13 @@ import base64
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
+from app.foundation.f04_evidence import public as evidence
 from app.foundation.f05_load import public as loads
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f12_offline import public as offline
@@ -207,3 +208,123 @@ def summary(
     if load is None or load.account_id != account.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "not your stop")
     return m5.protection_summary(db, stop)
+
+
+# --- FR2/FR4 export + share (design-prd §17: one link, never an attachment) ---
+class ShareIn(BaseModel):
+    recipient: str | None = None
+
+
+def _pack_for(db: Session, account, kind: str, ref: uuid.UUID):
+    """One resolver so export and share can never disagree about what a given id
+    means — the two endpoints must produce the SAME document for the same input."""
+    if kind == "condition":
+        pack = m5.condition_pack(db, ref)
+        if pack is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no condition capture for that stop")
+        return pack
+    incident = db.get(m5.Incident, ref)
+    if incident is None or incident.account_id != account.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "incident not found")
+    return m5.incident_pack(db, incident)
+
+
+@router.get("/{kind}/{ref}/export")
+def export_pack(
+    kind: str,
+    ref: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+):
+    """The driver's own copy. Regenerated on demand because rendering is
+    deterministic — this is a VIEW of the chain and always current, which is exactly
+    what a share must not be."""
+    if kind not in ("condition", "incident"):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown pack kind")
+    pack = _pack_for(db, account, kind, ref)
+    content = m5.render_pack(db, pack)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{kind}-{str(ref)[:8]}.pdf"'},
+    )
+
+
+@router.post("/{kind}/{ref}/share", status_code=201)
+def share(
+    kind: str,
+    ref: uuid.UUID,
+    body: ShareIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Pins what is being sent. From here the bytes are frozen: the chain may grow,
+    and the link will keep serving the document the counterparty was actually
+    given."""
+    if kind not in ("condition", "incident"):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown pack kind")
+    pack = _pack_for(db, account, kind, ref)
+    shared = m5.share_pack(db, pack.log_id, pack, account.id, recipient=body.recipient)
+    return {
+        "share_id": str(shared.id),
+        # §17: counterparty mail is plain, short, professional, ONE link, no images
+        "url": f"/pack/s/{shared.token}",
+        "content_hash": shared.content_hash,
+        "expires_at": shared.expires_at.isoformat() if shared.expires_at else None,
+    }
+
+
+@router.delete("/share/{share_id}")
+def revoke(
+    share_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    shared = db.get(evidence.SharedPack, share_id)
+    if shared is None or shared.shared_by != account.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "share not found")
+    evidence.revoke_share(db, shared)
+    # the bytes and their hash survive: closing a link does not unsend a document
+    return {"revoked": True, "content_hash": shared.content_hash}
+
+
+# --- FR1: the per-load opt-in (PRD §8.5 "opt-in per load") ---
+class OnTimeConsentIn(BaseModel):
+    load_id: uuid.UUID
+    enabled: bool
+    counterparty_email: str | None = None
+
+
+@router.put("/on-time/consent")
+def set_on_time_consent(
+    body: OnTimeConsentIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """The choice has to survive the drive, so it is stored per load rather than
+    passed per call. It gates the NOTICE only — the proof artifact is filed on every
+    arrival, because a driver who declined to tell the broker still wants to be able
+    to prove when they got there."""
+    consent = m5.set_on_time_consent(
+        db, account.id, body.load_id, body.enabled, body.counterparty_email
+    )
+    return {
+        "load_id": str(consent.load_ref),
+        "enabled": consent.enabled,
+        "counterparty_email": consent.counterparty_email,
+    }
+
+
+@router.get("/on-time/consent/{load_id}")
+def get_on_time_consent(
+    load_id: uuid.UUID,
+    _account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    consent = m5.on_time_consent(db, load_id)
+    return {
+        "load_id": str(load_id),
+        # absence is not consent: no row means the notice does not go out
+        "enabled": bool(consent and consent.enabled),
+        "counterparty_email": consent.counterparty_email if consent else None,
+    }

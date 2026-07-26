@@ -31,9 +31,7 @@ def _driver(db, email="driver@example.com"):
 
 
 def _scale(db, name="I-90 Weigh Station EB", coords=AHEAD, kind=None):
-    return facility.create_facility(
-        db, kind or facility.FacilityType.weigh_station, name, *coords
-    )
+    return facility.create_facility(db, kind or facility.FacilityType.weigh_station, name, *coords)
 
 
 def _activate(db):
@@ -180,9 +178,7 @@ def test_a_report_runs_the_standard_crowd_pipeline(db):
     _report(db, first, fac, "closed")
     _report(db, second, fac, "closed")
 
-    belief = crowd.update_belief(
-        db, fac.id, crowd.SignalType.weigh_station_status, as_of=T0
-    )
+    belief = crowd.update_belief(db, fac.id, crowd.SignalType.weigh_station_status, as_of=T0)
     assert belief.value == {"status": "closed"}
     assert belief.sample_size == 2  # distinct drivers, as everywhere else
 

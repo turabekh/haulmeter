@@ -37,7 +37,8 @@ def upgrade() -> None:
         schema=SCHEMA,
     )
     op.add_column(
-        "account", sa.Column("deactivated_at", sa.DateTime(timezone=True), nullable=True),
+        "account",
+        sa.Column("deactivated_at", sa.DateTime(timezone=True), nullable=True),
         schema=SCHEMA,
     )
     op.create_index("ix_f01_account_active", "account", ["active"], schema=SCHEMA)

@@ -67,9 +67,7 @@ def _cook(client, db, name, languages, halal_claim, dish, price=1200, lat=None, 
     )
     if halal_claim:
         client.patch("/vendor/profile", json={"halal_claim": halal_claim}, headers=headers)
-    client.post(
-        "/vendor/menu", json={"name": dish, "price_cents": price}, headers=headers
-    )
+    client.post("/vendor/menu", json={"name": dish, "price_cents": price}, headers=headers)
     fac = facility.create_facility(
         db, facility.FacilityType.truck_stop, f"{name} stop", lat or MADISON[0], lon or MADISON[1]
     )
@@ -232,17 +230,23 @@ def test_an_approved_certificate_unlocks_the_top_rung(client, active, db):
     vendor_id = client.get("/vendor/profile", headers=headers).json()["vendor_id"]
 
     # still pending — an upload is not an approval
-    assert client.patch(
-        "/vendor/profile", json={"halal_claim": "certified"}, headers=headers
-    ).json()["halal_claim"] == "self_declared"
+    assert (
+        client.patch("/vendor/profile", json={"halal_claim": "certified"}, headers=headers).json()[
+            "halal_claim"
+        ]
+        == "self_declared"
+    )
 
     vendor = m13.resolve_vendor(db, vendor_id)
     m13.decide_document(db, vendor.documents[0], approve=True)
     db.flush()
 
-    assert client.patch(
-        "/vendor/profile", json={"halal_claim": "certified"}, headers=headers
-    ).json()["halal_claim"] == "certified"
+    assert (
+        client.patch("/vendor/profile", json={"halal_claim": "certified"}, headers=headers).json()[
+            "halal_claim"
+        ]
+        == "certified"
+    )
 
 
 @dataclass

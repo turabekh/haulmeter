@@ -119,9 +119,18 @@ def arrive(
     # a geofence ENTER at the stop is the arrival the detention clock triggers on
     location.evaluate_ping(db, account.id, lat, lon, occurred_at=datetime.now(UTC))
     claim = m3.claim_for_stop(db, stop.id) or m3.start_claim(db, stop)
+    # M5-FR1: the arrival that starts the detention clock IS the arrival that proves
+    # the driver was on time, so the proof is filed here rather than on its own
+    # geofence. The notice needs the load's opt-in; the artifact never does.
+    proof = m5.auto_file_on_arrival(db, stop, account.id, gateway=_GATEWAY)
     # F14: North Star funnel step 2 — the driver reached the dock (clock started)
     admin.emit(db, "arrived", "m03", datetime.now(UTC), account_id=account.id)
-    return {"claim_id": str(claim.id), "arrived": True}
+    return {
+        "claim_id": str(claim.id),
+        "arrived": True,
+        "on_time": proof.within_window,
+        "notice_sent": proof.notice_sent,
+    }
 
 
 @router.post("/{stop_id}/end", status_code=201)

@@ -39,7 +39,8 @@ def upgrade() -> None:
         schema=SCHEMA,
     )
     op.add_column(
-        "auth_session", sa.Column("ended_at", sa.DateTime(timezone=True), nullable=True),
+        "auth_session",
+        sa.Column("ended_at", sa.DateTime(timezone=True), nullable=True),
         schema=SCHEMA,
     )
     op.create_index(

@@ -176,9 +176,7 @@ def profile(
         # approved certificate exists, so the control cannot promise a rung the
         # server will silently take back.
         "halal_claims_available": [
-            c.value
-            for c in m13.HalalClaim
-            if m13.allowed_halal_claim(db, vendor, c) == c
+            c.value for c in m13.HalalClaim if m13.allowed_halal_claim(db, vendor, c) == c
         ],
         "verify_status": vendor.verify_status.value,
         "status": vendor.status.value,
@@ -703,11 +701,7 @@ def edit_menu_item(
     vendor = _my_vendor(db, who)
     try:
         before = _menu_row(
-            next(
-                i
-                for i in m13.list_menu(db, vendor.id, include_inactive=True)
-                if i.id == item_id
-            )
+            next(i for i in m13.list_menu(db, vendor.id, include_inactive=True) if i.id == item_id)
         )
         item = m13.update_menu_item(
             db,

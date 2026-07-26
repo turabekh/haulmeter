@@ -191,9 +191,7 @@ def test_a_claim_row_carries_both_halves_of_the_union(client, db, live):
     import uuid as _uuid
 
     m13.decide_claim(db, db.get(m13.FacilityClaim, _uuid.UUID(claim_id)), approve=True)
-    client.patch(
-        f"/vendor/claims/{claim_id}", json={"services_added": ["towing"]}, headers=headers
-    )
+    client.patch(f"/vendor/claims/{claim_id}", json={"services_added": ["towing"]}, headers=headers)
 
     row = client.get("/vendor/claims", headers=headers).json()["claims"][0]
     # the portal shows the addition AND what it was added to — E3.2 union, visibly

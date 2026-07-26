@@ -230,9 +230,10 @@ def test_a_public_weigh_station_beside_a_rest_area_stays_its_own_place(db):
     stats = facility.ingest_records(db, weigh, batch_id="weigh")
 
     assert stats.created == 1
-    assert facility.resolve_canonical(
-        db, next(iter(stats.facility_ids))
-    ).facility_type == facility.FacilityType.weigh_station
+    assert (
+        facility.resolve_canonical(db, next(iter(stats.facility_ids))).facility_type
+        == facility.FacilityType.weigh_station
+    )
 
 
 def test_proximity_alone_never_merges_an_ordinary_facility(db):

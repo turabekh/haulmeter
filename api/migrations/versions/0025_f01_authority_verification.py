@@ -19,9 +19,7 @@ SCHEMA = "f01"
 
 
 def upgrade() -> None:
-    verify_status = sa.Enum(
-        "unverified", "verified", "failed", name="verify_status", schema=SCHEMA
-    )
+    verify_status = sa.Enum("unverified", "verified", "failed", name="verify_status", schema=SCHEMA)
     verify_status.create(op.get_bind(), checkfirst=True)
     op.add_column(
         "driver_profile",

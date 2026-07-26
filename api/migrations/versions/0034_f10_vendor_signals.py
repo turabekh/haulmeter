@@ -39,14 +39,10 @@ def upgrade() -> None:
     for table in ("submission", "belief"):
         op.add_column(
             table,
-            sa.Column(
-                "subject_ref", sa.String(64), nullable=False, server_default=sa.text("''")
-            ),
+            sa.Column("subject_ref", sa.String(64), nullable=False, server_default=sa.text("''")),
             schema=SCHEMA,
         )
-    op.create_index(
-        "ix_f10_submission_subject_ref", "submission", ["subject_ref"], schema=SCHEMA
-    )
+    op.create_index("ix_f10_submission_subject_ref", "submission", ["subject_ref"], schema=SCHEMA)
 
     # the belief uniqueness key gains the subject: one belief per
     # (facility, signal, subject), with '' meaning "the facility as a whole"

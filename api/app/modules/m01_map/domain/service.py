@@ -237,9 +237,7 @@ def scales_ahead(
     )
     out = []
     for entry in entries[:limit]:
-        belief = crowd.get_belief(
-            db, entry.facility_id, crowd.SignalType.weigh_station_status
-        )
+        belief = crowd.get_belief(db, entry.facility_id, crowd.SignalType.weigh_station_status)
         value = (belief.value or {}) if belief is not None else {}
         out.append(
             {

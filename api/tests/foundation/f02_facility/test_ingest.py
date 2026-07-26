@@ -101,14 +101,22 @@ def test_osm_skips_non_truck_fuel_and_parking():
     gj = {
         "type": "FeatureCollection",
         "features": [
-            {"geometry": {"type": "Point", "coordinates": [-89.0, 43.0]},
-             "properties": {"@id": "n/1", "amenity": "fuel", "name": "Car Gas"}},
-            {"geometry": {"type": "Point", "coordinates": [-89.1, 43.1]},
-             "properties": {"@id": "n/2", "amenity": "parking", "name": "Mall Lot"}},
-            {"geometry": {"type": "Point", "coordinates": [-89.2, 43.2]},
-             "properties": {"@id": "n/3", "amenity": "fuel", "hgv": "yes", "name": "Truck Fuel"}},
-            {"geometry": {"type": "Point", "coordinates": [-89.3, 43.3]},
-             "properties": {"@id": "n/4", "highway": "rest_area", "name": "Rest Area"}},
+            {
+                "geometry": {"type": "Point", "coordinates": [-89.0, 43.0]},
+                "properties": {"@id": "n/1", "amenity": "fuel", "name": "Car Gas"},
+            },
+            {
+                "geometry": {"type": "Point", "coordinates": [-89.1, 43.1]},
+                "properties": {"@id": "n/2", "amenity": "parking", "name": "Mall Lot"},
+            },
+            {
+                "geometry": {"type": "Point", "coordinates": [-89.2, 43.2]},
+                "properties": {"@id": "n/3", "amenity": "fuel", "hgv": "yes", "name": "Truck Fuel"},
+            },
+            {
+                "geometry": {"type": "Point", "coordinates": [-89.3, 43.3]},
+                "properties": {"@id": "n/4", "highway": "rest_area", "name": "Rest Area"},
+            },
         ],
     }
     refs = {r.external_ref for r in facility.parse_osm(gj)}
@@ -150,7 +158,11 @@ def test_dev_seed_facilities_are_excluded_from_dedupe(db):
     # DEV_SEED field-test facilities show on the map but must never be a merge target
     # for real ingest — otherwise NTAD/OSM data would collapse into throwaway records.
     dev = facility.create_facility(
-        db, facility.FacilityType.rest_area, "DEV — Rest Area I-94 EB", 43.0700, -89.4000,
+        db,
+        facility.FacilityType.rest_area,
+        "DEV — Rest Area I-94 EB",
+        43.0700,
+        -89.4000,
         is_dev=True,
     )
     real = facility.create_facility(

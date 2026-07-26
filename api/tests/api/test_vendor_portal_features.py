@@ -143,9 +143,12 @@ def test_a_cook_edits_every_field_of_their_own_profile(client, cook):
 
 
 def test_an_unknown_vendor_type_is_refused(client, cook):
-    assert client.patch(
-        "/vendor/profile", json={"vendor_type": "food_stall"}, headers=cook
-    ).status_code == 422
+    assert (
+        client.patch(
+            "/vendor/profile", json={"vendor_type": "food_stall"}, headers=cook
+        ).status_code
+        == 422
+    )
 
 
 # --- verification ---
@@ -247,7 +250,8 @@ def test_editing_a_promotion_never_re_sends_the_alert(client, cook):
     would be a way around the one-per-driver-per-day cap the class is defined by."""
     promo = _promo(client, cook).json()
     resp = client.patch(
-        f"/vendor/promotions/{promo['promotion_id']}", json={"text": "Now with pozole"},
+        f"/vendor/promotions/{promo['promotion_id']}",
+        json={"text": "Now with pozole"},
         headers=cook,
     )
     assert resp.json()["alerts_delivered"] == 0
@@ -270,9 +274,12 @@ def test_a_vendor_cannot_edit_another_vendors_promotion(client, active):
 
     bob = _account(client, "bob@example.com")
     _register(client, bob, name="Bob's BBQ")
-    assert client.patch(
-        f"/vendor/promotions/{promo['promotion_id']}", json={"text": "mine now"}, headers=bob
-    ).status_code == 404
+    assert (
+        client.patch(
+            f"/vendor/promotions/{promo['promotion_id']}", json={"text": "mine now"}, headers=bob
+        ).status_code
+        == 404
+    )
 
 
 # --- the whole portal stays behind the flag ---

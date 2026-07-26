@@ -1005,9 +1005,7 @@ def vendors_at_facility(
 # corridor exactly as the unfiltered query is: an unbounded food search would be
 # expensive and useless at 3am, and an empty result must mean "none in this view".
 def _matches_query(entry: "VendorEntry", needle: str) -> bool:
-    haystack = " ".join(
-        [entry.vendor.name, *(o.name for o in entry.offerings)]
-    ).casefold()
+    haystack = " ".join([entry.vendor.name, *(o.name for o in entry.offerings)]).casefold()
     return needle.casefold() in haystack
 
 
@@ -1047,8 +1045,7 @@ def allowed_halal_claim(db: Session, vendor: Vendor, wanted: HalalClaim) -> Hala
     if wanted != HalalClaim.certified:
         return wanted
     approved = any(
-        d.doc_kind == DocumentKind.halal_cert
-        and d.review_status == DocumentReviewStatus.approved
+        d.doc_kind == DocumentKind.halal_cert and d.review_status == DocumentReviewStatus.approved
         for d in vendor.documents
     )
     return HalalClaim.certified if approved else HalalClaim.self_declared

@@ -340,9 +340,7 @@ def _osm_is_weighbridge(tags: dict) -> bool:
 
 
 def _osm_is_commercial_scale(tags: dict) -> bool:
-    operator = " ".join(
-        str(tags.get(key, "")) for key in ("operator", "brand", "name")
-    ).lower()
+    operator = " ".join(str(tags.get(key, "")) for key in ("operator", "brand", "name")).lower()
     return any(brand in operator for brand in _COMMERCIAL_SCALE_OPERATORS)
 
 

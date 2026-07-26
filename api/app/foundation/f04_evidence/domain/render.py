@@ -99,6 +99,7 @@ TEMPLATE_TITLES = {
     PackTemplate.tonu: "Truck ordered, not used",
     PackTemplate.on_time_proof: "On-time arrival proof",
     PackTemplate.cargo_condition: "Cargo condition report",
+    PackTemplate.incident: "Incident report",
 }
 
 _fonts_registered = False
@@ -311,9 +312,7 @@ def _timeline(cur, pack):
         filed = _divergence_note(record)
         captured = _fmt_ts(record.get("occurred_at"))
         cur.text(f"{captured} · {filed}" if filed else captured, MONO, CAPTION, TEXT_2)
-        stamp_w = pdfmetrics.stringWidth(
-            "0000-00-00 00:00:00 UTC · filed 00:00", MONO, CAPTION
-        )
+        stamp_w = pdfmetrics.stringWidth("0000-00-00 00:00:00 UTC · filed 00:00", MONO, CAPTION)
         cur.text(
             str(record.get("type", "")).replace("_", " ").title(),
             SANS_MEDIUM,

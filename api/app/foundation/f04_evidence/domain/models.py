@@ -109,3 +109,43 @@ class ChainAnchor(Base):
     anchored_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class SharedPack(Base):
+    """AI-CONTEXT: what was actually sent to a counterparty, pinned.
+
+    Rendering is deterministic, so a pack can always be regenerated — but a pack
+    shared at 14:00 and regenerated at 16:00 after another photo lands is a DIFFERENT
+    document. In a dispute the question is "what did we send them", so the bytes are
+    stored and hashed at the moment of sharing and the link serves those bytes
+    forever. The chain is free to grow afterwards; that is precisely why this exists.
+
+    `content_hash` and `storage_key` outlive revocation: closing a link does not
+    unsend a document, and the record of what was sent must survive the decision to
+    stop hosting it.
+    """
+
+    __tablename__ = "shared_pack"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    log_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.evidence_log.id", ondelete="CASCADE"), index=True
+    )
+    template: Mapped[str] = mapped_column(String(40))
+    content_hash: Mapped[str] = mapped_column(String(64), index=True)
+    storage_key: Mapped[str] = mapped_column(String(500))
+    # opaque and random rather than signed: we store the row anyway for the hash and
+    # the key, so lookup is free and revocation is one column instead of a denylist
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    shared_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="SET NULL"), nullable=True
+    )
+    recipient: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # "they opened it on the 12th" is evidence; the count is for the driver's screen
+    opened_count: Mapped[int] = mapped_column(Integer, default=0)
+    first_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

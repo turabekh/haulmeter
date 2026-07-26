@@ -19,7 +19,7 @@ from app.foundation.f06_documents import public as documents
 from app.foundation.f08_notifications import public as notify
 
 from .enums import CONDITION_SEQUENCE, INSPECTION_DOC_TYPES, CapturePhase
-from .models import ConditionCapture, Incident, OnTimeProof
+from .models import ConditionCapture, Incident, OnTimeConsent, OnTimeProof
 
 FLAG_KEY = "m05_protection"
 MODULE = "m05"
@@ -238,7 +238,9 @@ def add_incident_photo(
 
 def incident_pack(db: Session, incident: Incident):
     log = db.get(evidence.EvidenceLog, incident.evidence_log_ref)
-    return evidence.compose_pack(db, log, evidence.PackTemplate.cargo_condition)
+    # an accident, a damage discovery or a dispute is not a cargo condition report,
+    # and the template decides the title a clerk reads first
+    return evidence.compose_pack(db, log, evidence.PackTemplate.incident)
 
 
 # --- Protection summary per stop (M5-FR5) ---
@@ -252,3 +254,112 @@ def protection_summary(db: Session, stop) -> dict:
     documented = {"on_time_proof": on_time, "pickup_photos": pickup, "delivery_photos": delivery}
     missing = [k for k, ok in documented.items() if not ok]
     return {"documented": documented, "missing": missing}
+
+
+# --- FR2/FR4 export + share (design-prd §17) ---
+def condition_pack(db: Session, stop_ref, phase: CapturePhase | None = None):
+    """FR2's "one-tap condition report". A stop's condition captures share one
+    subject, so the export is per-STOP rather than per-capture session: a clerk
+    asking "what did the trailer look like" wants pickup and delivery in one
+    document, not two files to reconcile."""
+    captures = list(
+        db.scalars(
+            select(ConditionCapture)
+            .where(ConditionCapture.stop_ref == stop_ref)
+            .order_by(ConditionCapture.created_at)
+        )
+    )
+    if phase is not None:
+        captures = [c for c in captures if c.phase == phase]
+    if not captures:
+        return None
+    # one log per capture session; the newest carries the fullest picture of the
+    # phase being exported, and every photo in it is chained to the same head
+    log = db.get(evidence.EvidenceLog, captures[-1].evidence_log_ref)
+    return evidence.compose_pack(db, log, evidence.PackTemplate.cargo_condition)
+
+
+def _pack_images(db: Session, pack) -> dict:
+    """Thumbnail bytes for the renderer, fetched HERE rather than inside F4 — the
+    evidence engine does not reach into object storage mid-render, so a storage miss
+    degrades to a labelled placeholder instead of taking the document down."""
+    images = {}
+    storage = documents.default_storage()
+    for artifact in pack.artifacts:
+        key = artifact.get("storage_key")
+        if not key:
+            continue
+        try:
+            images[artifact["content_hash"]] = storage.get(key)
+        except Exception:
+            continue
+    return images
+
+
+def render_pack(db: Session, pack, context=None):
+    context = context or evidence.PackContext()
+    if not context.images:
+        context.images = _pack_images(db, pack)
+    return evidence.render_pack_pdf(pack, context)
+
+
+def share_pack(db: Session, log_ref, pack, account_id, recipient=None, now=None, context=None):
+    """Render, pin, and hand back the record. The share is the moment the document
+    stops being a view of the chain and becomes a thing that was SENT."""
+    log = db.get(evidence.EvidenceLog, log_ref)
+    content = render_pack(db, pack, context)
+    return evidence.share_pack(
+        db, log, pack.template, content, account_id, recipient=recipient, now=now
+    )
+
+
+# --- FR1: the per-load opt-in and the automatic filing ---
+def set_on_time_consent(
+    db: Session, account_id, load_ref, enabled: bool, counterparty_email: str | None = None
+) -> OnTimeConsent:
+    consent = db.scalar(select(OnTimeConsent).where(OnTimeConsent.load_ref == load_ref))
+    if consent is None:
+        consent = OnTimeConsent(account_id=account_id, load_ref=load_ref)
+        db.add(consent)
+    consent.enabled = enabled
+    if counterparty_email is not None:
+        consent.counterparty_email = counterparty_email
+    db.flush()
+    return consent
+
+
+def on_time_consent(db: Session, load_ref) -> OnTimeConsent | None:
+    return db.scalar(select(OnTimeConsent).where(OnTimeConsent.load_ref == load_ref))
+
+
+def auto_file_on_arrival(db: Session, stop, account_id, arrived_at=None, gateway=None):
+    """PRD §8.5 FR1: geofence ENTER inside the appointment window auto-fires the
+    notice and files the proof. Runs on M3's existing arming — no new geofence
+    machinery, because the arrival that starts the detention clock IS the arrival
+    that proves you were on time.
+
+    Two rules the wording of the FR implies and this makes explicit:
+
+    · **The proof is filed on every arrival**, in or out of the window and opted in
+      or not. It is the driver's own protection; someone who declined to notify the
+      broker still wants to be able to prove when they got there.
+    · **A late arrival notifies nobody.** The only notice this FR can send says the
+      driver was on time, and sending that when they were not is the single thing it
+      must never do. Silence is the honest outcome, and the artifact still exists.
+    """
+    arrived_at = arrived_at or datetime.now(UTC)
+    existing = db.scalar(select(OnTimeProof).where(OnTimeProof.stop_ref == stop.id))
+    if existing is not None:
+        return existing  # one proof per stop; a re-arm is not a second arrival
+
+    consent = on_time_consent(db, stop.load_id)
+    wants_notice = bool(consent and consent.enabled)
+    return file_on_time_proof(
+        db,
+        stop,
+        account_id,
+        checked_in_at=arrived_at,
+        notify_counterparty=wants_notice,
+        counterparty_email=consent.counterparty_email if consent else None,
+        gateway=gateway if wants_notice else None,
+    )

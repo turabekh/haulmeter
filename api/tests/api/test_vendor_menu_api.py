@@ -96,9 +96,7 @@ def test_a_cook_builds_a_menu_once(client, cook):
 
 def test_a_price_can_be_changed_in_one_place(client, cook):
     item = _add(client, cook, "Tamales", 1200).json()
-    resp = client.patch(
-        f"/vendor/menu/{item['item_id']}", json={"price_cents": 1350}, headers=cook
-    )
+    resp = client.patch(f"/vendor/menu/{item['item_id']}", json={"price_cents": 1350}, headers=cook)
     assert resp.status_code == 200
     assert resp.json()["price_cents"] == 1350
 
@@ -145,9 +143,12 @@ def test_a_vendor_cannot_touch_another_vendors_menu(client, active):
 
     # indistinguishable from an item that does not exist — the scoping is in the
     # QUERY, so it cannot be forgotten at a call site
-    assert client.patch(
-        f"/vendor/menu/{item['item_id']}", json={"price_cents": 1}, headers=bob
-    ).status_code == 404
+    assert (
+        client.patch(
+            f"/vendor/menu/{item['item_id']}", json={"price_cents": 1}, headers=bob
+        ).status_code
+        == 404
+    )
     assert client.delete(f"/vendor/menu/{item['item_id']}", headers=bob).status_code == 404
     assert client.get("/vendor/menu", headers=bob).json() == []
 

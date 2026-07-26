@@ -38,7 +38,9 @@ def upgrade() -> None:
         schema=SCHEMA,
     )
     op.create_unique_constraint(
-        "uq_facility_source_kind_ref", "facility_source", ["source_kind", "external_ref"],
+        "uq_facility_source_kind_ref",
+        "facility_source",
+        ["source_kind", "external_ref"],
         schema=SCHEMA,
     )
 

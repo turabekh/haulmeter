@@ -90,8 +90,13 @@ def test_crowd_report_still_applies_over_an_unknown_tpims_site(db, monkeypatch):
     drv = identity.register_account(db, "il-driver@example.com", "pw-123456")
     now = datetime(2026, 7, 23, 9, 5, tzinfo=UTC)
     crowd.submit(
-        db, drv.id, fac.id, crowd.SignalType.parking_fullness, {"status": "empty"},
-        submitted_at=now, award=False,
+        db,
+        drv.id,
+        fac.id,
+        crowd.SignalType.parking_fullness,
+        {"status": "empty"},
+        submitted_at=now,
+        award=False,
     )
     crowd.update_belief(db, fac.id, crowd.SignalType.parking_fullness, as_of=now)
     b = crowd.get_belief(db, fac.id, crowd.SignalType.parking_fullness)

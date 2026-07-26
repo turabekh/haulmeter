@@ -138,3 +138,72 @@ def test_protection_summary_flags_missing(db):
     assert summary["documented"]["on_time_proof"] is True
     assert "pickup_photos" in summary["missing"]
     assert "delivery_photos" in summary["missing"]
+
+
+# --- FR1: the arrival that starts the clock is the arrival that proves on-time ---
+def test_arrival_files_the_proof_even_without_consent(db):
+    """The consent gates the NOTICE. The artifact is the driver's own protection and
+    is filed either way — someone who declined to tell the broker still wants to be
+    able to prove when they got there."""
+    account = _account(db)
+    stop = _stop(db, account)
+    gateway = notify.RecordingNotificationGateway()
+
+    proof = m5.auto_file_on_arrival(db, stop, account.id, arrived_at=T0, gateway=gateway)
+
+    assert proof.within_window is True
+    assert proof.notice_sent is False
+    assert gateway.sent == []
+
+
+def test_consent_turns_the_notice_on(db):
+    account = _account(db)
+    stop = _stop(db, account)
+    m5.set_on_time_consent(db, account.id, stop.load_id, True, "ap@acme.example")
+    gateway = notify.RecordingNotificationGateway()
+
+    proof = m5.auto_file_on_arrival(db, stop, account.id, arrived_at=T0, gateway=gateway)
+
+    assert proof.notice_sent is True
+    assert len(gateway.sent) == 1
+
+
+def test_a_late_arrival_notifies_nobody(db):
+    """The only notice this FR can send says the driver was on time. Sending it when
+    they were not is the one thing it must never do — and the proof still exists."""
+    from datetime import timedelta
+
+    account = _account(db)
+    stop = _stop(db, account)
+    m5.set_on_time_consent(db, account.id, stop.load_id, True, "ap@acme.example")
+    gateway = notify.RecordingNotificationGateway()
+
+    late = (stop.appointment_end or stop.appointment_start) + timedelta(hours=2)
+    proof = m5.auto_file_on_arrival(db, stop, account.id, arrived_at=late, gateway=gateway)
+
+    assert proof.within_window is False
+    assert proof.notice_sent is False
+    assert gateway.sent == []
+
+
+def test_re_arming_does_not_file_a_second_proof(db):
+    """A driver re-opening the stop is not a second arrival, and two check-in
+    artifacts for one appointment would be a gift to a counterparty."""
+    account = _account(db)
+    stop = _stop(db, account)
+    gateway = notify.RecordingNotificationGateway()
+
+    first = m5.auto_file_on_arrival(db, stop, account.id, arrived_at=T0, gateway=gateway)
+    second = m5.auto_file_on_arrival(db, stop, account.id, arrived_at=T0, gateway=gateway)
+
+    assert first.id == second.id
+
+
+def test_absence_of_a_consent_row_is_not_consent(db):
+    account = _account(db)
+    stop = _stop(db, account)
+    assert m5.on_time_consent(db, stop.load_id) is None
+
+    m5.set_on_time_consent(db, account.id, stop.load_id, False)
+    consent = m5.on_time_consent(db, stop.load_id)
+    assert consent.enabled is False

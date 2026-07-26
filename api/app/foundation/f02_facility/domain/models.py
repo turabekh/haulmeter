@@ -68,9 +68,7 @@ class FacilitySource(Base):
     __table_args__ = (
         # one provenance row per (source, external id) — makes ingest idempotent and
         # keeps OSM-derived rows separable for ODbL compliance (PRD §12)
-        UniqueConstraint(
-            "source_kind", "external_ref", name="uq_facility_source_kind_ref"
-        ),
+        UniqueConstraint("source_kind", "external_ref", name="uq_facility_source_kind_ref"),
         {"schema": SCHEMA},
     )
 

@@ -94,8 +94,12 @@ def test_award_cooldown_blocks_second_award_but_belief_still_updates(db):
     unit = crowd.POINTS_PER_SIGNAL[crowd.SignalType.parking_fullness]
 
     crowd.submit(
-        db, account.id, fac.id, crowd.SignalType.parking_fullness,
-        {"status": "full"}, submitted_at=T0,
+        db,
+        account.id,
+        fac.id,
+        crowd.SignalType.parking_fullness,
+        {"status": "full"},
+        submitted_at=T0,
     )
     assert _points_balance(db, account) == unit
 
@@ -103,8 +107,12 @@ def test_award_cooldown_blocks_second_award_but_belief_still_updates(db):
     later = T0 + timedelta(hours=2)
     location.evaluate_ping(db, account.id, *DALLAS, occurred_at=later)
     sub2 = crowd.submit(
-        db, account.id, fac.id, crowd.SignalType.parking_fullness,
-        {"status": "empty"}, submitted_at=later,
+        db,
+        account.id,
+        fac.id,
+        crowd.SignalType.parking_fullness,
+        {"status": "empty"},
+        submitted_at=later,
     )
     assert sub2.awarded is False
     assert _points_balance(db, account) == unit  # unchanged
@@ -121,15 +129,23 @@ def test_award_resumes_after_cooldown_window(db):
     unit = crowd.POINTS_PER_SIGNAL[crowd.SignalType.parking_fullness]
 
     crowd.submit(
-        db, account.id, fac.id, crowd.SignalType.parking_fullness,
-        {"status": "full"}, submitted_at=T0,
+        db,
+        account.id,
+        fac.id,
+        crowd.SignalType.parking_fullness,
+        {"status": "full"},
+        submitted_at=T0,
     )
     # 7h later (> 6h default cooldown): award resumes
     after = T0 + timedelta(hours=7)
     location.evaluate_ping(db, account.id, *DALLAS, occurred_at=after)
     sub2 = crowd.submit(
-        db, account.id, fac.id, crowd.SignalType.parking_fullness,
-        {"status": "full"}, submitted_at=after,
+        db,
+        account.id,
+        fac.id,
+        crowd.SignalType.parking_fullness,
+        {"status": "full"},
+        submitted_at=after,
     )
     assert sub2.awarded is True
     assert _points_balance(db, account) == unit * 2
@@ -146,12 +162,20 @@ def test_award_cooldown_is_per_driver(db):
     _make_present(db, b, fac)
 
     crowd.submit(
-        db, a.id, fac.id, crowd.SignalType.parking_fullness,
-        {"status": "full"}, submitted_at=T0,
+        db,
+        a.id,
+        fac.id,
+        crowd.SignalType.parking_fullness,
+        {"status": "full"},
+        submitted_at=T0,
     )
     crowd.submit(
-        db, b.id, fac.id, crowd.SignalType.parking_fullness,
-        {"status": "full"}, submitted_at=T0,
+        db,
+        b.id,
+        fac.id,
+        crowd.SignalType.parking_fullness,
+        {"status": "full"},
+        submitted_at=T0,
     )
     assert _points_balance(db, a) == unit
     assert _points_balance(db, b) == unit
@@ -166,14 +190,22 @@ def test_award_cooldown_duration_is_f13_configurable(db):
     unit = crowd.POINTS_PER_SIGNAL[crowd.SignalType.parking_fullness]
 
     crowd.submit(
-        db, account.id, fac.id, crowd.SignalType.parking_fullness,
-        {"status": "full"}, submitted_at=T0,
+        db,
+        account.id,
+        fac.id,
+        crowd.SignalType.parking_fullness,
+        {"status": "full"},
+        submitted_at=T0,
     )
     after = T0 + timedelta(minutes=2)  # past the shrunken 1-min window
     location.evaluate_ping(db, account.id, *DALLAS, occurred_at=after)
     crowd.submit(
-        db, account.id, fac.id, crowd.SignalType.parking_fullness,
-        {"status": "full"}, submitted_at=after,
+        db,
+        account.id,
+        fac.id,
+        crowd.SignalType.parking_fullness,
+        {"status": "full"},
+        submitted_at=after,
     )
     assert _points_balance(db, account) == unit * 2
 
@@ -184,9 +216,12 @@ def test_authoritative_submissions_never_award_regardless_of_cooldown(db):
     fac = _facility(db)
     for i in range(3):
         crowd.submit_authoritative(
-            db, fac.id, crowd.SignalType.parking_fullness,
+            db,
+            fac.id,
+            crowd.SignalType.parking_fullness,
             {"status": "full", "source": "tpims"},
-            submitted_at=T0 + timedelta(minutes=i), source="tpims",
+            submitted_at=T0 + timedelta(minutes=i),
+            source="tpims",
         )
     pool = ledger.get_or_create_account(
         db, ledger.LedgerAccountKind.points_pool, "points:pool", currency=ledger.Currency.points
@@ -244,9 +279,13 @@ def test_one_driver_reporting_repeatedly_counts_once(db):
     spammer = _account(db, "spammer@example.com")
     for i in range(4):  # same driver, four reports, changing their mind on the last
         crowd.submit(
-            db, spammer.id, fac.id, crowd.SignalType.parking_fullness,
+            db,
+            spammer.id,
+            fac.id,
+            crowd.SignalType.parking_fullness,
             {"status": "empty" if i < 3 else "full"},
-            submitted_at=T0 + timedelta(minutes=i), award=False,
+            submitted_at=T0 + timedelta(minutes=i),
+            award=False,
         )
     at = T0 + timedelta(minutes=4)
     belief = crowd.aggregate_belief(db, fac.id, crowd.SignalType.parking_fullness, as_of=at)
@@ -256,8 +295,13 @@ def test_one_driver_reporting_repeatedly_counts_once(db):
     # a second, distinct driver now genuinely makes it two
     other = _account(db, "other@example.com")
     crowd.submit(
-        db, other.id, fac.id, crowd.SignalType.parking_fullness, {"status": "full"},
-        submitted_at=T0 + timedelta(minutes=4), award=False,
+        db,
+        other.id,
+        fac.id,
+        crowd.SignalType.parking_fullness,
+        {"status": "full"},
+        submitted_at=T0 + timedelta(minutes=4),
+        award=False,
     )
     at = T0 + timedelta(minutes=4)
     belief = crowd.aggregate_belief(db, fac.id, crowd.SignalType.parking_fullness, as_of=at)
