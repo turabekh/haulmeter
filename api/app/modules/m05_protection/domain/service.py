@@ -243,6 +243,17 @@ def incident_pack(db: Session, incident: Incident):
     return evidence.compose_pack(db, log, evidence.PackTemplate.incident)
 
 
+def has_bol(db: Session, stop_ref) -> bool:
+    """§10.2's checklist opens with "BOL ✓". The row rendered an unconditional tick,
+    so it said yes before anyone had photographed anything — and a checklist that
+    always says yes is decoration. This answers it honestly, which for most stops
+    today means NO, which is the point: FR5 exists to make a gap visible while the
+    driver is still standing where it can be closed."""
+    return bool(
+        documents.documents_for_subject(db, "stop", stop_ref, doc_type=documents.DocType.bol)
+    )
+
+
 # --- Protection summary per stop (M5-FR5) ---
 def protection_summary(db: Session, stop) -> dict:
     on_time = db.scalar(select(OnTimeProof).where(OnTimeProof.stop_ref == stop.id)) is not None
@@ -251,7 +262,12 @@ def protection_summary(db: Session, stop) -> dict:
     )
     pickup = any(c.phase == CapturePhase.pickup and c.photo_count > 0 for c in captures)
     delivery = any(c.phase == CapturePhase.delivery and c.photo_count > 0 for c in captures)
-    documented = {"on_time_proof": on_time, "pickup_photos": pickup, "delivery_photos": delivery}
+    documented = {
+        "on_time_proof": on_time,
+        "pickup_photos": pickup,
+        "delivery_photos": delivery,
+        "bol": has_bol(db, stop.id),
+    }
     missing = [k for k, ok in documented.items() if not ok]
     return {"documented": documented, "missing": missing}
 

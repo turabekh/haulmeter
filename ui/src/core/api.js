@@ -927,6 +927,24 @@ export async function unfollowVendor(vendorId) {
   return resp.json();
 }
 
+// M5-FR2/FR4. EXPORT is a live render of the chain — the driver's own copy, always
+// current. It needs the server, and that is fine: an export is not a promise to
+// anyone, so when there is no signal we simply do not claim one was produced.
+export async function exportProtectionPack(kind, ref) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/protection/${kind}/${ref}/export`, { headers: headers() });
+  if (!resp.ok) throw new Error(`export failed: ${resp.status}`);
+  const blob = await resp.blob();
+  return URL.createObjectURL(blob);
+}
+
+// SHARE pins what is sent, so it queues like any other write (F12). §15.1: the
+// driver is told once, quietly, that it will go when there is signal — and nothing
+// announces it when it does.
+export async function shareProtectionPack(kind, ref, recipient = null) {
+  return queuedPost(`/protection/${kind}/${ref}/share`, { recipient });
+}
+
 export async function suggestACook(lat, lon) {
   // Q-7: the empty state's affordance records WHERE drivers want food — the demand
   // half of the vendor recruitment loop. Queued offline like any other contribution.

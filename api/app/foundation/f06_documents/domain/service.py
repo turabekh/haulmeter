@@ -97,6 +97,19 @@ def active_reminder_offset(expires_on: date, as_of: date) -> int | None:
     return None
 
 
+def documents_for_subject(db: Session, subject_kind: str, subject_ref, doc_type=None) -> list:
+    """What is attached to one thing — a stop, a load, a claim. The columns existed
+    from the start and nothing could query them, so a caller wanting "is there a BOL
+    for this stop" had to load every document the account owns and filter in Python."""
+    stmt = select(Document).where(
+        Document.subject_kind == subject_kind,
+        Document.subject_ref == subject_ref,
+    )
+    if doc_type is not None:
+        stmt = stmt.where(Document.doc_type == doc_type)
+    return list(db.scalars(stmt.order_by(Document.uploaded_at)))
+
+
 def due_reminders(db: Session, as_of: date, account_id=None) -> list[tuple[Document, int]]:
     stmt = select(Document).where(Document.expires_on.is_not(None))
     if account_id is not None:

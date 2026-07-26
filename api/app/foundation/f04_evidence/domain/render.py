@@ -329,9 +329,26 @@ def _timeline(cur, pack):
 
 
 def _detail(payload) -> str:
+    """AI-CONTEXT: a prompt is ATTRIBUTED, never asserted.
+
+    Putting the guided-capture prompt into the chained record was right — it is a
+    claim about what an image shows and belongs hashed with it. Rendering the row as
+    `Photo  seals` was not: to a clerk that reads as *this photograph shows the
+    seals*, which is the platform asserting image content in its own voice. If the
+    driver photographed a mud flap at step two, the document states something false
+    and we are the ones who said it.
+
+    What actually happened is that we prompted for seals and this is what arrived.
+    `prompted: seals` says who is speaking — the same discipline as "Vendor says
+    halal" never being a bare "Halal", `documents_on_file` rendering neutral, and a
+    vendor's own presence claim never appearing as a driver count. Same rule, applied
+    to the AP clerk instead of the driver.
+    """
     if not isinstance(payload, dict):
         return ""
-    for key in ("event", "prompt", "kind", "status"):
+    if payload.get("prompt"):
+        return f"prompted: {str(payload['prompt']).replace('_', ' ')}"
+    for key in ("event", "kind", "status"):
         if payload.get(key):
             return str(payload[key]).replace("_", " ")
     return ""

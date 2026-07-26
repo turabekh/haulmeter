@@ -7,10 +7,35 @@
      entry (never a fake thumbnail). -->
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from "vue";
-import { ArrowLeft, ShieldCheck, MapPin, Camera, Send, FileText, ShieldAlert } from "lucide-vue-next";
+import {
+  ArrowLeft,
+  ShieldCheck,
+  MapPin,
+  Camera,
+  Send,
+  FileText,
+  ShieldAlert,
+  FileDown,
+  Share2,
+  Clock,
+} from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
-import { fetchEvidence, fetchEvidencePhoto } from "../core/api.js";
+import {
+  fetchEvidence,
+  fetchEvidencePhoto,
+  exportProtectionPack,
+  shareProtectionPack,
+} from "../core/api.js";
+import { useDriverState } from "../core/state.js";
+import BottomSheet from "../core/components/BottomSheet.vue";
+
+const { isDriving } = useDriverState();
+const sharing = ref(false);
+const recipient = ref("");
+const busy = ref(false);
+const queued = ref(false);
+const shareUrl = ref(null);
 
 const route = useRoute();
 const router = useRouter();
@@ -54,6 +79,35 @@ const evLabel = (type) => t(EV[type]?.key ?? "claim.ev_system");
 const evIcon = (type) => (EV[type] ?? EV.SYSTEM).icon;
 const time = (iso) => (iso ? iso.slice(11, 16) : "");
 // guided prompts have friendly names; fall back to the raw prompt
+async function openExport() {
+  busy.value = true;
+  try {
+    const url = await exportProtectionPack("condition", route.params.stopId);
+    if (url && typeof window !== "undefined") window.open(url, "_blank");
+  } catch {
+    /* offline: the export is a live render and needs the server. Nothing to queue —
+       the driver's own copy is not a promise to anyone, so we simply do not claim
+       one was produced. */
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function doShare() {
+  busy.value = true;
+  try {
+    const res = await shareProtectionPack("condition", route.params.stopId, recipient.value || null);
+    // §15.1: a queued share is stated once, quietly, and its completion is silent
+    queued.value = res?.queued === true;
+    shareUrl.value = res?.url ?? null;
+    sharing.value = false;
+  } catch {
+    sharing.value = false;
+  } finally {
+    busy.value = false;
+  }
+}
+
 function photoLabel(prompt) {
   if (!prompt) return t("claim.ev_photo");
   const key = `cond.step.${prompt}`;
@@ -126,7 +180,53 @@ function photoLabel(prompt) {
       </section>
 
       <p class="doc-note">{{ t("evidence.images_note") }}</p>
+      <!-- AI-CONTEXT: FR2's "one-tap export" and FR4's "shareable pack", which have
+           had a server since session 2 and no button at all.
+
+           EXPORT is the driver's own copy and regenerates from the chain, so it is
+           always current. SHARE pins what is sent and hands a counterparty one link
+           (§17) — a different act, and the copy says so rather than offering two
+           buttons that look alike.
+
+           DRIVING (SM-3): neither renders. Sharing sends a document to a
+           counterparty and Forbidden #11 bans interactive prompts at speed; export
+           opens a viewer, which is the same problem. The evidence stays READABLE at
+           speed — nothing above this point is hidden — but nothing here acts. -->
+      <section v-if="!isDriving" class="card">
+        <h2 class="card__title">{{ t("evidence.send") }}</h2>
+        <button class="cta" type="button" :disabled="busy" @click="openExport">
+          <FileDown :size="18" :stroke-width="2" aria-hidden="true" />
+          {{ t("evidence.export") }}
+        </button>
+        <button class="cta cta--secondary" type="button" :disabled="busy" @click="sharing = true">
+          <Share2 :size="18" :stroke-width="2" aria-hidden="true" />
+          {{ t("evidence.share") }}
+        </button>
+        <!-- §15.1: queued work carries a subtle pending glyph and completion is
+             SILENT. No toast parade when the link finally goes out. -->
+        <p v-if="queued" class="pending">
+          <Clock :size="14" :stroke-width="2" aria-hidden="true" />
+          {{ t("evidence.share_queued") }}
+        </p>
+        <p v-else-if="shareUrl" class="shared">
+          <ShieldCheck :size="14" :stroke-width="2.5" aria-hidden="true" />
+          {{ t("evidence.shared") }}
+        </p>
+      </section>
     </template>
+
+    <BottomSheet :open="sharing" :title="t('evidence.share')" @close="sharing = false">
+      <p class="sheet__lead">{{ t("evidence.share_lead") }}</p>
+      <label class="field">
+        <span class="field__label">{{ t("evidence.share_to") }}</span>
+        <input v-model="recipient" class="field__input" type="email" inputmode="email" />
+      </label>
+      <p class="field__hint">{{ t("evidence.share_note") }}</p>
+      <button class="cta" type="button" :disabled="busy" @click="doShare">
+        <Share2 :size="18" :stroke-width="2" aria-hidden="true" />
+        {{ t("evidence.share_send") }}
+      </button>
+    </BottomSheet>
   </div>
 </template>
 

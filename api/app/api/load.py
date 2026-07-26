@@ -194,6 +194,13 @@ def meter(
         "notice_sent": bool(claim is not None and claim.start_notice_sent_at is not None),
         "filed": filed,
         "photos_captured": m5.condition_photo_count(db, stop.id),
+        # §10.2 specifies "photos 2/4". The denominator IS the feature: a bare count
+        # cannot tell a driver whether they are finished, and FR5 exists to make a
+        # gap visible while it can still be closed.
+        "photos_required": len(m5.condition_sequence()),
+        # the checklist rendered an unconditional tick for the BOL. A checklist that
+        # always says yes is decoration.
+        "bol_captured": m5.has_bol(db, stop.id),
     }
 
 

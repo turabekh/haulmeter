@@ -104,6 +104,17 @@ const stopMeta = computed(() => {
 });
 const noticeSent = computed(() => (live.value ? live.value.notice_sent : false));
 const photosCaptured = computed(() => live.value?.photos_captured ?? 0);
+// §10.2 specifies "photos 2/4". The DENOMINATOR is the feature: a bare count cannot
+// tell a driver whether they are finished, and FR5 exists to make a gap visible
+// while the driver is still standing where it can be closed.
+const photosRequired = computed(() => live.value?.photos_required ?? 0);
+const photosDone = computed(
+  () => photosRequired.value > 0 && photosCaptured.value >= photosRequired.value,
+);
+// the row rendered an unconditional tick. A checklist that always says yes is
+// decoration — and the honest answer for most stops today is "not yet", which is
+// exactly what FR5 is for.
+const bolCaptured = computed(() => live.value?.bol_captured === true);
 
 const state = computed(() =>
   computeDetentionState(arrivalMs.value ?? now.value, freeMin.value, rateCents.value, now.value),
@@ -214,13 +225,17 @@ async function endLoad() {
         <h2 class="card__title">{{ t("load.evidence") }}</h2>
         <ul class="checklist">
           <li class="checklist__item">
-            <Check :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
+            <Check v-if="bolCaptured" :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
+            <Camera v-else :size="20" :stroke-width="2" aria-hidden="true" />
             {{ t("load.bol") }}
           </li>
           <li class="checklist__item">
-            <Check v-if="photosCaptured > 0" :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
+            <Check v-if="photosDone" :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
             <Camera v-else :size="20" :stroke-width="2" aria-hidden="true" />
-            {{ photosCaptured > 0 ? `${t("load.photos")} · ${photosCaptured}` : t("load.photos") }}
+            {{ t("load.photos") }}
+            <span v-if="photosRequired" class="checklist__count">
+              {{ photosCaptured }}/{{ photosRequired }}
+            </span>
           </li>
           <li class="checklist__item">
             <Send :size="20" :stroke-width="2" :class="{ ok: noticeSent }" aria-hidden="true" />
@@ -405,6 +420,13 @@ async function endLoad() {
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
+}
+/* the count is a figure, so it is Mono and tabular like every other figure (T-2) */
+.checklist__count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
 }
 .checklist__item {
   display: flex;

@@ -294,3 +294,28 @@ def test_ordinary_drift_is_not_announced_on_every_row(db):
     data = evidence.render_pack_pdf(pack)
 
     assert b"filed" not in data
+
+
+def test_a_prompt_is_attributed_never_asserted(db):
+    """`Photo  seals` reads, to a clerk, as *this photograph shows the seals* — the
+    platform asserting image content in its own voice. If the driver photographed a
+    mud flap at step two, the document states something false and we said it. What
+    happened is that we prompted for seals and this is what arrived.
+
+    Same discipline as "Vendor says halal" never being a bare "Halal"."""
+    account = _account(db, "attribution@example.com")
+    log = evidence.create_log(db, account.id, label="condition-pickup")
+    evidence.attach_artifact(
+        db,
+        log,
+        evidence.ArtifactType.photo,
+        content=b"a-photo",
+        exif={"prompt": "seals"},
+        captured_at=T0,
+    )
+    pack = evidence.compose_pack(db, log, evidence.PackTemplate.cargo_condition)
+    data = evidence.render_pack_pdf(pack)
+
+    assert b"prompted: seals" in data
+    # the bare form must never appear: it is the assertion we are refusing to make
+    assert b"(seals)" not in data
