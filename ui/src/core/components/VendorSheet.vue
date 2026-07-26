@@ -15,24 +15,37 @@
      fine at a glance; tapping "he's here" at 65 mph is not. -->
 <script setup>
 import { computed, ref } from "vue";
-import { Check, Languages, MapPin } from "lucide-vue-next";
+import { Check, Languages, MapPin, Navigation } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { useDriverState } from "../state.js";
+import { formatMiles } from "../presentation.js";
 import {
   bucketLabelKey,
   presenceLabel,
   priceLabel,
   reasonLabelKey,
   reviewSummary,
-  untilLabel,
   verificationPresentation,
+  windowLabel,
   REPORT_REASONS,
 } from "../vendors.js";
 
 const props = defineProps({
   sheet: { type: Object, required: true },
+  // the appearance the driver actually tapped. The sheet may list several, at
+  // different lots — navigation has to mean THIS one, not "somewhere this cook
+  // works this week".
+  target: { type: Object, default: null },
 });
-const emit = defineEmits(["confirm", "not-here", "sold-out", "mute", "review", "report"]);
+const emit = defineEmits([
+  "confirm",
+  "not-here",
+  "sold-out",
+  "mute",
+  "review",
+  "report",
+  "navigate",
+]);
 const { t } = useI18n();
 const { isDriving } = useDriverState();
 
@@ -42,6 +55,20 @@ const showsUp = computed(() =>
   props.sheet.shows_up?.published ? props.sheet.shows_up : null,
 );
 const next = computed(() => props.sheet.appearances?.[0] ?? null);
+// what Navigate will open: the tapped appearance, falling back to the next one the
+// sheet is showing. Rendered only when we actually hold coordinates — a button that
+// might not go anywhere is worse than no button.
+const going = computed(() => {
+  const t = props.target?.lat != null ? props.target : null;
+  return t ?? (next.value?.lat != null ? next.value : null);
+});
+const goingMiles = computed(() => formatMiles(going.value?.distance_m));
+const anyDistance = computed(() =>
+  (props.sheet.appearances ?? []).some((a) => a.distance_m != null),
+);
+function whenLabel(appearance) {
+  return windowLabel(appearance?.starts_at, appearance?.ends_at, now);
+}
 const reviews = computed(() => reviewSummary(props.sheet.reviews));
 const reviewItems = computed(() => props.sheet.reviews?.items ?? []);
 // FR6 / Q-3: promoted content arrives in its OWN key and renders in its own
@@ -84,15 +111,29 @@ const presence = computed(() =>
       <span class="vs__figure">{{ showsUp.published }}</span>
     </p>
 
-    <!-- schedule: the one time fact that matters, figure first (§12.2) -->
+    <!-- schedule: WHERE, then when. The lot was named on the card and used to be
+         dropped here, which left "Today · until 9pm" attached to no place at all —
+         ambiguous the moment a cook works more than one lot. -->
     <ul class="vs__schedule">
       <li v-for="a in sheet.appearances" :key="a.starts_at" class="vs__slot">
         <MapPin :size="16" :stroke-width="2" aria-hidden="true" />
+        <span class="vs__lot">{{ a.facility_name || t("vendor.lot_unknown") }}</span>
         <span class="vs__when">{{ t(bucketLabelKey(a.bucket)) }}</span>
-        <span class="vs__until">{{ t("vendor.until") }} {{ untilLabel(a.ends_at) }}</span>
+        <!-- the WINDOW, not only its end: "opens 5pm" before, "5–9pm" once open -->
+        <span class="vs__until">
+          <template v-if="whenLabel(a).key">{{ t(whenLabel(a).key) }} </template>
+          {{ whenLabel(a).value }}
+        </span>
+        <span v-if="a.distance_m != null" class="vs__miles">
+          {{ formatMiles(a.distance_m) }} {{ t("unit.mi") }}
+        </span>
         <span v-if="a.sold_out" class="vs__soldout">{{ t("vendor.sold_out") }}</span>
       </li>
     </ul>
+    <!-- said ONCE, not on every row: these are straight lines, not driving
+         distances, and no arrival time is derived from them (§11.7; truck routing
+         is §17 Q9 and open) -->
+    <p v-if="anyDistance" class="vs__direct">{{ t("vendor.distance_direct") }}</p>
 
     <!-- menu: prices are Mono figures like every other money figure (T-2) -->
     <ul v-if="next?.offerings?.length" class="vs__menu">
@@ -177,7 +218,18 @@ const presence = computed(() =>
       </div>
       <p v-else-if="reviews" class="vs__meta">{{ t("vendor.review_too_soon") }}</p>
 
-      <button class="cta" type="button" @click="emit('confirm')">
+      <!-- §23: the PRIMARY action is Navigate. This sheet is read while deciding
+           whether to go; a crowd-contribution affordance must not outrank the one
+           action the whole flow exists to produce. "Here now" stays one tap away
+           for the driver who has already arrived.
+           The distance rides the button so the cost of the decision sits on the
+           control that acts on it. -->
+      <button v-if="going" class="cta" type="button" @click="emit('navigate', going)">
+        <Navigation :size="18" :stroke-width="2" aria-hidden="true" />
+        {{ t("vendor.navigate") }}
+        <span v-if="goingMiles" class="cta__miles">{{ goingMiles }} {{ t("unit.mi") }}</span>
+      </button>
+      <button class="cta cta--secondary" type="button" @click="emit('confirm')">
         {{ t("vendor.here_now") }}
       </button>
       <button class="cta cta--secondary" type="button" @click="emit('not-here')">
@@ -256,13 +308,30 @@ const presence = computed(() =>
 .vs__slot {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--s-2);
   min-height: 48px;
   color: var(--text-2);
   font-size: var(--type-label-size);
 }
+.vs__lot {
+  color: var(--text-1);
+  font-weight: 500;
+}
 .vs__when {
   color: var(--text-1);
+}
+/* every distance is a Mono figure, like every other figure in the product (T-2) */
+.vs__miles {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+.vs__direct {
+  margin: 0 0 var(--s-3);
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
 }
 .vs__until {
   font-family: var(--font-mono);
@@ -428,6 +497,11 @@ const presence = computed(() =>
   color: var(--on-accent);
   font-size: var(--type-label-size);
   font-weight: 500;
+}
+.cta__miles {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
 }
 .cta--secondary {
   margin-top: var(--s-2);

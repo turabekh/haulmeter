@@ -67,8 +67,13 @@ const PARKING_RANK = { empty: 0, some: 1, null: 2, full: 3 };
 // else a sensible default until then (§10.1 — a real map follows the driver).
 // Handoffs stay point-based (nearby); the overlay is viewport-driven (onBounds).
 const geo = ref({ lat: 32.78, lon: -96.8 });
+// whether that default has been replaced by a REAL fix. Distances are measured from
+// the driver, so until this is true no origin is sent and no distance is shown —
+// a figure measured from a default would be confidently wrong (§11.7).
+const located = ref(false);
 function onLocated({ lat, lon }) {
   geo.value = { lat, lon };
+  located.value = true;
   loadHandoffs(); // the map's recenter fires @bounds -> overlay refetch on its own
 }
 
@@ -191,7 +196,11 @@ const vendorTarget = ref(null);
 
 async function loadVendors(bbox = lastBbox) {
   try {
-    const entries = await fetchVendorAppearances({ bbox, filters: filters.value });
+    const entries = await fetchVendorAppearances({
+      bbox,
+      filters: filters.value,
+      origin: located.value ? geo.value : null,
+    });
     vendorEntries.value = Array.isArray(entries) ? entries : cachedAppearances();
   } catch {
     vendorEntries.value = cachedAppearances(); // dead zone / flag off / no session
@@ -339,6 +348,14 @@ function handoff(pin) {
   // M10-FR2: broadcast "leaving soon" from this free lot (backend proves presence)
   selected.value = null;
   broadcastHandoff(pin.facility_id).catch(() => {});
+}
+
+// M13-FR3: the sheet's primary action. The entry carries the LOT's coordinates, so
+// this hands off exactly the appearance the driver tapped rather than guessing from
+// whatever pin happens to be selected. Reuses the M1-FR8 handoff unchanged.
+function navigateToVendor(entry) {
+  vendorSheet.value = null;
+  if (entry?.lat != null && entry?.lon != null) navigate(entry);
 }
 
 function navigate(pin) {
@@ -535,6 +552,8 @@ async function submitPrice(cents) {
       <VendorSheet
         v-if="vendorSheet"
         :sheet="vendorSheet"
+        :target="vendorTarget"
+        @navigate="navigateToVendor"
         @confirm="confirmVendorPresence(true)"
         @not-here="confirmVendorPresence(false)"
         @sold-out="reportVendorSoldOut"

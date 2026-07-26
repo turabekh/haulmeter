@@ -821,7 +821,7 @@ function withFilters(params, filters) {
   return params;
 }
 
-export async function fetchVendorAppearances({ bbox, filters, signal } = {}) {
+export async function fetchVendorAppearances({ bbox, filters, origin, signal } = {}) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const q = withFilters(
     new URLSearchParams({
@@ -832,6 +832,13 @@ export async function fetchVendorAppearances({ bbox, filters, signal } = {}) {
     }),
     filters,
   );
+  // the driver's OWN position, sent only when they have actually shared one. The
+  // map holds a default until the first fix; sending that would print a confident
+  // distance measured from a place the driver has never been.
+  if (origin?.lat != null && origin?.lon != null) {
+    q.set("lat", origin.lat);
+    q.set("lon", origin.lon);
+  }
   const resp = await fetch(`${API_BASE}/vendors/appearances?${q}`, {
     headers: headers(),
     signal,

@@ -15,15 +15,15 @@ import { computed } from "vue";
 import { Navigation, SquareParking, Fuel, UtensilsCrossed } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import StatusPill from "./StatusPill.vue";
-import { freshnessLabel, isStale, SCALE_TYPES } from "../presentation.js";
+import { formatMiles, freshnessLabel, isStale, SCALE_TYPES } from "../presentation.js";
 import { formatMoney } from "../meter.js";
 import { useI18n } from "../i18n.js";
 import {
   bucketLabelKey,
   cardVendors,
   presenceLabel,
-  untilLabel,
   verificationPresentation,
+  windowLabel,
 } from "../vendors.js";
 
 const props = defineProps({
@@ -128,6 +128,10 @@ const unknownScale = computed(
 const shownVendors = computed(() => cardVendors(props.vendors));
 const moreVendors = computed(() => Math.max(0, props.vendors.length - shownVendors.value.length));
 
+function whenLabel(entry) {
+  return windowLabel(entry.starts_at, entry.ends_at, now);
+}
+
 function vendorLine(entry) {
   // §11.7: "3 drivers · 20m" for a crowd confirmation, "vendor says here" for the
   // vendor's own claim. presenceLabel refuses to produce a count for the latter.
@@ -187,7 +191,14 @@ function vendorLine(entry) {
       >
         <span class="vendor__name">{{ v.name }}</span>
         <span class="vendor__when">
-          {{ t(bucketLabelKey(v.bucket)) }} · {{ t("vendor.until") }} {{ untilLabel(v.ends_at) }}
+          {{ t(bucketLabelKey(v.bucket)) }} ·
+          <template v-if="whenLabel(v).key">{{ t(whenLabel(v).key) }} </template>
+          {{ whenLabel(v).value }}
+          <!-- distance is what turns "there is a cook" into "is it worth the
+               detour". Absent entirely when the driver has shared no location. -->
+          <span v-if="v.distance_m != null" class="vendor__miles">
+            · {{ formatMiles(v.distance_m) }} {{ t("unit.mi") }}
+          </span>
         </span>
         <span class="vendor__meta">
           <span :style="{ color: `var(${verificationPresentation(v.verify_status).token})` }">
@@ -389,6 +400,10 @@ function vendorLine(entry) {
   align-items: center;
   gap: var(--s-2);
   font-size: var(--type-caption-size);
+}
+.vendor__miles {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 .vendor__fresh {
   color: var(--text-3);

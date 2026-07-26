@@ -97,3 +97,19 @@ export function formatDwell(seconds) {
   const m = total % 60;
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
+
+// AI-CONTEXT: miles, in ONE place. The corridor grew two private mile helpers at
+// two precisions; a card and a corridor card disagreeing about the same distance is
+// the kind of drift nobody notices until a driver does.
+//
+// `precise` is for a distance measured ALONG a corridor (M1 geometry). The default
+// is whole miles, because a map distance is a DIRECT line and a decimal on a
+// straight line implies routing precision that no straight line has — truck routing
+// is PRD §17 Q9, unresolved, so nothing here may imply an arrival time (§11.7).
+const METRES_PER_MILE = 1609.344;
+
+export function formatMiles(distanceM, { precise = false } = {}) {
+  if (distanceM == null || Number.isNaN(distanceM)) return null;
+  const miles = distanceM / METRES_PER_MILE;
+  return precise ? miles.toFixed(1) : String(Math.round(miles));
+}

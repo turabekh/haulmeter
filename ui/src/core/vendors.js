@@ -109,6 +109,27 @@ export function untilLabel(endsAt, locale = undefined) {
   });
 }
 
+// AI-CONTEXT: the window, not just its end. "until 9pm" answers "how long have I
+// got" but not "can I still get there" — a driver reading "Today" at 3pm cannot
+// tell whether the cook is already out. Before the start it reads "opens 5pm"; once
+// open it reads "5–9pm", so the same row answers both questions.
+//
+// This is deliberately as far as it goes. Whether a driver WILL arrive inside the
+// window needs travel time, and truck routing is PRD §17 Q9 — open. A computed ETA
+// here would be a promise the platform has no engine to keep (§11.7).
+export function windowLabel(startsAt, endsAt, nowMs = Date.now(), locale = undefined) {
+  const start = startsAt ? new Date(startsAt) : null;
+  const end = endsAt ? new Date(endsAt) : null;
+  if (!start || !end) return { key: null, value: untilLabel(endsAt, locale) };
+  if (start.getTime() > nowMs) {
+    return { key: "vendor.opens", value: untilLabel(startsAt, locale) };
+  }
+  return {
+    key: null,
+    value: `${untilLabel(startsAt, locale)}–${untilLabel(endsAt, locale)}`,
+  };
+}
+
 // menu prices are Mono figures like every other money figure (§6.2 T-2)
 export function priceLabel(cents) {
   if (cents === null || cents === undefined) return null;

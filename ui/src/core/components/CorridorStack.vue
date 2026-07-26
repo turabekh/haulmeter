@@ -7,6 +7,7 @@ import { computed } from "vue";
 import { UtensilsCrossed, Scale } from "lucide-vue-next";
 import StatusPill from "./StatusPill.vue";
 import { corridorVendors, untilLabel } from "../vendors.js";
+import { formatMiles } from "../presentation.js";
 import { useI18n } from "../i18n.js";
 
 const props = defineProps({
@@ -24,13 +25,10 @@ const props = defineProps({
 const { t } = useI18n();
 const foodAhead = computed(() => corridorVendors(props.vendors));
 
-function milesAhead(distanceM) {
-  return (distanceM / 1609.344).toFixed(0);
-}
-
-function miles(distanceM) {
-  return (distanceM / 1609.344).toFixed(1);
-}
+// both precisions come from the shared formatter — see presentation.js for why a
+// corridor distance carries a decimal and a direct map distance does not
+const milesAhead = (distanceM) => formatMiles(distanceM);
+const miles = (distanceM) => formatMiles(distanceM, { precise: true });
 </script>
 
 <template>
