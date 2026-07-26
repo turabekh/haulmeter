@@ -12,6 +12,7 @@ contract is a proposal: only the driver can see both the paper and the screen.
 """
 
 import base64
+import uuid
 
 import pytest
 from fastapi.testclient import TestClient
@@ -349,3 +350,125 @@ def test_accessorial_terms_come_back_as_a_map_whatever_the_schema_had_to_say(
 
     assert body["parsed"]["accessorial_terms"] == {"tonu": "50% of linehaul"}
     assert "tonu" not in body["silent_on"]  # the contract does state it
+
+
+# --- Load history: where a finished load goes ---
+def _run_load(client, headers, name, lat=32.7767, lon=-96.7970, **extra):
+    return client.post(
+        "/load",
+        json={
+            "facility_name": name,
+            "lat": lat,
+            "lon": lon,
+            "counterparty": "Acme Brokerage",
+            **extra,
+        },
+        headers=headers,
+    ).json()["stop_id"]
+
+
+def test_a_finished_load_is_still_reachable(client, db):
+    """Before this, ending a load left no way back to it. Its evidence log, condition
+    captures and stop-scoped BOL were all still in the database with no route reaching
+    them — and an evidence pack is worth having precisely because it can be produced
+    weeks later when a broker disputes it."""
+    headers = _headers(client, "history@example.com")
+    stop_id = _run_load(client, headers, "ACME Distribution Center")
+    client.post(f"/load/{stop_id}/end", headers=headers)
+
+    assert client.get("/load/active", headers=headers).json()["stop_id"] is None  # gone from now
+    [row] = client.get("/load/history", headers=headers).json()["loads"]
+    assert row["facility_name"] == "ACME Distribution Center"
+    assert row["stop_id"] == stop_id  # the evidence surface has its id back
+    # what the log CONTAINS, not whether one exists: arm_stop opens a log for every
+    # stop, so "a log exists" is an indicator that can never say no
+    assert row["evidence_count"] == 0  # armed, but nothing captured yet
+
+
+def test_ending_a_load_completes_it(client, db):
+    """`LoadStatus` has carried draft/active/completed/canceled since F5 was written
+    and `set_load_status` was never called from anywhere — so every load ever created
+    sat in `draft`, and "completed" could not be listed even by something that wanted
+    to."""
+    headers = _headers(client, "completes@example.com")
+    stop_id = _run_load(client, headers, "Only Dock")
+
+    before = client.get("/load/history", headers=headers).json()["loads"][0]["status"]
+    resp = client.post(f"/load/{stop_id}/end", headers=headers).json()
+
+    assert before == "draft"
+    assert resp["load_status"] == "completed"
+
+
+def test_a_load_with_stops_still_running_is_not_completed(client, db):
+    """A multi-stop load ends when its LAST stop departs, not its first."""
+    from app.foundation.f05_load import public as loads
+
+    headers = _headers(client, "multistop@example.com")
+    stop_id = _run_load(client, headers, "First Dock")
+    stop = loads.get_stop(db, uuid.UUID(stop_id))
+    load = loads.get_load(db, stop.load_id)
+    second = facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, "Second Dock", 35.05, -89.87
+    )
+    loads.add_stop(db, load, second.id, loads.StopType.delivery)
+
+    resp = client.post(f"/load/{stop_id}/end", headers=headers).json()
+
+    assert resp["load_status"] == "draft"  # the second stop is still pending
+
+
+def test_history_shows_only_what_the_load_produced(client, db, monkeypatch):
+    """A load that captured nothing says so. Rendering an empty money row or a dead
+    evidence link would read as data we lost rather than a quiet week."""
+    _with_parse(monkeypatch, FULL_TERMS)
+    headers = _headers(client, "produced@example.com")
+    doc_id = _import(client, headers).json()["document_id"]
+    _run_load(client, headers, "Papered Dock", rate_con_document_id=doc_id)
+
+    [row] = client.get("/load/history", headers=headers).json()["loads"]
+
+    # the contract it was built from is attached to the stop, so history can show it
+    assert row["documents"] == ["rate_con"]
+    # no claim was filed, so there is no money to state
+    assert row["detention_cents"] is None
+    assert row["claim_state"] is None
+
+
+def test_history_states_money_when_a_claim_was_filed(client, db):
+    headers = _headers(client, "money-history@example.com")
+    stop_id = _run_load(client, headers, "Slow Dock")
+    client.post(f"/load/{stop_id}/arrive", headers=headers)
+    client.post(f"/load/{stop_id}/claim", headers=headers)
+
+    [row] = client.get("/load/history", headers=headers).json()["loads"]
+
+    assert row["detention_cents"] is not None
+    assert row["claim_state"] is not None
+
+
+def test_history_is_yours_only(client, db):
+    mine = _headers(client, "mine-hist@example.com")
+    theirs = _headers(client, "theirs-hist@example.com")
+    _run_load(client, mine, "My Dock")
+
+    assert client.get("/load/history", headers=theirs).json()["loads"] == []
+
+
+def test_history_counts_what_was_captured_not_whether_a_log_exists(client, db):
+    """`arm_stop` opens an evidence log for every stop, so "a log exists" is true for
+    every load ever created — an indicator that always says yes. The first live run
+    showed "evidence pack" against a load where nothing had been captured."""
+    headers = _headers(client, "evcount@example.com")
+    quiet = _run_load(client, headers, "Quiet Dock")
+    client.post(f"/load/{quiet}/end", headers=headers)
+
+    busy = _run_load(client, headers, "Busy Dock", lat=35.05, lon=-89.87)
+    client.post(f"/load/{busy}/arrive", headers=headers)  # a real capture lands here
+    client.post(f"/load/{busy}/end", headers=headers)
+
+    history = client.get("/load/history", headers=headers).json()["loads"]
+    rows = {r["facility_name"]: r for r in history}
+
+    assert rows["Quiet Dock"]["evidence_count"] == 0
+    assert rows["Busy Dock"]["evidence_count"] > 0

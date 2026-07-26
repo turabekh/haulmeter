@@ -192,6 +192,41 @@ def depart_stop(db: Session, stop: Stop, occurred_at: datetime | None = None) ->
     return stop
 
 
+def list_loads(db: Session, account_id, limit: int = 50) -> list[Load]:
+    """A driver's loads, newest first.
+
+    AI-CONTEXT: nothing has ever asked this question. `/load/active` returns the ONE
+    armed stop and there is no other read, so a load that ended left no way back to
+    itself — its evidence log, condition captures and stop-scoped BOL all still in the
+    database with no route reaching them. An evidence pack is worth having precisely
+    because it can be produced weeks later when a broker disputes; unreachable the
+    moment the driver taps "End load" is the opposite of that.
+    """
+    stmt = (
+        select(Load)
+        .where(Load.account_id == account_id)
+        .order_by(Load.created_at.desc())
+        .limit(limit)
+    )
+    return list(db.scalars(stmt))
+
+
+def complete_load_if_finished(db: Session, load: Load) -> Load:
+    """Mark a load completed once no stop is still live.
+
+    `LoadStatus` has carried draft/active/completed/canceled since F5 was written and
+    `set_load_status` was never called from anywhere — so every load ever created is
+    still `draft`. Ending a load departed the STOP and left the load untouched, which
+    is why "completed" could not be listed even by something that wanted to.
+    """
+    live = {StopStatus.pending, StopStatus.armed, StopStatus.arrived}
+    if any(s.status in live for s in load.stops):
+        return load
+    if load.status != LoadStatus.completed:
+        set_load_status(db, load, LoadStatus.completed)
+    return load
+
+
 def list_stops(db: Session, load: Load) -> list[Stop]:
     return list(db.scalars(select(Stop).where(Stop.load_id == load.id).order_by(Stop.sequence)))
 

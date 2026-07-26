@@ -263,6 +263,15 @@ export async function importRateCon({ contentB64, filename, contentType } = {}) 
   return resp.json();
 }
 
+// AI-CONTEXT: a finished load, still reachable. Nothing asked this before: the only
+// read was /load/active (the ONE armed stop), so ending a load orphaned its evidence
+// log, condition captures and stop-scoped BOL — all still in the database with no
+// route reaching them. Cached like every other read, because history is exactly the
+// thing a driver wants at a truck stop with no signal.
+export async function fetchLoadHistory() {
+  return apiGet("/load/history", "load_history");
+}
+
 export async function arriveAtStop(stopId) {
   const resp = await fetch(`${API_BASE}/load/${stopId}/arrive`, {
     method: "POST",

@@ -1882,6 +1882,78 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
   });
 });
 
+describe("LoadSurface — past loads (§23-approved history)", () => {
+  const HISTORY = {
+    loads: [
+      {
+        load_id: "l-1", stop_id: "s-1", facility_name: "ACME Distribution Center",
+        reference_number: "L-9001", created_at: "2026-08-03T14:00:00+00:00",
+        status: "completed", stop_count: 1,
+        detention_cents: 8750, claim_state: "invoiced",
+        evidence_count: 6, documents: ["bol", "rate_con"],
+      },
+      {
+        load_id: "l-2", stop_id: "s-2", facility_name: "Quiet Dock",
+        reference_number: null, created_at: "2026-07-24T09:00:00+00:00",
+        status: "completed", stop_count: 1,
+        detention_cents: null, claim_state: null,
+        evidence_count: 0, documents: [],
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    useDriverState().setState(DriverState.IDLE);
+    setToken("tok-hist");
+    setActiveStop(null); // no active load -> the empty state, where history lives
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url) => {
+        if (String(url).includes("/load/history")) return jsonOk(HISTORY);
+        if (String(url).includes("/load/active")) return jsonOk({ stop_id: null });
+        return Promise.reject(new Error("no live load"));
+      }),
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    logout();
+  });
+
+  it("a finished load is still reachable, with a route back to its evidence", async () => {
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await w.findAll(".cta").find((b) => b.text() === "Past loads").trigger("click");
+    await flushPromises();
+
+    const rows = w.findAll(".hist__row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].text()).toContain("ACME Distribution Center");
+    expect(rows[0].text()).toContain("$87.50"); // Mono, like every money figure
+    expect(rows[0].text()).toContain("Invoiced");
+
+    // the stop id is back, so the evidence pack has a route weeks later
+    await rows[0].find(".hist__main").trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/load/s-1/evidence");
+  });
+
+  it("a load that produced nothing says so rather than rendering empty rows", async () => {
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    await w.findAll(".cta").find((b) => b.text() === "Past loads").trigger("click");
+    await flushPromises();
+
+    const quiet = w.findAll(".hist__row")[1].text();
+    expect(quiet).toContain("no detention");
+    expect(quiet).toContain("nothing was captured");
+    expect(quiet).not.toContain("$0.00"); // a zero would read as a claim that failed
+  });
+});
+
 describe("MoneySurface (M4 Money tab, design-prd §10.3)", () => {
   it("lists receivables with Mono amounts + status pills (fixture)", async () => {
     const w = mount(MoneySurface);

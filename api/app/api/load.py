@@ -126,6 +126,14 @@ def create_load(
         detention_rate_cents_per_hour=rate,
     )
     loads.arm_stop(db, stop)  # opens the F4 evidence log + arms the F3 geofence
+    # the rate con was photographed BEFORE this stop existed, so it was filed against
+    # the account. Now that we know which stop it describes, attach it — otherwise the
+    # contract and the load built from it have no link in either direction, and the
+    # load's history cannot show the paper it came from.
+    if body.rate_con_document_id is not None:
+        rate_con = db.get(documents.Document, body.rate_con_document_id)
+        if rate_con is not None and rate_con.account_id == account.id:
+            documents.set_document_subject(db, rate_con, "stop", stop.id)
     # F14: North Star funnel step 1 — a live load exists (feeds /admin/analytics)
     admin.emit(db, "load_added", "m03", datetime.now(UTC), account_id=account.id)
     return {"load_id": str(load.id), "stop_id": str(stop.id)}
@@ -196,6 +204,60 @@ def import_rate_con(
     return {"document_id": str(document.id), **draft}
 
 
+@router.get("/history")
+def load_history(
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """AI-CONTEXT: where a finished load goes.
+
+    Nothing has ever asked this. `/load/active` returns the ONE armed stop and there
+    was no other read, so a load that ended left no way back to itself — its evidence
+    log, condition captures and stop-scoped BOL all still in the database with no route
+    reaching them. An evidence pack is worth having precisely because it can be
+    produced weeks later when a broker disputes it; unreachable the moment the driver
+    taps "End load" is the opposite of that.
+
+    Each row carries only what that load actually PRODUCED. A load that captured
+    nothing says so — rendering empty money and evidence rows would read as data we
+    lost rather than a quiet week.
+    """
+    rows = []
+    for load in loads.list_loads(db, account.id):
+        stops = loads.list_stops(db, load)
+        if not stops:
+            continue
+        first = stops[0]
+        fac = facility.get_facility(db, first.facility_id)
+        claim = m3.claim_for_stop(db, first.id)
+        docs = documents.documents_for_subject(db, "stop", first.id)
+        rows.append(
+            {
+                "load_id": str(load.id),
+                "stop_id": str(first.id),
+                "facility_name": fac.name if fac else None,
+                "reference_number": load.reference_number,
+                "created_at": load.created_at.isoformat(),
+                "status": load.status.value,
+                "stop_count": len(stops),
+                # money only when there is money: a load that ran clean owes nothing,
+                # and a $0.00 row would read as a claim that failed
+                "detention_cents": claim.amount_cents if claim else None,
+                "claim_state": claim.state.value if claim else None,
+                # AI-CONTEXT: what the log CONTAINS, not whether one exists.
+                #
+                # `arm_stop` opens an evidence log for every stop, so
+                # `evidence_log_id is not None` is true for every load ever created —
+                # an indicator that always says yes, which is decoration. The first
+                # live run showed "evidence pack" against a load where nothing had
+                # been captured. Same shape as the BOL row that could never say no.
+                "evidence_count": len(evidence.stop_evidence(db, first.id)["timeline"]),
+                "documents": sorted({d.doc_type.value for d in docs}),
+            }
+        )
+    return {"loads": rows}
+
+
 @router.get("/active")
 def active_load(
     account: identity.Account = Depends(current_account),
@@ -243,7 +305,17 @@ def end_load(
     # resurfacing it (ownership-checked — a driver only ends their own stop)
     stop = _owned_stop(db, stop_id, account)
     loads.depart_stop(db, stop, occurred_at=datetime.now(UTC))
-    return {"stop_id": str(stop.id), "status": stop.status.value}
+    # ...and the LOAD reaches a terminal state, which nothing ever did before: every
+    # load ever created sat in `draft` because `set_load_status` was never called from
+    # anywhere, so "completed" could not be listed even by something that wanted to.
+    load = loads.get_load(db, stop.load_id)
+    if load is not None:
+        loads.complete_load_if_finished(db, load)
+    return {
+        "stop_id": str(stop.id),
+        "status": stop.status.value,
+        "load_status": load.status.value if load else None,
+    }
 
 
 @router.get("/{stop_id}/meter")

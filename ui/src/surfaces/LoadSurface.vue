@@ -29,6 +29,7 @@ import {
   arriveAtStop,
   fetchMeter,
   fetchActiveLoad,
+  fetchLoadHistory,
   endActiveLoad,
   sendDetentionNotice,
   generateClaim,
@@ -71,6 +72,24 @@ const importing = ref(false);
 // §10.2's single-CTA rule, honoured without stranding capability: the rungs the
 // ladder passes over and this stop's other actions live one tap away in a sheet.
 const more = ref(false);
+// AI-CONTEXT: where a finished load goes. Ending a load used to leave no way back to
+// it — its evidence log, condition captures and stop-scoped BOL all still stored with
+// nothing reaching them. An evidence pack is worth having precisely because it can be
+// produced weeks later when a broker disputes it.
+//
+// §10.2 is silent on history, and navigation is a never-improvise category (§22), so
+// this shape is the owner's decision logged in §23: a tertiary control on the Load tab
+// opening a sheet (NAV-3), because a load is what this tab is about.
+const history = ref([]);
+const historyOpen = ref(false);
+async function openHistory() {
+  historyOpen.value = true;
+  try {
+    history.value = (await fetchLoadHistory()).loads;
+  } catch {
+    /* offline: show the last-known list rather than an error screen */
+  }
+}
 function go(path) {
   more.value = false;
   router.push(path);
@@ -262,6 +281,7 @@ async function onSendNotice() {
 }
 
 async function endLoad() {
+  history.value = []; // re-read on next open: this load just joined it
   const stopId = activeStopId.value;
   if (stopId) await endActiveLoad(stopId); // durable: departs the stop server-side
   else setActiveStop(null);
@@ -408,8 +428,42 @@ async function endLoad() {
         {{ t("load.rc_add") }}
       </button>
 
+      <!-- §23-approved: history lives on the Load tab, because a load is what this tab
+           is about — tertiary, so §10.2's one empty-state action stays the loud thing.
+           §10.2 is silent on history and navigation is a never-improvise category
+           (§22), so the shape was the owner's decision rather than a reading. -->
+      <button v-if="!live" class="cta cta--text" type="button" @click="openHistory">
+        {{ t("load.history") }}
+      </button>
+
       <BottomSheet :open="reporting" :title="t('incident.title')" @close="reporting = false">
         <IncidentSheet @filed="onIncidentFiled" />
+      </BottomSheet>
+
+      <!-- Each row carries only what that load PRODUCED. A load that captured nothing
+           says so: empty money and evidence rows would read as data we lost rather
+           than a quiet week. -->
+      <BottomSheet :open="historyOpen" :title="t('load.history')" @close="historyOpen = false">
+        <p v-if="!history.length" class="docs__empty">{{ t("load.history_empty") }}</p>
+        <ul v-else class="hist">
+          <li v-for="h in history" :key="h.load_id" class="hist__row">
+            <button class="hist__main" type="button" @click="go(`/load/${h.stop_id}/evidence`)">
+              <span class="hist__name">{{ h.facility_name }}</span>
+              <span class="hist__date">{{ h.created_at.slice(0, 10) }}</span>
+            </button>
+            <span v-if="h.detention_cents" class="hist__money">
+              {{ formatMoney(h.detention_cents) }} · {{ t(`money.state.${h.claim_state}`) }}
+            </span>
+            <span v-else class="hist__quiet">{{ t("load.history_no_money") }}</span>
+            <span v-if="h.evidence_count || h.documents.length" class="hist__has">
+              {{ [
+                h.evidence_count ? t("load.history_pack") : null,
+                ...h.documents.map((d) => t(`docs.type.${d}`)),
+              ].filter(Boolean).join(" · ") }}
+            </span>
+            <span v-else class="hist__quiet">{{ t("load.history_nothing") }}</span>
+          </li>
+        </ul>
       </BottomSheet>
 
       <BottomSheet :open="more" :title="t('load.more')" @close="more = false">
@@ -624,6 +678,49 @@ async function endLoad() {
   min-height: 48px;
   background: transparent;
   color: var(--shield-500);
+}
+.hist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.hist__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
+  background: var(--ink-1);
+}
+.hist__main {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  width: 100%;
+  min-height: 48px;
+  text-align: left;
+  background: transparent;
+}
+.hist__name {
+  flex: 1 1 auto;
+  font-size: var(--type-body-size);
+  color: var(--text-1);
+}
+.hist__date,
+.hist__money {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--type-caption-size);
+  color: var(--text-2);
+}
+.hist__has,
+.hist__quiet {
+  font-size: var(--type-caption-size);
+  color: var(--text-3);
 }
 .more {
   list-style: none;

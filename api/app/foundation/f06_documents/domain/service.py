@@ -186,6 +186,26 @@ def update_document_meta(
     return document
 
 
+def set_document_subject(
+    db: Session, document: Document, subject_kind: str, subject_ref
+) -> Document:
+    """Attach a document to the thing it turned out to belong to.
+
+    AI-CONTEXT: a rate confirmation is photographed BEFORE the load exists — that is
+    the whole point of importing one — so it is filed against the account, and the stop
+    it describes is not known until the driver confirms the draft. Without this, the
+    contract and the load it created had no link in either direction, and the load's
+    history could not show the paper it was built from.
+
+    It does not change ownership: `documents_for_account` filters on `account_id`, so
+    the document stays in the driver's wallet exactly as before.
+    """
+    document.subject_kind = subject_kind
+    document.subject_ref = subject_ref
+    db.flush()
+    return document
+
+
 def documents_for_subject(db: Session, subject_kind: str, subject_ref, doc_type=None) -> list:
     """What is attached to one thing — a stop, a load, a claim. The columns existed
     from the start and nothing could query them, so a caller wanting "is there a BOL
