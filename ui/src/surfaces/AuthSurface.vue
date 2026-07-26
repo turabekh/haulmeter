@@ -119,7 +119,15 @@ async function submit() {
 </template>
 
 <style scoped>
+/* §6.5 glove spec: 48 dp is the floor for anything tappable, and a dev-only
+   affordance is not exempt — the first thing the layout harness ever found was this
+   control at 328×19, which no gloved thumb could hit reliably. */
 .auth__dev {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
   margin-top: var(--s-4);
   background: transparent;
   border: none;

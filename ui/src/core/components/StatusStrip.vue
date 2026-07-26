@@ -62,6 +62,9 @@ const stateLabel = computed(() => state.value);
 }
 .strip__mic {
   margin-left: auto;
+  /* declared 48 and RENDERED 47: a flex parent was shrinking it below the §6.5
+     floor. `flex: 0 0` is what makes the declaration true. */
+  flex: 0 0 48px;
   width: 48px;
   height: 48px;
   display: flex;

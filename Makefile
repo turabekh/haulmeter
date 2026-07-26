@@ -2,7 +2,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci \
-        seed purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales
+        seed purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales ui-layout
 
 STATE ?= wisconsin
 # osmium-tool is packaged in Debian/Ubuntu; install it in a slim base at run time
@@ -52,7 +52,13 @@ lint: env
 fmt:
 	$(COMPOSE) run --rm --no-deps api ruff format .
 
-ci: env preflight lint test
+# AI-CONTEXT: the LAW 0 harness (design-prd §22.3). Deliberately NOT part of `make
+# test`: the unit suite finishes in seconds and putting a browser on that path would
+# cost the tight red-green loop. `make ci` runs both.
+ui-layout: env
+	$(COMPOSE) run --rm --entrypoint sh ui -c "npx --yes playwright install --with-deps chromium >/dev/null 2>&1 || npx --yes playwright install chromium; npm run layout"
+
+ci: env preflight lint test ui-layout
 
 # --- Real POI data (PRD §12) — live pulls only, never in CI ---
 # Dev seed is OFF by default; this forces it on for local field-testing.

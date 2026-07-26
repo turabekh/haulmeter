@@ -52,7 +52,10 @@ const presets = [
 }
 .chip {
   flex: 0 0 auto;
-  min-height: 40px;
+  /* §6.5 glove spec floor. These shipped at 40 dp and were re-approved in a §23
+     entry without anyone measuring them — the layout harness found it in its
+     first real run. */
+  min-height: 48px;
   padding: 0 var(--s-4);
   border-radius: var(--r-pill);
   border: 1px solid var(--line-1);

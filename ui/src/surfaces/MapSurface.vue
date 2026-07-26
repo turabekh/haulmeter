@@ -678,7 +678,7 @@ async function submitPrice(cents) {
 }
 .relay-banner {
   margin: var(--s-2) var(--s-4) 0;
-  min-height: 44px;
+  min-height: 48px; /* §6.5 glove spec — was 44 */
   border-radius: var(--r-control);
   background: var(--shield-500);
   color: var(--on-accent);
