@@ -90,6 +90,10 @@ _FONT_FILES = {
 # make otherwise-identical renders differ
 PRODUCER = "Haulmeter Evidence Pack 1"
 
+# how far the two clocks may drift before the row discloses both (see
+# `_divergence_note` for why this number and why it lives here rather than in config)
+DISCLOSE_DIVERGENCE_S = 300
+
 TEMPLATE_TITLES = {
     PackTemplate.detention_claim: "Detention claim",
     PackTemplate.tonu: "Truck ordered, not used",
@@ -267,6 +271,33 @@ def _chronological(records, key="occurred_at"):
     return sorted(records, key=lambda r: (r.get(key) is None, r.get(key)))
 
 
+def _divergence_note(record) -> str:
+    """AI-CONTEXT: where the two clocks disagree, the row SAYS SO.
+
+    Sorting the timeline by capture time was right and is not sufficient. The chain's
+    hashes commit to `seq`, which is filing order, so a counterparty who obtains the
+    chain can show that our rendered order differs from the order the hashes cover.
+    "Your PDF reordered our evidence" is a bad sentence to be answering, and the
+    answer is already in the data: F12 records both clocks precisely so the gap can
+    be disclosed. Recording it and then hiding it wastes the capture.
+
+    Five minutes: comfortably above ordinary drift and sync latency, comfortably
+    below the case a counterparty would actually probe — a photo taken at the dock
+    with no signal and filed hours later, which is the normal life of this product.
+    Disclosing sub-minute jitter on every row would bury the rows that mean
+    something. The threshold lives here, in the open, rather than in config: it is a
+    statement about evidence, not a tuning knob.
+    """
+    occurred, received = record.get("occurred_at"), record.get("received_at")
+    if occurred is None or received is None:
+        return ""
+    occurred = occurred if occurred.tzinfo else occurred.replace(tzinfo=UTC)
+    received = received if received.tzinfo else received.replace(tzinfo=UTC)
+    if abs((received - occurred).total_seconds()) < DISCLOSE_DIVERGENCE_S:
+        return ""
+    return f"filed {received.astimezone(UTC):%H:%M}"
+
+
 def _timeline(cur, pack):
     """§17: event timeline, Mono timestamps, hairline rules."""
     if not pack.timeline:
@@ -277,8 +308,12 @@ def _timeline(cur, pack):
     for record in _chronological(pack.timeline):
         cur.need(BODY_LINE + S2)
         # T-2: time is ALWAYS Mono + tabular, in every surface including this one
-        cur.text(_fmt_ts(record.get("occurred_at")), MONO, CAPTION, TEXT_2)
-        stamp_w = pdfmetrics.stringWidth("0000-00-00 00:00:00 UTC", MONO, CAPTION)
+        filed = _divergence_note(record)
+        captured = _fmt_ts(record.get("occurred_at"))
+        cur.text(f"{captured} · {filed}" if filed else captured, MONO, CAPTION, TEXT_2)
+        stamp_w = pdfmetrics.stringWidth(
+            "0000-00-00 00:00:00 UTC · filed 00:00", MONO, CAPTION
+        )
         cur.text(
             str(record.get("type", "")).replace("_", " ").title(),
             SANS_MEDIUM,

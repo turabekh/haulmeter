@@ -250,3 +250,47 @@ def test_the_trace_follows_time_not_the_order_points_were_recorded(db):
     points = _located_points(pack)
     assert points[0] == (32.77, -96.80), "the trace must start where the driver started"
     assert points[-1] == (32.79, -96.78)
+
+
+def test_a_late_filed_record_discloses_both_clocks(db):
+    """Sorting by capture time was right and not sufficient. The chain's hashes
+    commit to SEQ — filing order — so a counterparty holding the chain can show the
+    rendered order differs from the order the hashes cover. F12 records both clocks
+    precisely so the gap can be disclosed; recording it and hiding it wastes it."""
+    from sqlalchemy import select
+
+    from app.foundation.f04_evidence.domain.models import EvidenceRecord
+
+    account = _account(db, "divergence@example.com")
+    log = evidence.create_log(db, account.id, label="dead zone")
+    evidence.append_record(db, log, evidence.RecordType.PHOTO, {"event": "seal"}, T0)
+    # captured at the dock with no signal, synced six hours later
+    record = db.scalars(select(EvidenceRecord).where(EvidenceRecord.log_id == log.id)).one()
+    record.received_at = T0 + timedelta(hours=6, minutes=24)
+    db.flush()
+
+    pack = evidence.compose_pack(db, log, evidence.PackTemplate.cargo_condition)
+    assert pack.timeline[0]["received_at"] is not None
+    data = evidence.render_pack_pdf(pack)
+
+    assert b"filed 14:22" in data
+
+
+def test_ordinary_drift_is_not_announced_on_every_row(db):
+    """Sub-threshold jitter is clock drift and sync latency, not evidence. Disclosing
+    it everywhere would bury the rows where the gap means something."""
+    from sqlalchemy import select
+
+    from app.foundation.f04_evidence.domain.models import EvidenceRecord
+
+    account = _account(db, "drift@example.com")
+    log = evidence.create_log(db, account.id, label="online")
+    evidence.append_record(db, log, evidence.RecordType.PHOTO, {"event": "seal"}, T0)
+    record = db.scalars(select(EvidenceRecord).where(EvidenceRecord.log_id == log.id)).one()
+    record.received_at = T0 + timedelta(seconds=90)
+    db.flush()
+
+    pack = evidence.compose_pack(db, log, evidence.PackTemplate.cargo_condition)
+    data = evidence.render_pack_pdf(pack)
+
+    assert b"filed" not in data

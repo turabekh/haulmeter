@@ -270,6 +270,12 @@ def compose_pack(db: Session, log: EvidenceLog, template: PackTemplate) -> Evide
                 "seq": r.seq,
                 "type": r.record_type.value,
                 "occurred_at": r.occurred_at,
+                # F12 records BOTH: `occurred_at` is the client's skew-corrected
+                # time, `received_at` is when the server actually saw it. The pack
+                # carried only the first, which threw the divergence away at the
+                # composition boundary — and the divergence is the whole point of
+                # recording two clocks (PRD §7.12).
+                "received_at": r.received_at,
                 "payload": r.payload,
                 "record_hash": r.record_hash,
             }
