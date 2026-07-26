@@ -1044,6 +1044,18 @@ export const fetchMyDocuments = () => portalGet("/documents");
 export const uploadVendorDocument = (body) => portalSend("/documents", "POST", body);
 export const fetchVendorReputation = () => portalGet("/reputation");
 
+// FR7 — claiming a service centre. The search exists because every other facility
+// lookup in the product is geographic and a claimant sits at a desk with a business
+// name. Rows carry the facility's own name, address and ingested services, so the
+// portal never asks anyone to recognise their site from an id.
+export const fetchClaimableFacilities = (q) =>
+  portalGet(`/claimable?q=${encodeURIComponent(q)}`);
+export const fetchVendorClaims = () => portalGet("/claims");
+export const submitFacilityClaim = (body) => portalSend("/claims", "POST", body);
+// curation is ADDITIVE — the response echoes the union so the portal can show the
+// addition alongside what ingestion already knew (E3.2)
+export const curateFacilityClaim = (id, body) => portalSend(`/claims/${id}`, "PATCH", body);
+
 // self-serve signup (owner decision: open, guarded by the Q-4 floor and the tier
 // ladder rather than by an approval queue). Not a portal path — it is the ordinary
 // M13 route a signed-in account uses to become a vendor.

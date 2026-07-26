@@ -37,6 +37,7 @@ import VendorPromotions from "./surfaces/vendor/VendorPromotions.vue";
 import VendorVerification from "./surfaces/vendor/VendorVerification.vue";
 import VendorReputation from "./surfaces/vendor/VendorReputation.vue";
 import VendorProfile from "./surfaces/vendor/VendorProfile.vue";
+import VendorSite from "./surfaces/vendor/VendorSite.vue";
 import VendorJoinSurface from "./surfaces/vendor/VendorJoinSurface.vue";
 import { isAuthenticated } from "./core/api.js";
 
@@ -107,6 +108,10 @@ export const routes = [
       { path: "promotions", name: "vendor-promotions", component: VendorPromotions },
       { path: "verification", name: "vendor-verification", component: VendorVerification },
       { path: "reputation", name: "vendor-reputation", component: VendorReputation },
+      // FR7. The rail shows this only to a service centre — a mobile cook has no
+      // site to claim — but the ROUTE stays open, so a vendor who switches type
+      // (or arrives from a link) gets the section rather than a dead URL.
+      { path: "site", name: "vendor-site", component: VendorSite },
       { path: "profile", name: "vendor-profile", component: VendorProfile },
     ],
   },

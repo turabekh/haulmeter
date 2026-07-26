@@ -35,8 +35,15 @@ const SECTIONS = [
   { key: "promotions", to: "/vendor-portal/promotions", label: "vendor.nav.promotions" },
   { key: "verification", to: "/vendor-portal/verification", label: "vendor.nav.verification" },
   { key: "reputation", to: "/vendor-portal/reputation", label: "vendor.nav.reputation" },
+  // FR7, service centres only: a mobile cook has no site to claim, and a rail item
+  // that leads to "this is not for you" is decoration (§21.3 — the same reason the
+  // registry decision labels an unbuilt destination instead of linking it)
+  { key: "site", to: "/vendor-portal/site", label: "vendor.nav.site", type: "service_center" },
 ];
 
+const sections = computed(() =>
+  SECTIONS.filter((s) => !s.type || s.type === profile.value?.vendor_type),
+);
 const suspended = computed(() => profile.value?.publish_suspended === true);
 const gaps = computed(() => profile.value?.profile_gaps ?? []);
 // E-D5: an impersonating admin must never forget whose screen they are on
@@ -96,7 +103,7 @@ onMounted(async () => {
       <div class="portal__body">
         <nav class="rail" :aria-label="t('portal.vendor.title')">
           <router-link
-            v-for="s in SECTIONS"
+            v-for="s in sections"
             :key="s.key"
             :to="s.to"
             class="rail__item"
