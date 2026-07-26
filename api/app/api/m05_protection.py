@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db
@@ -353,7 +354,34 @@ class DocumentIn(BaseModel):
 def document_types(_account: identity.Account = Depends(current_account)) -> dict:
     """The capture screen offers only what the server will file, and says which of
     them an expiry date means anything for — a BOL does not expire."""
-    return {"types": m5.DRIVER_DOC_TYPES, "expiring": m5.EXPIRING_DOC_TYPES}
+    return {
+        "types": m5.DRIVER_DOC_TYPES,
+        "expiring": m5.EXPIRING_DOC_TYPES,
+        # the types where filing a new one replaces the old, so the form can say so
+        # BEFORE the driver saves rather than after
+        "superseding": m5.SUPERSEDING_DOC_TYPES,
+    }
+
+
+@router.get("/documents/replaces/{doc_type}")
+def would_replace(
+    doc_type: str,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """What filing this type would archive. Asked before the capture so the
+    consequence is stated in advance — a driver should not learn that their old CDL
+    was replaced by noticing it is gone."""
+    previous = m5.superseded_by_capturing(db, account.id, doc_type)
+    return {
+        "replaces": None
+        if previous is None
+        else {
+            "document_id": str(previous.id),
+            "doc_type": previous.doc_type.value,
+            "expires_on": previous.expires_on.isoformat() if previous.expires_on else None,
+        }
+    }
 
 
 @router.post("/documents", status_code=201)
@@ -397,6 +425,7 @@ def capture_document(
                 status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown document type"
             ) from exc
         captured["id"] = str(doc.id)
+        captured["replaced"] = None if doc.superseded_by_id else _replaced_id(db, doc)
 
     # F12: a credential photographed in a dead zone replays exactly once
     applied = True
@@ -413,7 +442,70 @@ def capture_document(
         applied = receipt.applied
     else:
         _apply(None)
-    return {"document_id": captured.get("id"), "applied": applied}
+    return {
+        "document_id": captured.get("id"),
+        "applied": applied,
+        # what this capture archived, so the confirmation can say it plainly
+        "replaced_document_id": captured.get("replaced"),
+    }
+
+
+class DocumentEditIn(BaseModel):
+    doc_type: str | None = None
+    expires_on: str | None = None
+
+
+@router.patch("/documents/{document_id}")
+def edit_document(
+    document_id: uuid.UUID,
+    body: DocumentEditIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Correct what was recorded ABOUT a document — a mistyped expiry, a credential
+    filed under the wrong type. The BYTES are never edited: replacing the image is a
+    new capture, which supersedes, so what a driver files and what an inspector sees
+    cannot quietly diverge."""
+    doc = db.get(documents.Document, document_id)
+    if doc is None or doc.account_id != account.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "document not found")
+    if doc.archived_at is not None:
+        # an archived document is a record of what was true; editing it would rewrite
+        # history rather than correct the present
+        raise HTTPException(status.HTTP_409_CONFLICT, "that document has been replaced")
+
+    doc_type = None
+    if body.doc_type is not None:
+        if body.doc_type not in m5.DRIVER_DOC_TYPES:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown document type")
+        doc_type = documents.DocType(body.doc_type)
+
+    expires_on = None
+    if body.expires_on:
+        from datetime import date as _date
+
+        try:
+            expires_on = _date.fromisoformat(body.expires_on)
+        except ValueError as exc:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "expiry must be an ISO date"
+            ) from exc
+
+    documents.update_document_meta(db, doc, doc_type=doc_type, expires_on=expires_on)
+    return {
+        "document_id": str(doc.id),
+        "doc_type": doc.doc_type.value,
+        "expires_on": doc.expires_on.isoformat() if doc.expires_on else None,
+    }
+
+
+def _replaced_id(db: Session, new_doc):
+    """Which document this capture archived, found by the pointer the archived row
+    now carries rather than by re-deriving the rule in a second place."""
+    prior = db.scalars(
+        select(documents.Document).where(documents.Document.superseded_by_id == new_doc.id)
+    ).first()
+    return str(prior.id) if prior is not None else None
 
 
 @router.get("/documents/{document_id}")

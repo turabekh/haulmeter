@@ -12,32 +12,54 @@
      the form is not paying attention. The server decides which those are. -->
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { Camera, Check } from "lucide-vue-next";
+import { Camera, Check, TriangleAlert } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
-import { captureDocument, fetchDocumentTypes } from "../api.js";
+import { captureDocument, fetchDocumentTypes, fetchWouldReplace } from "../api.js";
 
 const emit = defineEmits(["captured"]);
 const { t } = useI18n();
 
 const types = ref([]);
 const expiringTypes = ref([]);
+const supersedingTypes = ref([]);
 const docType = ref("");
 const expiresOn = ref("");
 const file = ref(null);
 const preview = ref(null);
 const busy = ref(false);
 const done = ref(null);
+// AI-CONTEXT: what saving this would archive. Checked when the TYPE is chosen, not
+// after saving: §17 Q16 keeps the old credential, but a driver still needs to know
+// their current CDL is about to stop being the one the wallet produces — and they
+// need to know it while they can still stop.
+const replaces = ref(null);
+const replacedLabel = ref(null);
+
+async function onType(ty) {
+  docType.value = ty;
+  replaces.value = null;
+  if (!supersedingTypes.value.includes(ty)) return;
+  try {
+    const res = await fetchWouldReplace(ty);
+    replaces.value = res?.replaces ?? null;
+  } catch {
+    /* offline: the warning is a courtesy, not a gate — the server still supersedes
+       correctly when the queued capture lands */
+  }
+}
 
 onMounted(async () => {
   try {
     const res = await fetchDocumentTypes();
     types.value = res.types ?? [];
     expiringTypes.value = res.expiring ?? [];
+    supersedingTypes.value = res.superseding ?? [];
   } catch {
     // offline: the type list is small and stable, so a cached-or-default list is
     // better than a form that cannot be opened in a dead zone
     types.value = ["cdl", "med_card", "insurance", "permit", "rate_con", "bol", "pod", "other"];
     expiringTypes.value = ["cdl", "med_card", "insurance", "permit"];
+    supersedingTypes.value = ["cdl", "med_card", "insurance"];
   }
 });
 
@@ -73,6 +95,7 @@ async function submit() {
       expiresOn: wantsExpiry.value ? expiresOn.value : null,
     });
     done.value = res?.queued ? "queued" : "filed";
+    replacedLabel.value = replaces.value ? t(`docs.type.${docType.value}`) : null;
     emit("captured", { state: done.value });
   } catch {
     done.value = "queued"; // never lose a capture to a server hiccup
@@ -89,6 +112,8 @@ async function submit() {
       <Check :size="18" :stroke-width="2.5" aria-hidden="true" />
       {{ done === "queued" ? t("docs.cap_queued") : t("docs.cap_filed") }}
     </p>
+    <!-- and said again afterwards, because it happened -->
+    <p v-if="done && replacedLabel" class="cap__hint">{{ t("docs.cap_replaced_done") }}</p>
 
     <template v-else>
       <span class="cap__label">{{ t("docs.cap_type") }}</span>
@@ -99,12 +124,18 @@ async function submit() {
             :class="{ 'cap__chip--on': docType === ty }"
             type="button"
             :aria-pressed="docType === ty"
-            @click="docType = ty"
+            @click="onType(ty)"
           >
             {{ t(`docs.type.${ty}`) }}
           </button>
         </li>
       </ul>
+
+      <!-- stated BEFORE the save, in marker (caution, not error — nothing is lost) -->
+      <p v-if="replaces" class="cap__replaces">
+        <TriangleAlert :size="16" :stroke-width="2" aria-hidden="true" />
+        {{ t("docs.cap_replaces") }}
+      </p>
 
       <label class="cap__field">
         <span class="cap__label">{{ t("docs.cap_photo") }}</span>
@@ -178,6 +209,18 @@ async function submit() {
   margin-bottom: var(--s-4);
   border: 1px solid var(--line-1);
   border-radius: var(--r-card);
+}
+.cap__replaces {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-4);
+  padding: var(--s-3);
+  border: 1px solid var(--marker-500);
+  border-radius: var(--r-control);
+  color: var(--marker-500);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
 }
 .cap__hint {
   margin: var(--s-2) 0 0;

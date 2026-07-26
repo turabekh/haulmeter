@@ -1,6 +1,6 @@
 import hashlib
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -77,11 +77,20 @@ def mark_extraction_failed(db: Session, document: Document) -> Document:
 
 
 def documents_for_account(
-    db: Session, account_id, doc_type: DocType | None = None
+    db: Session,
+    account_id,
+    doc_type: DocType | None = None,
+    include_archived: bool = False,
 ) -> list[Document]:
+    """Archived documents are excluded by DEFAULT. The wallet's job is to produce the
+    credential a driver holds now; a superseded CDL surfacing beside the current one
+    at a roadside inspection is exactly the confusion this must not create. They are
+    still reachable — `include_archived` — because §17 Q16 keeps them."""
     stmt = select(Document).where(Document.account_id == account_id)
     if doc_type is not None:
         stmt = stmt.where(Document.doc_type == doc_type)
+    if not include_archived:
+        stmt = stmt.where(Document.archived_at.is_(None))
     return list(db.scalars(stmt.order_by(Document.uploaded_at.desc())))
 
 
@@ -95,6 +104,37 @@ def active_reminder_offset(expires_on: date, as_of: date) -> int | None:
             return offset
         lower = offset
     return None
+
+
+def supersede_document(db: Session, old: Document, new: Document, now: datetime | None = None):
+    """Archive `old` in favour of `new`. Nothing is deleted and no bytes are touched —
+    what changes is which document the wallet PRODUCES, which is the only thing a
+    driver or an inspector cares about."""
+    old.archived_at = now or datetime.now(UTC)
+    old.superseded_by_id = new.id
+    db.flush()
+    return old
+
+
+def update_document_meta(
+    db: Session,
+    document: Document,
+    doc_type: DocType | None = None,
+    expires_on: date | None = None,
+) -> Document:
+    """Correct what was recorded ABOUT a document — a mistyped expiry, a credential
+    filed under the wrong type. The bytes are never edited: replacing the image is a
+    new capture, which supersedes, so that the thing a driver files and the thing an
+    inspector sees can never quietly diverge."""
+    if doc_type is not None:
+        document.doc_type = doc_type
+    if expires_on is not None:
+        document.expires_on = expires_on
+        # the reminder ladder is recomputed from the new date: a corrected expiry
+        # whose 30-day rung was already "sent" against the wrong one would go silent
+        document.sent_reminders = []
+    db.flush()
+    return document
 
 
 def documents_for_subject(db: Session, subject_kind: str, subject_ref, doc_type=None) -> list:
@@ -111,7 +151,9 @@ def documents_for_subject(db: Session, subject_kind: str, subject_ref, doc_type=
 
 
 def due_reminders(db: Session, as_of: date, account_id=None) -> list[tuple[Document, int]]:
-    stmt = select(Document).where(Document.expires_on.is_not(None))
+    # an archived credential has been replaced; warning about its expiry would send a
+    # driver to renew something they already renewed
+    stmt = select(Document).where(Document.expires_on.is_not(None), Document.archived_at.is_(None))
     if account_id is not None:
         stmt = stmt.where(Document.account_id == account_id)
     due: list[tuple[Document, int]] = []

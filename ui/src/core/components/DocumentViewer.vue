@@ -20,19 +20,47 @@
      × buttons on the screen — visible immediately, invisible to every test. -->
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { FileText, TriangleAlert } from "lucide-vue-next";
+import { FileText, TriangleAlert, Pencil } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
-import { fetchDocumentBytes } from "../api.js";
+import { fetchDocumentBytes, editDocument } from "../api.js";
 
 const props = defineProps({
   document: { type: Object, required: true },
 });
+const emit = defineEmits(["edited"]);
 const { t } = useI18n();
 
 const url = ref(null);
 const failed = ref(false);
 const loading = ref(true);
 const isPdf = computed(() => (props.document.content_type || "").includes("pdf"));
+
+// AI-CONTEXT: editing corrects what was RECORDED about a document — a mistyped
+// expiry is the common case, and until now a driver who fat-fingered a year had no
+// way to fix it and would be warned on the wrong schedule forever.
+//
+// The bytes are deliberately not editable. Replacing the image is a new capture,
+// which supersedes and archives, so what a driver files and what an inspector sees
+// can never quietly diverge.
+const editing = ref(false);
+const expiresOn = ref(props.document.expires_on || "");
+const saving = ref(false);
+const savedAt = ref(null);
+
+async function save() {
+  saving.value = true;
+  try {
+    const res = await editDocument(props.document.id, { expiresOn: expiresOn.value });
+    savedAt.value = res.expires_on;
+    editing.value = false;
+    emit("edited", res);
+  } catch {
+    /* leave the form open with what they typed — losing a correction to a failed
+       request would make them type it twice */
+  } finally {
+    saving.value = false;
+  }
+}
 
 onMounted(async () => {
   try {
@@ -67,6 +95,26 @@ onBeforeUnmount(() => {
       </object>
       <img v-else :src="url" class="viewer__frame" :alt="document.label" />
     </template>
+
+    <div v-if="document.expires_on || savedAt" class="viewer__meta">
+      <span class="viewer__expiry">
+        {{ t("docs.view_expires") }}
+        <span class="viewer__date">{{ savedAt || document.expires_on }}</span>
+      </span>
+      <button v-if="!editing" class="viewer__edit" type="button" @click="editing = true">
+        <Pencil :size="16" :stroke-width="2" aria-hidden="true" />
+        {{ t("docs.view_edit") }}
+      </button>
+    </div>
+
+    <div v-if="editing" class="viewer__form">
+      <label class="viewer__label" for="doc-expiry">{{ t("docs.cap_expiry") }}</label>
+      <input id="doc-expiry" v-model="expiresOn" class="viewer__input" type="date" />
+      <p class="viewer__hint">{{ t("docs.view_edit_hint") }}</p>
+      <button class="viewer__save" type="button" :disabled="saving" @click="save">
+        {{ t("portal.vendor.save") }}
+      </button>
+    </div>
   </div>
 </template>
 
@@ -95,6 +143,66 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--s-2);
   color: var(--flare-500);
+}
+.viewer__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: var(--type-body-size);
+  color: var(--text-2);
+}
+.viewer__expiry {
+  flex: 1 1 auto;
+}
+.viewer__date {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+}
+.viewer__edit {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 48px;
+  padding: 0 var(--s-3);
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+}
+.viewer__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.viewer__label {
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+}
+.viewer__input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+  background: var(--ink-0);
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+}
+.viewer__hint {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+}
+.viewer__save {
+  min-height: 48px;
+  border-radius: var(--r-control);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.viewer__save:disabled {
+  opacity: 0.5;
 }
 .viewer__fallback {
   display: flex;

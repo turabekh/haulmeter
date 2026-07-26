@@ -18,6 +18,8 @@ from .domain.service import (
     mark_extraction_failed,
     mark_reminder_sent,
     store_document,
+    supersede_document,
+    update_document_meta,
 )
 from .domain.storage import (
     InMemoryObjectStorage,
@@ -41,6 +43,8 @@ __all__ = [
     "mark_extraction_failed",
     "mark_reminder_sent",
     "store_document",
+    "supersede_document",
+    "update_document_meta",
     "ObjectStorage",
     "InMemoryObjectStorage",
     "MinioObjectStorage",

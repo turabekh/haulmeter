@@ -128,3 +128,69 @@ def test_expiry_needs_no_new_notification_class(db):
     """§13.2 names "doc expires this week" as a P1 example, so these ride the ordinary
     tier rules. A new opt-in class would be a §22.2 stop; this is not one."""
     assert notify.get_class("document_expiry") is None
+
+
+# --- replacing a credential: archived, never overwritten ---
+def test_a_new_cdl_archives_the_old_one_and_keeps_it(db):
+    """§17 Q16 forbids hard delete, and the old card is still the answer to "what
+    were you carrying at that inspection in March". Destroying it would destroy
+    evidence of a fact that was true."""
+    account = _account(db, "renew@example.com")
+    old = _doc(db, account, "cdl", 30)
+    new = _doc(db, account, "cdl", 1500)
+
+    assert old.archived_at is not None
+    assert old.superseded_by_id == new.id
+    # the wallet produces the current one, and only the current one
+    shown = [d["id"] for d in m5.wallet(db, account.id, as_of=TODAY)["documents"]]
+    assert shown == [str(new.id)]
+    # ...but the old one is still there for anyone who asks
+    kept = documents.documents_for_account(db, account.id, include_archived=True)
+    assert len(kept) == 2
+
+
+def test_a_driver_is_told_what_will_be_replaced_before_they_save(db):
+    """The consequence is stated in advance. A driver should not learn their old CDL
+    was replaced by noticing it is gone."""
+    account = _account(db, "warned-first@example.com")
+    old = _doc(db, account, "cdl", 30)
+
+    assert m5.superseded_by_capturing(db, account.id, "cdl").id == old.id
+    assert m5.superseded_by_capturing(db, account.id, "insurance") is None
+
+
+def test_permits_do_not_supersede_each_other(db):
+    """A driver carries several at once — IFTA, oversize, a state permit — and
+    nothing we collect distinguishes them, so superseding on type alone would archive
+    the wrong one."""
+    account = _account(db, "permits@example.com")
+    _doc(db, account, "permit", 100)
+    _doc(db, account, "permit", 200)
+
+    shown = m5.wallet(db, account.id, as_of=TODAY)["documents"]
+    assert len(shown) == 2
+
+
+def test_an_archived_credential_stops_nagging_about_its_expiry(db):
+    """Warning about a superseded card would send a driver to renew something they
+    have already renewed."""
+    account = _account(db, "quiet@example.com")
+    _doc(db, account, "med_card", 3)  # expiring, would fire today
+    _doc(db, account, "med_card", 900)  # the renewal
+
+    due = [d.doc_type.value for d, _ in m5.expiry_reminders_due(db, TODAY)]
+    assert due == []
+
+
+def test_correcting_an_expiry_reopens_the_reminder_ladder(db):
+    """A mistyped date whose 30-day rung was already marked sent would go silent
+    against the corrected one."""
+    account = _account(db, "correct@example.com")
+    doc = _doc(db, account, "cdl", 30)
+    gateway = notify.RecordingNotificationGateway()
+    m5.dispatch_expiry_reminders(db, gateway, as_of=TODAY, now=NOON)
+    assert m5.expiry_reminders_due(db, TODAY) == []
+
+    documents.update_document_meta(db, doc, expires_on=TODAY + timedelta(days=14))
+
+    assert [off for _, off in m5.expiry_reminders_due(db, TODAY)] == [14]

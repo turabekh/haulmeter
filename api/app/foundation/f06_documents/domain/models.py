@@ -46,6 +46,13 @@ class Document(Base):
         default=ExtractionStatus.pending,
     )
 
+    # AI-CONTEXT: a credential is REPLACED, never overwritten. §17 Q16 forbids hard
+    # delete, and an old CDL is still evidence of what the driver held on the date of
+    # an inspection six months ago — destroying it would destroy the answer to a
+    # question someone may yet ask. So a new one archives the old and points back at
+    # it, and the chain of what was held when stays walkable.
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    superseded_by_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
     subject_kind: Mapped[str | None] = mapped_column(String(40), nullable=True)
     subject_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
 

@@ -34,7 +34,12 @@ const capturing = ref(false);
 const viewing = ref(null);
 
 function open(doc) {
-  viewing.value = { id: doc.id, label: docLabel(doc.doc_type), content_type: doc.content_type };
+  viewing.value = {
+    id: doc.id,
+    label: docLabel(doc.doc_type),
+    content_type: doc.content_type,
+    expires_on: doc.expires_on,
+  };
 }
 
 async function onCaptured() {
@@ -137,7 +142,7 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
     </BottomSheet>
 
     <BottomSheet :open="!!viewing" :title="viewing?.label || ''" @close="viewing = null">
-      <DocumentViewer v-if="viewing" :document="viewing" />
+      <DocumentViewer v-if="viewing" :document="viewing" @edited="onCaptured" />
     </BottomSheet>
   </div>
 </template>

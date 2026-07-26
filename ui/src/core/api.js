@@ -970,6 +970,25 @@ export async function fetchDocumentBytes(documentId) {
   return URL.createObjectURL(await resp.blob());
 }
 
+// what filing this type would archive, asked BEFORE the capture. A driver should
+// not learn their old CDL was replaced by noticing it is gone.
+export async function fetchWouldReplace(docType) {
+  return apiGet(`/protection/documents/replaces/${docType}`, `replaces:${docType}`);
+}
+
+// corrects what was recorded ABOUT a document. The bytes are never edited —
+// replacing the image is a new capture, which supersedes.
+export async function editDocument(documentId, { docType, expiresOn } = {}) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/protection/documents/${documentId}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({ doc_type: docType ?? null, expires_on: expiresOn || null }),
+  });
+  if (!resp.ok) throw new Error(`edit failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchDocumentTypes() {
   return apiGet("/protection/documents/types", "doc_types");
 }

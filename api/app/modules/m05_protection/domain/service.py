@@ -389,6 +389,24 @@ def auto_file_on_arrival(db: Session, stop, account_id, arrived_at=None, gateway
 DRIVER_DOC_TYPES = ["cdl", "med_card", "insurance", "permit", "rate_con", "bol", "pod", "other"]
 # the credentials an expiry date is meaningful for. A BOL does not expire.
 EXPIRING_DOC_TYPES = ["cdl", "med_card", "insurance", "permit"]
+# AI-CONTEXT: types a driver holds exactly ONE of at a time, so filing a new one
+# replaces the old rather than sitting beside it.
+#
+# `permit` is deliberately NOT here even though it expires. A driver carries several
+# at once — IFTA, oversize, a state permit — and we do not collect anything that
+# distinguishes them, so superseding on type alone would archive the wrong one. Two
+# permits in the wallet is correct; two CDLs is a question about which is current,
+# asked at a roadside inspection, which is the worst moment to be asking it.
+SUPERSEDING_DOC_TYPES = ["cdl", "med_card", "insurance"]
+
+
+def superseded_by_capturing(db: Session, account_id, doc_type: str):
+    """What filing this type would archive — asked BEFORE the capture, so the driver
+    is told what is about to happen rather than informed after it has."""
+    if doc_type not in SUPERSEDING_DOC_TYPES:
+        return None
+    existing = documents.documents_for_account(db, account_id, doc_type=documents.DocType(doc_type))
+    return existing[0] if existing else None
 
 
 def capture_document(
@@ -412,7 +430,8 @@ def capture_document(
     """
     if doc_type not in DRIVER_DOC_TYPES:
         raise ValueError(doc_type)
-    return documents.store_document(
+    previous = superseded_by_capturing(db, account_id, doc_type)
+    document = documents.store_document(
         db,
         account_id,
         documents.DocType(doc_type),
@@ -425,6 +444,11 @@ def capture_document(
         subject_kind="stop" if stop_ref is not None else "account",
         subject_ref=stop_ref if stop_ref is not None else account_id,
     )
+    if previous is not None:
+        # archived, never deleted (§17 Q16): the old card is still the answer to
+        # "what were you carrying at that inspection in March"
+        documents.supersede_document(db, previous, document)
+    return document
 
 
 def expiry_reminders_due(db: Session, as_of: date | None = None) -> list:
