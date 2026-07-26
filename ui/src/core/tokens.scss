@@ -2,10 +2,49 @@
 // transcribed verbatim from the design constitution — nothing invented. No
 // component may hardcode a hex, px, duration, radius, or shadow: use these
 // SCSS vars or the mirrored CSS custom properties. Quasar brand variables map
-// FROM these (§19), never the reverse. Dark is the primary theme (§6.1). The
-// light theme's derived surface/text ramps are NOT yet specified numerically
-// in §6 and are intentionally absent (pending a §23 Decision Log entry) rather
-// than guessed.
+// FROM these (§19), never the reverse. Dark is the primary theme (§6.1); the
+// light theme's ramps were derived and owner-approved 2026-07-20 (§23) and live
+// in the `longhaul-light` mixin at the foot of this file.
+
+// AI-CONTEXT: §6.2 — "loaded as self-hosted variable fonts". Until now that was
+// a claim rather than a fact: the families were named and no file was ever
+// shipped, so the app rendered in the system stack and the type — which §6.2
+// calls the professionalism itself — was whatever the device happened to have.
+// The five faces the scale actually uses are vendored in `ui/public/fonts`
+// (SIL OFL 1.1, see LICENSE.txt beside them). The SAME faces ship as TTF in
+// `api/app/foundation/f04_evidence/assets/fonts` and are embedded in the
+// evidence pack, so the artifact a broker reads and the screen a driver reads
+// are set in one typeface, not two.
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/IBMPlexSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/IBMPlexSans-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/IBMPlexMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/IBMPlexMono-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
 
 // AI-CONTEXT: §6.1 Color — dark-first surfaces
 $ink-0: #0E1319;
