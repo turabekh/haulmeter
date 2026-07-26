@@ -17,6 +17,7 @@ from app.foundation.f13_flags import public as flags
 from app.foundation.f14_admin import public as admin
 from app.ingest import flags as ingest_flags
 from app.ingest import runners, sources
+from app.modules.m05_protection import public as m5
 
 TICK_SECONDS = 5
 BACKOFF_CAP_SECONDS = 3600
@@ -44,6 +45,10 @@ def _jobs() -> list[Job]:
         # weekly (EIA publishes on-highway diesel Mondays ~5pm ET); upsert is
         # idempotent so the interval need not align to the exact release.
         Job("eia_regional", ingest_flags.FLAG_EIA, 604800, runners.run_eia),
+        # M5-FR3: the 30/14/3 credential warnings. Daily, because the offsets are
+        # measured in days and a driver does not need to hear about a renewal twice
+        # before lunch. F8's caps decide what actually leaves.
+        Job("document_expiry", m5.FLAG_KEY, 86400, runners.run_document_expiry),
     ]
 
 

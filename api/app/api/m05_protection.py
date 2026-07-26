@@ -338,6 +338,83 @@ def revoke(
     return {"revoked": True, "content_hash": shared.content_hash}
 
 
+# --- FR3: the wallet's writer (design-prd §8 camera capture) ---
+class DocumentIn(BaseModel):
+    doc_type: str
+    content_b64: str
+    filename: str | None = None
+    content_type: str | None = None
+    expires_on: str | None = None  # ISO date; meaningful only for credentials
+    stop_id: uuid.UUID | None = None
+
+
+@router.get("/documents/types")
+def document_types(_account: identity.Account = Depends(current_account)) -> dict:
+    """The capture screen offers only what the server will file, and says which of
+    them an expiry date means anything for — a BOL does not expire."""
+    return {"types": m5.DRIVER_DOC_TYPES, "expiring": m5.EXPIRING_DOC_TYPES}
+
+
+@router.post("/documents", status_code=201)
+def capture_document(
+    body: DocumentIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None),
+) -> dict:
+    """The endpoint the Docs tab never had. Until this existed the wallet was a
+    reader with no writer: a vendor could upload a licence through the portal and a
+    driver could not upload their own CDL, so the tab was empty and F6's expiry
+    engine had nothing to count down from."""
+    from datetime import date as _date
+
+    expires_on = None
+    if body.expires_on:
+        try:
+            expires_on = _date.fromisoformat(body.expires_on)
+        except ValueError as exc:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "expiry must be an ISO date"
+            ) from exc
+
+    captured = {}
+
+    def _apply(_env):
+        try:
+            doc = m5.capture_document(
+                db,
+                account.id,
+                body.doc_type,
+                base64.b64decode(body.content_b64),
+                filename=body.filename,
+                content_type=body.content_type,
+                expires_on=expires_on,
+                stop_ref=body.stop_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown document type"
+            ) from exc
+        captured["id"] = str(doc.id)
+
+    # F12: a credential photographed in a dead zone replays exactly once
+    applied = True
+    if idempotency_key:
+        receipt = offline.ingest(
+            db,
+            account.id,
+            idempotency_key,
+            "document_capture",
+            {"doc_type": body.doc_type},
+            datetime.now(UTC),
+            handler=_apply,
+        )
+        applied = receipt.applied
+    else:
+        _apply(None)
+    return {"document_id": captured.get("id"), "applied": applied}
+
+
 # --- FR1: the per-load opt-in (PRD §8.5 "opt-in per load") ---
 class OnTimeConsentIn(BaseModel):
     load_id: uuid.UUID

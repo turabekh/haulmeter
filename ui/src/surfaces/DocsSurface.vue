@@ -1,28 +1,43 @@
 <!-- AI-CONTEXT: Docs tab (design-prd §10.4) — wallet + capture inbox.
 
-     The §10.4 anatomy ends with a capture chip and this surface does not render one.
-     That is deliberate: M5 has no document-upload endpoint, so the chip said "Add
-     document" and pressing it did nothing. §23 settled this exact case for the
-     module registry — a capability whose destination does not exist is LABELLED,
-     never linked — and §22.2's first heuristic is remove rather than add. It returns
-     when there is an upload path for it to reach.
+     The capture chip is back, and the round trip is the point. It shipped as a
+     control with no handler, was removed under §23's registry precedent (a
+     capability whose destination does not exist is labelled, never linked), and
+     returns now that `POST /protection/documents` exists for it to reach. The wallet
+     was a READER with no writer — which is why this tab was empty and why F6's
+     expiry engine had nothing to count down from.
 
      Anatomy at
      360 dp: Inspection-mode button (top, 56 dp, ≤2 taps from cold start, works
      offline) → expiring-soon strip (marker pills) → document grid by type →
-     capture chip REMOVED — see below. S2 dock-task session. Fixture-backed pending live
+     capture chip. S2 dock-task session. Fixture-backed pending live
      /protection/wallet. Doc-type acronyms (CDL/BOL/POD) stay English (§12.3). -->
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { ShieldCheck } from "lucide-vue-next";
+import { ShieldCheck, Plus } from "lucide-vue-next";
 import BottomSheet from "../core/components/BottomSheet.vue";
+import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
 import { useI18n } from "../core/i18n.js";
+import { useDriverState } from "../core/state.js";
 import { fetchWallet } from "../core/api.js";
 import { SAMPLE_WALLET } from "../core/fixtures.js";
 
 const { t } = useI18n();
+const { isDriving } = useDriverState();
 const data = ref(SAMPLE_WALLET);
 const inspecting = ref(false);
+const capturing = ref(false);
+
+async function onCaptured() {
+  // §15.1: sync completion is silent. The wallet simply has the document in it —
+  // the driver watched it arrive, so announcing it again is noise.
+  capturing.value = false;
+  try {
+    data.value = await fetchWallet();
+  } catch {
+    /* queued offline; it appears when the outbox drains */
+  }
+}
 
 onMounted(async () => {
   try {
@@ -82,6 +97,18 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
         <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
       </li>
     </ul>
+
+    <!-- §10.4's capture chip. DRIVING: capture is Forbidden #11 territory, so the
+         chip does not render at speed — a credential photographed at 65 mph is not
+         a credential, it is a hazard. -->
+    <button v-if="!isDriving" class="capture" type="button" @click="capturing = true">
+      <Plus :size="20" :stroke-width="2" aria-hidden="true" />
+      {{ t("docs.add") }}
+    </button>
+
+    <BottomSheet :open="capturing" :title="t('docs.add')" @close="capturing = false">
+      <DocumentCaptureSheet @captured="onCaptured" />
+    </BottomSheet>
 
     <BottomSheet :open="inspecting" :title="t('docs.inspection')" @close="inspecting = false">
       <ul class="grid">

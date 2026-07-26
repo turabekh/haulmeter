@@ -47,14 +47,12 @@ def _retype_misfiled_weighbridges(db, dry_run: bool) -> int:
     creation, exactly as it does the name), so a re-ingest cannot fix these either."""
     retyped = 0
     for fac in db.scalars(
-        select(Facility).where(Facility.status != FacilityStatus.merged).where(
-            Facility.facility_type == FacilityType.repair
-        )
+        select(Facility)
+        .where(Facility.status != FacilityStatus.merged)
+        .where(Facility.facility_type == FacilityType.repair)
     ):
         tags = [(s.attributes or {}).get("osm_tags", {}) for s in fac.sources]
-        if not tags or not all(
-            t.get("amenity") in ("weighbridge", "weigh_station") for t in tags
-        ):
+        if not tags or not all(t.get("amenity") in ("weighbridge", "weigh_station") for t in tags):
             continue
         commercial = any(
             "cat scale"

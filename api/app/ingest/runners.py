@@ -98,6 +98,20 @@ def run_osm(db: Session, geojson_path: str, commit: bool = True) -> facility.Ing
     return stats
 
 
+def run_document_expiry(db: Session, commit: bool = True) -> dict:
+    """M5-FR3's unattended half. F6 computes what is due at 30/14/3; this is the
+    caller F6 deliberately does not have, since a documents service should not know
+    what a notification is."""
+    from app.foundation.f08_notifications import public as notify
+    from app.modules.m05_protection import public as m5
+
+    gateway = notify.RecordingNotificationGateway()
+    sent = m5.dispatch_expiry_reminders(db, gateway)
+    if commit:
+        db.commit()
+    return {"considered": len(sent), "delivered": len(gateway.sent)}
+
+
 def run_eia(db: Session, commit: bool = True) -> dict:
     # weekly EIA regional diesel refresh (M1-FR5). Idempotent upsert per PADD region,
     # so re-running before EIA publishes just rewrites the same week — cadence is

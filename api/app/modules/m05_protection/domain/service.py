@@ -379,3 +379,99 @@ def auto_file_on_arrival(db: Session, stop, account_id, arrived_at=None, gateway
         counterparty_email=consent.counterparty_email if consent else None,
         gateway=gateway if wants_notice else None,
     )
+
+
+# --- FR3: the driver's own documents, in and out ---
+# Which types a DRIVER files themselves. The rest of F6's vocabulary belongs to
+# flows that create documents as a side effect — a lumper receipt comes from M4's
+# claim, a settlement from M9 — and offering them here would invite a driver to file
+# a receipt in the wrong place.
+DRIVER_DOC_TYPES = ["cdl", "med_card", "insurance", "permit", "rate_con", "bol", "pod", "other"]
+# the credentials an expiry date is meaningful for. A BOL does not expire.
+EXPIRING_DOC_TYPES = ["cdl", "med_card", "insurance", "permit"]
+
+
+def capture_document(
+    db: Session,
+    account_id,
+    doc_type: str,
+    content: bytes,
+    filename: str | None = None,
+    content_type: str | None = None,
+    expires_on: date | None = None,
+    stop_ref=None,
+):
+    """AI-CONTEXT: the wallet's missing WRITER.
+
+    The Docs tab has always been a reader: `/protection/wallet` and
+    `/protection/inspection` are both GETs, and no driver-facing endpoint has ever
+    created a document. A cook could upload a business licence through the vendor
+    portal; a driver could not upload their own CDL. That is why the tab was empty,
+    and why the expiry engine had nothing to warn about — F6 counts down from
+    `expires_on`, and nothing a driver did could ever set one.
+    """
+    if doc_type not in DRIVER_DOC_TYPES:
+        raise ValueError(doc_type)
+    return documents.store_document(
+        db,
+        account_id,
+        documents.DocType(doc_type),
+        content,
+        filename=filename,
+        content_type=content_type or "image/jpeg",
+        expires_on=expires_on,
+        # scoped to the stop when one is in play (a BOL belongs to a delivery), and
+        # to the account when it is a credential the driver carries everywhere
+        subject_kind="stop" if stop_ref is not None else "account",
+        subject_ref=stop_ref if stop_ref is not None else account_id,
+    )
+
+
+def expiry_reminders_due(db: Session, as_of: date | None = None) -> list:
+    """What F6 says is due, ordered by PROXIMITY TO EXPIRY.
+
+    The ordering is the whole design. §13.1 allows two unprompted notifications per
+    driver per day; a driver with five credentials at 30/14/3 generates fifteen
+    events, so on a bad day most of them lose. When something has to lose, the thing
+    that survives should be the most urgent — the medical card expiring in three days
+    beats the permit expiring in thirty. Same reasoning settled for vendor alerts in
+    HANDOFF-081: where the cap bites, the nearest wins.
+    """
+    as_of = as_of or datetime.now(UTC).date()
+    due = documents.due_reminders(db, as_of)
+    return sorted(due, key=lambda pair: ((pair[0].expires_on - as_of).days, pair[1]))
+
+
+def dispatch_expiry_reminders(db: Session, gateway, as_of: date | None = None, now=None) -> list:
+    """§13.2 names "doc expires this week" as a P1 example, so these ride the ordinary
+    tier rules — no new notification class, and therefore no §22.2 stop. Every §13
+    law still applies: quiet hours, RESTING, and the two-per-day budget.
+
+    A reminder is marked sent when it is DISPATCHED, not when it is delivered. F8 may
+    suppress it for quiet hours or budget, and re-offering the same 30-day warning
+    every morning until one gets through would be exactly the nagging §13 exists to
+    prevent. The next rung (14, then 3) still comes.
+    """
+    as_of = as_of or datetime.now(UTC).date()
+    now = now or datetime.now(UTC)
+    if gateway is None:
+        return []
+    sent = []
+    for document, offset in expiry_reminders_due(db, as_of):
+        label = document.doc_type.value.replace("_", " ")
+        sent.append(
+            notify.dispatch(
+                db,
+                document.account_id,
+                notify.NotificationTier.P1,
+                "document_expiry",
+                f"{label} expires in {offset} days",
+                f"Renew it before {document.expires_on:%d %b} to stay road-legal.",
+                "/docs",
+                gateway,
+                now=now,
+                subject_ref=str(document.id),
+            )
+        )
+        documents.mark_reminder_sent(db, document, offset)
+    return sent

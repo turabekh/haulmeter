@@ -171,7 +171,11 @@ def _seed_origin(db):
         print(f"DEV origin facilities already present near {lat},{lon}")
         return
     facility.create_facility(
-        db, facility.FacilityType.shipper_receiver, "DEV — Test Shipper", lat + 0.0008, lon,
+        db,
+        facility.FacilityType.shipper_receiver,
+        "DEV — Test Shipper",
+        lat + 0.0008,
+        lon,
         is_dev=True,
     )
     ts = facility.create_facility(
@@ -195,9 +199,7 @@ def _seed_origin(db):
         award=False,
     )
     crowd.update_belief(db, ts.id, crowd.SignalType.parking_fullness, as_of=NOW)
-    owner = identity.register_account(
-        db, f"dev-yard-{NOW.timestamp():.0f}@seed.local", "pw-123456"
-    )
+    owner = identity.register_account(db, f"dev-yard-{NOW.timestamp():.0f}@seed.local", "pw-123456")
     prop = m6.create_property(db, owner.id, "DEV — Test Yard", lat, lon - 0.0009, vetted=True)
     m6.add_spot(db, prop, "D1", price_cents_per_night=1500)
     db.commit()
@@ -207,8 +209,7 @@ def _seed_origin(db):
 def main():
     if os.environ.get("DEV_SEED") != "1":
         print(
-            "seed skipped — DEV_SEED != 1 "
-            "(real POI data comes from F2 ingestion). Use `make seed`."
+            "seed skipped — DEV_SEED != 1 (real POI data comes from F2 ingestion). Use `make seed`."
         )
         return
     db = SessionLocal()

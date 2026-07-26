@@ -945,6 +945,23 @@ export async function shareProtectionPack(kind, ref, recipient = null) {
   return queuedPost(`/protection/${kind}/${ref}/share`, { recipient });
 }
 
+// M5-FR3's missing writer. Queued like every other capture (§15.1) — a credential
+// photographed at a scale house with no signal is exactly the case this exists for.
+export async function captureDocument({ docType, contentB64, filename, contentType, expiresOn, stopId } = {}) {
+  return queuedPost("/protection/documents", {
+    doc_type: docType,
+    content_b64: contentB64,
+    filename: filename ?? null,
+    content_type: contentType ?? null,
+    expires_on: expiresOn || null,
+    stop_id: stopId ?? null,
+  });
+}
+
+export async function fetchDocumentTypes() {
+  return apiGet("/protection/documents/types", "doc_types");
+}
+
 export async function suggestACook(lat, lon) {
   // Q-7: the empty state's affordance records WHERE drivers want food — the demand
   // half of the vendor recruitment loop. Queued offline like any other contribution.
