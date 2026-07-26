@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility_registry
+from app.foundation.f03_location import public as location
 from app.foundation.f06_documents import public as documents
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f10_crowd import public as crowd
@@ -67,6 +68,23 @@ NO_SHOW_STRIKES = 3
 DEDUP_NAME_SIMILARITY = 0.55
 
 VENDOR_ALERT = notify.VENDOR_ALERT_CLASS
+
+# AI-CONTEXT: what makes `route_relevant_only` TRUE rather than merely declared.
+#
+# The class has always claimed route relevance while nothing enforced it — the code
+# said so plainly, because no per-driver route feed exists and prior-confirmation was
+# standing in for both consent AND geography. A follow supplies real consent, which
+# removes that stand-in: following a cook in Dallas must not push to a driver in
+# Ohio. So relevance becomes an explicit gate on the driver's own last known
+# position, and its two numbers are F13 config rather than constants.
+#
+# 240 km: a day's driving is 800+, so a cook this side of that is plausibly reachable
+# and one beyond it is not. 6 hours: a driver mid-shift can be 400 km from a ping
+# older than that, which would make the gate measure a place they have left.
+CONFIG_FOLLOW_RADIUS_M = "m13_follow_radius_m"
+DEFAULT_FOLLOW_RADIUS_M = 240_000
+CONFIG_FOLLOW_PING_MAX_AGE_S = "m13_follow_ping_max_age_s"
+DEFAULT_FOLLOW_PING_MAX_AGE_S = 6 * 3600
 
 
 class VendorNotFound(Exception):
@@ -359,6 +377,7 @@ def publish_appearance(
     property_approved: bool = False,
     weekly: list[int] | None = None,
     now: datetime | None = None,
+    gateway=None,
 ) -> list[Appearance]:
     """Q-4 publish floor + Q-2 suspension gate. A weekly schedule materializes
     concrete occurrences over the horizon; a one-off returns a single row."""
@@ -409,6 +428,11 @@ def publish_appearance(
 
     vendor.last_published_at = now
     db.flush()
+    # only the FIRST occurrence of a series is announced. A weekly schedule creates
+    # many rows and the driver asked about a cook, not about a calendar — one push
+    # per publish, not one per Tuesday between now and the horizon.
+    if created and gateway is not None:
+        notify_published(db, created[0], gateway, now=now)
     return created
 
 
@@ -466,17 +490,11 @@ def notify_cancelled(db: Session, appearance: Appearance, gateway, now=None) -> 
     now = now or datetime.now(UTC)
     vendor = db.get(Vendor, appearance.vendor_id)
     facility = facility_registry.get_facility(db, appearance.facility_id)
-    interested = db.scalars(
-        select(crowd.Submission.account_id)
-        .where(
-            crowd.Submission.subject_ref == str(appearance.vendor_id),
-            crowd.Submission.signal_type == crowd.SignalType.vendor_present,
-            crowd.Submission.account_id.is_not(None),
-        )
-        .distinct()
-    )
+    # followers FIRST: someone who asked to hear about this cook has a stronger claim
+    # on the one daily slot than someone who once tapped "here now" and moved on.
+    audience = _relevant_audience(db, appearance, followers_first=True, now=now)
     sent = []
-    for account_id in interested:
+    for account_id in audience:
         sent.append(
             notify.dispatch(
                 db,
@@ -485,6 +503,108 @@ def notify_cancelled(db: Session, appearance: Appearance, gateway, now=None) -> 
                 VENDOR_ALERT,
                 f"{vendor.name} cancelled",
                 f"Not at {facility.name if facility else 'the stop'} tonight",
+                f"/vendor/{vendor.id}",
+                gateway,
+                now=now,
+                subject_ref=str(vendor.id),
+            )
+        )
+    return sent
+
+
+def follow_vendor(db: Session, account_id, vendor_id) -> None:
+    """Following is consent to be told, never permission to be told more. Every cap
+    the class declares still applies — see F8's `follow_subject` for what one tap
+    changes and why it changes all three things at once."""
+    notify.follow_subject(db, account_id, VENDOR_ALERT, str(vendor_id))
+
+
+def unfollow_vendor(db: Session, account_id, vendor_id) -> None:
+    notify.unfollow_subject(db, account_id, VENDOR_ALERT, str(vendor_id))
+
+
+def is_following_vendor(db: Session, account_id, vendor_id) -> bool:
+    return notify.is_following(db, account_id, VENDOR_ALERT, str(vendor_id))
+
+
+def _past_confirmers(db: Session, vendor_id) -> list:
+    return list(
+        db.scalars(
+            select(crowd.Submission.account_id)
+            .where(
+                crowd.Submission.subject_ref == str(vendor_id),
+                crowd.Submission.signal_type == crowd.SignalType.vendor_present,
+                crowd.Submission.account_id.is_not(None),
+            )
+            .distinct()
+        )
+    )
+
+
+def _relevant_audience(
+    db: Session, appearance: Appearance, followers_first: bool = False, now=None
+) -> list:
+    """Who is close enough for this to be worth an interruption, nearest first.
+
+    Two rules do the work. **A stale ping is not a location**, so a driver F3 cannot
+    currently place is dropped rather than guessed at — the notification simply is
+    not relevant enough to spend a scarce budget on. And the survivors are ordered by
+    distance, because the class allows ONE push per driver per day: when several
+    followed cooks publish on the same day, the one that gets through should be the
+    nearest rather than whichever the loop happened to reach first.
+    """
+    now = now or datetime.now(UTC)
+    radius = float(_config_int(db, CONFIG_FOLLOW_RADIUS_M, DEFAULT_FOLLOW_RADIUS_M))
+    max_age = timedelta(
+        seconds=_config_int(db, CONFIG_FOLLOW_PING_MAX_AGE_S, DEFAULT_FOLLOW_PING_MAX_AGE_S)
+    )
+    followers = notify.followers_of(db, VENDOR_ALERT, str(appearance.vendor_id))
+    candidates = list(followers)
+    if not followers_first:
+        candidates = list(dict.fromkeys(candidates))
+    else:
+        for account_id in _past_confirmers(db, appearance.vendor_id):
+            if account_id not in candidates:
+                candidates.append(account_id)
+
+    scored = []
+    for account_id in candidates:
+        where = location.last_known_position(db, account_id, max_age, now=now)
+        if where is None:
+            continue  # cannot place them: stay quiet rather than guess
+        distances = facility_registry.facility_distances(
+            db, [appearance.facility_id], where[0], where[1]
+        )
+        metres = distances.get(appearance.facility_id)
+        if metres is None or metres > radius:
+            continue
+        scored.append((metres, account_id))
+    scored.sort(key=lambda pair: pair[0])
+    return [account_id for _, account_id in scored]
+
+
+def notify_published(db: Session, appearance: Appearance, gateway, now=None) -> list:
+    """A followed cook published somewhere a driver can actually reach. This is the
+    event the food loop was missing: everything before it could only tell a driver
+    about a cook they had already found for themselves."""
+    now = now or datetime.now(UTC)
+    if gateway is None:
+        return []
+    vendor = db.get(Vendor, appearance.vendor_id)
+    if vendor is None or not is_presentable(vendor):
+        return []
+    facility = facility_registry.get_facility(db, appearance.facility_id)
+    when = appearance.starts_at
+    sent = []
+    for account_id in _relevant_audience(db, appearance, now=now):
+        sent.append(
+            notify.dispatch(
+                db,
+                account_id,
+                notify.NotificationTier.P1,
+                VENDOR_ALERT,
+                f"{vendor.name} published",
+                f"{facility.name if facility else 'A stop'} · {when:%a} from {when:%H:%M}",
                 f"/vendor/{vendor.id}",
                 gateway,
                 now=now,

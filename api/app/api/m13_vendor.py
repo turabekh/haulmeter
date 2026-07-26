@@ -249,6 +249,9 @@ def vendor_sheet(
         # and "95%" over two appearances would overstate what we actually know
         "shows_up": {"confirmed": score.confirmed, "published": score.published},
         "in_discovery": detail["in_discovery"],
+        # so the sheet can render "Following" rather than offering to follow again
+        "following": m13.is_following_vendor(db, account.id, vendor.id),
+        "alerts_on": notify.is_opted_in(db, account.id, m13.VENDOR_ALERT),
         "appearances": _entries_out(detail["appearances"], db),
         # FR5: the raw pair again — `reviewers` is the honest denominator, and an
         # average without it invites overreading a handful of opinions (§11.7)
@@ -342,6 +345,39 @@ def mute_vendor(
     return {"muted": pref.muted_subjects}
 
 
+# AI-CONTEXT: following. One tap does three things (see F8 `follow_subject`): records
+# the vendor, opts the class in, and clears any older mute on it. The response
+# reports the class state back so the UI can SAY that alerts are now on rather than
+# leaving the driver to discover it.
+@router.post("/{vendor_id}/follow")
+def follow_vendor(
+    vendor_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_active(db)
+    if m13.resolve_vendor(db, vendor_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    m13.follow_vendor(db, account.id, vendor_id)
+    return {"following": True, "alerts_on": True}
+
+
+@router.delete("/{vendor_id}/follow")
+def unfollow_vendor(
+    vendor_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    _require_active(db)
+    m13.unfollow_vendor(db, account.id, vendor_id)
+    # unfollowing one cook never switches the whole class off — that is a separate,
+    # louder choice and making it for someone would take away alerts they still want
+    return {
+        "following": False,
+        "alerts_on": notify.is_opted_in(db, account.id, m13.VENDOR_ALERT),
+    }
+
+
 # --- Vendor side (the Session-B portal will sit on these) ---
 @router.post("/register", status_code=201)
 def register(
@@ -382,6 +418,7 @@ def publish(
 ) -> dict:
     _require_active(db)
     vendor = _my_vendor(db, account)
+    gateway = notify.RecordingNotificationGateway()
     try:
         created = m13.publish_appearance(
             db,
@@ -392,6 +429,7 @@ def publish(
             [m13.OfferingIn(o.name, o.price_cents, o.portions) for o in body.offerings],
             property_approved=body.property_approved,
             weekly=body.weekly,
+            gateway=gateway,
         )
     except m13.ListingIncomplete as exc:
         # Q-4: name exactly what is missing so the vendor can fix it in one pass

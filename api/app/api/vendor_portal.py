@@ -348,6 +348,10 @@ def create_appearance(
     offerings = [m13.OfferingIn(o.name, o.price_cents, o.portions) for o in body.offerings]
     if body.menu_item_ids is not None:
         offerings += m13.menu_as_offerings(db, vendor.id, body.menu_item_ids or None)
+    # followers of this cook who are close enough to act on it hear about the
+    # publish. Every vendor_alert cap still applies — the gateway only decides that
+    # the event happened, never that anyone may be interrupted by it.
+    gateway = notify.RecordingNotificationGateway()
     try:
         created = m13.publish_appearance(
             db,
@@ -358,6 +362,7 @@ def create_appearance(
             offerings,
             property_approved=body.property_approved,
             weekly=body.weekly,
+            gateway=gateway,
         )
     except m13.ListingIncomplete as exc:
         raise HTTPException(
@@ -376,7 +381,13 @@ def create_appearance(
         None,
         {"appearance_ids": [str(a.id) for a in created], "facility_id": str(body.facility_id)},
     )
-    return {"appearance_ids": [str(a.id) for a in created]}
+    # what ACTUALLY went out, not what was attempted — the same honesty the
+    # promotions screen already applies, since the vendor_alert caps suppress some
+    # sends and a vendor should never be told a push landed when it did not
+    return {
+        "appearance_ids": [str(a.id) for a in created],
+        "followers_notified": len(gateway.sent),
+    }
 
 
 @router.delete("/appearances/{appearance_id}")

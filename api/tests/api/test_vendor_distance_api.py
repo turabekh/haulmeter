@@ -146,3 +146,50 @@ def test_a_filter_still_cannot_reorder_anything(client, active, db):
         r["name"] for r in _search(client, driver, lat=MADISON[0], lon=MADISON[1], language="en")
     ]
     assert narrowed == [n for n in everyone if n in narrowed]
+
+
+# --- following through the API ---
+def test_following_reports_that_it_turned_alerts_on(client, active, db):
+    """The response says `alerts_on` because one tap changed something the driver
+    did not explicitly ask for in those words — the UI has to be able to say so
+    rather than leave them to discover it."""
+    headers, fac = _cook(client, db, "Anas Tamales", *MADISON)
+    driver = _account(client, "follower-a@example.com")
+    vendor_id = _search(client, driver)[0]["vendor_id"]
+
+    resp = client.post(f"/vendors/{vendor_id}/follow", headers=driver)
+    assert resp.status_code == 200
+    assert resp.json() == {"following": True, "alerts_on": True}
+
+    sheet = client.get(f"/vendors/{vendor_id}", headers=driver).json()
+    assert sheet["following"] is True
+    assert sheet["alerts_on"] is True
+
+
+def test_unfollowing_leaves_the_class_on(client, active, db):
+    headers, fac = _cook(client, db, "Anas Tamales", *MADISON)
+    driver = _account(client, "follower-b@example.com")
+    vendor_id = _search(client, driver)[0]["vendor_id"]
+    client.post(f"/vendors/{vendor_id}/follow", headers=driver)
+
+    resp = client.delete(f"/vendors/{vendor_id}/follow", headers=driver)
+    # dropping one cook is not leaving the class — that is a separate, louder choice
+    assert resp.json() == {"following": False, "alerts_on": True}
+    assert client.get(f"/vendors/{vendor_id}", headers=driver).json()["following"] is False
+
+
+def test_following_a_vendor_that_does_not_exist_is_a_404(client, active, db):
+    driver = _account(client, "follower-c@example.com")
+    missing = "11111111-2222-3333-4444-555555555555"
+    assert client.post(f"/vendors/{missing}/follow", headers=driver).status_code == 404
+
+
+def test_a_sheet_read_by_a_stranger_reports_not_following(client, active, db):
+    _cook(client, db, "Anas Tamales", *MADISON)
+    driver = _account(client, "follower-d@example.com")
+    stranger = _account(client, "stranger@example.com")
+    vendor_id = _search(client, driver)[0]["vendor_id"]
+    client.post(f"/vendors/{vendor_id}/follow", headers=driver)
+
+    # following is per-account, never a property of the vendor
+    assert client.get(f"/vendors/{vendor_id}", headers=stranger).json()["following"] is False
