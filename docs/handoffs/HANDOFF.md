@@ -3,7 +3,7 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-084.md](HANDOFF-084.md)** — read this first, every session.
+➡️ **[HANDOFF-085.md](HANDOFF-085.md)** — read this first, every session.
 
 Each session ends by writing the next `HANDOFF-<n>.md` in this directory and updating
 this pointer to it. Full history is here in `docs/handoffs/`; the Session-0 bootstrap
