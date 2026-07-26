@@ -1,5 +1,9 @@
 # HANDOFF-090 — the Load tab, and the primary path that lived only in a test
 
+> **SUPERSEDED by [HANDOFF-091.md](HANDOFF-091.md).** This was written mid-session and then had
+> §12–§14 appended as the session continued. 091 consolidates it; this is kept as the record of the
+> intermediate state.
+
 **Project:** Haulmeter — Consolidated Trucker Platform (mobile-first, driver pays $0).
 **Date:** 26 July 2026 · **Stack:** UP (api :8008 · ui :9008 · worker · postgres :5438 · redis · minio · mailpit).
 
