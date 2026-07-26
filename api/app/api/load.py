@@ -154,7 +154,8 @@ def meter(
 ) -> dict:
     stop = _owned_stop(db, stop_id, account)
     fac = facility.get_facility(db, stop.facility_id)
-    cp = loads.get_counterparty(db, loads.get_load(db, stop.load_id).counterparty_id)
+    load = loads.get_load(db, stop.load_id)
+    cp = loads.get_counterparty(db, load.counterparty_id) if load else None
     free_time, rate = loads.effective_detention_terms(db, stop)
     claim = m3.claim_for_stop(db, stop.id)
     arrived = location.is_present(db, account.id, stop.facility_id)
@@ -201,6 +202,12 @@ def meter(
         # the checklist rendered an unconditional tick for the BOL. A checklist that
         # always says yes is decoration.
         "bol_captured": m5.has_bol(db, stop.id),
+        # M5-FR1: a driver can only protect themselves from a MIS-PARSED appointment
+        # if they can see the window before they arrive AND tell whether a machine
+        # read it. A value typed by hand carries different confidence from one an
+        # OCR pass produced, and only the driver knows which is right.
+        "appointment_end": stop.appointment_end.isoformat() if stop.appointment_end else None,
+        "appointment_source": load.source.value if load is not None else None,
     }
 
 

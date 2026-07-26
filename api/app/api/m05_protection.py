@@ -305,6 +305,25 @@ def share(
     }
 
 
+@router.post("/share/{share_id}/extend")
+def extend(
+    share_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """A dispute outlives an AP cycle. The driver decides when their evidence stops
+    being reachable, because they are the only party who knows the claim is still
+    running (see f04 sharing for the cadence this was measured against)."""
+    shared = db.get(evidence.SharedPack, share_id)
+    if shared is None or shared.shared_by != account.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "share not found")
+    evidence.extend_share(db, shared)
+    return {
+        "share_id": str(shared.id),
+        "expires_at": shared.expires_at.isoformat() if shared.expires_at else None,
+    }
+
+
 @router.delete("/share/{share_id}")
 def revoke(
     share_id: uuid.UUID,

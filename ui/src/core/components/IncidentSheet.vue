@@ -23,14 +23,19 @@ const done = ref(null); // "filed" | "queued" once submitted
 async function submit() {
   if (!kind.value || busy.value) return;
   busy.value = true;
+  // the server's id for what was filed. It was dropped on the floor, so the pack it
+  // produced could never be opened again — carrying it is what gives FR4 a route.
+  // A queued incident has no id yet; the caller must handle that rather than assume.
+  let incidentId = null;
   try {
     const res = await fileIncident(kind.value, note.value.trim() || null);
     done.value = res && res.queued ? "queued" : "filed";
+    incidentId = res?.incident_id ?? null;
   } catch {
     done.value = "queued"; // treat a server hiccup as saved-locally; never lose it
   } finally {
     busy.value = false;
-    emit("filed", { kind: kind.value, state: done.value });
+    emit("filed", { kind: kind.value, state: done.value, incident_id: incidentId });
   }
 }
 </script>

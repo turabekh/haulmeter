@@ -157,3 +157,67 @@ def test_two_shares_of_the_same_unchanged_pack_have_the_same_hash(db, storage):
 
     assert first.content_hash == second.content_hash
     assert first.token != second.token
+
+
+def test_a_link_can_be_extended_because_disputes_outlive_ap_cycles(db, storage):
+    """M3's dunning runs to day 21 and that is only the escalation OFFER; partner
+    collection follows and PRD §8.3 prices it for aged accounts. A link dying
+    mid-collection makes the driver look like they withdrew their evidence."""
+    account = _account(db, "extend@example.com")
+    log, pack = _log_with_pack(db, account)
+    shared = evidence.share_pack(
+        db, log, pack.template, evidence.render_pack_pdf(pack), account.id, storage=storage
+    )
+    original = shared.expires_at
+
+    evidence.extend_share(db, shared, days=500)
+
+    assert shared.expires_at > original
+    assert evidence.open_share(db, shared.token, storage=storage)
+
+
+def test_extend_never_shortens_a_link(db, storage):
+    """Caught by a failing test: with the default at a year, extend(days=180) moved
+    the expiry CLOSER. A function called extend that can cut a link short is a trap
+    for its next caller."""
+    account = _account(db, "noshorten@example.com")
+    log, pack = _log_with_pack(db, account)
+    shared = evidence.share_pack(
+        db, log, pack.template, evidence.render_pack_pdf(pack), account.id, storage=storage
+    )
+    original = shared.expires_at
+
+    evidence.extend_share(db, shared, days=1)
+
+    assert shared.expires_at == original
+
+
+def test_extending_counts_from_now_not_from_a_date_already_past(db, storage):
+    account = _account(db, "lapsed@example.com")
+    log, pack = _log_with_pack(db, account)
+    shared = evidence.share_pack(
+        db, log, pack.template, evidence.render_pack_pdf(pack), account.id, storage=storage
+    )
+    shared.expires_at = datetime(2020, 1, 1, tzinfo=UTC)  # long lapsed
+    db.flush()
+
+    evidence.extend_share(db, shared, days=30)
+
+    # "keep it alive" must mean 30 days from today, not 30 days from 2020
+    assert shared.expires_at > datetime.now(UTC)
+
+
+def test_extending_does_not_resurrect_a_revoked_link(db, storage):
+    """Revocation was about intent; extension is about time. One must not undo the
+    other by accident."""
+    account = _account(db, "revoked-extend@example.com")
+    log, pack = _log_with_pack(db, account)
+    shared = evidence.share_pack(
+        db, log, pack.template, evidence.render_pack_pdf(pack), account.id, storage=storage
+    )
+    evidence.revoke_share(db, shared)
+
+    evidence.extend_share(db, shared, days=90)
+
+    with pytest.raises(evidence.ShareNotFound):
+        evidence.open_share(db, shared.token, storage=storage)

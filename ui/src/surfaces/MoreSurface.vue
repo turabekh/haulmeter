@@ -7,12 +7,14 @@ import { ref, reactive, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { Check } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
+import { useTheme } from "../core/theme.js";
 import { LAUNCH_LOCALES } from "../core/i18n/index.js";
 import { email, logout, fetchPoints, fetchMe, verifyAuthority, saveEquipment, setFoodAlerts } from "../core/api.js";
 import { SAMPLE_POINTS } from "../core/fixtures.js";
 
 const router = useRouter();
 const { t, locale, setLocale } = useI18n();
+const { mode, setMode, modes } = useTheme();
 const points = ref(SAMPLE_POINTS);
 
 // F1: operating-authority verification (FMCSA). Section only appears when the
@@ -148,6 +150,29 @@ function signOut() {
           >
             <span class="lang__name">{{ LANG_NAMES[code] }}</span>
             <Check v-if="locale === code" :size="18" :stroke-width="2.5" class="lang__tick" aria-hidden="true" />
+          </button>
+        </li>
+      </ul>
+    </section>
+
+    <!-- AI-CONTEXT: §6.1 C-3 — "toggled by system setting + manual override". The
+         override had no control anywhere in the app, so light was reachable only by
+         changing the operating system. Same shape as the language rows beside it:
+         chips, not a dropdown (§8 forms — chips when ≤5 options), and the choice
+         persists like the locale does. -->
+    <section class="card">
+      <h2 class="card__title">{{ t("more.appearance") }}</h2>
+      <ul class="langs">
+        <li v-for="m in modes" :key="m">
+          <button
+            class="theme-opt"
+            :class="{ 'lang--on': mode === m }"
+            type="button"
+            :aria-pressed="mode === m"
+            @click="setMode(m)"
+          >
+            <span class="lang__name">{{ t(`more.theme.${m}`) }}</span>
+            <Check v-if="mode === m" :size="18" :stroke-width="2.5" class="lang__tick" aria-hidden="true" />
           </button>
         </li>
       </ul>
@@ -316,7 +341,8 @@ function signOut() {
   display: flex;
   flex-direction: column;
 }
-.lang {
+.lang,
+.theme-opt {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -330,7 +356,8 @@ function signOut() {
   text-align: left;
   cursor: pointer;
 }
-.langs li:first-child .lang {
+.langs li:first-child .lang,
+.theme-opt {
   border-top: none;
 }
 .lang__name {

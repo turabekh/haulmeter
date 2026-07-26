@@ -7,5 +7,7 @@ import "./core/app-shell.scss";
 import { createApp } from "vue";
 import App from "./App.vue";
 import { createAppRouter } from "./router.js";
+import { initTheme } from "./core/theme.js";
 
+initTheme(); // §6.1 C-3: a stored override wins over the system setting, from boot
 createApp(App).use(createAppRouter()).mount("#app");

@@ -37,6 +37,11 @@ const busy = ref(false);
 const queued = ref(false);
 const shareUrl = ref(null);
 
+// AI-CONTEXT: this surface serves both pack kinds. Condition packs key on the STOP;
+// an incident keys on the incident itself, which is why the id in the path means
+// different things and the kind has to come with it rather than be guessed.
+const packKind = () => (useRoute().query.kind === "incident" ? "incident" : "condition");
+
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
@@ -82,7 +87,7 @@ const time = (iso) => (iso ? iso.slice(11, 16) : "");
 async function openExport() {
   busy.value = true;
   try {
-    const url = await exportProtectionPack("condition", route.params.stopId);
+    const url = await exportProtectionPack(packKind(), route.params.stopId);
     if (url && typeof window !== "undefined") window.open(url, "_blank");
   } catch {
     /* offline: the export is a live render and needs the server. Nothing to queue —
@@ -96,7 +101,7 @@ async function openExport() {
 async function doShare() {
   busy.value = true;
   try {
-    const res = await shareProtectionPack("condition", route.params.stopId, recipient.value || null);
+    const res = await shareProtectionPack(packKind(), route.params.stopId, recipient.value || null);
     // §15.1: a queued share is stated once, quietly, and its completion is silent
     queued.value = res?.queued === true;
     shareUrl.value = res?.url ?? null;

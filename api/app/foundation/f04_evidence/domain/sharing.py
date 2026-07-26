@@ -37,10 +37,22 @@ from app.foundation.f13_flags import public as flags
 from .enums import RecordType
 from .models import EvidenceLog, SharedPack
 
-# A broker's AP cycle runs 30–60 days and a dispute can outlive it, so a link that
-# dies at 30 would expire at exactly the wrong moment. 90 is F13-tunable.
+# AI-CONTEXT: how long a shared pack stays reachable, and why 90 was not enough.
+#
+# Measured against what actually happens to a claim: M3's own dunning runs day 3,
+# day 10, day 21 — and day 21 is only the ESCALATION OFFER, after which M3-FR7 hands
+# the claim to a licensed collection partner. PRD §8.3 prices partner work at
+# "25–30% … higher for aged/complex accounts", so the business model itself assumes
+# escalated claims run long. A link dying at 90 days can therefore expire in the
+# middle of partner collection — and when it does, the counterparty's copy of the
+# evidence evaporates and the driver looks like they withdrew it.
+#
+# So the default covers a realistic dispute rather than an AP cycle, and the driver
+# can EXTEND. Extension is deliberately the driver's act, not an automatic one: F4 is
+# foundation and cannot ask M3 whether a claim is still live, and a seam built for a
+# caller that does not exist yet is the bug class this project keeps producing.
 CONFIG_SHARE_DAYS = "f04_share_link_days"
-DEFAULT_SHARE_DAYS = 90
+DEFAULT_SHARE_DAYS = 365
 
 
 class ShareNotFound(Exception):
@@ -136,6 +148,30 @@ def open_share(db: Session, token: str, now: datetime | None = None, storage=Non
             )
     db.flush()
     return storage.get(shared.storage_key)
+
+
+def extend_share(db: Session, shared: SharedPack, days: int | None = None, now=None) -> SharedPack:
+    """Push the expiry out from NOW, not from the old date — a driver extending a link
+    that lapsed yesterday means "keep it alive", and counting from a date already past
+    would grant less time than they asked for.
+
+    It also never SHORTENS, which a first draft of this did: with the default at a
+    year, `extend(days=180)` moved the expiry closer and a test caught it. A function
+    called extend that can cut a link short is a trap for its next caller, so the
+    later of the two dates wins.
+
+    Revoked links stay revoked: extending is about time, revocation was about intent,
+    and one must not quietly undo the other."""
+    now = now or datetime.now(UTC)
+    if shared.revoked_at is not None:
+        return shared
+    proposed = now + timedelta(days=days or _share_days(db))
+    current = shared.expires_at
+    if current is not None and current.tzinfo is None:
+        current = current.replace(tzinfo=UTC)
+    shared.expires_at = proposed if current is None or proposed > current else current
+    db.flush()
+    return shared
 
 
 def revoke_share(db: Session, shared: SharedPack, now: datetime | None = None) -> SharedPack:

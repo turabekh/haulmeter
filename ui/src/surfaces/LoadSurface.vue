@@ -39,9 +39,18 @@ const now = ref(Date.now());
 const starting = ref(false);
 const reporting = ref(false); // incident sheet open
 const incidentToast = ref("");
+// the last incident filed in this session, so its pack has a route (FR4)
+const lastIncidentId = ref(null);
 function onIncidentFiled(e) {
-  // the incident is logged to the F4 evidence chain; confirm it clearly and close
+  // AI-CONTEXT: M5-FR4 — the pack was unreachable the moment this toast faded.
+  //
+  // The incident id arrived in this event and nothing kept it, so a filed incident
+  // could never be opened, exported or shared again from the app. Holding it turns
+  // the confirmation into a route: file, then look at what you filed. No new
+  // navigation structure — the same evidence surface the condition packs use, with
+  // the kind carried in the query (§22.2: navigation structure is never-improvise).
   reporting.value = false;
+  lastIncidentId.value = e.incident_id ?? null;
   incidentToast.value = e.state === "queued" ? t("incident.queued") : t("incident.logged");
   setTimeout(() => (incidentToast.value = ""), 3500);
 }
@@ -115,6 +124,31 @@ const photosDone = computed(
 // decoration — and the honest answer for most stops today is "not yet", which is
 // exactly what FR5 is for.
 const bolCaptured = computed(() => live.value?.bol_captured === true);
+
+// AI-CONTEXT: M5-FR1's protection is the WINDOW, not the verdict.
+//
+// The verdict arrives after the fact and is a post-mortem. The failure this FR
+// exists to prevent is a mis-parsed appointment silently costing a driver a
+// protection they believe they have — and that is only correctable while they are
+// still approaching, by ringing the broker. So the window is shown BEFORE arrival,
+// with where the value came from: a machine read of a rate con and a value typed by
+// hand carry different confidence, and only the driver knows which is right.
+//
+// There is deliberately no edit control. F5 owns `Stop.appointment_*`, and M5
+// building a load-field editor would cross a foundation boundary. Logged as F5 debt.
+function hm(iso) {
+  return iso ? iso.slice(11, 16) : null;
+}
+const apptWindow = computed(() => {
+  const start = hm(live.value?.appointment);
+  const end = hm(live.value?.appointment_end);
+  if (!start) return null;
+  return end ? `${start}–${end}` : start;
+});
+const apptSourceKey = computed(() => {
+  const src = live.value?.appointment_source;
+  return src ? `load.appt_from.${src}` : null;
+});
 
 const state = computed(() =>
   computeDetentionState(arrivalMs.value ?? now.value, freeMin.value, rateCents.value, now.value),
@@ -219,6 +253,12 @@ async function endLoad() {
       <div class="context">
         <span class="context__name">{{ stopName }}</span>
         <span class="context__meta">{{ stopMeta }}</span>
+        <!-- the window, early, in Mono like every other time figure (T-2) -->
+        <span v-if="apptWindow" class="context__appt">
+          {{ t("load.appointment") }}
+          <span class="context__window">{{ apptWindow }}</span>
+        </span>
+        <span v-if="apptSourceKey" class="context__source">{{ t(apptSourceKey) }}</span>
       </div>
 
       <section class="card">
@@ -290,6 +330,16 @@ async function endLoad() {
       </button>
 
       <!-- M5-FR4: log an incident (damage / refusal / unsafe) for the active stop -->
+      <!-- FR4: what you just filed is one tap away while it is still on your mind.
+           Same evidence surface the condition packs use; the kind rides the query. -->
+      <button
+        v-if="lastIncidentId"
+        class="cta cta--text"
+        type="button"
+        @click="router.push(`/load/${lastIncidentId}/evidence?kind=incident`)"
+      >
+        {{ t("incident.view") }}
+      </button>
       <button v-if="live" class="cta cta--text" type="button" @click="reporting = true">
         {{ t("incident.title") }}
       </button>
@@ -422,6 +472,22 @@ async function endLoad() {
   gap: var(--s-3);
 }
 /* the count is a figure, so it is Mono and tabular like every other figure (T-2) */
+.context__appt {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-size: var(--type-body-size);
+  color: var(--text-2);
+}
+.context__window {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+}
+.context__source {
+  font-size: var(--type-caption-size);
+  color: var(--text-3);
+}
 .checklist__count {
   margin-left: auto;
   font-family: var(--font-mono);
