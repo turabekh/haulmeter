@@ -2,9 +2,15 @@
 
 One flow, exercising F1–F9 + F12 through their public interfaces only: a test
 driver with a parsed rate con is geofence-armed at a seeded facility, generates
-a hash-chain-valid evidence pack offline, syncs it idempotently, and triggers a
-templated (English) counterparty email with a ledger receivable opened. If this
+a hash-chain-valid evidence pack PDF offline, syncs it idempotently, and triggers
+a templated (English) counterparty email with a ledger receivable opened. If this
 stays green, the Common Ground holds together as a product, not just as parts.
+
+The word PDF in that sentence is load-bearing and was missing for a while. §7.16(b)
+has always asked for the artifact, not for the dataclass behind it; the assertion
+had relaxed to `chain_valid` on a composed structure, which meant the Foundation
+DoD was signed off against something a broker could not open. It renders again, and
+this docstring says so, so the next person to relax it has to do it in writing.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -108,6 +114,26 @@ def test_common_ground_synthetic_end_to_end(db):
     pack = evidence.compose_pack(db, log, evidence.PackTemplate.detention_claim)
     assert pack.verification["chain_valid"] is True
     assert pack.verification["anchored"] is True
+
+    # ...and §7.16(b) asks for a PDF, so render the real artifact (design-prd §17).
+    # No network, no fonts fetched, no tile server: it renders from the chain alone,
+    # which is what "offline" in the DoD sentence has to mean.
+    artifact = evidence.render_pack_pdf(
+        pack,
+        evidence.PackContext(
+            parties=[("Carrier", "Owner Operator LLC"), ("Broker", "Acme Logistics")],
+            references=[("Load", str(load.id)[:8]), ("Stop", str(stop.id)[:8])],
+            meter=[("Total detention", "3:00:00"), ("Amount", "$225.00")],
+            facility_name="Dallas Receiving",
+        ),
+    )
+    assert artifact[:5] == b"%PDF-"
+    assert artifact.rstrip().endswith(b"%%EOF")
+    # the verification block a third party acts on, and the parties they check
+    assert b"Hash chain intact" in artifact
+    assert b"Acme Logistics" in artifact
+    # rendering is deterministic: the same chain is the same document (PRD §11)
+    assert evidence.render_pack_pdf(pack) == evidence.render_pack_pdf(pack)
 
     # F12 — the claim pack is captured offline and synced idempotently (once)
     key = f"claim-pack-{stop.id}"

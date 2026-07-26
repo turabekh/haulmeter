@@ -159,9 +159,14 @@ def test_anchor_empty_log_raises(db):
         evidence.anchor_chain(db, log)
 
 
-def test_pdf_render_is_a_seam(db):
+def test_pdf_render_is_no_longer_a_seam(db):
+    """This test used to assert the OPPOSITE — that rendering raised
+    `RenderNotEnabled` — which is how a seam quietly becomes permanent. PRD §7.16(b)
+    has always required the Foundation e2e to produce an evidence pack PDF; the
+    renderer now exists, so the test that documented its absence is inverted rather
+    than deleted, leaving the record of what changed. Anatomy is covered in
+    `test_render.py`."""
     log = _log(db)
     evidence.append_record(db, log, evidence.RecordType.SYSTEM, {"i": 0}, T0)
     pack = evidence.compose_pack(db, log, evidence.PackTemplate.cargo_condition)
-    with pytest.raises(evidence.RenderNotEnabled):
-        evidence.render_pack_pdf(pack)
+    assert evidence.render_pack_pdf(pack)[:5] == b"%PDF-"

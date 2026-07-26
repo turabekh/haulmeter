@@ -7,10 +7,10 @@ survive a dispute. Consumed by M3, M4, M5, M9, M12.
 
 from .domain.enums import ArtifactType, PackTemplate, RecordType
 from .domain.models import ChainAnchor, EvidenceArtifact, EvidenceLog, EvidenceRecord
+from .domain.render import PackContext
 from .domain.service import (
     ChainVerification,
     EvidencePack,
-    RenderNotEnabled,
     anchor_chain,
     append_record,
     attach_artifact,
@@ -32,7 +32,7 @@ __all__ = [
     "RecordType",
     "ChainVerification",
     "EvidencePack",
-    "RenderNotEnabled",
+    "PackContext",
     "anchor_chain",
     "append_record",
     "attach_artifact",

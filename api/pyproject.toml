@@ -17,6 +17,11 @@ dependencies = [
     "minio>=7.2",
     "tzdata>=2024.2",
     "pgvector>=0.3",
+    # F4 evidence-pack rendering (design-prd §17). Pure-Python wheel: no system
+    # libraries, so the image and CI stay light and dev=CI parity is trivial.
+    # Chosen over WeasyPrint because F15 makes counterparty artifacts English-only,
+    # which removes the complex-script shaping that would justify the heavier stack.
+    "reportlab>=4.2",
 ]
 
 [project.optional-dependencies]

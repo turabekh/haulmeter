@@ -10,10 +10,6 @@ from .enums import ArtifactType, PackTemplate, RecordType
 from .models import ChainAnchor, EvidenceArtifact, EvidenceLog, EvidenceRecord
 
 
-class RenderNotEnabled(Exception):
-    pass
-
-
 @dataclass
 class ChainVerification:
     valid: bool
@@ -302,8 +298,11 @@ def compose_pack(db: Session, log: EvidenceLog, template: PackTemplate) -> Evide
     )
 
 
-def render_pack_pdf(pack: EvidencePack) -> bytes:
-    raise RenderNotEnabled(
-        "PDF rendering is a seam: token-styled composer templates (design-prd §17) "
-        "land with the F4 template set. compose_pack() provides the verified structure."
-    )
+def render_pack_pdf(pack: EvidencePack, context=None) -> bytes:
+    """The §17 artifact. `compose_pack` supplies the verified structure; this turns
+    it into the thing a broker's AP clerk actually reads. `context` carries what F4
+    cannot know — the parties, the references and the Meter figure — because the
+    money is M3's arithmetic and the counterparties are F5's records."""
+    from .render import render
+
+    return render(pack, context)
