@@ -102,30 +102,80 @@ curate before approval     -> 409, as designed
 
 The approve half needs an admin account and is covered by the API tests.
 
-## 5. Exact next task — recommendation
+## 5. The OSM service pass — RUN, and what it showed
 
-**Ingest OSM service tags.** This is now the binding constraint, and it is new information: the
-claimable universe in dev is **one facility** (`Blue Beacon`, wash). `parse_osm` already has rules for
-tyres / wash / repair / parts / mobile repair; the Geofabrik pass run for E3.1 pulled weighbridges
-only. Until a service pass runs, the FR7 screen is correct and has almost nothing to point at — and
-**founding-vendor onboarding for service centres cannot start**.
+Run against the **eight extracts already on disk**; no Geofabrik download was needed, because the
+Jul-22/Jul-25 extracts already carry service features. Idempotent upsert, so the re-run mostly
+re-matched what was there.
 
-**Then:** founding-vendor onboarding itself, still the standing recommendation since HANDOFF-072 and
-now unblocked on the food side (a cook can sign up, build a menu, publish, and be found).
+```
+indiana   619 staged   0 created      kansas   292   4 created
+iowa      564 staged   0 created      kentucky 297   4 created
+minnesota 402 staged   0 created      michigan 447   3 created
+wisconsin 515 staged   0 created      ohio     763   9 created
+```
 
-**Alternatives:** the four remaining weigh-station states (KS, KY, MI, OH); §17 Q9 truck routing,
-still the largest open product decision.
+| | before | after |
+|---|---|---|
+| facilities | 4,517 | **4,537** |
+| weigh_station | 106 | **117** (the KS/KY/MI/OH gap from 078 §7, partly closed) |
+| repair | 1 | **10** |
+| **claimable sites (FR7)** | **1** | **10** |
+
+The claimable universe is now: 6 washes (Blue Beacon ×3, Eagle, Truckomat, Interclean) and 4 repair
+sites (Travel Centers of America, Wingfoot Tire Service, and one OSM record literally named "Repair").
+
+### The supply is genuinely thin, and it is not our pipeline
+
+Surveying all 284,361 features across the eight extracts before ingesting: **19 carry a claimable
+service, and ZERO service-tagged features were dropped by the hgv gate.** Every service POI that
+survived the extract reached a facility. The thinness is upstream — OSM has very few US truck service
+businesses tagged in a way that distinguishes them from consumer garages.
+
+**That leaves a real product decision, and it is the owner's.** The extract filter keeps `nwr/hgv`,
+and `_OSM_TYPE_RULES` requires `osm_services(t) and _osm_hgv(t)` with the comment *"otherwise every
+neighbourhood car wash lands in the registry"* — a sound rule. Loosening either would grow the
+claimable set and admit consumer garages with it. The alternative is to accept that **service centres
+arrive by self-claim and admin entry, not by ingest**, in which case FR7's discovery search matters
+more than the extract does. Nothing was loosened; the rule stands as written.
+
+## 5a. Exact next task — recommendation
+
+**Fix the geohash-boundary duplicate miss in `find_duplicate_candidates`.** The pass surfaced a
+concrete instance: two `Blue Beacon Truck Wash #74` records **20.2 m apart**, identical names, both
+`confirmed`, and `find_duplicate_candidates` returns only the record itself for either one. Cause:
+`DEDUP_GEOHASH_PRECISION = 7` searches a **single** geohash cell (~153 m), so a pair straddling a cell
+boundary is invisible to it however close they are. The standard fix is to search the eight
+neighbouring cells too, or to use a PostGIS distance query — `geom` is already spatially indexed.
+
+This is now FR7-blocking in a way it was not before: a claimant searching "beacon" sees **two identical
+rows** and cannot tell which is their site, and claiming the wrong one puts their page on a facility
+the map may not be using. It also compounds the carried blocker below — an admin merging them may leave
+the survivor's attributes stale, which for a claimed facility means a `services` list that no longer
+justifies the claim. **Both deserve one plan together.** Verified separately: the other same-name pairs
+are chain siblings 199 km and 1,107 km apart, correctly distinct.
+
+**Then:** founding-vendor onboarding, still the standing recommendation since HANDOFF-072 and now
+unblocked on the food side (a cook can sign up, build a menu, publish, and be found).
+
+**Alternatives:** a fresh Geofabrik pull for KS/KY/MI/OH (their extracts predate the weighbridge
+filter, so 117 weigh stations is still short of the real count); §17 Q9 truck routing, still the
+largest open product decision.
 
 ## 6. Blockers
 
 - **No git remote — seven sessions running.** Fourteen commits sit locally on `main`.
-- **NEW: the claimable universe is one facility.** See §5. Not a code defect — an ingest gap.
+- **NEW: `find_duplicate_candidates` misses duplicates that straddle a geohash cell.** Evidence and fix
+  in §5a. Ten claimable sites, one of which is a duplicate pair.
+- **NEW: the claimable universe is ten facilities, and the ceiling is upstream.** See §5. Not a code
+  defect and not fixable by ingesting harder — it is a product decision about the hgv gate.
 - **A service centre still sees "My week" and "Menu & prices".** Both are food-shaped. Making the whole
   rail type-aware is a larger change than this slice, and half-doing it would be worse than the honest
   gap; logged in §23 entry 32 rather than left implicit.
-- **`merge_facilities` may leave the survivor's attributes stale.** Carried from 076 §5, still unchecked.
-  Note it now also touches FR7: a claim points at a facility id, and a merge that leaves attributes
-  stale could strand a claim against a survivor whose `services` list no longer justifies it.
+- **`merge_facilities` may leave the survivor's attributes stale.** Carried from 076 §5, still unchecked
+  — and now urgent, because §5a's fix will produce merges to perform. A claim points at a facility id,
+  and a merge that leaves attributes stale could strand a claim against a survivor whose `services`
+  list no longer justifies it.
 - **A vendor cannot delete their own listing or account** (§17 Q16 consistent, but self-serve signup
   makes self-serve exit a fair expectation).
 - **Nothing rate-limits vendor registration.**
