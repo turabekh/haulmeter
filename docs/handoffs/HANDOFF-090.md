@@ -13,10 +13,10 @@ the next-stop preview, the single CTA, the DRIVING voice hint, and "Add a load" 
 | Thing | Value |
 |---|---|
 | Migrations | head **0050_f06_document_archive_reason** (none added) |
-| Tests | **pytest 985 · vitest 363 · layout 136/136 · ruff clean · import-linter 30/30** |
+| Tests | **pytest 990 · vitest 363 · layout 136/136 · ruff clean · import-linter 30/30** |
 | §23 decision log | 47 entries |
 | Handoffs | 000 → 090 |
-| Git | **51 commits, `main` in sync with `origin`** (remote added by the owner this session) |
+| Git | **52 commits on `main`; `origin` is one behind** (remote added by the owner this session) |
 
 ## 2. What §10.2 asked for, and what was there
 
@@ -95,14 +95,19 @@ which is how defect (1) was caught at all.
 
 ## 7. Debt logged, not worked around
 
-- **F9 coerces JSON by prompt, not by schema.** `parse_structured` asks the model to "return ONLY a
-  single valid JSON object" and then regex-extracts it. The Messages API has **structured outputs**
-  (`output_config.format` with a JSON schema) which would make malformed output impossible. This is
-  a foundation-wide change touching M4 and M9 as well, so it was flagged rather than taken here.
-- **F9's required-keys check tests presence, not value** — F5 works around it with `has_terms`.
-  M4 and M9 use the same gate and have the same exposure.
-- **`f9_model` is `claude-haiku-4-5-20251001`** — a date-suffixed ID where `claude-haiku-4-5` is the
-  current form, and a model choice worth an owner decision now that a real key is wired.
+- ~~F9 coerces JSON by prompt~~ · ~~`f9_model` is date-suffixed~~ — **both closed** in `7b8709c`
+  (see §12). All three parse callers now pass a JSON schema; the model is `claude-opus-5` at `low`
+  effort for extraction.
+- **F9's required-keys check tests presence, not value** — F5 works around it with `has_terms`, and
+  the gate is now documented in `parse_structured`'s docstring. M4 and M9 have the same exposure:
+  a schema guarantees the *shape*, so an all-null answer still passes.
+- **M4 and M9 still send the model a `content_hash`**, not the document — the same defect fixed for
+  the rate con in `f137dc5`. The attachment mechanism now exists (`document_b64` in the parse
+  context) and both callers hold the F6 document, so this is small; it changes their runtime cost,
+  which is why it was flagged rather than taken.
+- **F9 talks to the API over raw httpx, not the Anthropic SDK.** Deliberate when written (the
+  transport is a module function so tests monkeypatch it without a network), and internally
+  consistent — but it means new API surface has to be hand-rolled, as `output_config` just was.
 - **The rate-con import is not offline-capable.** Every other capture queues through F12; this one
   needs the model. A driver photographing a rate con in a dead zone gets the manual form.
 - **The confirm screen sends fixed coordinates** for a newly-created facility — there is no geocoder
@@ -146,6 +151,33 @@ TESTS  api/test_load_import.py (NEW, 14) · f05_load/test_load.py (+7)
        f09_ai_gateway/test_ai_gateway.py (+document assertions)
        ui-components.test.js (+7 rate-con, ladder, anatomy, DRIVING)
 ```
+
+## 12. F9 structured outputs + model id (added after §9's commits)
+
+`parse_structured` asked the model for JSON and then scavenged the reply for the first `{` and the
+last `}`. It now sends **`output_config.format` with a JSON schema**, so malformed output is not
+something to recover from. All three callers bring a schema — F5's rate con, M4's lumper receipt,
+M9's settlement lines.
+
+Two consequences worth keeping: the "return ONLY JSON" plea is **dropped** when a schema is present
+(asking for what the format guarantees just adds a second, weaker instruction), and the strict path
+**does not fall back to scavenging** — brace-hunting can succeed on the wrong thing, returning a
+fragment as though it were the whole.
+
+`accessorial_terms` had to become a list of `{term, wording}`: structured outputs require
+`additionalProperties: false` on every object, which is exactly what an open map is not. It is
+normalised back to a map on the way out.
+
+**Model:** `claude-haiku-4-5-20251001` → **`claude-opus-5`**. The old id carried a date suffix — the
+shape that silently 404s when a snapshot retires. Cost is tuned by **effort** rather than model tier:
+structured parses run at `low`. `max_tokens` raised to 8192, because thinking is on by default on
+Opus 5 and shares that budget with the response.
+
+**One bug the live run caught.** The model names terms the way the contract does — a real parse
+returned `{"TONU": "50% of linehaul if cancelled after arrival"}` — and the exact-key lookup for
+`"tonu"` missed it, so the screen said the rate con was **silent on TONU while quoting the clause
+that grants it**. A driver who believes there is no TONU clause does not claim TONU. Matched
+case-insensitively now, and verified both ways live.
 
 ## 11. Ports / env / flags
 
