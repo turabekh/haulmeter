@@ -223,6 +223,7 @@
   "cond.take": "Rasmga olish",
   "cond.title": "Yuk holati",
   "docs.add": "Hujjat qo'shish",
+  "docs.empty": "CDL, tibbiy karta, sug'urta va ruxsatnomalaringiz shu yerda — aloqa bo'lmasa ham yo'l tekshiruviga tayyor. Ular hisobingizga qo'shilgan sari paydo bo'ladi.",
   "docs.inspection": "Tekshiruv rejimi",
   "docs.status.expired": "muddati tugagan",
   "docs.status.expiring": "muddati tugayapti",

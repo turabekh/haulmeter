@@ -2,7 +2,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci \
-        seed purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales ui-layout
+        seed seed-wallet purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales ui-layout
 
 STATE ?= wisconsin
 # osmium-tool is packaged in Debian/Ubuntu; install it in a slim base at run time
@@ -65,6 +65,12 @@ ci: env preflight lint test ui-layout
 # Optional: DEV_SEED_ORIGIN=lat,lon plants a few "DEV —" facilities around a point.
 seed:
 	$(COMPOSE) exec -e DEV_SEED=1 -e DEV_SEED_ORIGIN="$(DEV_SEED_ORIGIN)" api python -m scripts.seed_demo
+
+# put a realistic document wallet on an account so the Docs tab has something to
+# show. Defaults to the most recently registered account: `make seed-wallet`, or
+# `make seed-wallet EMAIL=you@example.com`.
+seed-wallet:
+	$(COMPOSE) exec api python -m scripts.seed_wallet "$(EMAIL)"
 
 # delete demo/test leftovers (admin-only facilities) from the dev DB
 purge-demo:

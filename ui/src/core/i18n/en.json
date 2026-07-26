@@ -223,6 +223,7 @@
   "cond.take": "Take photo",
   "cond.title": "Cargo condition",
   "docs.add": "Add document",
+  "docs.empty": "Your CDL, medical card, insurance and permits live here, ready for a roadside inspection even with no signal. They appear as they are added to your account.",
   "docs.inspection": "Inspection mode",
   "docs.status.expired": "expired",
   "docs.status.expiring": "expiring",

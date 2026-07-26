@@ -64,7 +64,19 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
       </span>
     </div>
 
-    <ul class="grid">
+    <!-- AI-CONTEXT: §15.3 — "one sentence of purpose + one starting action". An
+         empty wallet used to render an empty grid under a dead "Add document" chip;
+         removing the chip (§23 registry precedent — a capability with no destination
+         is labelled, never linked) left literally nothing on the screen, which is
+         how this surface was found looking broken rather than empty.
+
+         There is deliberately NO action button: M5 has no upload path yet, and
+         inventing one here would put the dead control straight back. The sentence
+         says what the wallet is for and what fills it, which is the honest half of
+         §15.3 when the other half does not exist yet. The action returns with the
+         upload path. -->
+    <p v-if="!data.documents.length" class="docs__empty">{{ t("docs.empty") }}</p>
+    <ul v-else class="grid">
       <li v-for="d in data.documents" :key="d.id" class="doc">
         <span class="doc__type">{{ docLabel(d.doc_type) }}</span>
         <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
@@ -113,6 +125,12 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
   font-weight: 500;
   color: var(--ink-0);
   background: var(--pill-color);
+}
+.docs__empty {
+  margin: var(--s-5) var(--s-4) 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
 }
 .grid {
   list-style: none;

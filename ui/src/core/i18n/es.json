@@ -223,6 +223,7 @@
   "cond.take": "Tomar foto",
   "cond.title": "Condición de la carga",
   "docs.add": "Agregar documento",
+  "docs.empty": "Tu CDL, tarjeta médica, seguro y permisos viven aquí, listos para una inspección en carretera incluso sin señal. Aparecen a medida que se agregan a tu cuenta.",
   "docs.inspection": "Modo inspección",
   "docs.status.expired": "vencido",
   "docs.status.expiring": "por vencer",

@@ -101,7 +101,13 @@ services:
     volumes:
       - ../ui:/app
       - /app/node_modules
+      # AI-CONTEXT: the layout harness's browser. Without this it lives in the
+      # container's filesystem and `make down` throws it away, so `make ui-layout`
+      # re-downloads 111 MB on the next run — found the first time the stack was
+      # restarted after the harness landed.
+      - playwright:/root/.cache/ms-playwright
 
 volumes:
   pgdata:
   miniodata:
+  playwright:
