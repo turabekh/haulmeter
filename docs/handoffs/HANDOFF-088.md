@@ -13,10 +13,10 @@ owner looking at an empty screen, and it was not missing data.
 | Thing | Value |
 |---|---|
 | Migrations | head **0048_m05_on_time_consent** (none added) |
-| Tests | **pytest 935 · vitest 345 · layout 136/136 · ruff clean · import-linter 30/30** |
+| Tests | **pytest 939 · vitest 345 · layout 136/136 · ruff clean · import-linter 30/30** |
 | §23 decision log | 45 entries |
 | Handoffs | 000 → 088 |
-| Git | **40 commits local on `main`, still no remote** |
+| Git | **42 commits local on `main`, still no remote** |
 
 ## 2. What looking at the screen caught
 
@@ -101,6 +101,28 @@ The cap bit exactly where it should: the two most urgent went out, the 30-day pe
 **All five FRs are complete end to end.** PRD §8.5's DoD also required inspection mode usable offline in
 under 2 taps — **measured at 2 taps, offline, session 4**.
 
+## 5a. The viewer — asked for, and it was a defect
+
+The owner asked whether a document should open on tap. It should, and not opening was a **defect**:
+`/protection/wallet` and `/protection/inspection` returned metadata only, and **F6 had exposed
+`get_document_bytes` since it was written with no route ever using it** — the same shape as the writer
+gap found an hour earlier.
+
+Inspection mode exists to **produce** a credential. A row reading `CDL · 2028-01-17` is our *claim* that
+the driver holds one, and asserting on a driver's behalf to a police officer is the worst possible
+audience for the honesty problem this product keeps solving elsewhere.
+
+`GET /protection/documents/{id}` returns the bytes, ownership-checked, with a stranger's id 404ing
+exactly like a missing one so ids cannot be probed. Cached `private, immutable, 1y` — a scale house is a
+dead zone, and a document that needs the network to render cannot be produced when it is asked for. The
+bytes are immutable (a document is replaced, never edited), so the long cache is safe as well as needed.
+
+Rows are buttons in the wallet **and** in inspection mode, opening a full-screen viewer that handles the
+two normal scale-house cases: no signal, which says so plainly rather than showing an empty frame, and a
+PDF, which an `<img>` cannot render and which gets an `<object>` with a real link as its fallback. **No
+DRIVING guard**, deliberately — the driver hands the *phone* to an officer, and by then the truck is
+stopped; the guard belongs on capture, where it already is.
+
 ## 6. Exact next task — Session 8
 
 M5's FRs are done; what remains is closing it out properly.
@@ -143,15 +165,17 @@ a2d2743 docs: HANDOFF-087
 ```
 M5     domain/service.py (capture_document, expiry_reminders_due,
        dispatch_expiry_reminders, DRIVER_DOC_TYPES, EXPIRING_DOC_TYPES) · public.py
-API    api/m05_protection.py (POST /documents, GET /documents/types)
+API    api/m05_protection.py (POST /documents, GET /documents/types,
+       GET /documents/{id} — the bytes)
 WORKER app/worker.py (daily document_expiry job) · app/ingest/runners.py
 UI     core/components/DocumentCaptureSheet.vue (NEW — §8 capture)
+       core/components/DocumentViewer.vue (NEW — produces the credential)
        surfaces/DocsSurface.vue (empty state, capture chip restored, DRIVING guard)
        core/api.js (captureDocument, fetchDocumentTypes)
        i18n/*.json (17 keys ×6)
 DEV    api/scripts/seed_wallet.py (NEW) · Makefile (seed-wallet)
        infra/docker-compose.yml (playwright browser in a named volume)
-TESTS  m05/test_documents.py (NEW, 8)
+TESTS  m05/test_documents.py (NEW, 8) · api/test_m05_export_share.py (+4 viewer)
 ```
 
 ## 11. Ports / env / flags
