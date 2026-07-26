@@ -142,3 +142,28 @@ def test_flag_gated_on_activation_preconditions(db):
     assert flags.can_activate(db, "m03_detention") is False  # legal + partner gates unmet
     with pytest.raises(flags.GateNotSatisfied):
         flags.enable(db, "m03_detention")
+
+
+def test_the_invoice_reproduces_from_the_figures_printed_on_it():
+    """Found by reading a claim screen: "0:00:38 · $120/h · $1.29", where 38 seconds
+    at $120/h is $1.27. The amount was rounded off the float behind the clock (38.7s)
+    while the time was truncated to the second — so the two figures on the face of the
+    invoice did not agree.
+
+    A claim is a document a third party verifies, and the clerk checking it does the
+    only arithmetic available to them: the time and the rate printed on it. The gap is
+    pennies; the credibility cost is not."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.modules.m03_detention.domain.service import compute_detention
+
+    arrived = datetime(2026, 7, 26, 12, 0, tzinfo=UTC)
+    # 38.7s past free time — the fractional case the screen exposed
+    state = compute_detention(
+        arrived, 1, 12000, arrived + timedelta(minutes=1, seconds=38, milliseconds=700)
+    )
+
+    assert state.detention_seconds == 38
+    assert state.amount_cents == round(38 / 3600 * 12000)  # 127, not 129
+    # and the reader's own arithmetic lands on the same number
+    assert state.amount_cents == 127

@@ -73,9 +73,17 @@ def compute_detention(
         return DetentionState(DetentionPhase.within_free_time, int(remaining), 0, 0)
     end = departed_at or now
     accrued = max(0.0, (end - detention_start).total_seconds())
-    amount = round(accrued / 3600 * (rate_cents_per_hour or 0))
+    # AI-CONTEXT: the amount is derived from the SECONDS WE REPORT, not from the float
+    # behind them. A claim is a document a third party verifies, and the clerk checking
+    # it does the only arithmetic available to them: the time and the rate printed on
+    # its face. Rounding the amount off 38.7s while reporting 38s produced an invoice
+    # reading "0:00:38 · $120/h · $1.29" — where 38 seconds at $120/h is $1.27. The
+    # gap is pennies and the credibility cost is not: an invoice whose own figures do
+    # not reproduce invites the one question a detention claim cannot afford.
+    seconds = int(accrued)
+    amount = round(seconds / 3600 * (rate_cents_per_hour or 0))
     phase = DetentionPhase.ended if departed_at is not None else DetentionPhase.accruing
-    return DetentionState(phase, 0, int(accrued), int(amount))
+    return DetentionState(phase, 0, seconds, int(amount))
 
 
 def register_module(db: Session) -> None:
