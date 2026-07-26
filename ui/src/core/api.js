@@ -910,6 +910,23 @@ export async function muteVendor(vendorId) {
   return queuedPost(`/vendors/${vendorId}/mute`, {});
 }
 
+// following a cook. One tap records the vendor, turns the food-alert class ON, and
+// clears any older mute on it — the server does all three, so the UI never has to
+// remember to (see F8 follow_subject).
+export async function followVendor(vendorId) {
+  return queuedPost(`/vendors/${vendorId}/follow`, {});
+}
+
+export async function unfollowVendor(vendorId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/vendors/${vendorId}/follow`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`unfollow failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function suggestACook(lat, lon) {
   // Q-7: the empty state's affordance records WHERE drivers want food — the demand
   // half of the vendor recruitment loop. Queued offline like any other contribution.

@@ -15,7 +15,7 @@
      fine at a glance; tapping "he's here" at 65 mph is not. -->
 <script setup>
 import { computed, ref } from "vue";
-import { Check, Languages, MapPin, Navigation } from "lucide-vue-next";
+import { Check, Languages, MapPin, Navigation, Star } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { useDriverState } from "../state.js";
 import { formatMiles } from "../presentation.js";
@@ -45,6 +45,8 @@ const emit = defineEmits([
   "review",
   "report",
   "navigate",
+  "follow",
+  "unfollow",
 ]);
 const { t } = useI18n();
 const { isDriving } = useDriverState();
@@ -63,6 +65,7 @@ const going = computed(() => {
   return t ?? (next.value?.lat != null ? next.value : null);
 });
 const goingMiles = computed(() => formatMiles(going.value?.distance_m));
+const following = computed(() => props.sheet.following === true);
 const anyDistance = computed(() =>
   (props.sheet.appearances ?? []).some((a) => a.distance_m != null),
 );
@@ -238,6 +241,23 @@ const presence = computed(() =>
       <button class="cta cta--secondary" type="button" @click="emit('sold-out')">
         {{ t("vendor.report_sold_out") }}
       </button>
+      <!-- following. The button states what one tap does BEFORE it is tapped:
+           §23 E-D1 makes silence never consent, so the control that supplies the
+           consent has to say what it is turning on, and name the caps in the same
+           breath so "we will tell you" cannot be read as "we will pester you". -->
+      <button
+        class="cta cta--secondary"
+        type="button"
+        :aria-pressed="following"
+        @click="emit(following ? 'unfollow' : 'follow')"
+      >
+        <Star :size="18" :stroke-width="2" aria-hidden="true" />
+        {{ following ? t("vendor.following") : t("vendor.follow") }}
+      </button>
+      <p class="vs__follow-note">
+        {{ following ? t("vendor.follow_on_note") : t("vendor.follow_note") }}
+      </p>
+
       <button class="cta cta--tertiary" type="button" @click="emit('mute')">
         {{ t("vendor.mute") }}
       </button>
@@ -326,6 +346,12 @@ const presence = computed(() =>
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--text-2);
+}
+.vs__follow-note {
+  margin: var(--s-2) 0 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
 }
 .vs__direct {
   margin: 0 0 var(--s-3);

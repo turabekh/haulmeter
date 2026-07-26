@@ -35,7 +35,9 @@ import {
   fetchVendorsAt,
   fetchVendorSheet,
   confirmVendor,
+  followVendor,
   muteVendor,
+  unfollowVendor,
   suggestACook,
   fetchCorridorVendors,
   fetchScalesAhead,
@@ -308,6 +310,20 @@ async function reportThisVendor(reason) {
   if (entry) await reportVendor(entry.vendor_id, reason).catch(() => {});
 }
 
+// following re-fetches the sheet rather than flipping a local flag: the server
+// decides what one tap changed (the class may have been switched on, an old mute
+// may have been cleared), and a screen that guessed could show the wrong state.
+async function followThisVendor(on) {
+  const entry = vendorTarget.value;
+  if (!entry) return;
+  try {
+    await (on ? followVendor(entry.vendor_id) : unfollowVendor(entry.vendor_id));
+    vendorSheet.value = await fetchVendorSheet(entry.vendor_id);
+  } catch {
+    /* queued offline, or no session — the sheet keeps the state it has */
+  }
+}
+
 async function muteThisVendor() {
   const entry = vendorTarget.value;
   vendorSheet.value = null;
@@ -554,6 +570,8 @@ async function submitPrice(cents) {
         :sheet="vendorSheet"
         :target="vendorTarget"
         @navigate="navigateToVendor"
+        @follow="followThisVendor(true)"
+        @unfollow="followThisVendor(false)"
         @confirm="confirmVendorPresence(true)"
         @not-here="confirmVendorPresence(false)"
         @sold-out="reportVendorSoldOut"

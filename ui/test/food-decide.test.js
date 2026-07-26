@@ -249,3 +249,50 @@ describe("the map only sends a position it actually has", () => {
     expect(last).toMatch(/[?&]lon=-89\.4/);
   });
 });
+
+// following: the consent the flow never had. Before this the only vendor
+// notification went to drivers who had already CONFIRMED a cook in person, so the
+// loop was closed to exactly the people it should have been opening for.
+describe("following a cook", () => {
+  it("says what one tap turns on, before it is tapped", () => {
+    const w = mountSheet({ sheet: sheet({ following: false }) });
+    const follow = w.findAll(".cta").find((b) => b.text().includes(en["vendor.follow"]));
+    expect(follow).toBeTruthy();
+    // E-D1: the control supplying the consent must name what it enables, and the
+    // caps in the same breath — "we will tell you" must not read as "we will pester"
+    expect(w.text()).toContain(en["vendor.follow_note"]);
+    expect(en["vendor.follow_note"].toLowerCase()).toContain("one a day");
+  });
+
+  it("reads as Following once it is on, and offers to stop", async () => {
+    const w = mountSheet({ sheet: sheet({ following: true }) });
+    const button = w.findAll(".cta").find((b) => b.text().includes(en["vendor.following"]));
+    expect(button.attributes("aria-pressed")).toBe("true");
+    expect(w.text()).toContain(en["vendor.follow_on_note"]);
+    expect(w.text()).not.toContain(en["vendor.follow_note"]);
+
+    await button.trigger("click");
+    expect(w.emitted("unfollow")).toBeTruthy();
+    expect(w.emitted("follow")).toBeFalsy();
+  });
+
+  it("emits follow when it is off", async () => {
+    const w = mountSheet({ sheet: sheet({ following: false }) });
+    await w.findAll(".cta").find((b) => b.text().includes(en["vendor.follow"])).trigger("click");
+    expect(w.emitted("follow")).toBeTruthy();
+  });
+
+  it("never outranks Navigate — following is not the reason a driver opened this", () => {
+    const w = mountSheet({ sheet: sheet({ following: false }) });
+    const primary = w.findAll(".cta").filter((b) => !b.classes().some((c) => c.startsWith("cta--")));
+    expect(primary).toHaveLength(1);
+    expect(primary[0].text()).toContain(en["vendor.navigate"]);
+  });
+
+  it("does not render while DRIVING (Forbidden #11)", () => {
+    useDriverState().setState(DriverState.DRIVING);
+    const w = mountSheet({ sheet: sheet({ following: false }) });
+    expect(w.text()).not.toContain(en["vendor.follow"]);
+    expect(w.text()).not.toContain(en["vendor.following"]);
+  });
+});
