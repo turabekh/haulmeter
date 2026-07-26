@@ -100,6 +100,13 @@ def attach_artifact(
         "storage_key": storage_key,
         "gps": [gps_lat, gps_lon] if gps_lat is not None else None,
     }
+    # the capture PROMPT is what a guided sequence is for. It lived only in the
+    # artifact's exif, so a rendered condition report read "Photo · Photo · Photo"
+    # and a clerk could not tell whether the seals had been photographed at all.
+    # It belongs in the chained record: the prompt is a claim about what the image
+    # shows, and a claim about evidence should be hashed with it.
+    if (exif or {}).get("prompt"):
+        payload["prompt"] = exif["prompt"]
     record = append_record(db, log, record_type, payload, captured_at)
     artifact = EvidenceArtifact(
         log_id=log.id,

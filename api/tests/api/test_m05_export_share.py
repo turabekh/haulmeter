@@ -205,3 +205,33 @@ def test_a_stranger_cannot_revoke_your_share(client, db):
 
 def test_an_unknown_token_is_the_same_404_as_a_revoked_one(client, db):
     assert client.get("/pack/s/never-existed-at-all").status_code == 404
+
+
+def test_the_report_names_which_shot_each_photo_is(client, db):
+    """Caught by opening the document. A guided sequence exists so a clerk can tell
+    whether the SEALS were photographed; the report read "Photo · Photo · Photo"
+    because the prompt lived in the artifact's exif and never reached the chained
+    record. A claim about what an image shows belongs in the chain with it."""
+    headers = _headers(client, "prompts@example.com")
+    account_id = client.get("/auth/me", headers=headers).json()["account_id"]
+    stop = _stop(db, account_id)
+    _capture(client, db, headers, stop)
+
+    content = client.get(f"/protection/condition/{stop.id}/export", headers=headers).content
+
+    assert b"trailer exterior" in content
+    assert b"seals" in content
+
+
+def test_the_report_names_the_facility_and_the_load(client, db):
+    """Also caught by opening it: a condition report with no parties on it is a photo
+    album. The reader did not take the pictures."""
+    headers = _headers(client, "context@example.com")
+    account_id = client.get("/auth/me", headers=headers).json()["account_id"]
+    stop = _stop(db, account_id)
+    _capture(client, db, headers, stop)
+
+    content = client.get(f"/protection/condition/{stop.id}/export", headers=headers).content
+
+    assert b"Dallas Receiving" in content
+    assert b"4471" in content

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
+from app.foundation.f02_facility import public as facility
 from app.foundation.f04_evidence import public as evidence
 from app.foundation.f05_load import public as loads
 from app.foundation.f08_notifications import public as notify
@@ -215,6 +216,29 @@ class ShareIn(BaseModel):
     recipient: str | None = None
 
 
+def _context_for(db: Session, kind: str, ref: uuid.UUID):
+    """A condition report with no parties on it is a photo album. The clerk reading
+    this did not take the pictures and needs to know whose load, whose dock and which
+    reference before the images mean anything (§17)."""
+    if kind != "condition":
+        return evidence.PackContext()
+    stop = loads.get_stop(db, ref)
+    if stop is None:
+        return evidence.PackContext()
+    fac = facility.get_facility(db, stop.facility_id)
+    load = loads.get_load(db, stop.load_id)
+    references = [("Stop", str(stop.id)[:8])]
+    if getattr(load, "reference_number", None):
+        references.insert(0, ("Load", load.reference_number))
+    if stop.appointment_start:
+        references.append(("Appointment", stop.appointment_start.strftime("%Y-%m-%d %H:%M UTC")))
+    return evidence.PackContext(
+        parties=[("Facility", fac.name)] if fac is not None else [],
+        references=references,
+        facility_name=fac.name if fac is not None else None,
+    )
+
+
 def _pack_for(db: Session, account, kind: str, ref: uuid.UUID):
     """One resolver so export and share can never disagree about what a given id
     means — the two endpoints must produce the SAME document for the same input."""
@@ -242,7 +266,7 @@ def export_pack(
     if kind not in ("condition", "incident"):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown pack kind")
     pack = _pack_for(db, account, kind, ref)
-    content = m5.render_pack(db, pack)
+    content = m5.render_pack(db, pack, _context_for(db, kind, ref))
     return Response(
         content=content,
         media_type="application/pdf",
@@ -264,7 +288,14 @@ def share(
     if kind not in ("condition", "incident"):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown pack kind")
     pack = _pack_for(db, account, kind, ref)
-    shared = m5.share_pack(db, pack.log_id, pack, account.id, recipient=body.recipient)
+    shared = m5.share_pack(
+        db,
+        pack.log_id,
+        pack,
+        account.id,
+        recipient=body.recipient,
+        context=_context_for(db, kind, ref),
+    )
     return {
         "share_id": str(shared.id),
         # §17: counterparty mail is plain, short, professional, ONE link, no images
