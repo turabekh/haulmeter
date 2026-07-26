@@ -746,5 +746,6 @@
   "voice.replay": "ਜਵਾਬ ਚਲਾਓ",
   "voice.retry": "ਸਮਝ ਨਹੀਂ ਆਇਆ — ਦੁਬਾਰਾ ਬੋਲੋ ਜਾਂ ਲਿਖੋ।",
   "voice.stop": "ਰੋਕੋ",
-  "voice.title": "ਕੋਪਾਇਲਟ"
+  "voice.title": "ਕੋਪਾਇਲਟ",
+  "voice.unavailable": "ਫਿਲਹਾਲ ਆਵਾਜ਼ ਨਕਸ਼ਾ ਟੈਬ ਉੱਤੇ ਹੈ।"
 }

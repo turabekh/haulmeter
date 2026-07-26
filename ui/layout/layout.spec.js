@@ -25,8 +25,15 @@ import { test, expect } from "@playwright/test";
 
 const BASE = process.env.UI_BASE || "http://ui:9008";
 
-// every driver-app surface that renders without a live session. Portals are §18 and
-// deliberately exempt from LAW 0 — they are not driver screens.
+// every driver-app surface. Portals are §18 and deliberately exempt from LAW 0 —
+// they are not driver screens.
+//
+// The last three were added when the theme dimension came out: the evidence surface
+// is where the newest and largest UI in the project landed (export, share, the §15.1
+// queue, the DRIVING guard) and had never been checked, which is the opposite of
+// where a harness should be spending its time. The parameterised routes render their
+// empty/loading states here, and an empty state is layout too — §15.3 gives it a
+// spec, so it gets checked like anything else.
 const SURFACES = [
   ["map", "/"],
   ["load", "/load"],
@@ -34,9 +41,10 @@ const SURFACES = [
   ["docs", "/docs"],
   ["more", "/more"],
   ["login", "/login"],
+  ["evidence", "/load/00000000-0000-0000-0000-0000000000aa/evidence"],
+  ["condition", "/protection/condition"],
+  ["facility", "/facility/00000000-0000-0000-0000-0000000000bb"],
 ];
-
-const THEMES = ["dark", "light"];
 const CAPTION_FLOOR_PX = 13; // §6.2: "Nothing smaller exists."
 const TOUCH_MIN_PX = 48; // §6.5 glove spec
 // The tab bar is a fixed 5-across strip: at 360 dp each tab is 72 dp wide and the
@@ -93,15 +101,32 @@ async function settle(page) {
   await page.waitForTimeout(250);
 }
 
+// AI-CONTEXT: the theme dimension was REMOVED on evidence, not on a hunch.
+//
+// It was also broken: `theme.js` keeps the mode in a ref and never persists it, so
+// the `longhaul.theme` key this harness had been setting for two sessions was read
+// by nothing, and only one of four assertions ever stamped `data-theme` itself. The
+// dimension had been running the same theme twice.
+//
+// Then, measured properly across all six surfaces under a correctly applied dark and
+// light: geometry was IDENTICAL on five, and the single difference was a font size
+// inside Mapbox's own attribution furniture, which is exempt anyway. That matches
+// §23's light-theme entry exactly — "Only the 12 color tokens change;
+// type/space/radius/motion/touch are theme-invariant" — so none of these assertions
+// CAN vary by theme, by constitutional decision rather than by luck. Contrast, the
+// genuinely theme-sensitive property, is computed from tokens in contrast.test.js.
+//
+// The budget went to surfaces instead, which is the dimension that finds bugs.
 for (const [name, path] of SURFACES) {
-  for (const theme of THEMES) {
+  {
+    const theme = "dark";
     // `pa` joins the matrix because §6.2's "metrics-compatible line-height tokens
     // verified" is a LAYOUT claim, and this harness is the only thing that can
     // answer it. Gurmukhi carries matras above AND below the baseline, so a line
     // height tuned for Latin is exactly the kind of thing that clips silently — and
     // "verified" was asserted in the constitution without anyone rendering it.
     for (const pseudo of [false, "xx-XL", "pa"]) {
-      const label = `${name} · ${theme}${pseudo ? ` · ${pseudo}` : ""}`;
+      const label = `${name}${pseudo ? ` · ${pseudo}` : ""}`;
 
       test(`${label} — no horizontal overflow at 360 dp`, async ({ page }) => {
         await prepare(page, { theme, pseudo });
@@ -185,6 +210,59 @@ for (const [name, path] of SURFACES) {
         });
 
         expect(clipped, `clipped text: ${clipped.join(" | ")}`).toEqual([]);
+      });
+
+      // AI-CONTEXT: the fifth assertion, and the one with the best odds of paying for
+      // its runtime. A <button> with no handler is the FIFTH instance of one bug
+      // class in this project: the "suggest a cook" control with no destination,
+      // `categories` collected and never read, `portions` carried through three API
+      // layers to nowhere, `followers_notified` returned and rendered nowhere, and
+      // the Docs capture chip. The near side of a seam gets built, the far side does
+      // not, and nothing in §22.3 catches it because every one of those passes review
+      // — the code looks finished from whichever side you are reading.
+      //
+      // A control that reports nothing when pressed is worse than an absent one: it
+      // spends the driver's trust. §23 already settled the principle for the module
+      // registry — a capability whose destination does not exist is LABELLED, never
+      // linked — and this is that rule, enforced.
+      //
+      // `disabled` is an acceptable answer. Saying "not yet" is honest; saying
+      // nothing is not.
+      test(`${label} — every control does something, or says it cannot`, async ({ page }) => {
+        await prepare(page, { theme, pseudo });
+        await page.setViewportSize({ width: 360, height: 800 });
+        await page.goto(`${BASE}${path}`);
+        await settle(page);
+
+        const inert = await page.evaluate(() => {
+          const found = [];
+          for (const el of document.querySelectorAll("button")) {
+            const r = el.getBoundingClientRect();
+            if (!r.width || !r.height) continue;
+            if (el.disabled || el.getAttribute("aria-disabled") === "true") continue;
+            // a <button type=submit> inside a form acts through the form
+            if (el.type === "submit" && el.closest("form")) continue;
+            // Vue compiles @click to a listener; getEventListeners is devtools-only,
+            // so the reliable signal is the framework's own bookkeeping on the node
+            const vue = el.__vnode || el.__vueParentComponent;
+            const props = vue && vue.props;
+            const hasVueHandler = !!(
+              props &&
+              Object.keys(props).some((k) => /^on[A-Z]/.test(k) && typeof props[k] === "function")
+            );
+            const hasDomHandler = typeof el.onclick === "function";
+            // Mapbox attaches its own listeners imperatively, so neither Vue's
+            // bookkeeping nor `onclick` can see them. Same exemption the glove-spec
+            // check already carries, and for the same reason: not our furniture.
+            if (el.closest(".mapboxgl-ctrl") || /mapboxgl/.test(el.className)) continue;
+            if (!hasVueHandler && !hasDomHandler && !el.closest("a[href]")) {
+              found.push(`${el.className || el.tagName.toLowerCase()}: "${(el.textContent || "").trim().slice(0, 32)}"`);
+            }
+          }
+          return found;
+        });
+
+        expect(inert, `controls that do nothing when pressed: ${inert.join(" | ")}`).toEqual([]);
       });
 
       test(`${label} — interactive targets meet the glove spec`, async ({ page }) => {

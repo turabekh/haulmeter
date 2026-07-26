@@ -746,5 +746,6 @@
   "voice.replay": "Javobni eshittirish",
   "voice.retry": "Tushunmadim — qayta ayting yoki yozing.",
   "voice.stop": "To‘xtatish",
-  "voice.title": "Kopilot"
+  "voice.title": "Kopilot",
+  "voice.unavailable": "Hozircha ovoz Xarita bo'limida."
 }

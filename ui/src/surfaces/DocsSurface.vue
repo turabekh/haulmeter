@@ -1,11 +1,20 @@
-<!-- AI-CONTEXT: Docs tab (design-prd §10.4) — wallet + capture inbox. Anatomy at
+<!-- AI-CONTEXT: Docs tab (design-prd §10.4) — wallet + capture inbox.
+
+     The §10.4 anatomy ends with a capture chip and this surface does not render one.
+     That is deliberate: M5 has no document-upload endpoint, so the chip said "Add
+     document" and pressing it did nothing. §23 settled this exact case for the
+     module registry — a capability whose destination does not exist is LABELLED,
+     never linked — and §22.2's first heuristic is remove rather than add. It returns
+     when there is an upload path for it to reach.
+
+     Anatomy at
      360 dp: Inspection-mode button (top, 56 dp, ≤2 taps from cold start, works
      offline) → expiring-soon strip (marker pills) → document grid by type →
-     capture chip. S2 dock-task session. Fixture-backed pending live
+     capture chip REMOVED — see below. S2 dock-task session. Fixture-backed pending live
      /protection/wallet. Doc-type acronyms (CDL/BOL/POD) stay English (§12.3). -->
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { ShieldCheck, Plus } from "lucide-vue-next";
+import { ShieldCheck } from "lucide-vue-next";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import { useI18n } from "../core/i18n.js";
 import { fetchWallet } from "../core/api.js";
@@ -61,11 +70,6 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
         <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
       </li>
     </ul>
-
-    <button class="capture" type="button">
-      <Plus :size="20" :stroke-width="2" aria-hidden="true" />
-      {{ t("docs.add") }}
-    </button>
 
     <BottomSheet :open="inspecting" :title="t('docs.inspection')" @close="inspecting = false">
       <ul class="grid">

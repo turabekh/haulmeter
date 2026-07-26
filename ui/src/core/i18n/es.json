@@ -746,5 +746,6 @@
   "voice.replay": "Reproducir respuesta",
   "voice.retry": "No te entendí — inténtalo otra vez o escribe.",
   "voice.stop": "Detener",
-  "voice.title": "Copiloto"
+  "voice.title": "Copiloto",
+  "voice.unavailable": "Por ahora, la voz está en la pestaña Mapa."
 }

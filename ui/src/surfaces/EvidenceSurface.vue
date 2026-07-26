@@ -243,8 +243,11 @@ function photoLabel(prompt) {
   gap: var(--s-2);
 }
 .back {
-  width: 40px;
-  height: 40px;
+  /* §6.5 glove spec: 40 was under the floor. Found by the harness on its first run
+     over this surface — the newest UI in the project and, until now, the least
+     verified. */
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;

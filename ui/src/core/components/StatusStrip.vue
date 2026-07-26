@@ -28,7 +28,21 @@ const stateLabel = computed(() => state.value);
       <CloudOff :size="14" :stroke-width="2" aria-hidden="true" />
       {{ pending }}
     </span>
-    <button class="strip__mic" type="button" aria-label="Voice">
+    <!-- AI-CONTEXT: §14.2 asks for a persistent voice mic and this button has never
+         had a handler — six sessions of every screen carrying a control that does
+         nothing when pressed. The working affordance is the Map surface's voice chip;
+         a GLOBAL one needs the voice sheet mounted at app level, which is M11 work
+         and not M5's to invent. So it follows §23's registry precedent: a capability
+         whose destination does not exist is labelled, never linked. Disabled and
+         titled is the honest state — "not yet" is a fact; silence is not. -->
+    <button
+      class="strip__mic"
+      type="button"
+      disabled
+      aria-disabled="true"
+      :aria-label="t('voice.mic')"
+      :title="t('voice.unavailable')"
+    >
       <Mic :size="20" :stroke-width="2" aria-hidden="true" />
     </button>
   </header>
