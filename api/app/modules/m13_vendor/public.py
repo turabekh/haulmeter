@@ -10,6 +10,7 @@ PHASE A: zero payment code paths. No order model, no ledger import, no charge.
 """
 
 from .domain.claims import (
+    CLAIMABLE_SERVICES,
     CONFIG_CLAIM_NAME_MATCH,
     DEFAULT_CLAIM_NAME_MATCH,
     AlreadyClaimed,
@@ -18,6 +19,7 @@ from .domain.claims import (
     NotAServiceCenter,
     NotAServiceFacility,
     approved_claim,
+    claimable_services,
     claimed_facility_view,
     claims_for_vendor,
     curate_claim,
@@ -200,7 +202,9 @@ __all__ = [
     "NameMismatch",
     "NotAServiceCenter",
     "NotAServiceFacility",
+    "CLAIMABLE_SERVICES",
     "approved_claim",
+    "claimable_services",
     "claimed_facility_view",
     "claims_for_vendor",
     "curate_claim",

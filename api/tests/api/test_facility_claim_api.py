@@ -229,3 +229,33 @@ def test_the_portal_is_never_offered_a_service_the_layer_owns(client, db, live):
     kinds = client.get("/vendor/claims", headers=headers).json()["service_kinds"]
     assert "scale" not in kinds
     assert "tire" in kinds and "wash" in kinds
+
+
+def test_a_scale_only_site_is_not_a_business_anyone_can_claim(client, db, live):
+    # 604 of the 605 facilities carrying a services list in dev are OSM
+    # weighbridges. A scale is public infrastructure feeding the M1 layer, not a
+    # service business — so it is neither offered in the picker nor accepted.
+    headers = _headers(client, "shop-l@example.com")
+    _vendor(client, headers, "Gateway Truck Service")
+    fac = _service_facility(db, "Gateway Truck Scale", services=["scale"])
+
+    assert client.get("/vendor/claimable?q=gateway", headers=headers).json() == []
+    resp = client.post(
+        "/vendor/claims",
+        json={"facility_id": str(fac.id), "claimed_name": "Gateway Truck Scale"},
+        headers=headers,
+    )
+    assert resp.status_code == 422
+
+
+def test_a_site_with_a_real_service_alongside_a_scale_is_claimable(client, db, live):
+    # E3.2 composites are the norm: a truck stop with a tire bay AND a weighbridge
+    # keeps both facts, and the tire bay is what makes it claimable.
+    headers = _headers(client, "shop-m@example.com")
+    _vendor(client, headers, "Gateway Truck Service")
+    _service_facility(db, "Gateway Truck Service", services=["scale", "tire"])
+
+    rows = client.get("/vendor/claimable?q=gateway", headers=headers).json()
+    assert len(rows) == 1
+    # and the scale is not presented as something they speak for
+    assert rows[0]["services"] == ["tire"]

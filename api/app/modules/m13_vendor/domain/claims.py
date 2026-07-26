@@ -35,14 +35,29 @@ from .models import FacilityClaim, Vendor
 CONFIG_CLAIM_NAME_MATCH = "m13_claim_name_match"
 DEFAULT_CLAIM_NAME_MATCH = 0.55
 
+# AI-CONTEXT: which of F2's service vocabulary a VENDOR may claim and curate. This
+# is M13's policy, not F2's — F2 records what is there, M13 decides who may speak
+# for it. `scale` is excluded on both counts: a weighbridge is public infrastructure
+# feeding the M1 weigh-station layer (E3.1), so a service a claimant could simply
+# tick would put an unverified scale in front of a driver deciding whether to pull
+# in. A facility whose ONLY service is a scale therefore has no service business to
+# claim, and the same list answers both "may I claim this?" and "may I add this?" —
+# so the picker and the guard cannot drift apart.
+CLAIMABLE_SERVICES = tuple(s for s in facility_registry.SERVICE_KINDS if s != "scale")
+
+
+def claimable_services(db: Session, facility_id) -> list[str]:
+    return [s for s in facility_services(db, facility_id) if s in CLAIMABLE_SERVICES]
+
 
 class NotAServiceCenter(Exception):
     pass
 
 
 class NotAServiceFacility(Exception):
-    """The facility has no ingested service capability, so there is nothing to claim.
-    Reads the E3.2 `services` list — the one source of truth (PRD §17 Q12)."""
+    """The facility has no ingested service a vendor could claim, so there is nothing
+    to claim. Reads the E3.2 `services` list — the one source of truth (PRD §17 Q12)
+    — through `CLAIMABLE_SERVICES`, so a scale-only weighbridge is not a business."""
 
 
 class NameMismatch(Exception):
@@ -97,7 +112,7 @@ def submit_claim(
         raise NotAServiceCenter(str(vendor.id))
 
     facility = facility_registry.get_facility(db, facility_id)
-    if facility is None or not facility_services(db, facility_id):
+    if facility is None or not claimable_services(db, facility_id):
         raise NotAServiceFacility(str(facility_id))
 
     required = float(flags.get_config(db, CONFIG_CLAIM_NAME_MATCH, DEFAULT_CLAIM_NAME_MATCH))
@@ -245,6 +260,7 @@ def claims_for_vendor(db: Session, vendor_id) -> list[FacilityClaim]:
 
 
 __all__ = [
+    "CLAIMABLE_SERVICES",
     "CONFIG_CLAIM_NAME_MATCH",
     "DEFAULT_CLAIM_NAME_MATCH",
     "AlreadyClaimed",
@@ -254,6 +270,7 @@ __all__ = [
     "NotAServiceFacility",
     "approved_claim",
     "claimed_facility_view",
+    "claimable_services",
     "claims_for_vendor",
     "curate_claim",
     "decide_claim",

@@ -520,13 +520,18 @@ def claimable_facilities(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "service centers only")
     out = []
     for facility in facility_registry.search_service_facilities(db, q):
+        # the picker offers exactly what `submit_claim` will accept — one list
+        # answers both questions, so a hit can never be a refusal in waiting
+        services = m13.claimable_services(db, facility.id)
+        if not services:
+            continue
         claimed = m13.approved_claim(db, facility.id)
         out.append(
             {
                 "facility_id": str(facility.id),
                 "name": facility.name,
                 "address": facility.address,
-                "services": m13.facility_services(db, facility.id),
+                "services": services,
                 "already_claimed": claimed is not None,
                 "claimed_by_me": claimed is not None and claimed.vendor_id == vendor.id,
             }
@@ -571,11 +576,10 @@ def list_claims(
     return {
         "claims": [_claim_row(db, c) for c in m13.claims_for_vendor(db, vendor.id)],
         # the portal offers only what the server will honour, exactly as the
-        # verification ladder and the halal rungs do. `scale` is deliberately NOT
-        # offered: a weigh scale feeds the M1 weigh-station layer, and a service a
-        # claimant could simply tick would put an unverified scale in front of a
-        # driver who is deciding whether to pull in.
-        "service_kinds": [k for k in facility_registry.SERVICE_KINDS if k != "scale"],
+        # verification ladder and the halal rungs do — and it is the SAME list the
+        # picker filters by, so what can be claimed and what can be added cannot
+        # drift apart (see m13 CLAIMABLE_SERVICES for why `scale` is not on it)
+        "service_kinds": list(m13.CLAIMABLE_SERVICES),
     }
 
 
