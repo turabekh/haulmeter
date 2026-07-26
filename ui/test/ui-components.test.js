@@ -15,6 +15,7 @@ import TheMeter from "../src/core/components/TheMeter.vue";
 import LoadSurface from "../src/surfaces/LoadSurface.vue";
 import MoneySurface from "../src/surfaces/MoneySurface.vue";
 import DocsSurface from "../src/surfaces/DocsSurface.vue";
+import RateConImportSheet from "../src/core/components/RateConImportSheet.vue";
 import BookingSurface from "../src/surfaces/BookingSurface.vue";
 import FuelSurface from "../src/surfaces/FuelSurface.vue";
 import LoadCalcSurface from "../src/surfaces/LoadCalcSurface.vue";
@@ -1689,6 +1690,127 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       setActiveStop(null);
       logout();
     }
+  });
+});
+
+describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
+  const DRAFT = {
+    document_id: "doc-rc",
+    readable: true,
+    parsed: {
+      reference_number: "L-9001",
+      detention_rate_cents_per_hour: 7500,
+      free_time_minutes: 120,
+      receiver_name: "ACME Distribution Center",
+    },
+    silent_on: ["tonu"],
+    facility_candidates: [
+      { facility_id: "fac-1", name: "ACME Distribution Center", address: null, score: 0.68 },
+      { facility_id: "fac-2", name: "Dallas Distribution Center", address: null, score: 0.65 },
+    ],
+  };
+
+  function stub(draft) {
+    const posts = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url, opts) => {
+        posts.push({ url: String(url), body: opts?.body ? JSON.parse(opts.body) : null });
+        if (String(url).endsWith("/load/import")) return jsonOk(draft);
+        return jsonOk({ load_id: "l-1", stop_id: "s-1" });
+      }),
+    );
+    return posts;
+  }
+
+  async function pickFile(w) {
+    // jsdom has no real file picker; drive the handler the input would call
+    w.find(".rc__input").element.files = [new File(["x"], "rc.pdf", { type: "application/pdf" })];
+    await w.find(".rc__input").trigger("change");
+    await flushPromises();
+  }
+
+  // FileReader.readAsDataURL resolves on a macrotask, which flushPromises does not
+  // await — so the base64 step outlives a plain microtask flush.
+  async function settle(w) {
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise((r) => setTimeout(r, 0));
+      await flushPromises();
+    }
+    await w.vm.$nextTick();
+  }
+
+  beforeEach(() => setToken("tok-rc"));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    logout();
+  });
+
+  it("reads the rate con and creates nothing until the driver confirms", async () => {
+    const posts = stub(DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    // the import ran; no load was created
+    expect(posts.filter((p) => p.url.endsWith("/load/import"))).toHaveLength(1);
+    expect(posts.filter((p) => p.url.endsWith("/load"))).toHaveLength(0);
+
+    // and the parsed terms are editable, not asserted
+    expect(w.text()).toContain("Read from your rate con");
+    const values = w.findAll(".rc__input").map((i) => i.element.value);
+    expect(values).toContain("ACME Distribution Center");
+    expect(values).toContain("75"); // 7500 cents/h rendered as dollars
+  });
+
+  it("says what the rate con is SILENT on rather than showing a zero (M4-FR4)", async () => {
+    stub(DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(w.text()).toContain("does not state");
+    expect(w.text()).toContain("TONU");
+    expect(w.text()).not.toContain("$0");
+  });
+
+  it("offers the matched facility and sends it on confirm, so no duplicate is created", async () => {
+    const posts = stub(DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(w.text()).toContain("Is this the same place?");
+
+    // no CANDIDATE is pre-selected — pg_trgm scores the wrong dock 0.65 and the right
+    // one 0.68, so no threshold tells them apart. "None of these" is the default,
+    // which is the honest one: the driver picks a match or the load creates its own.
+    const radios = w.findAll(".rc__opt input");
+    expect(radios.slice(0, 2).some((i) => i.element.checked)).toBe(false);
+    expect(radios[radios.length - 1].element.checked).toBe(true); // "None of these"
+
+    await w.findAll(".rc__opt input")[0].setValue(); // the driver picks
+    await w.find(".rc__cta").trigger("click"); // now the create button
+    await settle(w);
+
+    const create = posts.find((p) => p.url.endsWith("/load"));
+    expect(create.body.facility_id).toBe("fac-1");
+    expect(create.body.rate_con_document_id).toBe("doc-rc");
+  });
+
+  it("an unreadable rate con falls back to typing, and invents nothing", async () => {
+    stub({ document_id: "doc-rc", readable: false, parsed: null, silent_on: [], facility_candidates: [] });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(w.text()).toContain("could not read this one");
+    const values = w.findAll(".rc__input").map((i) => i.element.value);
+    expect(values.every((v) => v === "")).toBe(true); // no invented terms
   });
 });
 

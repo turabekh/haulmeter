@@ -100,6 +100,34 @@ def confirm_with_second_signal(
     return facility
 
 
+# the bar for OFFERING a match to a human. Lower than DEDUP_NAME_SIMILARITY, which
+# decides whether an ingest run merges two rows unattended: a wrong automatic merge
+# corrupts the registry, while a wrong suggestion costs the driver one tap to reject.
+SEARCH_NAME_SIMILARITY = 0.25
+
+
+def search_by_name(db: Session, name: str, limit: int = 5) -> list[tuple[Facility, float]]:
+    """Find facilities by NAME alone, best match first, each with its score.
+
+    `find_duplicate_candidates` blocks on a geohash, so it needs coordinates. A rate
+    confirmation gives an address string and no coordinates, and this codebase has no
+    geocoder — so a text search is what a parsed load can actually offer. The score
+    travels with the row because the caller is deciding whether to show a human a
+    suggestion, not whether to merge two records unattended.
+    """
+    if not (name or "").strip():
+        return []
+    score = func.similarity(Facility.name, name)
+    stmt = (
+        select(Facility, score)
+        .where(Facility.status != FacilityStatus.merged)
+        .where(score >= SEARCH_NAME_SIMILARITY)
+        .order_by(score.desc())
+        .limit(limit)
+    )
+    return [(row[0], float(row[1])) for row in db.execute(stmt)]
+
+
 def find_duplicate_candidates(db: Session, name: str, lat: float, lon: float) -> list[Facility]:
     block = geohash_util.encode(lat, lon, DEDUP_GEOHASH_PRECISION)
     stmt = (

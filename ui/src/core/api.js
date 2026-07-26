@@ -242,6 +242,27 @@ export async function createActiveLoad(payload) {
   return data;
 }
 
+// AI-CONTEXT: §10.2's empty-state action — "Add a load" by rate-con photo, which PRD
+// §108 calls the PRIMARY way a load is created. It returns a DRAFT and creates
+// nothing: M4-FR4 specifies a driver-confirm step, because a machine read of a
+// photographed contract is a proposal and only the driver holds both the paper and
+// the phone. Not queued offline — there is nothing useful to show a driver who
+// photographs a rate con in a dead zone except the manual form they already have.
+export async function importRateCon({ contentB64, filename, contentType } = {}) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/load/import`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      content_b64: contentB64,
+      filename: filename ?? null,
+      content_type: contentType ?? null,
+    }),
+  });
+  if (!resp.ok) throw new Error(`import failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function arriveAtStop(stopId) {
   const resp = await fetch(`${API_BASE}/load/${stopId}/arrive`, {
     method: "POST",

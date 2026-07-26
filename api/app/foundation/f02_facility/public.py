@@ -54,6 +54,7 @@ from .domain.service import (
     merge_facilities,
     nearest,
     resolve_canonical,
+    search_by_name,
     search_service_facilities,
     set_lot_polygon,
 )
@@ -93,6 +94,7 @@ __all__ = [
     "merge_facilities",
     "nearest",
     "resolve_canonical",
+    "search_by_name",
     "search_service_facilities",
     "set_lot_polygon",
     # --- ingestion (PRD §12) ---

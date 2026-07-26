@@ -136,3 +136,76 @@ def test_load_status_transitions(db):
     assert load.status == loads.LoadStatus.active
     loads.set_load_status(db, load, loads.LoadStatus.completed)
     assert load.status == loads.LoadStatus.completed
+
+
+# --- The rate con, parsed (PRD §108's PRIMARY way a load is created) ---
+def test_a_rate_con_silent_on_detention_says_so(db):
+    """M4-FR4's pre-acceptance warning. "Silent on detention" is not "no detention" —
+    it means the contract does not say, which is a fact about the paper the driver
+    should learn before accepting the load, not after waiting four hours at a dock."""
+    silent = loads.silent_terms({"rate_cents": 250000})
+
+    assert set(silent) == {"detention", "free_time", "tonu"}
+
+
+def test_a_term_the_contract_states_is_not_warned_about(db):
+    parsed = {
+        "detention_rate_cents_per_hour": 7500,
+        "free_time_minutes": 120,
+        "accessorial_terms": {"tonu": "50% of linehaul"},
+    }
+
+    assert loads.silent_terms(parsed) == []
+
+
+def test_a_null_term_is_treated_as_silence_not_as_zero(db):
+    """An explicit null and a missing key mean the same thing: the document does not
+    say. Reading null as "no free time" would put a driver on a clock the contract
+    never agreed to."""
+    assert "free_time" in loads.silent_terms(
+        {"detention_rate_cents_per_hour": 7500, "free_time_minutes": None}
+    )
+
+
+def test_the_parsed_receiver_is_matched_against_facilities_we_already_know(db):
+    """Matched rather than created: a facility row per filed load is how the registry
+    accumulates duplicates, and those duplicates are what M2's dwell history
+    aggregates over."""
+    known = _facility(db, name="ACME Distribution Center")
+
+    candidates = loads.facility_candidates(db, {"receiver_name": "Acme Distribution"})
+
+    assert [c["facility_id"] for c in candidates] == [str(known.id)]
+    assert candidates[0]["score"] > 0
+
+
+def test_a_rate_con_with_no_receiver_name_offers_no_match(db):
+    """Rather than matching everything, or nothing, by accident."""
+    _facility(db, name="Somewhere Else")
+
+    assert loads.facility_candidates(db, {"receiver_name": None}) == []
+    assert loads.facility_candidates(db, {}) == []
+
+
+def test_name_similarity_cannot_tell_the_right_dock_from_a_wrong_one(db):
+    """The measurement behind offering matches without pre-selecting one. Against
+    "ACME Distribution Center", an unrelated "Dallas Distribution Center" scores 0.645
+    and the correct-but-abbreviated "ACME Distribution Ctr" scores 0.679 — four
+    hundredths apart, because the score is dominated by the words they share. No
+    threshold separates them, so the screen offers and the driver picks."""
+    _facility(db, name="Dallas Distribution Center")
+    _facility(db, name="ACME Distribution Ctr", coords=(32.9, -96.9))
+
+    ranked = loads.facility_candidates(db, {"receiver_name": "ACME Distribution Center"})
+
+    by_name = {c["name"]: c["score"] for c in ranked}
+    assert by_name["ACME Distribution Ctr"] - by_name["Dallas Distribution Center"] < 0.05
+    # both are offered; neither carries a flag that would let a screen tick it by default
+    assert all("confident" not in c for c in ranked)
+
+
+def test_an_unrelated_facility_is_not_offered_at_all(db):
+    """Below F2's suggestion floor there is no useful signal left."""
+    _facility(db, name="Memphis Cold Storage")
+
+    assert loads.facility_candidates(db, {"receiver_name": "ACME Distribution Center"}) == []

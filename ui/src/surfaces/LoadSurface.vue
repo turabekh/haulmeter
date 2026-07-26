@@ -3,16 +3,22 @@
      LIVE: an active stop (api.js activeStopId) drives the Meter off the M3
      detention clock (GET /load/{stop}/meter); the client reconstructs arrival
      and ticks locally. Pre-arrival shows an "I've arrived" CTA; arrived ticks
-     free-time down then money up. No active load -> a fixture demo Meter + a
-     "Start a load" sheet. DRIVING collapses to a Meter-only glance. S2 dock. -->
+     free-time down then money up. DRIVING collapses to a Meter-only glance. S2 dock.
+
+     Empty state is §10.2's: "Add a load" by RATE-CON PHOTO as the one action. PRD
+     §108 calls the parsed rate con the primary way a load is created, and it had
+     never existed outside the Foundation e2e — this tab offered a four-field manual
+     form in its place, which now lives inside the import sheet as the fallback for a
+     rate con the parse cannot read. -->
 <script setup>
-import { ref, computed, reactive, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { Check, Camera, Send } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import IncidentSheet from "../core/components/IncidentSheet.vue";
 import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
+import RateConImportSheet from "../core/components/RateConImportSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { computeDetentionState, meterVariant, formatClock, formatMoney } from "../core/meter.js";
@@ -20,7 +26,6 @@ import { SAMPLE_STOP } from "../core/fixtures.js";
 import {
   activeStopId,
   setActiveStop,
-  createActiveLoad,
   arriveAtStop,
   fetchMeter,
   fetchActiveLoad,
@@ -37,7 +42,6 @@ const router = useRouter();
 const live = ref(null); // live meter response, or null (fixture demo)
 const arrivalMs = ref(0); // null while a live load is pre-arrival
 const now = ref(Date.now());
-const starting = ref(false);
 const reporting = ref(false); // incident sheet open
 const incidentToast = ref("");
 // the last incident filed in this session, so its pack has a route (FR4)
@@ -61,12 +65,18 @@ function onIncidentFiled(e) {
 // against the account, so the row could never turn green no matter what the driver
 // photographed. The endpoint has accepted a stop since the writer shipped.
 const snapping = ref(false);
+// §10.2's empty-state action. The manual "Start a load" form now lives inside this
+// sheet as the fallback when a rate con cannot be read, rather than as a rival action.
+const importing = ref(false);
+async function onLoadCreated() {
+  importing.value = false;
+  await loadMeter();
+}
 async function onBolCaptured() {
   snapping.value = false;
   await loadMeter(); // the checklist row closes the moment the BOL lands
 }
 const filed = ref(null); // the generated claim result, once filed
-const form = reactive({ facility: "", broker: "", freeMin: 120, rateHr: 75 });
 let timer = null;
 
 function setupDemo() {
@@ -243,23 +253,6 @@ async function onSendNotice() {
   }
 }
 
-async function startLoad() {
-  starting.value = false;
-  try {
-    await createActiveLoad({
-      facility_name: form.facility || "Receiver",
-      lat: 32.7767,
-      lon: -96.797,
-      counterparty: form.broker || "Broker",
-      free_time_minutes: Number(form.freeMin) || 120,
-      rate_cents_per_hour: Math.round(Number(form.rateHr) || 75) * 100,
-    });
-    await loadMeter();
-  } catch {
-    /* offline: the demo Meter stays; queued in a later F12 pass */
-  }
-}
-
 async function endLoad() {
   const stopId = activeStopId.value;
   if (stopId) await endActiveLoad(stopId); // durable: departs the stop server-side
@@ -398,40 +391,30 @@ async function endLoad() {
 
       <button v-if="live" class="cta cta--text" type="button" @click="endLoad">{{ t("load.end") }}</button>
 
-      <!-- no active load: the Meter above is a sample; start a real one -->
-      <button v-if="!live" class="cta" type="button" @click="starting = true">
-        {{ t("load.start") }}
+      <!-- §10.2's empty state: "Add a load (rate-con photo import) as the ONE action".
+           PRD §108 calls the parsed rate con the primary way a load is created; the
+           manual form lives inside that sheet as the fallback for a rate con the
+           parse cannot read, rather than competing with it out here. -->
+      <button v-if="!live" class="cta" type="button" @click="importing = true">
+        {{ t("load.rc_add") }}
       </button>
 
       <!-- M8: pre-acceptance decision — cross-link to the true-profit calculator (NAV-5) -->
-      <button class="cta cta--text" type="button" @click="router.push('/load/calc')">
+      <button
+        v-if="live"
+        class="cta cta--text"
+        type="button"
+        @click="router.push('/load/calc')"
+      >
         {{ t("load.check_profit") }}
       </button>
 
-      <BottomSheet :open="starting" :title="t('load.start')" @close="starting = false">
-        <form class="start" @submit.prevent="startLoad">
-          <label class="field">
-            <span class="field__label">{{ t("load.facility") }}</span>
-            <input v-model="form.facility" class="field__input" type="text" />
-          </label>
-          <label class="field">
-            <span class="field__label">{{ t("load.broker") }}</span>
-            <input v-model="form.broker" class="field__input" type="text" />
-          </label>
-          <label class="field">
-            <span class="field__label">{{ t("calc.free_min") }}</span>
-            <input v-model="form.freeMin" class="field__input" type="number" inputmode="numeric" />
-          </label>
-          <label class="field">
-            <span class="field__label">{{ t("calc.rate_hr") }}</span>
-            <input v-model="form.rateHr" class="field__input" type="number" inputmode="decimal" />
-          </label>
-          <button class="cta" type="submit">{{ t("load.create") }}</button>
-        </form>
-      </BottomSheet>
-
       <BottomSheet :open="reporting" :title="t('incident.title')" @close="reporting = false">
         <IncidentSheet @filed="onIncidentFiled" />
+      </BottomSheet>
+
+      <BottomSheet :open="importing" :title="t('load.rc_add')" @close="importing = false">
+        <RateConImportSheet @created="onLoadCreated" />
       </BottomSheet>
 
       <BottomSheet :open="snapping" :title="t('load.cta.bol')" @close="snapping = false">

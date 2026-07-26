@@ -21,6 +21,7 @@ from app.foundation.f04_evidence import public as evidence
 from app.foundation.f05_load import public as loads
 from app.foundation.f06_documents import public as documents
 from app.foundation.f08_notifications import public as notify
+from app.foundation.f09_ai_gateway import public as ai
 from app.foundation.f14_admin import public as admin
 from app.modules.m03_detention import public as m3
 from app.modules.m05_protection import public as m5
@@ -39,6 +40,33 @@ class CreateLoadIn(BaseModel):
     # omit to use the live F13-config detention terms (default 2h free / $75/h)
     free_time_minutes: int | None = None
     rate_cents_per_hour: int | None = None
+    # AI-CONTEXT: set when the driver confirmed a MATCHED facility on the rate-con
+    # import screen. Without it this route called create_facility unconditionally, so
+    # every load a driver filed added another row for a dock that was already in the
+    # registry — and those duplicates are what M2's dwell history aggregates over.
+    facility_id: uuid.UUID | None = None
+    # what the terms came from, so the load records that it was read off a contract
+    # rather than typed, and the wallet keeps the contract itself
+    rate_con_document_id: uuid.UUID | None = None
+    reference_number: str | None = None
+
+
+def _resolve_facility(db: Session, body: CreateLoadIn):
+    """Reuse before create. `facility_id` is the confirmed match from the import
+    screen; without one, fall back to the same name+geohash rule ingest already
+    trusts to merge two records unattended — a dock at the same coordinates with
+    a matching name is the same dock, however the driver got here."""
+    if body.facility_id is not None:
+        existing = facility.get_facility(db, body.facility_id)
+        if existing is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "facility not found")
+        return existing
+    matches = facility.find_duplicate_candidates(db, body.facility_name, body.lat, body.lon)
+    if matches:
+        return matches[0]
+    return facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, body.facility_name, body.lat, body.lon
+    )
 
 
 def _owned_stop(db: Session, stop_id: uuid.UUID, account: identity.Account):
@@ -59,9 +87,7 @@ def create_load(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
-    fac = facility.create_facility(
-        db, facility.FacilityType.shipper_receiver, body.facility_name, body.lat, body.lon
-    )
+    fac = _resolve_facility(db, body)
     cp = loads.create_counterparty(db, body.counterparty, loads.CounterpartyKind.broker)
     # unset terms fall back to the live F13-config detention defaults (M3 owns them)
     free_time = (
@@ -74,12 +100,21 @@ def create_load(
         if body.rate_cents_per_hour is not None
         else m3.default_rate_cents_per_hour(db)
     )
+    # a load whose terms were read off a photographed contract records that it was —
+    # `appointment_source` on the Meter payload is how M5-FR1 tells the driver whether
+    # a machine read their appointment window or they typed it
     load = loads.create_load(
         db,
         account.id,
         counterparty_id=cp.id,
+        reference_number=body.reference_number,
         detention_rate_cents_per_hour=rate,
         free_time_minutes=free_time,
+        source=(
+            loads.LoadSource.rate_con_parse
+            if body.rate_con_document_id is not None
+            else loads.LoadSource.manual
+        ),
     )
     stop = loads.add_stop(
         db,
@@ -94,6 +129,71 @@ def create_load(
     # F14: North Star funnel step 1 — a live load exists (feeds /admin/analytics)
     admin.emit(db, "load_added", "m03", datetime.now(UTC), account_id=account.id)
     return {"load_id": str(load.id), "stop_id": str(stop.id)}
+
+
+class ImportRateConIn(BaseModel):
+    content_b64: str
+    filename: str | None = None
+    content_type: str | None = None
+
+
+@router.post("/import", status_code=201)
+def import_rate_con(
+    body: ImportRateConIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """AI-CONTEXT: §10.2's empty state — "Add a load" by rate-con photo, which PRD
+    §108 calls the PRIMARY way a load is created and which has never existed outside a
+    test. F6 stores `rate_con`, F9 parses documents, `create_load_from_parsed_terms`
+    takes the result — and the only place the three were ever joined was
+    `tests/e2e/test_common_ground_e2e.py`. The Load tab offered a four-field manual
+    form instead.
+
+    It returns a DRAFT and creates nothing. M4-FR4 specifies a driver-confirm step,
+    and that step is the point: a machine read of a photographed contract is a
+    proposal, and only the driver can see both the paper and the screen. The rate con
+    itself is filed to the wallet either way — the document is worth keeping even when
+    the parse fails, because it is the contract the claim will be argued from.
+    """
+    import base64
+
+    try:
+        content = base64.b64decode(body.content_b64)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unreadable upload") from exc
+
+    document = m5.capture_document(
+        db,
+        account.id,
+        "rate_con",
+        content,
+        filename=body.filename or "rate-con",
+        content_type=body.content_type or "image/jpeg",
+    )
+
+    try:
+        draft = loads.draft_from_rate_con(
+            db,
+            ai.resolve_provider(),
+            document.content_hash,
+            account_id=account.id,
+            document_b64=body.content_b64,
+            media_type=document.content_type,
+        )
+    except Exception:
+        # The document is filed and the driver types the terms instead. This is the
+        # honest failure: with no model key configured, or a rate con the parse cannot
+        # read, inventing plausible terms would put a number the contract never
+        # contained behind a detention claim.
+        return {
+            "document_id": str(document.id),
+            "parsed": None,
+            "silent_on": [],
+            "facility_candidates": [],
+            "readable": False,
+        }
+    return {"document_id": str(document.id), **draft}
 
 
 @router.get("/active")

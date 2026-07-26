@@ -114,16 +114,35 @@ _ANTHROPIC_VERSION = "2023-06-01"
 
 
 def _anthropic_messages(
-    api_key: str, model: str, system: str | None, user: str, max_tokens: int = 1024
+    api_key: str,
+    model: str,
+    system: str | None,
+    user: str,
+    max_tokens: int = 1024,
+    document: tuple[str, str] | None = None,
 ) -> tuple[str, int, int]:
     # single HTTP call to the Messages API; kept as a module function so tests can
     # monkeypatch it without hitting the network. Returns (text, in_tok, out_tok).
+    #
+    # AI-CONTEXT: `document` is (media_type, base64) and is what makes document_parse
+    # actually read a DOCUMENT. Without it, a caller can only describe the document in
+    # words — which is how the first rate-con import shipped a SHA-256 hash to the
+    # model and got back a form of nulls that the screen then called "read from your
+    # rate con". A photographed contract has to travel as an image or a PDF; naming it
+    # is not reading it.
     import httpx
 
+    content: list | str = user
+    if document is not None:
+        media_type, data = document
+        source = {"type": "base64", "media_type": media_type, "data": data}
+        kind = "document" if media_type == "application/pdf" else "image"
+        block = {"type": kind, "source": source}
+        content = [block, {"type": "text", "text": user}]  # document first, then the ask
     body: dict = {
         "model": model,
         "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": user}],
+        "messages": [{"role": "user", "content": content}],
     }
     if system:
         body["system"] = system
@@ -178,7 +197,14 @@ class AnthropicModelProvider:
 
     def parse_structured(self, prompt: str, context: dict) -> StructuredResult:
         system = "Return ONLY a single valid JSON object — no prose, no markdown."
-        text, i, o = _anthropic_messages(self._key, self._model, system, prompt)
+        # a caller that put the document itself in the context gets it ATTACHED rather
+        # than described; callers that pass only text are unaffected
+        data = context.get("document_b64")
+        media_type = context.get("document_media_type")
+        document = (media_type, data) if data and media_type else None
+        text, i, o = _anthropic_messages(
+            self._key, self._model, system, prompt, document=document
+        )
         return StructuredResult(_extract_json(text), i, o)
 
     def embed(self, text: str) -> EmbeddingResult:

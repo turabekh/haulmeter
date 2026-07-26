@@ -130,8 +130,8 @@ def test_anthropic_provider_complete_and_structured(monkeypatch):
 
     calls = []
 
-    def fake_messages(api_key, model, system, user, max_tokens=1024):
-        calls.append({"model": model, "system": system, "user": user})
+    def fake_messages(api_key, model, system, user, max_tokens=1024, document=None):
+        calls.append({"model": model, "system": system, "user": user, "document": document})
         if system:  # parse_structured asks for JSON
             return '```json\n{"lines": [{"kind": "detention", "amount_cents": 15000}]}\n```', 40, 12
         return "Per our rate confirmation, $150 detention is owed.", 30, 18
@@ -149,6 +149,14 @@ def test_anthropic_provider_complete_and_structured(monkeypatch):
         "lines": [{"kind": "detention", "amount_cents": 15000}]
     }  # fence stripped
     assert calls[-1]["model"] == "claude-haiku-4-5-20251001"
+    assert calls[-1]["document"] is None  # a text-only parse attaches nothing
+
+    # AI-CONTEXT: a caller that puts the DOCUMENT in the context gets it attached.
+    # Without this, document_parse could only ever describe a document in words — which
+    # is how the rate-con import first shipped a SHA-256 hash to the model and got back
+    # a form of nulls the screen then called "read from your rate con".
+    p.parse_structured("Read it.", {"document_b64": "aGk=", "document_media_type": "image/png"})
+    assert calls[-1]["document"] == ("image/png", "aGk=")
 
     # embeddings/STT/TTS have no Anthropic API -> deterministic fallback, not a crash
     assert len(p.embed("hello").vector) == ai.EMBED_DIM
