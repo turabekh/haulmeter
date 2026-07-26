@@ -22,6 +22,12 @@ from sqlalchemy import select  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
 from app.foundation.f01_identity import public as identity  # noqa: E402
 from app.foundation.f06_documents import public as documents  # noqa: E402
+from app.main import _wire_object_storage  # noqa: E402
+
+# a script does not run the FastAPI lifespan, so without this it writes bytes into
+# an in-process dict that dies with the interpreter — the documents would exist in
+# the database and be unopenable, which is exactly how the storage bug was found.
+_wire_object_storage()
 
 TODAY = datetime.now(UTC).date()
 

@@ -137,7 +137,7 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
     </BottomSheet>
 
     <BottomSheet :open="!!viewing" :title="viewing?.label || ''" @close="viewing = null">
-      <DocumentViewer v-if="viewing" :document="viewing" @close="viewing = null" />
+      <DocumentViewer v-if="viewing" :document="viewing" />
     </BottomSheet>
   </div>
 </template>

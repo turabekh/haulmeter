@@ -13,17 +13,20 @@
        gets an object tag, and the fallback is a plain link rather than a blank box.
 
      DRIVING is not guarded here: the driver hands the PHONE to an officer, and by
-     then the truck is stopped. The guard belongs on capture, which is where it is. -->
+     then the truck is stopped. The guard belongs on capture, which is where it is.
+
+     It renders NO header of its own. The BottomSheet hosting it already provides the
+     title and the close control, and duplicating them put two "CDL" headings and two
+     × buttons on the screen — visible immediately, invisible to every test. -->
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { X, FileText, TriangleAlert } from "lucide-vue-next";
+import { FileText, TriangleAlert } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { fetchDocumentBytes } from "../api.js";
 
 const props = defineProps({
   document: { type: Object, required: true },
 });
-const emit = defineEmits(["close"]);
 const { t } = useI18n();
 
 const url = ref(null);
@@ -48,13 +51,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="viewer">
-    <header class="viewer__head">
-      <span class="viewer__title">{{ document.label }}</span>
-      <button class="viewer__close" type="button" :aria-label="t('docs.view_close')" @click="emit('close')">
-        <X :size="24" :stroke-width="2" aria-hidden="true" />
-      </button>
-    </header>
-
     <p v-if="loading" class="viewer__state">{{ t("docs.view_loading") }}</p>
 
     <p v-else-if="failed" class="viewer__state viewer__state--bad" role="alert">
@@ -79,27 +75,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
-}
-.viewer__head {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-}
-.viewer__title {
-  flex: 1 1 auto;
-  font-size: var(--type-title-size);
-  line-height: var(--type-title-line);
-  font-weight: var(--type-title-weight);
-  color: var(--text-1);
-}
-.viewer__close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 48px;
-  width: 48px;
-  height: 48px;
-  color: var(--text-2);
 }
 .viewer__frame {
   width: 100%;

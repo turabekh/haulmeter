@@ -58,6 +58,14 @@ services:
     env_file:
       - .env
     environment:
+      # AI-CONTEXT: MinIO credentials come from infra/.env, the same place the minio
+      # service reads them. They were absent here, so the API fell back to its own
+      # defaults — whose secret key did not match MINIO_ROOT_PASSWORD, so every
+      # connection failed with SignatureDoesNotMatch and object storage silently
+      # became an in-process dict.
+      MINIO_ENDPOINT: "minio:${MINIO_API_PORT}"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${API_PORT} --reload"]
@@ -75,6 +83,14 @@ services:
     env_file:
       - .env
     environment:
+      # AI-CONTEXT: MinIO credentials come from infra/.env, the same place the minio
+      # service reads them. They were absent here, so the API fell back to its own
+      # defaults — whose secret key did not match MINIO_ROOT_PASSWORD, so every
+      # connection failed with SignatureDoesNotMatch and object storage silently
+      # became an in-process dict.
+      MINIO_ENDPOINT: "minio:${MINIO_API_PORT}"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
     command: ["python", "-m", "app.worker"]

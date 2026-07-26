@@ -109,3 +109,33 @@ def test_no_reminder_without_expiry_or_when_expired(db):
     )
     due = documents.due_reminders(db, date(2026, 7, 20), account_id=account.id)
     assert due == []
+
+
+def test_a_stored_document_can_actually_be_read_back(db):
+    """AI-CONTEXT: this is the assertion whose absence hid the storage bug.
+
+    Every test used the in-memory default, so `store_document` followed by
+    `get_document_bytes` always passed — while in the running product the compose
+    file passed no MinIO credentials to the API, its own defaults did not match
+    MINIO_ROOT_PASSWORD, and every connection failed with SignatureDoesNotMatch. The
+    wiring swallowed that exception, so bytes went into an in-process dict and
+    evaporated on the next restart while the UI reported success.
+
+    A unit test cannot reach MinIO. What it CAN hold is the contract every backend
+    must satisfy — put then get returns the same bytes — so a backend that silently
+    loses them fails here rather than in a driver's hands at a scale house.
+    """
+    account = _account(db, "roundtrip@example.com")
+    content = b"%PDF-1.4 a credential that must survive"
+
+    doc = documents.store_document(
+        db,
+        account.id,
+        documents.DocType.cdl,
+        content,
+        filename="cdl.pdf",
+        content_type="application/pdf",
+    )
+
+    assert documents.get_document_bytes(db, doc) == content
+    assert doc.storage_key, "a document with no storage key cannot be produced later"
