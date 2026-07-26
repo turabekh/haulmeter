@@ -13,10 +13,10 @@ the next-stop preview, the single CTA, the DRIVING voice hint, and "Add a load" 
 | Thing | Value |
 |---|---|
 | Migrations | head **0050_f06_document_archive_reason** (none added) |
-| Tests | **pytest 997 · vitest 365 · layout 136/136 · ruff clean · import-linter 30/30** |
+| Tests | **pytest 999 · vitest 365 · layout 136/136 · ruff clean · import-linter 30/30** |
 | §23 decision log | 48 entries |
 | Handoffs | 000 → 090 |
-| Git | **54 commits on `main`; `origin` is behind** (remote added by the owner this session) |
+| Git | **57 commits, pushed to `origin/main`** (remote added by the owner this session) |
 
 ## 2. What §10.2 asked for, and what was there
 
@@ -201,6 +201,45 @@ the load produced.
 for every stop and the flag asked whether one EXISTS. An indicator that can never say no is
 decoration — the same shape as the BOL row that could never say yes. It counts contents now: a quiet
 load reports 0, one with an arrival reports 1.
+
+## 14. What four screenshots caught (added after §13)
+
+The owner sent four screens. **Five defects, none of which any test noticed.**
+
+**The evidence record listed the driver's whole WALLET** — CDL, medical card, insurance, every rate
+con — under a heading sitting directly above *"Share with broker · They get one link to this
+record."* The shared artifact never carried them (`compose_pack` builds from the log's records and
+artifacts alone), so nothing leaked; what leaked was the **impression**, and the harm runs backwards:
+a driver withholds a legitimate claim to protect documents that were never going anywhere. The record
+now lists the paperwork attached to **that stop**. Verified live — a wallet of four credentials
+renders one BOL.
+
+**`RATE_CON` / `MED_CARD`** — the raw enum, upper-cased: ALL-CAPS (Forbidden #5), untranslated in six
+locales, beside a `docs.type.*` catalogue that has had labels since the capture sheet was built. The
+same drift the Docs grid was caught by, in a second place. The status column went with the wallet — a
+BOL does not expire, so flagging paperwork "expiring" in flare answered a question the list no longer
+asks.
+
+**"1 records"** — `t()` has no plural support and the six locales do not share one plural rule (ru
+needs three forms), so a figure-first noun cannot be correct here without ICU, which PRD §171 puts in
+F15's pipeline. Labelled figures are plural-free everywhere. **ICU plurals logged as F15 debt.**
+
+**"The shareable claim PDF generates at activation"** was false — the pack renderer shipped in
+session 6 and the same screen carries a working Export PDF two cards down.
+
+**An invoice whose own figures did not reproduce.** "0:00:38 · $120/h" over **$1.29**; 38s at $120/h
+is $1.27. The amount was rounded off the float behind the clock (38.7s) while the time was truncated
+to the second. The amount now derives from the seconds we report — a clerk verifying a claim does the
+only arithmetic available to them, the figures on its face.
+
+**And one the suite found on itself:** `tests/m13` went red between two runs with no code change.
+`enqueue_moderation` took the **database** clock while its caller passed an injected `now`, so the
+72h SLA was measured across two clocks and passed only while real time sat on the right side of the
+boundary. An injected clock that does not reach the record it dates is not an injected clock.
+
+**Checked and left alone:** the Money tab's `$0.00 delivered to you` above `$1.29 invoiced` is the
+North Star figure (recovered + fuel saved + audit-flagged), which is what §10.3 specifies as the
+month summary. An invoice is not money delivered.
 
 ## 11. Ports / env / flags
 
