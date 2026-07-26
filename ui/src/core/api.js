@@ -958,6 +958,18 @@ export async function captureDocument({ docType, contentB64, filename, contentTy
   });
 }
 
+// the document itself. Held as an object URL by the caller, which revokes it —
+// inspection mode may open several in a row and leaking a blob per tap on a phone
+// that is already low on memory is not acceptable.
+export async function fetchDocumentBytes(documentId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/protection/documents/${documentId}`, {
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`document ${resp.status}`);
+  return URL.createObjectURL(await resp.blob());
+}
+
 export async function fetchDocumentTypes() {
   return apiGet("/protection/documents/types", "doc_types");
 }

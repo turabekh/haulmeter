@@ -16,6 +16,7 @@ from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f04_evidence import public as evidence
 from app.foundation.f05_load import public as loads
+from app.foundation.f06_documents import public as documents
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f12_offline import public as offline
 from app.modules.m05_protection import public as m5
@@ -413,6 +414,44 @@ def capture_document(
     else:
         _apply(None)
     return {"document_id": captured.get("id"), "applied": applied}
+
+
+@router.get("/documents/{document_id}")
+def view_document(
+    document_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+):
+    """AI-CONTEXT: the bytes. Inspection mode's whole purpose is PRODUCING the
+    credential, and until this existed the wallet could only show metadata — an
+    officer asking for a CDL got a row reading "CDL · 2028-01-17", which is not a
+    credential, it is our claim that the driver has one. Asserting on a driver's
+    behalf to a police officer is the worst possible version of the honesty problem
+    this product keeps solving elsewhere.
+
+    F6 has had `get_document_bytes` since it was written and no route used it.
+
+    Cached hard on purpose: a scale house is a dead zone, and a document that needs
+    the network to render is a document you cannot produce when you are asked for it.
+    The bytes are immutable — a document is replaced, never edited — so a long cache
+    is safe as well as necessary.
+    """
+    doc = db.get(documents.Document, document_id)
+    if doc is None or doc.account_id != account.id:
+        # a stranger's document id must not be distinguishable from a missing one
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "document not found")
+    try:
+        content = documents.get_document_bytes(db, doc)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "document unavailable") from exc
+    return Response(
+        content=content,
+        media_type=doc.content_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'inline; filename="{doc.filename or doc.doc_type.value}"',
+            "Cache-Control": "private, max-age=31536000, immutable",
+        },
+    )
 
 
 # --- FR1: the per-load opt-in (PRD §8.5 "opt-in per load") ---

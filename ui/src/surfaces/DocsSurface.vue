@@ -17,6 +17,7 @@ import { ref, computed, onMounted } from "vue";
 import { ShieldCheck, Plus } from "lucide-vue-next";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
+import DocumentViewer from "../core/components/DocumentViewer.vue";
 import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import { fetchWallet } from "../core/api.js";
@@ -27,6 +28,14 @@ const { isDriving } = useDriverState();
 const data = ref(SAMPLE_WALLET);
 const inspecting = ref(false);
 const capturing = ref(false);
+// AI-CONTEXT: the document a driver (or an officer) is looking at. Tapping a row
+// opens it, in the wallet AND in inspection mode — the point of the wallet is
+// producing the credential, not reporting that one exists.
+const viewing = ref(null);
+
+function open(doc) {
+  viewing.value = { id: doc.id, label: docLabel(doc.doc_type), content_type: doc.content_type };
+}
 
 async function onCaptured() {
   // §15.1: sync completion is silent. The wallet simply has the document in it —
@@ -92,9 +101,11 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
          upload path. -->
     <p v-if="!data.documents.length" class="docs__empty">{{ t("docs.empty") }}</p>
     <ul v-else class="grid">
-      <li v-for="d in data.documents" :key="d.id" class="doc">
-        <span class="doc__type">{{ docLabel(d.doc_type) }}</span>
-        <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
+      <li v-for="d in data.documents" :key="d.id">
+        <button class="doc" type="button" @click="open(d)">
+          <span class="doc__type">{{ docLabel(d.doc_type) }}</span>
+          <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
+        </button>
       </li>
     </ul>
 
@@ -111,12 +122,22 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
     </BottomSheet>
 
     <BottomSheet :open="inspecting" :title="t('docs.inspection')" @close="inspecting = false">
+      <!-- the officer's screen. Tapping produces the credential itself, which is
+           the entire purpose of inspection mode — a list of types and dates is our
+           CLAIM that the driver holds them, not the documents. -->
       <ul class="grid">
-        <li v-for="d in inspectionDocs" :key="d.id" class="doc doc--inspect">
-          <span class="doc__type">{{ docLabel(d.doc_type) }}</span>
-          <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
+        <li v-for="d in inspectionDocs" :key="d.id">
+          <button class="doc doc--inspect" type="button" @click="open(d)">
+            <span class="doc__type">{{ docLabel(d.doc_type) }}</span>
+            <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
+          </button>
         </li>
       </ul>
+      <p class="docs__hint">{{ t("docs.view_hint") }}</p>
+    </BottomSheet>
+
+    <BottomSheet :open="!!viewing" :title="viewing?.label || ''" @close="viewing = null">
+      <DocumentViewer v-if="viewing" :document="viewing" @close="viewing = null" />
     </BottomSheet>
   </div>
 </template>
@@ -153,6 +174,11 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
   color: var(--ink-0);
   background: var(--pill-color);
 }
+.docs__hint {
+  margin: var(--s-3) 0 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+}
 .docs__empty {
   margin: var(--s-5) var(--s-4) 0;
   color: var(--text-2);
@@ -168,6 +194,9 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
   gap: var(--s-3);
 }
 .doc {
+  width: 100%;
+  min-height: 64px;
+  text-align: left;
   min-height: 88px;
   display: flex;
   flex-direction: column;

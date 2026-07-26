@@ -235,3 +235,63 @@ def test_the_report_names_the_facility_and_the_load(client, db):
 
     assert b"Dallas Receiving" in content
     assert b"4471" in content
+
+
+# --- FR3: producing the credential, not a claim about it ---
+def _file_doc(client, headers, doc_type="cdl", expires="2028-01-17"):
+    return client.post(
+        "/protection/documents",
+        json={
+            "doc_type": doc_type,
+            "content_b64": base64.b64encode(b"\x89PNG\r\n\x1a\n-cdl-scan").decode(),
+            "filename": f"{doc_type}.png",
+            "content_type": "image/png",
+            "expires_on": expires,
+        },
+        headers=headers,
+    ).json()["document_id"]
+
+
+def test_a_driver_can_see_the_document_they_filed(client, db):
+    """Inspection mode exists to PRODUCE a credential. A row reading "CDL ·
+    2028-01-17" is our claim that the driver holds one, not the document — and
+    asserting on their behalf to a police officer is the worst possible audience for
+    that."""
+    headers = _headers(client, "viewdoc@example.com")
+    doc_id = _file_doc(client, headers)
+
+    resp = client.get(f"/protection/documents/{doc_id}", headers=headers)
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    assert resp.content.startswith(b"\x89PNG")
+
+
+def test_the_bytes_are_cached_hard_because_a_scale_house_is_a_dead_zone(client, db):
+    """A document that needs the network to render is a document you cannot produce
+    when you are asked for it. The bytes are immutable — a document is replaced,
+    never edited — so a long cache is safe as well as necessary."""
+    headers = _headers(client, "cachedoc@example.com")
+    doc_id = _file_doc(client, headers)
+
+    resp = client.get(f"/protection/documents/{doc_id}", headers=headers)
+
+    assert "immutable" in resp.headers.get("cache-control", "")
+    assert "private" in resp.headers.get("cache-control", "")
+
+
+def test_another_driver_cannot_read_your_credential(client, db):
+    """A CDL is the most identifying document a driver carries."""
+    mine = _headers(client, "mydoc@example.com")
+    theirs = _headers(client, "theirdoc@example.com")
+    doc_id = _file_doc(client, mine)
+
+    assert client.get(f"/protection/documents/{doc_id}", headers=theirs).status_code == 404
+
+
+def test_a_stranger_id_is_indistinguishable_from_a_missing_one(client, db):
+    """Both 404, so a caller cannot probe ids to learn which documents exist."""
+    headers = _headers(client, "probedoc@example.com")
+    missing = "11111111-2222-3333-4444-555555555555"
+
+    assert client.get(f"/protection/documents/{missing}", headers=headers).status_code == 404
