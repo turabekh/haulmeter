@@ -225,11 +225,21 @@ def job_history(db: Session, job_name: str, limit: int = 20) -> list[JobRun]:
 
 # --- Moderation queue ---
 def enqueue_moderation(
-    db: Session, content_kind: str, content_ref, submitted_by=None
+    db: Session, content_kind: str, content_ref, submitted_by=None, now=None
 ) -> ModerationItem:
+    """AI-CONTEXT: `now` reaches the ROW whose age the SLA is measured from.
+
+    Without it the item took the database clock while its caller was passing an
+    injected `now`, so the 72h SLA was computed between two different clocks. The
+    queue test only passed while real time happened to sit on the right side of the
+    boundary — it went red on its own, hours later, with no code change. An injected
+    clock that does not reach the record it is meant to date is not an injected clock.
+    """
     item = ModerationItem(
         content_kind=content_kind, content_ref=content_ref, submitted_by=submitted_by
     )
+    if now is not None:
+        item.created_at = now
     db.add(item)
     db.flush()
     return item

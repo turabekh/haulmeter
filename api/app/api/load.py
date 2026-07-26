@@ -448,14 +448,25 @@ def evidence_detail(
     db: Session = Depends(get_db),
 ) -> dict:
     # everything captured for this load in one place: GPS timeline + cargo-condition
-    # photos (all F4 logs for the stop) + the documents on file (owner-gated)
+    # photos (all F4 logs for the stop) + the paperwork attached to THIS STOP.
+    #
+    # AI-CONTEXT: it used to list the driver's whole WALLET — every CDL, medical card,
+    # insurance certificate and rate con on the account — inside a record the next card
+    # offers to "share with broker". The shared PDF never carried them (`compose_pack`
+    # builds from the log's records and artifacts alone), so nothing leaked; what the
+    # screen did was tell the driver their credentials were part of what a broker
+    # receives. That is the wrong direction of wrong: it invites a driver to withhold a
+    # legitimate claim to protect documents that were never going anywhere.
     stop = _owned_stop(db, stop_id, account)
     fac = facility.get_facility(db, stop.facility_id)
-    docs = m5.wallet(db, account.id)["documents"]
+    docs = documents.documents_for_subject(db, "stop", stop.id)
     return {
         "stop_id": str(stop.id),
         "facility": fac.name if fac else None,
-        "documents": [{"doc_type": d["doc_type"], "status": d["status"]} for d in docs],
+        "documents": [
+            {"doc_type": d.doc_type.value, "uploaded_at": d.uploaded_at.isoformat()}
+            for d in docs
+        ],
         **evidence.stop_evidence(db, stop.id),
     }
 

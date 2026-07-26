@@ -77,3 +77,18 @@ def test_admin_view_registry(db):
     assert len(views) == 2
     m03 = admin.list_admin_views(db, module="m03")
     assert m03[0].title == "Claims Desk"
+
+
+def test_the_injected_clock_reaches_the_row_it_dates(db):
+    """The 72h moderation SLA is measured from this row's `created_at`. Without the
+    clock reaching it, the item took the database time while its caller passed an
+    injected `now` — so the SLA was computed between two clocks, and the queue test
+    went red on its own hours later with no code change. An injected clock that does
+    not reach the record it is meant to date is not an injected clock."""
+    from datetime import UTC, datetime
+
+    when = datetime(2026, 7, 26, 12, 0, tzinfo=UTC)
+
+    item = admin.enqueue_moderation(db, "review", uuid.uuid4(), now=when)
+
+    assert item.created_at == when

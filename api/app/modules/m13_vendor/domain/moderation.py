@@ -220,7 +220,9 @@ def report_content(
     # "this review, reported by 3 people", not three identical tasks
     existing_ref = _existing_moderation_ref(db, content_kind, content_ref)
     if existing_ref is None:
-        item = admin.enqueue_moderation(db, content_kind, content_ref, submitted_by=account_id)
+        item = admin.enqueue_moderation(
+            db, content_kind, content_ref, submitted_by=account_id, now=now
+        )
         _attach_moderation_ref(db, content_kind, content_ref, item.id)
         existing_ref = item.id
 

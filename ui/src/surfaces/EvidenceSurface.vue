@@ -45,6 +45,14 @@ const packKind = () => (useRoute().query.kind === "incident" ? "incident" : "con
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+
+// acronyms stay English inside the locale catalogue, which is where §12.3 wants that
+// decision — not derived here from the enum
+function docLabel(type) {
+  const key = `docs.type.${type}`;
+  const label = t(key);
+  return label === key ? type.replace(/_/g, " ") : label;
+}
 const data = ref(null);
 const missing = ref(false);
 // object URLs for the real F6-served thumbnails, keyed by artifact_id; revoked
@@ -178,8 +186,16 @@ function photoLabel(prompt) {
         <ul class="docs">
           <li v-for="(d, i) in data.documents" :key="i" class="doc">
             <FileText :size="16" :stroke-width="2" class="doc__icon" aria-hidden="true" />
-            <span class="doc__name">{{ d.doc_type.toUpperCase() }}</span>
-            <span class="doc__status" :class="d.status !== 'ok' ? 'doc__status--warn' : ''">{{ d.status }}</span>
+            <!-- AI-CONTEXT: TRANSLATED, and not shouted. This rendered the raw enum
+                 upper-cased — "RATE_CON", "MED_CARD" — which is ALL-CAPS text
+                 (Forbidden #5), untranslated in all six locales, and beside a
+                 `docs.type.*` catalogue that has carried proper labels since the
+                 capture sheet was built. The same drift the Docs grid was caught by.
+                 The status column went with the wallet: a BOL does not expire, so
+                 flagging paperwork as "expiring" in flare was answering a question
+                 this list does not ask. -->
+            <span class="doc__name">{{ docLabel(d.doc_type) }}</span>
+            <span class="doc__when">{{ (d.uploaded_at || "").slice(0, 10) }}</span>
           </li>
         </ul>
       </section>
@@ -378,8 +394,12 @@ function photoLabel(prompt) {
   font-size: var(--type-caption-size);
   color: var(--text-3);
 }
-.doc__status--warn {
-  color: var(--flare-500);
+.doc__when {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
 }
 .doc-note {
   margin: 0;

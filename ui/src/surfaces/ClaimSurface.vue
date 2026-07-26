@@ -122,7 +122,16 @@ function evTime(iso) {
             <span class="ev__label">{{ claim.notice_sent ? t("claim.notice_sent") : t("claim.notice_not_sent") }}</span>
           </li>
         </ul>
-        <p class="records">{{ claim.record_count }} {{ t("claim.records") }} · {{ claim.artifact_count }} {{ t("claim.photos") }}</p>
+        <!-- AI-CONTEXT: label-then-figure, not "1 records". `t()` has no plural
+             support, and the six launch locales do not share one plural rule — ru
+             alone needs three forms — so a figure-first noun cannot be made correct
+             here without ICU, which PRD §171 puts in F15's translation pipeline.
+             Labelled figures are plural-free in every locale and match the count
+             pattern the Docs archive and the photo checklist already use. -->
+        <p class="records">
+          {{ t("claim.records") }} <span class="records__n">{{ claim.record_count }}</span>
+          · {{ t("claim.photos") }} <span class="records__n">{{ claim.artifact_count }}</span>
+        </p>
       </section>
 
       <p class="doc-note">{{ t("claim.doc_note") }}</p>
@@ -287,6 +296,11 @@ function evTime(iso) {
 .ev__time {
   color: var(--text-3);
   font-size: var(--type-caption-size);
+}
+.records__n {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
 }
 .records {
   margin: var(--s-3) 0 0;
