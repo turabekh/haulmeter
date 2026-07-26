@@ -395,6 +395,7 @@
   "load.broker": "Broker",
   "load.check_profit": "Check load profit",
   "load.create": "Start",
+  "load.cta.bol": "Snap BOL",
   "load.cta.claim": "Generate claim",
   "load.cta.notice": "Send notice",
   "load.detention": "Detention",

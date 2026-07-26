@@ -12,6 +12,7 @@ import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import IncidentSheet from "../core/components/IncidentSheet.vue";
+import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { computeDetentionState, meterVariant, formatClock, formatMoney } from "../core/meter.js";
@@ -53,6 +54,16 @@ function onIncidentFiled(e) {
   lastIncidentId.value = e.incident_id ?? null;
   incidentToast.value = e.state === "queued" ? t("incident.queued") : t("incident.logged");
   setTimeout(() => (incidentToast.value = ""), 3500);
+}
+// AI-CONTEXT: §10.2's CTA ladder is "Arm stop -> Snap BOL -> Send notice -> Generate
+// claim", and the Snap BOL rung has never existed. The checklist read `has_bol(stop)`
+// — a document scoped to THIS stop — while the only capture sheet in the app filed
+// against the account, so the row could never turn green no matter what the driver
+// photographed. The endpoint has accepted a stop since the writer shipped.
+const snapping = ref(false);
+async function onBolCaptured() {
+  snapping.value = false;
+  await loadMeter(); // the checklist row closes the moment the BOL lands
 }
 const filed = ref(null); // the generated claim result, once filed
 const form = reactive({ facility: "", broker: "", freeMin: 120, rateHr: 75 });
@@ -184,6 +195,25 @@ const meterStatus = computed(() => {
 });
 const variant = computed(() => (preArrival.value ? "countdown" : meterVariant(state.value)));
 
+// AI-CONTEXT: §10.2's "state-dependent single CTA (Arm stop -> Snap BOL -> Send
+// notice -> Generate claim)" — one rung at a time, and the ORDER is the spec's.
+//
+// It decides which action is PRIMARY, not which are permitted. Snap BOL outranking
+// Generate claim reflects that a claim filed without the BOL is a weaker claim, but
+// a driver at a receiver that has not produced paperwork yet must still be able to
+// file — so the rungs the ladder passes over stay reachable as secondary text
+// controls. A ladder that removed capability would be a gate, and §10.2 asks for
+// guidance.
+const rung = computed(() => {
+  if (!live.value) return "start";
+  if (isFiled.value) return null;
+  if (preArrival.value) return "arrive";
+  if (!bolCaptured.value) return "bol";
+  if (accruing.value && !noticeSent.value) return "notice";
+  if (accruing.value) return "claim";
+  return null; // arrived, BOL filed, still inside free time: nothing is owed yet
+});
+
 async function onArrive() {
   if (!activeStopId.value) return;
   try {
@@ -304,23 +334,45 @@ async function endLoad() {
         <span class="filed__link">{{ t("claim.view") }}</span>
       </button>
 
-      <!-- pre-arrival: mark arrival (starts the clock) -->
-      <button v-if="live && preArrival" class="cta" type="button" @click="onArrive">
+      <!-- §10.2: ONE state-dependent CTA. The ladder picks the rung; the rungs it
+           passes over stay reachable below as secondary text controls. -->
+      <button v-if="rung === 'arrive'" class="cta" type="button" @click="onArrive">
         {{ t("load.arrive") }}
       </button>
-
-      <!-- accruing: FILE the GPS-backed claim (freezes the Meter) -->
-      <button v-if="accruing && !isFiled" class="cta" type="button" @click="onGenerateClaim">
+      <button v-else-if="rung === 'bol'" class="cta" type="button" @click="snapping = true">
+        {{ t("load.cta.bol") }}
+      </button>
+      <button v-else-if="rung === 'notice'" class="cta" type="button" @click="onSendNotice">
+        {{ t("load.cta.notice") }}
+      </button>
+      <button v-else-if="rung === 'claim'" class="cta" type="button" @click="onGenerateClaim">
         {{ t("load.cta.claim") }}
       </button>
-      <!-- accruing: warn the broker detention started (once) -->
+
+      <!-- passed-over rungs: still available, never competing for the eye -->
       <button
-        v-if="accruing && !noticeSent && !isFiled"
+        v-if="accruing && !isFiled && rung !== 'claim'"
+        class="cta cta--text"
+        type="button"
+        @click="onGenerateClaim"
+      >
+        {{ t("load.cta.claim") }}
+      </button>
+      <button
+        v-if="accruing && !noticeSent && !isFiled && rung !== 'notice'"
         class="cta cta--text"
         type="button"
         @click="onSendNotice"
       >
         {{ t("load.cta.notice") }}
+      </button>
+      <button
+        v-if="live && !preArrival && !bolCaptured && rung !== 'bol'"
+        class="cta cta--text"
+        type="button"
+        @click="snapping = true"
+      >
+        {{ t("load.cta.bol") }}
       </button>
       <p v-if="noticeMsg" class="notice-msg">{{ noticeMsg }}</p>
 
@@ -380,6 +432,14 @@ async function endLoad() {
 
       <BottomSheet :open="reporting" :title="t('incident.title')" @close="reporting = false">
         <IncidentSheet @filed="onIncidentFiled" />
+      </BottomSheet>
+
+      <BottomSheet :open="snapping" :title="t('load.cta.bol')" @close="snapping = false">
+        <DocumentCaptureSheet
+          :stop-id="activeStopId"
+          fixed-type="bol"
+          @captured="onBolCaptured"
+        />
       </BottomSheet>
     </template>
   </div>

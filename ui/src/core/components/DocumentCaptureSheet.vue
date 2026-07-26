@@ -16,13 +16,28 @@ import { Camera, Check, TriangleAlert } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { captureDocument, fetchDocumentTypes, fetchWouldReplace } from "../api.js";
 
+// AI-CONTEXT: `stopId` is what made §10.2's BOL row honest.
+//
+// The row reads `has_bol(stop)`, which asks F6 for a document scoped to THIS stop —
+// and this sheet had no stop to scope one to, so everything it filed landed against
+// the account. The checklist row was therefore permanently false in production: not
+// wrong about the data, just asking a question nothing could ever answer yes to. The
+// endpoint has taken `stop_id` since the writer shipped; nothing passed it.
+//
+// `fixedType` skips the type chooser. A driver who tapped "Snap BOL" has already
+// answered "what is it?", and asking again is the form not paying attention — the
+// same reasoning that hides the expiry field for types that do not expire.
+const props = defineProps({
+  stopId: { type: String, default: null },
+  fixedType: { type: String, default: null },
+});
 const emit = defineEmits(["captured"]);
 const { t } = useI18n();
 
 const types = ref([]);
 const expiringTypes = ref([]);
 const supersedingTypes = ref([]);
-const docType = ref("");
+const docType = ref(props.fixedType || "");
 const expiresOn = ref("");
 const file = ref(null);
 const preview = ref(null);
@@ -93,6 +108,8 @@ async function submit() {
       filename: file.value.name,
       contentType: file.value.type,
       expiresOn: wantsExpiry.value ? expiresOn.value : null,
+      // a BOL belongs to the delivery it came from, not to the driver in general
+      stopId: props.stopId,
     });
     done.value = res?.queued ? "queued" : "filed";
     replacedLabel.value = replaces.value ? t(`docs.type.${docType.value}`) : null;
@@ -116,20 +133,22 @@ async function submit() {
     <p v-if="done && replacedLabel" class="cap__hint">{{ t("docs.cap_replaced_done") }}</p>
 
     <template v-else>
-      <span class="cap__label">{{ t("docs.cap_type") }}</span>
-      <ul class="cap__types">
-        <li v-for="ty in types" :key="ty">
-          <button
-            class="cap__chip"
-            :class="{ 'cap__chip--on': docType === ty }"
-            type="button"
-            :aria-pressed="docType === ty"
-            @click="onType(ty)"
-          >
-            {{ t(`docs.type.${ty}`) }}
-          </button>
-        </li>
-      </ul>
+      <template v-if="!fixedType">
+        <span class="cap__label">{{ t("docs.cap_type") }}</span>
+        <ul class="cap__types">
+          <li v-for="ty in types" :key="ty">
+            <button
+              class="cap__chip"
+              :class="{ 'cap__chip--on': docType === ty }"
+              type="button"
+              :aria-pressed="docType === ty"
+              @click="onType(ty)"
+            >
+              {{ t(`docs.type.${ty}`) }}
+            </button>
+          </li>
+        </ul>
+      </template>
 
       <!-- stated BEFORE the save, in marker (caution, not error — nothing is lost) -->
       <p v-if="replaces" class="cap__replaces">

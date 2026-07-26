@@ -1556,7 +1556,11 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       free_time_remaining_seconds: 0,
       detention_seconds: 1800,
       detention_cents: 3750,
-      notice_sent: false,
+      // §10.2's ladder is Arm -> Snap BOL -> Send notice -> Generate claim, so the
+      // claim is the primary only once the rungs before it are behind the driver:
+      // the BOL is filed and the broker has been told the clock started
+      notice_sent: true,
+      bol_captured: true,
     };
     const fetchStub = vi.fn().mockImplementation((url) => {
       if (String(url).endsWith("/claim")) {
@@ -1577,6 +1581,109 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       await flushPromises();
       expect(w.find(".filed").exists()).toBe(true);
       expect(w.find(".filed").text()).toContain("$37.50"); // filed claim amount
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
+
+  it("the CTA ladder makes Snap BOL the primary before the claim (§10.2)", async () => {
+    setToken("tok-ladder");
+    setActiveStop("stop-nobol");
+    const noBol = {
+      stop_id: "stop-nobol",
+      claim_id: "claim-2",
+      facility_name: "Paperwork Pending",
+      counterparty: "Acme",
+      appointment: null,
+      arrived: true,
+      free_time_minutes: 120,
+      rate_cents_per_hour: 7500,
+      phase: "accruing",
+      free_time_remaining_seconds: 0,
+      detention_seconds: 1800,
+      detention_cents: 3750,
+      notice_sent: false,
+      bol_captured: false,
+      photos_captured: 0,
+      photos_required: 4,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => jsonOk(noBol)),
+    );
+    try {
+      const router = testRouter();
+      const w = mount(LoadSurface, { global: { plugins: [router] } });
+      await flushPromises();
+
+      // exactly one filled primary, and it is the rung the spec orders next
+      const primaries = w.findAll(".cta:not(.cta--text)");
+      expect(primaries).toHaveLength(1);
+      expect(primaries[0].text()).toContain("Snap BOL");
+
+      // a claim filed without the BOL is a weaker claim, but a driver whose receiver
+      // has not produced paperwork must still be able to file — the ladder guides,
+      // it does not gate
+      const texts = w.findAll(".cta--text").map((b) => b.text());
+      expect(texts.some((s) => s.includes("Generate claim"))).toBe(true);
+
+      // and the checklist row can finally answer the question it has always asked
+      expect(w.text()).toContain("BOL");
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
+
+  it("scopes a snapped BOL to the stop, which is what makes the row honest", async () => {
+    setToken("tok-bol");
+    setActiveStop("stop-bol");
+    const meter = {
+      stop_id: "stop-bol",
+      claim_id: "claim-3",
+      facility_name: "Dock 4",
+      counterparty: "Acme",
+      appointment: null,
+      arrived: true,
+      free_time_minutes: 120,
+      rate_cents_per_hour: 7500,
+      phase: "within_free_time",
+      free_time_remaining_seconds: 3600,
+      detention_seconds: 0,
+      detention_cents: 0,
+      notice_sent: false,
+      bol_captured: false,
+    };
+    const posts = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url, opts) => {
+        if (opts?.method === "POST") {
+          posts.push({ url: String(url), body: JSON.parse(opts.body) });
+          return jsonOk({ document_id: "doc-1", applied: true });
+        }
+        if (String(url).includes("/documents/types")) {
+          return jsonOk({ types: ["bol"], expiring: [], superseding: [] });
+        }
+        return jsonOk(meter);
+      }),
+    );
+    try {
+      const router = testRouter();
+      const w = mount(LoadSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      await w.find(".cta").trigger("click"); // Snap BOL
+      await flushPromises();
+
+      // the type was answered by the control that opened this, so it is not re-asked
+      expect(w.findAll(".cap__chip")).toHaveLength(0);
+
+      const sheet = w.findComponent({ name: "DocumentCaptureSheet" });
+      expect(sheet.props("stopId")).toBe("stop-bol");
+      expect(sheet.props("fixedType")).toBe("bol");
     } finally {
       vi.unstubAllGlobals();
       setActiveStop(null);

@@ -395,6 +395,7 @@
   "load.broker": "Брокер",
   "load.check_profit": "Рассчитать прибыль",
   "load.create": "Начать",
+  "load.cta.bol": "Снять BOL",
   "load.cta.claim": "Создать претензию",
   "load.cta.notice": "Отправить уведомление",
   "load.detention": "Простой",
