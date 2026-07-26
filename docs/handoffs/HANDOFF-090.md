@@ -13,10 +13,10 @@ the next-stop preview, the single CTA, the DRIVING voice hint, and "Add a load" 
 | Thing | Value |
 |---|---|
 | Migrations | head **0050_f06_document_archive_reason** (none added) |
-| Tests | **pytest 990 · vitest 363 · layout 136/136 · ruff clean · import-linter 30/30** |
-| §23 decision log | 47 entries |
+| Tests | **pytest 997 · vitest 365 · layout 136/136 · ruff clean · import-linter 30/30** |
+| §23 decision log | 48 entries |
 | Handoffs | 000 → 090 |
-| Git | **52 commits on `main`; `origin` is one behind** (remote added by the owner this session) |
+| Git | **54 commits on `main`; `origin` is behind** (remote added by the owner this session) |
 
 ## 2. What §10.2 asked for, and what was there
 
@@ -178,6 +178,29 @@ returned `{"TONU": "50% of linehaul if cancelled after arrival"}` — and the ex
 `"tonu"` missed it, so the screen said the rate con was **silent on TONU while quoting the clause
 that grants it**. A driver who believes there is no TONU clause does not claim TONU. Matched
 case-insensitively now, and verified both ways live.
+
+## 13. Load history (added after §12)
+
+Asked where past loads are seen. **Nowhere** — `/load` had eleven routes and not one
+listed loads. The only "which load" read was `/load/active`, the single armed stop, so ending a load
+orphaned its evidence log, condition captures, stop-scoped BOL and rate con: all still stored, none
+reachable. An evidence pack is worth having precisely because it can be produced weeks later.
+
+**Two defects underneath.** `LoadStatus` has carried draft/active/completed/canceled since F5 was
+written and `set_load_status` was **never called from anywhere** — every load ever created sat in
+`draft`, so "completed" could not be listed even by something that wanted to. A load now completes
+when its **last** stop departs. And the rate con had no link to the load it built: photographed
+*before* the load exists, filed against the account, stop unknown until the driver confirms — F6 can
+now attach it without changing whose wallet it is in.
+
+**design-prd was silent and navigation is never-improvise (§22)**, so the shape was the owner's
+call, logged as §23 entry 48: the Load tab, tertiary, opening a sheet (NAV-3). Rows carry only what
+the load produced.
+
+**One more found by running it.** Every load reported "evidence pack", because `arm_stop` opens a log
+for every stop and the flag asked whether one EXISTS. An indicator that can never say no is
+decoration — the same shape as the BOL row that could never say yes. It counts contents now: a quiet
+load reports 0, one with an arrival reports 1.
 
 ## 11. Ports / env / flags
 
