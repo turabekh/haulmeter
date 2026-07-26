@@ -93,6 +93,36 @@ def _increment_confirmed_arrivals(db: Session, facility_id) -> None:
         db.flush()
 
 
+# AI-CONTEXT: where a driver most recently was, IF that is still worth believing.
+#
+# `not_older_than` is not optional politeness — it is the whole point. A ping from
+# three days ago is a place the driver has long left, and a caller that targeted an
+# interruption on it would be confidently wrong. Past the bound this returns None and
+# the caller is expected to stay quiet rather than guess (§11.7).
+#
+# Driver position lives in F3, so consumers ask here instead of querying pings
+# themselves — the same reason facility geometry is only reachable through F2.
+def last_known_position(db: Session, account_id, not_older_than: timedelta, now=None):
+    now = now or datetime.now(UTC)
+    ping = db.scalar(
+        select(LocationPing)
+        .where(
+            LocationPing.account_id == account_id,
+            LocationPing.occurred_at >= now - not_older_than,
+        )
+        .order_by(LocationPing.occurred_at.desc())
+        .limit(1)
+    )
+    if ping is None:
+        return None
+    lon, lat = db.execute(
+        select(func.ST_X(LocationPing.geom), func.ST_Y(LocationPing.geom)).where(
+            LocationPing.id == ping.id
+        )
+    ).one()
+    return (lat, lon)
+
+
 def record_ping(
     db: Session,
     account_id,

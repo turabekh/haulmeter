@@ -64,6 +64,10 @@ class NotificationClassPref(Base):
     class_key: Mapped[str] = mapped_column(String(60), index=True)
     opted_in: Mapped[bool] = mapped_column(Boolean, default=False)
     muted_subjects: Mapped[list] = mapped_column(JSON, default=list)
+    # the positive half of the same idea: subjects this account asked to hear ABOUT.
+    # `muted_subjects` suppresses at dispatch; this one is read by callers choosing an
+    # audience, which is why F8 also exposes the reverse lookup.
+    followed_subjects: Mapped[list] = mapped_column(JSON, default=list)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

@@ -158,6 +158,65 @@ def is_subject_muted(db: Session, account_id, class_key: str, subject_ref: str |
     return bool(pref and str(subject_ref) in (pref.muted_subjects or []))
 
 
+# AI-CONTEXT: following — the positive half of the per-subject preference.
+#
+# A follow does three things at once, deliberately. It records the subject, it OPTS
+# THE CLASS IN, and it clears any existing mute on that subject. E-D1 says silence is
+# never consent, and a deliberate tap on "follow this cook" is not silence — it is a
+# request to be told. The other two are failure modes the driver could never debug: a
+# follow recorded into a class that is switched off, or onto a vendor they muted
+# months ago, would be a control that reports success and does nothing.
+def follow_subject(
+    db: Session, account_id, class_key: str, subject_ref: str
+) -> NotificationClassPref:
+    pref = get_class_pref(db, account_id, class_key)
+    if pref is None:
+        pref = NotificationClassPref(account_id=account_id, class_key=class_key)
+        db.add(pref)
+    ref = str(subject_ref)
+    pref.followed_subjects = sorted({*(pref.followed_subjects or []), ref})
+    pref.muted_subjects = [s for s in (pref.muted_subjects or []) if s != ref]
+    pref.opted_in = True
+    db.flush()
+    return pref
+
+
+def unfollow_subject(
+    db: Session, account_id, class_key: str, subject_ref: str
+) -> NotificationClassPref | None:
+    """Unfollowing leaves the class ON. Turning the whole class off is a separate,
+    louder choice, and silently making it for someone who dropped one cook would take
+    away notifications they never asked to lose."""
+    pref = get_class_pref(db, account_id, class_key)
+    if pref is None:
+        return None
+    ref = str(subject_ref)
+    pref.followed_subjects = [s for s in (pref.followed_subjects or []) if s != ref]
+    db.flush()
+    return pref
+
+
+def is_following(db: Session, account_id, class_key: str, subject_ref: str | None) -> bool:
+    if subject_ref is None:
+        return False
+    pref = get_class_pref(db, account_id, class_key)
+    return bool(pref and str(subject_ref) in (pref.followed_subjects or []))
+
+
+def followers_of(db: Session, class_key: str, subject_ref: str) -> list:
+    """The reverse lookup a caller needs to build an audience. Returns account ids
+    that asked about this subject AND are still opted in — an account that later left
+    the class is not an audience, whatever its follow list still says."""
+    ref = str(subject_ref)
+    rows = db.scalars(
+        select(NotificationClassPref).where(
+            NotificationClassPref.class_key == class_key,
+            NotificationClassPref.opted_in.is_(True),
+        )
+    )
+    return [p.account_id for p in rows if ref in (p.followed_subjects or [])]
+
+
 def class_sends_today(db: Session, account_id, class_key: str, now: datetime) -> int:
     return db.scalar(
         select(func.count())

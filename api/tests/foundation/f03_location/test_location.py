@@ -159,3 +159,43 @@ def test_arm_unknown_facility_raises(db):
     except location.FacilityNotFound:
         raised = True
     assert raised is True
+
+
+# --- last known position: only when it is still worth believing ---
+def test_last_known_position_returns_the_most_recent_ping(db):
+    account = _account(db, "lastpos@example.com")
+    location.record_ping(db, account.id, *DALLAS, occurred_at=T0 - timedelta(hours=2))
+    location.record_ping(db, account.id, 40.7128, -74.0060, occurred_at=T0 - timedelta(minutes=10))
+
+    got = location.last_known_position(db, account.id, timedelta(hours=6), now=T0)
+
+    assert got is not None
+    lat, lon = got
+    assert round(lat, 3) == 40.713
+    assert round(lon, 3) == -74.006
+
+
+def test_a_stale_ping_is_not_a_position(db):
+    """A ping from days ago is a place the driver has long left. Returning it would
+    let a caller target an interruption on a guess, so the bound returns nothing and
+    the caller is expected to stay quiet."""
+    account = _account(db, "stalepos@example.com")
+    location.record_ping(db, account.id, *DALLAS, occurred_at=T0 - timedelta(days=3))
+
+    assert location.last_known_position(db, account.id, timedelta(hours=6), now=T0) is None
+    # the same ping inside a wider bound is fine — the caller chooses the bound
+    assert location.last_known_position(db, account.id, timedelta(days=7), now=T0) is not None
+
+
+def test_a_driver_who_never_pinged_has_no_position(db):
+    account = _account(db, "nopos@example.com")
+    assert location.last_known_position(db, account.id, timedelta(hours=6), now=T0) is None
+
+
+def test_one_drivers_position_is_never_anothers(db):
+    a = _account(db, "pos-a@example.com")
+    b = _account(db, "pos-b@example.com")
+    location.record_ping(db, a.id, *DALLAS, occurred_at=T0 - timedelta(minutes=5))
+
+    assert location.last_known_position(db, a.id, timedelta(hours=6), now=T0) is not None
+    assert location.last_known_position(db, b.id, timedelta(hours=6), now=T0) is None

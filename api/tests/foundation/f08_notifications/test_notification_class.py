@@ -135,3 +135,84 @@ def test_vendor_alert_class_declares_its_anti_spam_laws(db):
     assert spec.max_per_day == 1
     assert spec.route_relevant_only is True
     assert spec.tier == notify.NotificationTier.P1  # never P0 — food is not urgent
+
+
+# --- following: the positive half of the same preference ---
+def test_following_is_consent_and_turns_the_class_on(db):
+    # E-D1: silence is never consent. A deliberate tap on "follow" is not silence —
+    # it is a request to be told, and a follow into a class that stayed OFF would be
+    # a control that reports success and does nothing.
+    account = _account(db, "follow-on@example.com")
+    assert notify.is_opted_in(db, account.id, notify.VENDOR_ALERT_CLASS) is False
+
+    notify.follow_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-1")
+
+    assert notify.is_opted_in(db, account.id, notify.VENDOR_ALERT_CLASS) is True
+    assert notify.is_following(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-1") is True
+
+
+def test_following_clears_an_older_mute_on_the_same_subject(db):
+    # muted months ago, followed today: the newer, explicit choice wins. Otherwise
+    # the follow silently does nothing and the driver cannot see why.
+    account = _account(db, "follow-unmute@example.com")
+    notify.mute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-2")
+    assert notify.is_subject_muted(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-2") is True
+
+    notify.follow_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-2")
+
+    assert notify.is_subject_muted(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-2") is False
+    gateway = _gateway()
+    sent = _send(db, account, gateway, subject_ref="vendor-2")
+    assert sent.status == notify.NotificationStatus.sent
+
+
+def test_unfollowing_leaves_the_class_on(db):
+    """Dropping one cook is not leaving the class. Turning it off is a separate,
+    louder choice, and making it for someone would take away notifications they
+    never asked to lose."""
+    account = _account(db, "unfollow@example.com")
+    notify.follow_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-3")
+    notify.unfollow_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-3")
+
+    assert notify.is_following(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-3") is False
+    assert notify.is_opted_in(db, account.id, notify.VENDOR_ALERT_CLASS) is True
+
+
+def test_unfollowing_something_never_followed_is_not_an_error(db):
+    account = _account(db, "unfollow-none@example.com")
+    assert notify.unfollow_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-x") is None
+
+
+def test_followers_of_finds_the_audience_and_skips_anyone_who_left(db):
+    stayed = _account(db, "stayed@example.com")
+    left = _account(db, "left@example.com")
+    other = _account(db, "other-vendor@example.com")
+    for account in (stayed, left):
+        notify.follow_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-4")
+    notify.follow_subject(db, other.id, notify.VENDOR_ALERT_CLASS, "vendor-5")
+    # left the class entirely without unfollowing — the follow list still names them
+    notify.set_class_opt_in(db, left.id, notify.VENDOR_ALERT_CLASS, False)
+
+    audience = notify.followers_of(db, notify.VENDOR_ALERT_CLASS, "vendor-4")
+
+    assert stayed.id in audience
+    assert left.id not in audience  # opting out of the class outranks a stale follow
+    assert other.id not in audience
+
+
+def test_a_follow_does_not_bypass_a_single_cap(db):
+    """Following is consent to be told, never permission to be told twice. Every law
+    the class declares still applies to a follower."""
+    account = _account(db, "follow-caps@example.com")
+    notify.follow_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-6")
+    gateway = _gateway()
+
+    first = _send(db, account, gateway, subject_ref="vendor-6")
+    second = _send(db, account, gateway, subject_ref="vendor-6")
+    assert first.status == notify.NotificationStatus.sent
+    assert second.status == notify.NotificationStatus.suppressed
+    assert second.suppress_reason == notify.SuppressReason.budget
+
+    # and quiet hours still bite a follower
+    quiet = _send(db, _account(db, "follow-quiet@example.com"), gateway, now=T0.replace(hour=23))
+    assert quiet.status == notify.NotificationStatus.suppressed
