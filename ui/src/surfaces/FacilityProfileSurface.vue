@@ -17,8 +17,10 @@ import {
   fetchDetentionRisk,
   fetchAppointmentHours,
   fetchQuestions,
+  fetchServiceCenter,
   askQuestion,
 } from "../core/api.js";
+import { verificationPresentation } from "../core/vendors.js";
 import { sampleProfile, sampleFacilityIntel, sampleQuestions } from "../core/fixtures.js";
 
 const route = useRoute();
@@ -28,6 +30,7 @@ const { t } = useI18n();
 const profile = ref(null);
 const intel = ref(null);
 const questions = ref([]);
+const serviceCenter = ref(null);
 const reviewing = ref(false);
 const asking = ref(false);
 const questionText = ref("");
@@ -55,6 +58,10 @@ async function load() {
   } catch {
     intel.value = sampleFacilityIntel(); // unauthenticated / offline
   }
+  // M13-FR7: an UNCLAIMED facility returns null and stays a plain POI. Claiming
+  // adds contact detail and curated services; it never changes what the facility
+  // fundamentally is, so this is one more card and never a different screen.
+  serviceCenter.value = await fetchServiceCenter(route.params.id).catch(() => null);
   await loadQuestions();
 }
 onMounted(load);
@@ -71,6 +78,13 @@ async function onAsk() {
     /* queued/offline in a later pass (F12) */
   }
 }
+
+// C-1: only `verified` earns the positive token. `documents_on_file` is a
+// statement about paperwork, not an endorsement, and renders neutral here exactly
+// as it does on the food sheet.
+const claimTier = computed(() =>
+  serviceCenter.value ? verificationPresentation(serviceCenter.value.verify_status) : null,
+);
 
 // M8-FR6/FR2 presentation: percentage + a readable "06:00" hour label
 const riskPct = computed(() =>
@@ -99,6 +113,31 @@ async function onReview(payload) {
       </button>
       <h1 class="profile__name">{{ profile.name }}</h1>
     </header>
+
+    <!-- M13-FR7: only a CLAIMED service centre renders this. The business's own
+         name and rung are stated together, so a driver reading the hours knows
+         who is telling them and how far that has been checked (§11.7). -->
+    <section v-if="serviceCenter" class="card">
+      <h2 class="card__title">{{ t("profile.service_center") }}</h2>
+      <p class="sc__who">
+        {{ serviceCenter.vendor_name }}
+        <span class="sc__tier" :style="{ color: `var(${claimTier.token})` }">
+          {{ t(claimTier.labelKey) }}
+        </span>
+      </p>
+      <p v-if="serviceCenter.services.length" class="sc__services">
+        {{ serviceCenter.services.map((s) => t(`facility.service.${s}`)).join(" · ") }}
+      </p>
+      <p v-if="serviceCenter.hours" class="sc__line">
+        {{ t("profile.sc_hours") }}: {{ serviceCenter.hours }}
+      </p>
+      <p v-if="serviceCenter.phone" class="sc__line">
+        {{ t("profile.sc_phone") }}: <span class="sc__phone">{{ serviceCenter.phone }}</span>
+      </p>
+      <!-- who said it, said once, at the bottom: hours and phone are the
+           business's own words, not something the platform verified -->
+      <p class="sc__source">{{ t("profile.sc_source") }}</p>
+    </section>
 
     <section class="card">
       <h2 class="card__title">{{ t("profile.dock_time") }}</h2>
@@ -293,6 +332,38 @@ async function onReview(payload) {
   margin: 0;
   color: var(--text-3);
   font-size: var(--type-body-size);
+}
+.sc__who {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: 500;
+}
+.sc__tier {
+  font-size: var(--type-caption-size);
+  font-weight: 400;
+}
+.sc__services {
+  margin: var(--s-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+}
+.sc__line {
+  margin: var(--s-2) 0 0;
+  font-size: var(--type-body-size);
+}
+.sc__phone {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.sc__source {
+  margin: var(--s-3) 0 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
 }
 .add-review {
   width: 100%;
