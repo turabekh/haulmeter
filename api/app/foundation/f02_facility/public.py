@@ -9,6 +9,7 @@ from .domain.enums import FacilityStatus, FacilityType, SourceKind
 from .domain.ingest import adapters as _adapters
 from .domain.ingest.adapters import (
     LOW,
+    SERVICE_KINDS,
     SERVICE_MOBILE_REPAIR,
     SERVICE_PARTS,
     SERVICE_REPAIR,
@@ -52,6 +53,7 @@ from .domain.service import (
     merge_facilities,
     nearest,
     resolve_canonical,
+    search_service_facilities,
     set_lot_polygon,
 )
 
@@ -66,6 +68,7 @@ __all__ = [
     "SERVICE_TIRE",
     "SERVICE_TOWING",
     "SERVICE_WASH",
+    "SERVICE_KINDS",
     "UNION_KEYS",
     "osm_services",
     "Facility",
@@ -88,6 +91,7 @@ __all__ = [
     "merge_facilities",
     "nearest",
     "resolve_canonical",
+    "search_service_facilities",
     "set_lot_polygon",
     # --- ingestion (PRD §12) ---
     "ingest",

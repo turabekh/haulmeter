@@ -235,6 +235,37 @@ def in_bbox(
     return list(db.scalars(stmt.limit(BBOX_QUERY_LIMIT)))
 
 
+# AI-CONTEXT: M13-FR7 needs to find a facility BY NAME from a desk — every other
+# lookup here is geographic, and a claimant typing their own business name has no
+# viewport. The `services` list is the E3.2 one source of truth for "is there
+# anything here to claim", so a facility without one is never a search result: the
+# claimable set is answered by the picker rather than by a rejection after the fact.
+# `attributes` is a JSON (not JSONB) column, so the services test is applied in
+# Python over a name-narrowed window rather than pushed into SQL.
+SERVICE_SEARCH_WINDOW = 200
+
+
+def search_service_facilities(db: Session, q: str, limit: int = 20) -> list[Facility]:
+    term = " ".join((q or "").strip().split())
+    if len(term) < 2:
+        return []
+    stmt = (
+        select(Facility)
+        .where(Facility.status != FacilityStatus.merged)
+        .where(Facility.merged_into_id.is_(None))
+        .where(Facility.name.ilike(f"%{term}%"))
+        .order_by(func.length(Facility.name), Facility.name)
+        .limit(SERVICE_SEARCH_WINDOW)
+    )
+    out = []
+    for facility in db.scalars(stmt):
+        if (facility.attributes or {}).get("services"):
+            out.append(facility)
+            if len(out) >= limit:
+                break
+    return out
+
+
 def set_lot_polygon(db: Session, facility: Facility, polygon_wkt: str) -> Facility:
     facility.lot_polygon = WKTElement(polygon_wkt, srid=4326)
     db.flush()

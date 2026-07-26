@@ -99,3 +99,49 @@ def test_merge_preserves_canonical_id_and_reassigns_sources(db):
     assert resolved.id == canonical.id
     db.refresh(canonical)
     assert len(canonical.sources) == 2
+
+
+def _with_services(db, name, services, lat=32.7767, lon=-96.7970):
+    return facility.create_facility(
+        db,
+        facility.FacilityType.truck_stop,
+        name,
+        lat,
+        lon,
+        attributes={"services": services} if services else {},
+    )
+
+
+def test_service_search_finds_by_partial_name_any_case(db):
+    _with_services(db, "Gateway Truck Wash", [facility.SERVICE_WASH])
+    assert [f.name for f in facility.search_service_facilities(db, "gateway")] == [
+        "Gateway Truck Wash"
+    ]
+    assert [f.name for f in facility.search_service_facilities(db, "TRUCK WASH")] == [
+        "Gateway Truck Wash"
+    ]
+
+
+def test_service_search_never_returns_a_facility_with_nothing_to_claim(db):
+    # E3.2: the `services` list is the one source of truth for "is there a service
+    # business here". A facility without one is not claimable, so it is not a result.
+    _with_services(db, "Gateway Truck Wash", [facility.SERVICE_WASH])
+    _with_services(db, "Gateway Rest Area", [])
+    found = facility.search_service_facilities(db, "gateway")
+    assert [f.name for f in found] == ["Gateway Truck Wash"]
+
+
+def test_service_search_ignores_a_merged_away_facility(db):
+    canonical = _with_services(db, "Gateway Tire", [facility.SERVICE_TIRE])
+    duplicate = _with_services(db, "Gateway Tire Co", [facility.SERVICE_TIRE], 32.7768, -96.7971)
+    facility.merge_facilities(db, canonical, duplicate)
+    found = facility.search_service_facilities(db, "gateway tire")
+    assert [f.id for f in found] == [canonical.id]
+
+
+def test_service_search_needs_two_characters_and_honours_its_limit(db):
+    for n in range(4):
+        _with_services(db, f"Gateway Repair {n}", [facility.SERVICE_REPAIR])
+    assert facility.search_service_facilities(db, "g") == []
+    assert facility.search_service_facilities(db, "  ") == []
+    assert len(facility.search_service_facilities(db, "gateway", limit=2)) == 2

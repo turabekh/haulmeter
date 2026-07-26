@@ -277,6 +277,18 @@ SERVICE_PARTS = "parts"
 # instead of planting a second pin on top of it.
 SERVICE_SCALE = "scale"
 
+# the whole vocabulary, in one place, so a consumer offering these as choices cannot
+# drift from what ingestion writes. WHO may set which of them is not decided here.
+SERVICE_KINDS = (
+    SERVICE_TIRE,
+    SERVICE_WASH,
+    SERVICE_REPAIR,
+    SERVICE_MOBILE_REPAIR,
+    SERVICE_TOWING,
+    SERVICE_PARTS,
+    SERVICE_SCALE,
+)
+
 _OSM_SERVICE_RULES = [
     (lambda t: t.get("shop") == "tyres" or t.get("service:vehicle:tyres") == "yes", SERVICE_TIRE),
     (

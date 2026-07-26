@@ -480,6 +480,60 @@ def cancel_promotion(
     return {"promotion_id": str(promotion.id), "status": promotion.status.value}
 
 
+def _claim_row(db: Session, claim) -> dict:
+    facility = facility_registry.get_facility(db, claim.facility_id)
+    ingested = m13.facility_services(db, claim.facility_id)
+    return {
+        "claim_id": str(claim.id),
+        "facility_id": str(claim.facility_id),
+        # the facility's OWN name and address travel with every claim: a vendor must
+        # never be shown an id and asked to recognise their own site from it
+        "facility_name": facility.name if facility is not None else claim.claimed_name,
+        "facility_address": facility.address if facility is not None else None,
+        "claimed_name": claim.claimed_name,
+        "status": claim.status.value,
+        # both halves of the union, so the portal can SHOW that curation adds to
+        # what ingestion already knows rather than replacing it (E3.2)
+        "services_ingested": ingested,
+        "services_added": claim.services_added or [],
+        "services": sorted({*ingested, *(claim.services_added or [])}),
+        "has_document": claim.document_id is not None,
+        "hours": claim.hours,
+        "phone": claim.phone,
+    }
+
+
+# AI-CONTEXT: FR7 discovery. Every other facility lookup in the product is
+# geographic; a claimant sits at a desk with a business name and no viewport.
+# `already_claimed` is disclosed HERE, before the form is filled, because a rival
+# claim becomes a DISPUTE an admin decides (never a silent loss) and a vendor is
+# entitled to know that before they submit rather than from the result.
+@router.get("/claimable")
+def claimable_facilities(
+    q: str = "",
+    who: PortalActor = Depends(portal_actor),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    _require_active(db)
+    vendor = _my_vendor(db, who)
+    if vendor.vendor_type != m13.VendorType.service_center:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "service centers only")
+    out = []
+    for facility in facility_registry.search_service_facilities(db, q):
+        claimed = m13.approved_claim(db, facility.id)
+        out.append(
+            {
+                "facility_id": str(facility.id),
+                "name": facility.name,
+                "address": facility.address,
+                "services": m13.facility_services(db, facility.id),
+                "already_claimed": claimed is not None,
+                "claimed_by_me": claimed is not None and claimed.vendor_id == vendor.id,
+            }
+        )
+    return out
+
+
 @router.post("/claims", status_code=201)
 def submit_claim(
     body: ClaimIn,
@@ -504,28 +558,25 @@ def submit_claim(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             {"error": "name_mismatch", "score": round(exc.score, 2)},
         ) from exc
-    return {"claim_id": str(claim.id), "status": claim.status.value}
+    return _claim_row(db, claim)
 
 
 @router.get("/claims")
 def list_claims(
     who: PortalActor = Depends(portal_actor),
     db: Session = Depends(get_db),
-) -> list[dict]:
+) -> dict:
     _require_active(db)
     vendor = _my_vendor(db, who)
-    return [
-        {
-            "claim_id": str(c.id),
-            "facility_id": str(c.facility_id),
-            "claimed_name": c.claimed_name,
-            "status": c.status.value,
-            "services_added": c.services_added,
-            "hours": c.hours,
-            "phone": c.phone,
-        }
-        for c in m13.claims_for_vendor(db, vendor.id)
-    ]
+    return {
+        "claims": [_claim_row(db, c) for c in m13.claims_for_vendor(db, vendor.id)],
+        # the portal offers only what the server will honour, exactly as the
+        # verification ladder and the halal rungs do. `scale` is deliberately NOT
+        # offered: a weigh scale feeds the M1 weigh-station layer, and a service a
+        # claimant could simply tick would put an unverified scale in front of a
+        # driver who is deciding whether to pull in.
+        "service_kinds": [k for k in facility_registry.SERVICE_KINDS if k != "scale"],
+    }
 
 
 @router.patch("/claims/{claim_id}")
@@ -543,15 +594,9 @@ def curate_claim(
     if claim.status != m13.ClaimStatus.approved:
         raise HTTPException(status.HTTP_409_CONFLICT, "claim not approved yet")
     m13.curate_claim(db, claim, body.services_added, body.hours, body.phone)
-    view = m13.claimed_facility_view(db, claim.facility_id)
-    return {
-        "claim_id": str(claim.id),
-        # the union is echoed back so a claimant SEES that their edit added to the
-        # ingested facts rather than replacing them (E3.2)
-        "services": view.services if view else claim.services_added,
-        "hours": claim.hours,
-        "phone": claim.phone,
-    }
+    # the union is echoed back so a claimant SEES that their edit added to the
+    # ingested facts rather than replacing them (E3.2)
+    return _claim_row(db, claim)
 
 
 @router.get("/analytics")
