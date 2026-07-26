@@ -68,6 +68,13 @@ const snapping = ref(false);
 // §10.2's empty-state action. The manual "Start a load" form now lives inside this
 // sheet as the fallback when a rate con cannot be read, rather than as a rival action.
 const importing = ref(false);
+// §10.2's single-CTA rule, honoured without stranding capability: the rungs the
+// ladder passes over and this stop's other actions live one tap away in a sheet.
+const more = ref(false);
+function go(path) {
+  more.value = false;
+  router.push(path);
+}
 async function onLoadCreated() {
   importing.value = false;
   await loadMeter();
@@ -145,6 +152,7 @@ const photosDone = computed(
 // decoration — and the honest answer for most stops today is "not yet", which is
 // exactly what FR5 is for.
 const bolCaptured = computed(() => live.value?.bol_captured === true);
+const nextStop = computed(() => live.value?.next_stop ?? null);
 
 // AI-CONTEXT: M5-FR1's protection is the WINDOW, not the verdict.
 //
@@ -271,6 +279,12 @@ async function endLoad() {
       <TheMeter :label="meterLabel" :figure="meterFigure" :variant="variant" :status="meterStatus" />
     </section>
     <p v-if="!live && !isDriving" class="sample-hint">{{ t("load.sample_hint") }}</p>
+    <!-- §10.2 DRIVING: "collapses to Meter-only glance card + voice hint". The hint
+         names a real destination — VoiceSheet lives on the Map tab — so this is a
+         label pointing somewhere, not the dead-control pattern §23 forbids. It is
+         text rather than a control: Forbidden #11 rules out interactive prompts at
+         speed, and the driver reaches voice where it already is. -->
+    <p v-if="isDriving" class="sample-hint">{{ t("voice.unavailable") }}</p>
 
     <template v-if="!isDriving">
       <div class="context">
@@ -313,6 +327,15 @@ async function endLoad() {
         >
           {{ t("evidence.view_all") }}
         </button>
+      </section>
+
+      <!-- §10.2's anatomy ends here: the next-stop preview. A driver weighing whether
+           to wait out detention is really asking what it costs them later, and the
+           answer is the appointment they have to make next. -->
+      <section v-if="nextStop" class="next">
+        <span class="next__label">{{ t("load.next_stop") }}</span>
+        <span class="next__name">{{ nextStop.facility_name }}</span>
+        <span v-if="nextStop.appointment" class="next__appt">{{ nextStop.appointment.slice(11, 16) }}</span>
       </section>
 
       <!-- arrive -> accrue -> FILE: the loop closes into a GPS-backed claim -->
@@ -369,27 +392,13 @@ async function endLoad() {
       </button>
       <p v-if="noticeMsg" class="notice-msg">{{ noticeMsg }}</p>
 
-      <!-- M5-FR2: camera-first cargo-condition capture for the active stop -->
-      <button v-if="live" class="cta cta--text" type="button" @click="router.push('/protection/condition')">
-        {{ t("cond.start") }}
+      <!-- §10.2: "state-dependent SINGLE CTA". These four are real capabilities and
+           none has another home, so they move behind one control into a sheet (NAV-3)
+           rather than stacking six buttons under the Meter. Scoped to this stop, so
+           it is not a nav drawer (Forbidden #2). -->
+      <button v-if="live" class="cta cta--text" type="button" @click="more = true">
+        {{ t("load.more") }}
       </button>
-
-      <!-- M5-FR4: log an incident (damage / refusal / unsafe) for the active stop -->
-      <!-- FR4: what you just filed is one tap away while it is still on your mind.
-           Same evidence surface the condition packs use; the kind rides the query. -->
-      <button
-        v-if="lastIncidentId"
-        class="cta cta--text"
-        type="button"
-        @click="router.push(`/load/${lastIncidentId}/evidence?kind=incident`)"
-      >
-        {{ t("incident.view") }}
-      </button>
-      <button v-if="live" class="cta cta--text" type="button" @click="reporting = true">
-        {{ t("incident.title") }}
-      </button>
-
-      <button v-if="live" class="cta cta--text" type="button" @click="endLoad">{{ t("load.end") }}</button>
 
       <!-- §10.2's empty state: "Add a load (rate-con photo import) as the ONE action".
            PRD §108 calls the parsed rate con the primary way a load is created; the
@@ -399,18 +408,34 @@ async function endLoad() {
         {{ t("load.rc_add") }}
       </button>
 
-      <!-- M8: pre-acceptance decision — cross-link to the true-profit calculator (NAV-5) -->
-      <button
-        v-if="live"
-        class="cta cta--text"
-        type="button"
-        @click="router.push('/load/calc')"
-      >
-        {{ t("load.check_profit") }}
-      </button>
-
       <BottomSheet :open="reporting" :title="t('incident.title')" @close="reporting = false">
         <IncidentSheet @filed="onIncidentFiled" />
+      </BottomSheet>
+
+      <BottomSheet :open="more" :title="t('load.more')" @close="more = false">
+        <ul class="more">
+          <!-- M5-FR2: camera-first cargo-condition capture for the active stop -->
+          <li><button class="more__item" type="button" @click="go('/protection/condition')">
+            {{ t("cond.start") }}
+          </button></li>
+          <!-- M5-FR4: log an incident (damage / refusal / unsafe) -->
+          <li><button class="more__item" type="button" @click="more = false; reporting = true">
+            {{ t("incident.title") }}
+          </button></li>
+          <!-- FR4: what you just filed is one tap away while it is still on your mind -->
+          <li v-if="lastIncidentId">
+            <button class="more__item" type="button" @click="go(`/load/${lastIncidentId}/evidence?kind=incident`)">
+              {{ t("incident.view") }}
+            </button>
+          </li>
+          <!-- M8: pre-acceptance decision — cross-link to the calculator (NAV-5) -->
+          <li><button class="more__item" type="button" @click="go('/load/calc')">
+            {{ t("load.check_profit") }}
+          </button></li>
+          <li><button class="more__item" type="button" @click="more = false; endLoad()">
+            {{ t("load.end") }}
+          </button></li>
+        </ul>
       </BottomSheet>
 
       <BottomSheet :open="importing" :title="t('load.rc_add')" @close="importing = false">
@@ -600,27 +625,45 @@ async function endLoad() {
   background: transparent;
   color: var(--shield-500);
 }
-.start {
+.more {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--s-3);
 }
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-}
-.field__label {
-  font-size: var(--type-label-size);
-  color: var(--text-2);
-}
-.field__input {
+.more__item {
+  width: 100%;
   min-height: 56px;
-  padding: 0 var(--s-3);
-  border-radius: var(--r-control);
-  border: 1px solid var(--line-1);
-  background: var(--ink-1);
+  text-align: left;
+  background: transparent;
   color: var(--text-1);
   font-size: var(--type-body-size);
+  border-bottom: 1px solid var(--line-1);
+}
+.next {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
+  background: var(--ink-1);
+}
+.next__label {
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+}
+.next__name {
+  flex: 1 1 auto;
+  font-size: var(--type-body-size);
+  color: var(--text-1);
+}
+.next__appt {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
 }
 </style>

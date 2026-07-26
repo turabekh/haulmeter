@@ -405,6 +405,8 @@
   "load.filed": "Da'vo topshirildi",
   "load.filed_frozen": "Da'vo topshirildi — soat to'xtadi",
   "load.free_time": "Bepul vaqt",
+  "load.more": "Bu to'xtash uchun yana",
+  "load.next_stop": "Keyingi",
   "load.notice_early": "Kutish hali boshlanmadi — xabar berishga hojat yo'q.",
   "load.notice_ok": "Broker ogohlantirildi — kutish qayd etildi.",
   "load.notice_sent": "Ogohlantirish yuborilmadi",

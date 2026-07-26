@@ -1492,7 +1492,11 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       const w = mount(LoadSurface, { global: { plugins: [router] } });
       await flushPromises();
       expect(w.text()).toContain("Ending Receiver"); // live
-      const endBtn = w.findAll(".cta").find((b) => b.text() === "End load");
+      // §10.2 leaves ONE CTA on the screen; this stop's other actions moved behind
+      // "More for this stop" (NAV-3) rather than stacking six buttons under the Meter
+      await w.findAll(".cta").find((b) => b.text().includes("More for this stop")).trigger("click");
+      await flushPromises();
+      const endBtn = w.findAll(".more__item").find((b) => b.text() === "End load");
       await endBtn.trigger("click");
       await flushPromises();
       expect(fetchStub.mock.calls.some((c) => String(c[0]).endsWith("/load/stop-end/end"))).toBe(true);
@@ -1811,6 +1815,70 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     expect(w.text()).toContain("could not read this one");
     const values = w.findAll(".rc__input").map((i) => i.element.value);
     expect(values.every((v) => v === "")).toBe(true); // no invented terms
+  });
+});
+
+describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
+  const LIVE = {
+    stop_id: "s-next", claim_id: "c-1", facility_name: "First Dock", counterparty: "Acme",
+    appointment: null, arrived: true, free_time_minutes: 120, rate_cents_per_hour: 7500,
+    phase: "within_free_time", free_time_remaining_seconds: 3600, detention_seconds: 0,
+    detention_cents: 0, notice_sent: false, bol_captured: true,
+    next_stop: { facility_name: "Second Dock", stop_type: "delivery", appointment: "2026-08-04T09:30:00" },
+  };
+
+  beforeEach(() => {
+    useDriverState().setState(DriverState.IDLE);
+    setToken("tok-next");
+    setActiveStop("s-next");
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => jsonOk(LIVE)));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setActiveStop(null);
+    logout();
+  });
+
+  it("previews the next stop (§10.2 anatomy)", async () => {
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(w.find(".next").exists()).toBe(true);
+    expect(w.find(".next__name").text()).toBe("Second Dock");
+    expect(w.find(".next__appt").text()).toBe("09:30"); // Mono, like every time figure
+  });
+
+  it("collapses to a Meter-only glance with a voice hint while DRIVING (§10.2)", async () => {
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(w.find(".next").exists()).toBe(true);
+
+    useDriverState().setState(DriverState.DRIVING);
+    await w.vm.$nextTick();
+
+    // everything below the Meter goes; the hint names a destination that exists
+    expect(w.find(".next").exists()).toBe(false);
+    expect(w.findAll(".cta")).toHaveLength(0);
+    expect(w.text()).toContain("Voice is on the Map tab");
+  });
+
+  it("keeps one CTA on screen and puts the rest behind More (§10.2 single CTA)", async () => {
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+
+    // one filled primary; the secondary controls are text, not rivals
+    expect(w.findAll(".cta:not(.cta--text)")).toHaveLength(0); // in free time nothing is owed yet
+    expect(w.findAll(".more__item")).toHaveLength(0); // sheet closed
+
+    await w.findAll(".cta").find((b) => b.text().includes("More for this stop")).trigger("click");
+    await flushPromises();
+
+    const items = w.findAll(".more__item").map((b) => b.text());
+    expect(items).toContain("End load");
+    expect(items).toContain("Check load profit");
   });
 });
 

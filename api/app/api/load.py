@@ -308,6 +308,32 @@ def meter(
         # OCR pass produced, and only the driver knows which is right.
         "appointment_end": stop.appointment_end.isoformat() if stop.appointment_end else None,
         "appointment_source": load.source.value if load is not None else None,
+        # §10.2's anatomy ends with a next-stop preview and this tab has never had one.
+        # `list_stops` has been ordered by sequence since F5 was written and nothing
+        # asked it what comes after the dock the driver is standing at.
+        "next_stop": _next_stop(db, load, stop),
+    }
+
+
+def _next_stop(db: Session, load, stop) -> dict | None:
+    """The stop after this one, if the load has one. A driver deciding whether to wait
+    out detention or leave is really asking what it costs them later, and the answer is
+    the appointment they have to make next."""
+    if load is None:
+        return None
+    later = [
+        s
+        for s in loads.list_stops(db, load)
+        if s.sequence > stop.sequence and s.status != loads.StopStatus.canceled
+    ]
+    if not later:
+        return None
+    nxt = later[0]
+    fac = facility.get_facility(db, nxt.facility_id)
+    return {
+        "facility_name": fac.name if fac else None,
+        "stop_type": nxt.stop_type.value,
+        "appointment": nxt.appointment_start.isoformat() if nxt.appointment_start else None,
     }
 
 

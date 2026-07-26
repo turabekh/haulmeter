@@ -405,6 +405,8 @@
   "load.filed": "Claim filed",
   "load.filed_frozen": "Claim filed — clock stopped",
   "load.free_time": "Free time",
+  "load.more": "More for this stop",
+  "load.next_stop": "Next",
   "load.notice_early": "Detention hasn't started yet — nothing to notify.",
   "load.notice_ok": "Broker notified — detention on record.",
   "load.notice_sent": "Notice not sent",

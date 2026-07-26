@@ -405,6 +405,8 @@
   "load.filed": "Reclamo presentado",
   "load.filed_frozen": "Reclamo presentado — reloj detenido",
   "load.free_time": "Tiempo libre",
+  "load.more": "Más para esta parada",
+  "load.next_stop": "Siguiente",
   "load.notice_early": "La detención aún no empieza — nada que notificar.",
   "load.notice_ok": "Bróker notificado — detención registrada.",
   "load.notice_sent": "Aviso no enviado",

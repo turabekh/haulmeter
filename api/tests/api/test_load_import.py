@@ -256,3 +256,52 @@ def test_the_document_itself_is_sent_to_the_model_not_its_hash(client, db, monke
 
     assert seen["document_b64"] == RATE_CON
     assert seen["document_media_type"] == "application/pdf"
+
+
+# --- §10.2's anatomy: the next-stop preview ---
+def test_the_meter_previews_the_next_stop(client, db):
+    """§10.2's anatomy ends with a next-stop preview and this tab never had one.
+    `list_stops` has been ordered by sequence since F5 was written and nothing asked
+    it what comes after the dock the driver is standing at."""
+    from app.foundation.f05_load import public as loads
+
+    headers = _headers(client, "nextstop@example.com")
+    stop_id = client.post(
+        "/load",
+        json={
+            "facility_name": "First Dock",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Acme Brokerage",
+        },
+        headers=headers,
+    ).json()["stop_id"]
+
+    stop = loads.get_stop(db, __import__("uuid").UUID(stop_id))
+    load = loads.get_load(db, stop.load_id)
+    second = facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, "Second Dock", 35.05, -89.87
+    )
+    loads.add_stop(db, load, second.id, loads.StopType.delivery)
+
+    meter = client.get(f"/load/{stop_id}/meter", headers=headers).json()
+
+    assert meter["next_stop"]["facility_name"] == "Second Dock"
+    assert meter["next_stop"]["stop_type"] == "delivery"
+
+
+def test_the_last_stop_previews_nothing(client, db):
+    """Rather than an empty row that reads as a missing value."""
+    headers = _headers(client, "laststop@example.com")
+    stop_id = client.post(
+        "/load",
+        json={
+            "facility_name": "Only Dock",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Acme Brokerage",
+        },
+        headers=headers,
+    ).json()["stop_id"]
+
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["next_stop"] is None
