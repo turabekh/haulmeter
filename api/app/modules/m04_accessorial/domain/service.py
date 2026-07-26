@@ -24,6 +24,15 @@ from .models import AccessorialClaim
 FLAG_KEY = "m04_accessorial"
 MODULE = "m04"
 LUMPER_PROMPT = "lumper_ocr"
+# the amount is the whole answer, and `required` + nullable says "I read the receipt
+# and there was no amount on it" rather than leaving the caller to guess from a
+# missing key. additionalProperties:false is required on every object by the format.
+LUMPER_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["amount_cents"],
+    "properties": {"amount_cents": {"anyOf": [{"type": "integer"}, {"type": "null"}]}},
+}
 
 _KIND_TO_RECEIVABLE = {
     AccessorialKind.tonu: ledger.ReceivableKind.tonu,
@@ -164,6 +173,7 @@ def file_lumper(
             LUMPER_PROMPT,
             {"doc": doc.content_hash},
             required_keys=["amount_cents"],
+            schema=LUMPER_SCHEMA,
         )
         amount_cents = parsed["amount_cents"]
     if amount_cents is None:

@@ -41,6 +41,58 @@ WARNABLE_TERMS = {
     "tonu": "tonu",
 }
 
+def _nullable(kind: str) -> dict:
+    # structured outputs support anyOf; a bare {"type": ["integer","null"]} union is
+    # the shakier spelling, so every optional field is written this way
+    return {"anyOf": [{"type": kind}, {"type": "null"}]}
+
+
+# AI-CONTEXT: the schema is what makes the parse a guarantee rather than a request.
+#
+# `additionalProperties: false` is required on every object by structured outputs, and
+# that is why `accessorial_terms` is a LIST of {term, wording} rather than the open
+# term->wording map it would naturally be: an open map is exactly what
+# additionalProperties forbids. The list is normalised back to a map on the way out, so
+# nothing downstream learns about the schema's constraint.
+#
+# Every field is `required` and nullable rather than optional, because "the contract
+# does not say" is an answer this product needs to hear explicitly — an absent key and
+# a null are indistinguishable to a reader, and only one of them is a statement.
+RATE_CON_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "reference_number",
+        "broker_name",
+        "rate_cents",
+        "detention_rate_cents_per_hour",
+        "free_time_minutes",
+        "receiver_name",
+        "receiver_address",
+        "appointment",
+        "accessorial_terms",
+    ],
+    "properties": {
+        "reference_number": _nullable("string"),
+        "broker_name": _nullable("string"),
+        "rate_cents": _nullable("integer"),
+        "detention_rate_cents_per_hour": _nullable("integer"),
+        "free_time_minutes": _nullable("integer"),
+        "receiver_name": _nullable("string"),
+        "receiver_address": _nullable("string"),
+        "appointment": _nullable("string"),
+        "accessorial_terms": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["term", "wording"],
+                "properties": {"term": {"type": "string"}, "wording": {"type": "string"}},
+            },
+        },
+    },
+}
+
 PROMPT_TEMPLATE = (
     "You are reading a freight rate confirmation. Extract only what the document "
     "actually states. Return a single JSON object with these keys: "
@@ -50,7 +102,7 @@ PROMPT_TEMPLATE = (
     "free_time_minutes (integer minutes of free time before detention accrues, or null), "
     "receiver_name (string or null), receiver_address (string or null), "
     "appointment (ISO 8601 datetime string or null), "
-    "accessorial_terms (object mapping term name to the contract's wording, may be empty). "
+    "accessorial_terms (a list of {term, wording} taken from the contract, may be empty). "
     "Use null for anything the document does not state. Never infer a market-standard "
     "value for a term the document is silent on. The rate confirmation is attached. {doc}"
 )
@@ -100,7 +152,7 @@ def parse_rate_con(
     if document_b64 and media_type:
         context["document_b64"] = document_b64
         context["document_media_type"] = media_type
-    return ai.parse_structured(
+    parsed = ai.parse_structured(
         db,
         provider,
         "f05",
@@ -108,7 +160,22 @@ def parse_rate_con(
         context,
         required_keys=REQUIRED_KEYS,
         account_id=account_id,
+        schema=RATE_CON_SCHEMA,
     )
+    return {**parsed, "accessorial_terms": _terms_as_map(parsed.get("accessorial_terms"))}
+
+
+def _terms_as_map(terms) -> dict:
+    """The schema has to express accessorial terms as a list — structured outputs
+    require `additionalProperties: false`, which is precisely what an open map is not.
+    Callers keep the map they already expect."""
+    if isinstance(terms, dict):
+        return terms  # a schema-less provider (or a fixture) answered in map form
+    return {
+        t["term"]: t.get("wording")
+        for t in terms or []
+        if isinstance(t, dict) and t.get("term")
+    }
 
 
 def silent_terms(parsed: dict) -> list[str]:
@@ -116,9 +183,19 @@ def silent_terms(parsed: dict) -> list[str]:
     "pre-acceptance warning"). A missing key and an explicit null mean the same thing:
     the document does not say."""
     gaps = []
-    accessorials = parsed.get("accessorial_terms") or {}
+    # AI-CONTEXT: matched case-INSENSITIVELY, and that is not tidiness.
+    #
+    # The model names terms the way the contract does — a live parse returned
+    # {"TONU": "50% of linehaul if cancelled after arrival"} — and an exact-key lookup
+    # for "tonu" missed it, so the screen told the driver the rate con was SILENT on
+    # TONU while quoting the clause that states it. Warning about a term the contract
+    # actually grants is worse than not warning at all: a driver who believes there is
+    # no TONU clause does not claim TONU.
+    accessorials = {
+        str(k).strip().lower() for k in (parsed.get("accessorial_terms") or {})
+    }
     for key, label in WARNABLE_TERMS.items():
-        if key in accessorials or parsed.get(key) is not None:
+        if label in accessorials or key in accessorials or parsed.get(key) is not None:
             continue
         gaps.append(label)
     return gaps

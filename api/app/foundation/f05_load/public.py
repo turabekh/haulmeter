@@ -16,6 +16,7 @@ from .domain.enums import (
 from .domain.models import Counterparty, Load, Stop
 from .domain.ratecon import (
     RATE_CON_PROMPT,
+    RATE_CON_SCHEMA,
     REQUIRED_KEYS,
     draft_from_rate_con,
     facility_candidates,
@@ -49,6 +50,7 @@ __all__ = [
     "Load",
     "Stop",
     "RATE_CON_PROMPT",
+    "RATE_CON_SCHEMA",
     "REQUIRED_KEYS",
     "draft_from_rate_con",
     "facility_candidates",

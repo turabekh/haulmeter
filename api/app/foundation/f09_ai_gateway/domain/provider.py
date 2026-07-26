@@ -118,8 +118,10 @@ def _anthropic_messages(
     model: str,
     system: str | None,
     user: str,
-    max_tokens: int = 1024,
+    max_tokens: int = 8192,
     document: tuple[str, str] | None = None,
+    schema: dict | None = None,
+    effort: str | None = None,
 ) -> tuple[str, int, int]:
     # single HTTP call to the Messages API; kept as a module function so tests can
     # monkeypatch it without hitting the network. Returns (text, in_tok, out_tok).
@@ -146,6 +148,18 @@ def _anthropic_messages(
     }
     if system:
         body["system"] = system
+    # AI-CONTEXT: `schema` is what makes structured output a GUARANTEE rather than a
+    # request. Without it this asked the model to "return ONLY a single valid JSON
+    # object" and then went hunting for braces in whatever came back — a parser that
+    # works until the day it doesn't, on a document a driver is about to build a
+    # detention claim from. `output_config.format` constrains the response itself.
+    output_config: dict = {}
+    if schema is not None:
+        output_config["format"] = {"type": "json_schema", "schema": schema}
+    if effort is not None:
+        output_config["effort"] = effort
+    if output_config:
+        body["output_config"] = output_config
     resp = httpx.post(
         _ANTHROPIC_URL,
         headers={
@@ -179,6 +193,25 @@ def _extract_json(text: str) -> dict:
     return {}  # unparseable -> service's required_keys check raises StructuredOutputError
 
 
+def _parse_json(text: str, strict: bool) -> dict:
+    """AI-CONTEXT: `strict` means a schema was sent, so the response IS the object and
+    `json.loads` is the whole job. The brace-hunting path below it exists only for
+    schema-less callers — and the reason to keep the two apart is that scavenging for
+    braces can SUCCEED on the wrong thing, quietly returning a fragment of a longer
+    answer as though it were the whole. When the format was guaranteed and the text
+    still will not parse, that is a fact worth surfacing, not one worth papering over.
+    """
+    import json
+
+    if strict:
+        try:
+            parsed = json.loads(text.strip())
+            return parsed if isinstance(parsed, dict) else {}
+        except ValueError:
+            return {}  # -> StructuredOutputError, rather than a salvaged fragment
+    return _extract_json(text)
+
+
 class AnthropicModelProvider:
     """Live Claude adapter. Real `complete` + `parse_structured` (text intelligence);
     `embed`/`transcribe`/`synthesize` delegate to a deterministic fallback because
@@ -196,16 +229,32 @@ class AnthropicModelProvider:
         return CompletionResult(text, i, o)
 
     def parse_structured(self, prompt: str, context: dict) -> StructuredResult:
-        system = "Return ONLY a single valid JSON object — no prose, no markdown."
         # a caller that put the document itself in the context gets it ATTACHED rather
         # than described; callers that pass only text are unaffected
         data = context.get("document_b64")
         media_type = context.get("document_media_type")
         document = (media_type, data) if data and media_type else None
-        text, i, o = _anthropic_messages(
-            self._key, self._model, system, prompt, document=document
+
+        schema = context.get("json_schema")
+        # With a schema the response IS the object, so the plea not to wrap it in prose
+        # is unnecessary — and asking for something the format already guarantees only
+        # gives the model a second, weaker instruction to weigh. Without one we are
+        # still asking nicely, which is why every caller should bring a schema.
+        system = (
+            None if schema else "Return ONLY a single valid JSON object — no prose, no markdown."
         )
-        return StructuredResult(_extract_json(text), i, o)
+        # extraction is the canonical low-effort task, and effort is the primary cost
+        # lever — raise it per prompt if a document type proves too hard to read
+        text, i, o = _anthropic_messages(
+            self._key,
+            self._model,
+            system,
+            prompt,
+            document=document,
+            schema=schema,
+            effort="low" if schema else None,
+        )
+        return StructuredResult(_parse_json(text, strict=schema is not None), i, o)
 
     def embed(self, text: str) -> EmbeddingResult:
         return self._fallback.embed(text)

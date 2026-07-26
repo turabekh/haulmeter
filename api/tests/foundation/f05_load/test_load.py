@@ -209,3 +209,21 @@ def test_an_unrelated_facility_is_not_offered_at_all(db):
     _facility(db, name="Memphis Cold Storage")
 
     assert loads.facility_candidates(db, {"receiver_name": "ACME Distribution Center"}) == []
+
+
+def test_a_term_the_contract_states_is_not_called_silence_over_a_capital_letter(db):
+    """Found in a live parse: the model names terms the way the contract does, and
+    returned {"TONU": "50% of linehaul if cancelled after arrival"}. An exact-key
+    lookup for "tonu" missed it, so the screen said the rate con was SILENT on TONU
+    while quoting the clause granting it. A driver who believes there is no TONU
+    clause does not claim TONU."""
+    parsed = {
+        "detention_rate_cents_per_hour": 7500,
+        "free_time_minutes": 120,
+        "accessorial_terms": {
+            "TONU": "50% of linehaul if cancelled after arrival.",
+            "Detention": "$75.00 per hour after 2 hours free time.",
+        },
+    }
+
+    assert loads.silent_terms(parsed) == []

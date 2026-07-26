@@ -38,6 +38,27 @@ from .models import Discrepancy, ExpenseReceipt, Settlement, SettlementLine
 FLAG_KEY = "m09_money"
 MODULE = "m09"
 SETTLEMENT_PROMPT = "m09_settlement_parse"
+# every pay line carries both fields or it is not a pay line — a settlement row with
+# no amount is the kind of half-read the auditor would go on to compare against
+SETTLEMENT_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["lines"],
+    "properties": {
+        "lines": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["kind", "amount_cents"],
+                "properties": {
+                    "kind": {"type": "string"},
+                    "amount_cents": {"type": "integer"},
+                },
+            },
+        }
+    },
+}
 # the accessorial pay kinds an auditor reconciles (match F7 ReceivableKind)
 AUDITABLE_KINDS = ("detention", "tonu", "layover", "lumper")
 
@@ -131,6 +152,7 @@ def parse_settlement_lines(db: Session, provider, doc_ref, account_id) -> list[d
         {"doc": str(doc_ref)},
         required_keys=["lines"],
         account_id=account_id,
+        schema=SETTLEMENT_SCHEMA,
     )
     return parsed["lines"]
 

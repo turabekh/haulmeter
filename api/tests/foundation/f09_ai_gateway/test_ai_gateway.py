@@ -130,8 +130,19 @@ def test_anthropic_provider_complete_and_structured(monkeypatch):
 
     calls = []
 
-    def fake_messages(api_key, model, system, user, max_tokens=1024, document=None):
-        calls.append({"model": model, "system": system, "user": user, "document": document})
+    def fake_messages(
+        api_key, model, system, user, max_tokens=8192, document=None, schema=None, effort=None
+    ):
+        calls.append(
+            {
+                "model": model,
+                "system": system,
+                "user": user,
+                "document": document,
+                "schema": schema,
+                "effort": effort,
+            }
+        )
         if system:  # parse_structured asks for JSON
             return '```json\n{"lines": [{"kind": "detention", "amount_cents": 15000}]}\n```', 40, 12
         return "Per our rate confirmation, $150 detention is owed.", 30, 18
@@ -157,6 +168,18 @@ def test_anthropic_provider_complete_and_structured(monkeypatch):
     # a form of nulls the screen then called "read from your rate con".
     p.parse_structured("Read it.", {"document_b64": "aGk=", "document_media_type": "image/png"})
     assert calls[-1]["document"] == ("image/png", "aGk=")
+
+    # AI-CONTEXT: a schema makes structured output a GUARANTEE rather than a request.
+    # Without one the provider asks for JSON and then hunts for braces in the reply —
+    # a parser that works until it doesn't, on a document a money claim is built from.
+    schema = {"type": "object", "additionalProperties": False,
+              "required": ["amount_cents"], "properties": {"amount_cents": {"type": "integer"}}}
+    p.parse_structured("Extract.", {"json_schema": schema})
+    assert calls[-1]["schema"] == schema
+    # and the plea not to wrap it in prose is dropped: asking for what the format
+    # already guarantees only gives the model a second, weaker instruction to weigh
+    assert calls[-1]["system"] is None
+    assert calls[-1]["effort"] == "low"  # extraction is where low effort belongs
 
     # embeddings/STT/TTS have no Anthropic API -> deterministic fallback, not a crash
     assert len(p.embed("hello").vector) == ai.EMBED_DIM
@@ -286,3 +309,32 @@ def test_resolve_provider_composes_anthropic_text_with_voyage_embed(monkeypatch)
         assert isinstance(resolved._fallback, prov.VoyageEmbeddingProvider)
     finally:
         get_settings.cache_clear()
+
+
+def test_a_schema_stops_the_parser_salvaging_a_fragment(monkeypatch):
+    """The brace-hunting path can SUCCEED on the wrong thing — quietly returning a
+    fragment of a longer answer as though it were the whole. When the format was
+    guaranteed and the text still will not parse, that is a fact worth surfacing."""
+    from app.foundation.f09_ai_gateway.domain import provider as prov
+
+    prose = 'Sure! Here are the lines: {"amount_cents": 1500} — let me know if that helps.'
+    monkeypatch.setattr(prov, "_anthropic_messages", lambda *a, **k: (prose, 1, 1))
+    p = prov.AnthropicModelProvider("sk-test", "claude-opus-5")
+
+    # schema-less: scavenging is all we have, so the fragment is taken
+    assert p.parse_structured("x", {}).data == {"amount_cents": 1500}
+
+    # with a schema, prose means something went wrong -> empty, and the service's
+    # required-keys check turns that into StructuredOutputError
+    schema = {"type": "object", "additionalProperties": False, "required": [], "properties": {}}
+    assert p.parse_structured("x", {"json_schema": schema}).data == {}
+
+
+def test_the_model_id_carries_no_date_suffix():
+    """A dated snapshot id is the shape that silently 404s when the snapshot retires;
+    the alias is the complete string."""
+    from app.core.config import get_settings
+
+    model = get_settings().f9_model
+    assert model == "claude-opus-5"
+    assert not model[-9:].lstrip("-").isdigit()

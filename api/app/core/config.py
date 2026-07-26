@@ -30,7 +30,15 @@ class Settings(BaseSettings):
     # F9 AI gateway — real Claude provider activates when a key is present; empty
     # -> the deterministic FakeModelProvider (canned output). Key lives in .env only.
     anthropic_api_key: str = Field(default="")
-    f9_model: str = Field(default="claude-haiku-4-5-20251001")
+    # AI-CONTEXT: the id carries NO date suffix — `claude-opus-5` is the complete
+    # string, and the dated form this used to hold (`claude-haiku-4-5-20251001`) is the
+    # shape that silently 404s when a snapshot is retired.
+    #
+    # Opus 5 because F9's parses are load-bearing on money: a rate con sets the
+    # detention terms a claim is argued from, and a settlement parse is what the
+    # auditor compares against. Cost is tuned by EFFORT rather than by model tier —
+    # structured parses run at `low`, which is where extraction belongs.
+    f9_model: str = Field(default="claude-opus-5")
 
     # F1 authority verification — real FMCSA QCMobile lookup activates when a webKey
     # is present; empty -> the deterministic FakeAuthorityVerifier. Key in .env only.

@@ -166,11 +166,25 @@ def parse_structured(
     context: dict,
     required_keys: list[str],
     account_id=None,
+    schema: dict | None = None,
 ) -> dict:
+    """AI-CONTEXT: `schema` turns structured output from a request into a guarantee.
+
+    Without one, the provider asks the model to return only JSON and then hunts for
+    braces in the reply — which works until it doesn't, on a document someone is about
+    to build a money claim from. Every caller should bring a schema; the schema-less
+    path stays for providers that cannot constrain output at all.
+
+    Note what `required_keys` does and does not do: it checks a key is PRESENT, not
+    that it holds a value. A model that answers every field with null passes this gate,
+    so a caller who needs "did we actually read anything" has to ask that itself.
+    """
     prompt = get_active_prompt(db, prompt_key)
     if prompt is None:
         raise PromptNotFound(prompt_key)
     _check_budget(db, module)
+    if schema is not None:
+        context = {**context, "json_schema": schema}
     result = provider.parse_structured(_render(prompt.template, context), context)
     missing = [k for k in required_keys if k not in result.data]
     if missing:

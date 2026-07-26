@@ -305,3 +305,47 @@ def test_the_last_stop_previews_nothing(client, db):
     ).json()["stop_id"]
 
     assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["next_stop"] is None
+
+
+def test_the_rate_con_parse_is_schema_constrained_not_asked_nicely(client, db, monkeypatch):
+    """F9 used to ask the model to "return ONLY a single valid JSON object" and then
+    hunt for braces in whatever came back — a parser that works until it doesn't, on
+    the document a detention claim is argued from."""
+    from app.foundation.f05_load import public as loads
+
+    seen = {}
+
+    class _Recorder(ai.FakeModelProvider):
+        def parse_structured(self, prompt, context):
+            seen.update(context)
+            return super().parse_structured(prompt, context)
+
+    monkeypatch.setattr(ai, "resolve_provider", lambda: _Recorder(FULL_TERMS))
+    headers = _headers(client, "rc-schema@example.com")
+
+    _import(client, headers)
+
+    assert seen["json_schema"] == loads.RATE_CON_SCHEMA
+    # every object in the schema closes to additionalProperties: false, which the
+    # format requires — and is why accessorial terms are a list, not an open map
+    assert seen["json_schema"]["additionalProperties"] is False
+    assert seen["json_schema"]["properties"]["accessorial_terms"]["type"] == "array"
+
+
+def test_accessorial_terms_come_back_as_a_map_whatever_the_schema_had_to_say(
+    client, db, monkeypatch
+):
+    """The schema has to express them as a list; callers keep the map they expect."""
+    _with_parse(
+        monkeypatch,
+        {
+            "detention_rate_cents_per_hour": 7500,
+            "accessorial_terms": [{"term": "tonu", "wording": "50% of linehaul"}],
+        },
+    )
+    headers = _headers(client, "rc-terms@example.com")
+
+    body = _import(client, headers).json()
+
+    assert body["parsed"]["accessorial_terms"] == {"tonu": "50% of linehaul"}
+    assert "tonu" not in body["silent_on"]  # the contract does state it
