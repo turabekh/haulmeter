@@ -944,19 +944,35 @@ def appearances_in_bbox(
     q: str | None = None,
     language: str | None = None,
     halal: str | None = None,
+    origin_lat: float | None = None,
+    origin_lon: float | None = None,
 ) -> list[VendorEntry]:
     """Feeds the map's food badge. Bounded by the viewport, so a continental pan
-    returns the facilities in view and nothing more."""
+    returns the facilities in view and nothing more.
+
+    The ORIGIN is optional and the distance is null without it. A driver who has not
+    shared a location must see no distance rather than one measured from a guess —
+    and until this argument existed the map's entries carried no distance at all,
+    which left Q-3's last tie-breaker permanently unreachable (see rank_entries)."""
     now = now or datetime.now(UTC)
     facilities = {
         f.id: f for f in facility_registry.in_bbox(db, min_lat, min_lon, max_lat, max_lon)
     }
     if not facilities:
         return []
+    distances = (
+        facility_registry.facility_distances(db, list(facilities), origin_lat, origin_lon)
+        if origin_lat is not None and origin_lon is not None
+        else {}
+    )
     rows = db.scalars(
         select(Appearance).where(Appearance.facility_id.in_(list(facilities)), *_discoverable(now))
     )
-    entries = [e for a in rows if (e := _entry_for(db, a, now)) is not None]
+    entries = [
+        e
+        for a in rows
+        if (e := _entry_for(db, a, now, distance_m=distances.get(a.facility_id))) is not None
+    ]
     # ranked FIRST, then narrowed: a filter must not be able to reorder anything (Q-3)
     return apply_filters(rank_entries(entries), q=q, language=language, halal=halal)
 

@@ -145,3 +145,21 @@ def test_service_search_needs_two_characters_and_honours_its_limit(db):
     assert facility.search_service_facilities(db, "g") == []
     assert facility.search_service_facilities(db, "  ") == []
     assert len(facility.search_service_facilities(db, "gateway", limit=2)) == 2
+
+
+def test_distances_are_measured_from_the_origin_in_one_call(db):
+    here = facility.create_facility(db, facility.FacilityType.truck_stop, "Here", *DALLAS)
+    # ~1.1 km north of DALLAS, and a second point far away
+    near = facility.create_facility(db, facility.FacilityType.truck_stop, "Near", 32.7867, -96.7970)
+    far = facility.create_facility(db, facility.FacilityType.truck_stop, "Far", 40.7128, -74.0060)
+
+    got = facility.facility_distances(db, [here.id, near.id, far.id], *DALLAS)
+
+    assert round(got[here.id]) == 0
+    assert 1000 < got[near.id] < 1300
+    assert got[far.id] > 2_000_000
+    assert set(got) == {here.id, near.id, far.id}
+
+
+def test_distances_of_nothing_is_no_query_and_no_rows(db):
+    assert facility.facility_distances(db, [], *DALLAS) == {}

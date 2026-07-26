@@ -210,6 +210,28 @@ def nearest(
     return list(db.scalars(stmt))
 
 
+# AI-CONTEXT: straight-line metres from one origin to a set of known facilities, in
+# ONE query. Facility geometry belongs to F2, so consumers that need a distance ask
+# for it here rather than growing their own haversine — the same discipline that
+# keeps M13's corridor layer reading M1's geometry instead of duplicating it.
+#
+# What this returns is a DIRECT distance, not a driving distance. Callers rendering
+# it to a driver must not imply routing precision (§11.7): truck routing is PRD §17
+# Q9 and unresolved, so no arrival time can honestly be derived from this number.
+def facility_distances(db: Session, facility_ids, lat: float, lon: float) -> dict:
+    ids = list(facility_ids)
+    if not ids:
+        return {}
+    point = _point(lat, lon)
+    rows = db.execute(
+        select(
+            Facility.id,
+            func.ST_Distance(cast(Facility.geom, Geography), cast(point, Geography)),
+        ).where(Facility.id.in_(ids))
+    ).all()
+    return {fid: float(metres) for fid, metres in rows}
+
+
 BBOX_QUERY_LIMIT = 5000  # DB safety ceiling; the map clusters well before this
 
 

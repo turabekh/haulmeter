@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
+from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f14_admin import public as admin
 from app.modules.m13_vendor import public as m13
@@ -73,9 +74,32 @@ class SuggestIn(BaseModel):
     lon: float
 
 
-def _entry_out(entry: m13.VendorEntry) -> dict:
+def _entries_out(entries: list, db: Session) -> list[dict]:
+    """AI-CONTEXT: every entry carries the LOT it is at — name and coordinates.
+
+    Without them the vendor sheet can only say "Today · until 9pm" with no place
+    attached, which is ambiguous the moment a cook works more than one lot, and
+    leaves the sheet unable to offer the one action the whole flow exists to
+    produce (M1-FR8 navigate). Resolved in one pass rather than per row."""
+    facilities = {}
+    for entry in entries:
+        fid = entry.appearance.facility_id
+        if fid not in facilities:
+            facilities[fid] = facility_registry.get_facility(db, fid)
+    coords = {}
+    for fid, facility in facilities.items():
+        coords[fid] = facility_registry.coordinates(db, facility) if facility else None
+    return [_entry_out(e, facilities.get(e.appearance.facility_id), coords) for e in entries]
+
+
+def _entry_out(entry: m13.VendorEntry, facility=None, coords=None) -> dict:
     belief = entry.presence
+    fid = entry.appearance.facility_id
+    where = (coords or {}).get(fid)
     return {
+        "facility_name": facility.name if facility is not None else None,
+        "lat": where[0] if where else None,
+        "lon": where[1] if where else None,
         "vendor_id": str(entry.vendor.id),
         "name": entry.vendor.name,
         "vendor_type": entry.vendor.vendor_type.value,
@@ -132,16 +156,27 @@ def appearances(
     q: str | None = None,
     language: str | None = None,
     halal: str | None = None,
+    # the driver's own position, when they have shared one. Optional on purpose: no
+    # location means no distance, never a distance measured from a default.
+    lat: float | None = None,
+    lon: float | None = None,
     _account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     _require_active(db)
-    return [
-        _entry_out(e)
-        for e in m13.appearances_in_bbox(
-            db, min_lat, min_lon, max_lat, max_lon, q=q, language=language, halal=halal
-        )
-    ]
+    entries = m13.appearances_in_bbox(
+        db,
+        min_lat,
+        min_lon,
+        max_lat,
+        max_lon,
+        q=q,
+        language=language,
+        halal=halal,
+        origin_lat=lat,
+        origin_lon=lon,
+    )
+    return _entries_out(entries, db)
 
 
 @router.get("/corridor")
@@ -159,13 +194,10 @@ def corridor(
     db: Session = Depends(get_db),
 ) -> list[dict]:
     _require_active(db)
-    return [
-        _entry_out(e)
-        for e in m13.corridor_vendors(
-            db, account.id, lat, lon, heading_deg, max_distance_m, q=q, language=language,
-            halal=halal,
-        )
-    ]
+    ahead = m13.corridor_vendors(
+        db, account.id, lat, lon, heading_deg, max_distance_m, q=q, language=language, halal=halal
+    )
+    return _entries_out(ahead, db)
 
 
 @router.get("/at/{facility_id}")
@@ -178,7 +210,7 @@ def at_facility(
     # Q-6: two by default (the card); `all_vendors` is the sheet's "all vendors"
     _require_active(db)
     limit = 0 if all_vendors else m13.MAX_VENDORS_PER_CARD
-    return [_entry_out(e) for e in m13.vendors_at_facility(db, facility_id, limit=limit)]
+    return _entries_out(m13.vendors_at_facility(db, facility_id, limit=limit), db)
 
 
 @router.get("/{vendor_id}")
@@ -217,7 +249,7 @@ def vendor_sheet(
         # and "95%" over two appearances would overstate what we actually know
         "shows_up": {"confirmed": score.confirmed, "published": score.published},
         "in_discovery": detail["in_discovery"],
-        "appearances": [_entry_out(e) for e in detail["appearances"]],
+        "appearances": _entries_out(detail["appearances"], db),
         # FR5: the raw pair again — `reviewers` is the honest denominator, and an
         # average without it invites overreading a handful of opinions (§11.7)
         "reviews": {
