@@ -106,11 +106,60 @@ def active_reminder_offset(expires_on: date, as_of: date) -> int | None:
     return None
 
 
+ARCHIVE_SUPERSEDED = "superseded"
+ARCHIVE_REMOVED = "removed_by_driver"
+
+
+def archive_document(
+    db: Session, document: Document, reason: str, now: datetime | None = None
+) -> Document:
+    """Take a document out of circulation without destroying it.
+
+    This is what "delete" means here, and the distinction is the whole point: §17 Q16
+    forbids hard delete, so what changes is which document the wallet PRODUCES — it
+    leaves the grid, leaves inspection mode, and stops the expiry ladder — while the
+    bytes and the row stay exactly where they were.
+
+    IDEMPOTENT, and deliberately so. A driver removes a document in a dead zone and
+    the write replays on reconnect; a second archive must not fail, and must not
+    rewrite the reason — overwriting `superseded` with `removed_by_driver` would make
+    the archive list state something untrue about how the row got there.
+    """
+    if document.archived_at is not None:
+        return document
+    document.archived_at = now or datetime.now(UTC)
+    document.archive_reason = reason
+    db.flush()
+    return document
+
+
+def restore_document(db: Session, document: Document) -> Document:
+    """Put it back. The counterpart that makes removal safe to offer at all: a
+    reversible removal is a decision a driver can make with gloves on at a fuel desk,
+    an irreversible one is not.
+
+    `superseded_by_id` is deliberately NOT cleared. It records that a replacement was
+    once filed, which stays true even after that replacement is itself removed, and
+    0049's walkable chain of what was held when depends on it surviving.
+
+    The reminder ladder reopens, for the same reason correcting an expiry reopens it:
+    rungs marked sent while the document was out of the wallet would otherwise keep a
+    restored credential silent all the way to its expiry date.
+    """
+    if document.archived_at is None:
+        return document
+    document.archived_at = None
+    document.archive_reason = None
+    document.sent_reminders = []
+    db.flush()
+    return document
+
+
 def supersede_document(db: Session, old: Document, new: Document, now: datetime | None = None):
     """Archive `old` in favour of `new`. Nothing is deleted and no bytes are touched —
     what changes is which document the wallet PRODUCES, which is the only thing a
     driver or an inspector cares about."""
-    old.archived_at = now or datetime.now(UTC)
+    archive_document(db, old, ARCHIVE_SUPERSEDED, now=now)
     old.superseded_by_id = new.id
     db.flush()
     return old

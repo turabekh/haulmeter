@@ -384,6 +384,77 @@ def would_replace(
     }
 
 
+# AI-CONTEXT: the archive routes are declared BEFORE `GET /documents/{document_id}`
+# on purpose. FastAPI matches in declaration order, and `{document_id}` is typed as a
+# UUID, so a later `/documents/archive` would be swallowed and rejected as a malformed
+# id rather than served.
+@router.get("/documents/archive")
+def archived_documents(
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """What the wallet is no longer producing, and why.
+
+    F6 has accepted `include_archived` since it was written and no route ever passed
+    it — the third capability found sitting in the foundation with nothing reaching
+    it, after the wallet's writer and the document viewer. §17 Q16 keeps these rows
+    forever; until now "forever" meant "invisible to the person they belong to".
+    """
+    return {"documents": m5.archived_documents(db, account.id)}
+
+
+@router.post("/documents/{document_id}/archive")
+def archive_document(
+    document_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Remove a document from the wallet. This is the driver's "delete", and it is
+    deliberately not one: §17 Q16 forbids hard delete, so the document leaves the
+    grid, leaves inspection mode and stops the expiry ladder while the bytes stay
+    exactly where they are, restorable.
+
+    Idempotent, because a removal made in a dead zone replays on reconnect and a
+    second archive must not fail. Replaying also must not rewrite the reason — an
+    archive that got there by supersession keeps saying so.
+    """
+    doc = m5.archive_own_document(db, account.id, document_id)
+    if doc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "document not found")
+    return {
+        "document_id": str(doc.id),
+        "archived_at": doc.archived_at.isoformat(),
+        "reason": doc.archive_reason,
+    }
+
+
+@router.post("/documents/{document_id}/restore")
+def restore_document(
+    document_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Put it back — the half that makes removal safe to offer. Refused, naming the
+    document in the way, when a live credential of a one-at-a-time type already holds
+    the slot: restoring a superseded CDL beside its replacement would put two current
+    licences in front of an officer, which is the confusion supersession exists to
+    prevent."""
+    try:
+        doc = m5.restore_own_document(db, account.id, document_id)
+    except m5.RestoreBlocked as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"a current {exc.blocker.doc_type.value} is already in the wallet",
+        ) from exc
+    if doc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "document not found")
+    return {
+        "document_id": str(doc.id),
+        "doc_type": doc.doc_type.value,
+        "expires_on": doc.expires_on.isoformat() if doc.expires_on else None,
+    }
+
+
 @router.post("/documents", status_code=201)
 def capture_document(
     body: DocumentIn,

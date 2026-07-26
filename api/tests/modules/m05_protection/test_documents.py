@@ -194,3 +194,176 @@ def test_correcting_an_expiry_reopens_the_reminder_ladder(db):
     documents.update_document_meta(db, doc, expires_on=TODAY + timedelta(days=14))
 
     assert [off for _, off in m5.expiry_reminders_due(db, TODAY)] == [14]
+
+
+# --- Removal, and why it is not a delete (§17 Q16 / §23) ---
+def test_removing_a_document_takes_it_out_of_the_wallet_without_destroying_it(db):
+    """What a driver means by "delete": it leaves the wallet. What the product may
+    not do: destroy it. §17 Q16 forbids hard delete, and a CDL removed today is still
+    the answer to what was carried at an inspection last March — so the row and the
+    bytes stay exactly where they were."""
+    account = _account(db, "remove@example.com")
+    doc = _doc(db, account, "permit", 100)
+
+    m5.archive_own_document(db, account.id, doc.id)
+
+    assert m5.wallet(db, account.id, as_of=TODAY)["documents"] == []
+    assert documents.get_document_bytes(db, doc) == b"%PDF-1.4 credential"
+    assert db.get(documents.Document, doc.id) is not None
+
+
+def test_a_removed_document_leaves_inspection_mode(db):
+    """Inspection mode produces what the driver is carrying NOW. A credential they
+    removed is not that, and an officer is the worst audience for the difference."""
+    account = _account(db, "inspect-removed@example.com")
+    doc = _doc(db, account, "cdl", 400)
+
+    m5.archive_own_document(db, account.id, doc.id)
+
+    assert m5.inspection_mode(db, account.id, as_of=TODAY) == []
+
+
+def test_a_removed_credential_stops_the_expiry_ladder(db):
+    """Same reasoning as a superseded one: warning about a document the driver has
+    taken out of their wallet is a notification they can do nothing useful with."""
+    account = _account(db, "removed-quiet@example.com")
+    doc = _doc(db, account, "med_card", 3)
+    assert [off for _, off in m5.expiry_reminders_due(db, TODAY)] == [3]
+
+    m5.archive_own_document(db, account.id, doc.id)
+
+    assert m5.expiry_reminders_due(db, TODAY) == []
+
+
+def test_restoring_puts_it_back_and_reopens_the_reminder_ladder(db):
+    """A reversible removal is a decision a driver can make with gloves on at a fuel
+    desk. Rungs marked sent while the document was out of the wallet would otherwise
+    keep a restored credential silent all the way to its expiry date."""
+    account = _account(db, "restore@example.com")
+    doc = _doc(db, account, "med_card", 3)
+    gateway = notify.RecordingNotificationGateway()
+    m5.dispatch_expiry_reminders(db, gateway, as_of=TODAY, now=NOON)
+    m5.archive_own_document(db, account.id, doc.id)
+
+    m5.restore_own_document(db, account.id, doc.id)
+
+    assert [d["doc_type"] for d in m5.wallet(db, account.id, as_of=TODAY)["documents"]] == [
+        "med_card"
+    ]
+    assert [off for _, off in m5.expiry_reminders_due(db, TODAY)] == [3]
+
+
+def test_a_restore_is_refused_when_a_current_credential_holds_the_slot(db):
+    """Restoring a superseded CDL beside its replacement would put two current
+    licences in front of an officer — the exact confusion supersession exists to
+    prevent. The refusal names the document in the way."""
+    import pytest
+
+    account = _account(db, "two-cdls@example.com")
+    old = _doc(db, account, "cdl", 30)
+    new = _doc(db, account, "cdl", 900)
+    assert old.archived_at is not None  # superseded by the renewal
+
+    with pytest.raises(m5.RestoreBlocked) as caught:
+        m5.restore_own_document(db, account.id, old.id)
+
+    assert caught.value.blocker.id == new.id
+
+
+def test_removing_the_replacement_frees_the_slot_for_the_old_one(db):
+    """The round trip that makes the refusal fair: a driver who filed the wrong CDL
+    removes it, and the card it archived can come back."""
+    account = _account(db, "undo-renewal@example.com")
+    old = _doc(db, account, "cdl", 30)
+    new = _doc(db, account, "cdl", 900)
+
+    m5.archive_own_document(db, account.id, new.id)
+    m5.restore_own_document(db, account.id, old.id)
+
+    assert [d["id"] for d in m5.wallet(db, account.id, as_of=TODAY)["documents"]] == [str(old.id)]
+
+
+def test_a_permit_never_blocks_a_restore(db):
+    """A driver carries several at once — IFTA, oversize, a state permit — which is
+    why permits do not supersede either. The two rules are the same rule."""
+    account = _account(db, "permits@example.com")
+    kept = _doc(db, account, "permit", 100)
+    removed = _doc(db, account, "permit", 200)
+
+    m5.archive_own_document(db, account.id, removed.id)
+    m5.restore_own_document(db, account.id, removed.id)
+
+    shown = {d["id"] for d in m5.wallet(db, account.id, as_of=TODAY)["documents"]}
+    assert shown == {str(kept.id), str(removed.id)}
+
+
+def test_a_replayed_removal_never_rewrites_why_a_document_was_archived(db):
+    """A removal made in a dead zone replays on reconnect. A second archive must not
+    fail, and must not relabel a supersession as something the driver did — the
+    archive list would then state something untrue about how the row got there."""
+    account = _account(db, "replay@example.com")
+    old = _doc(db, account, "cdl", 30)
+    _doc(db, account, "cdl", 900)
+
+    m5.archive_own_document(db, account.id, old.id)  # the replay
+    m5.archive_own_document(db, account.id, old.id)
+
+    row = next(r for r in m5.archived_documents(db, account.id) if r["id"] == str(old.id))
+    assert row["reason"] == "superseded"
+
+
+def test_the_archive_says_why_each_document_is_in_it(db):
+    """"Replaced by the CDL you filed" and "you removed this" are different facts and
+    lead to different decisions, so the list states which."""
+    account = _account(db, "why@example.com")
+    superseded = _doc(db, account, "cdl", 30)
+    replacement = _doc(db, account, "cdl", 900)
+    removed = _doc(db, account, "permit", 100)
+    m5.archive_own_document(db, account.id, removed.id)
+
+    rows = {r["id"]: r for r in m5.archived_documents(db, account.id)}
+
+    assert rows[str(superseded.id)]["reason"] == "superseded"
+    assert rows[str(superseded.id)]["replaced_by"]["id"] == str(replacement.id)
+    assert rows[str(removed.id)]["reason"] == "removed_by_driver"
+    assert rows[str(removed.id)]["replaced_by"] is None
+
+
+def test_the_archive_says_whether_a_restore_will_actually_work(db):
+    """A Restore control that exists only to fail is the dead-control pattern this
+    surface has already been caught by twice."""
+    account = _account(db, "restorable@example.com")
+    blocked = _doc(db, account, "cdl", 30)
+    _doc(db, account, "cdl", 900)
+    free = _doc(db, account, "permit", 100)
+    m5.archive_own_document(db, account.id, free.id)
+
+    rows = {r["id"]: r for r in m5.archived_documents(db, account.id)}
+
+    assert rows[str(blocked.id)]["restorable"] is False
+    assert rows[str(blocked.id)]["blocked_by_doc_type"] == "cdl"
+    assert rows[str(free.id)]["restorable"] is True
+
+
+def test_the_wallet_carries_the_archived_count(db):
+    """So the archive control can say how many are in there without a second request
+    on a fuel-desk connection."""
+    account = _account(db, "count@example.com")
+    doc = _doc(db, account, "permit", 100)
+    assert m5.wallet(db, account.id, as_of=TODAY)["archived_count"] == 0
+
+    m5.archive_own_document(db, account.id, doc.id)
+
+    assert m5.wallet(db, account.id, as_of=TODAY)["archived_count"] == 1
+
+
+def test_you_cannot_remove_a_document_that_is_not_yours(db):
+    """A stranger's id must be indistinguishable from a missing one, exactly as the
+    viewer route already treats it — otherwise ids can be probed for existence."""
+    mine = _account(db, "mine-rm@example.com")
+    theirs = _account(db, "theirs-rm@example.com")
+    doc = _doc(db, mine, "cdl", 400)
+
+    assert m5.archive_own_document(db, theirs.id, doc.id) is None
+    assert m5.restore_own_document(db, theirs.id, doc.id) is None
+    assert db.get(documents.Document, doc.id).archived_at is None

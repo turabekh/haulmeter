@@ -993,6 +993,25 @@ export async function fetchDocumentTypes() {
   return apiGet("/protection/documents/types", "doc_types");
 }
 
+// AI-CONTEXT: removal, restore, and the archive they move between.
+//
+// Both writes go through the F12 queue because a driver clearing a dead permit at a
+// fuel desk has the same connectivity as one photographing a CDL at a scale house.
+// Neither needs the idempotency bookkeeping a capture does: the SERVER makes them
+// idempotent — a second archive returns the existing state and never rewrites why a
+// document was archived — so a replay out of the dead-zone queue is simply true again.
+export async function archiveDocument(documentId) {
+  return queuedPost(`/protection/documents/${documentId}/archive`, {});
+}
+
+export async function restoreDocument(documentId) {
+  return queuedPost(`/protection/documents/${documentId}/restore`, {});
+}
+
+export async function fetchArchivedDocuments() {
+  return apiGet("/protection/documents/archive", "doc_archive");
+}
+
 export async function suggestACook(lat, lon) {
   // Q-7: the empty state's affordance records WHERE drivers want food — the demand
   // half of the vendor recruitment loop. Queued offline like any other contribution.

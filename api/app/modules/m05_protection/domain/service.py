@@ -188,7 +188,14 @@ def wallet(db: Session, account_id, as_of: date | None = None) -> dict:
         docs.append(row)
         if status in ("expiring", "expired"):
             expiring.append(row)
-    return {"documents": docs, "expiring": expiring}
+    # the count travels with the wallet so the archive control can state how many are
+    # in there without a second request — a driver on a fuel-desk connection should
+    # not pay a round trip to learn whether it is worth opening
+    return {
+        "documents": docs,
+        "expiring": expiring,
+        "archived_count": archived_count(db, account_id),
+    }
 
 
 def inspection_mode(db: Session, account_id, as_of: date | None = None) -> list[dict]:
@@ -449,6 +456,118 @@ def capture_document(
         # "what were you carrying at that inspection in March"
         documents.supersede_document(db, previous, document)
     return document
+
+
+class RestoreBlocked(Exception):
+    """A restore that would put two current credentials of one type in front of an
+    officer. Carries the document already holding the slot so the refusal can name it
+    rather than saying no without saying why."""
+
+    def __init__(self, blocker):
+        self.blocker = blocker
+        super().__init__(str(blocker.id))
+
+
+def _own_document(db: Session, account_id, document_id):
+    doc = db.get(documents.Document, document_id)
+    if doc is None or doc.account_id != account_id:
+        # a stranger's id must be indistinguishable from a missing one, exactly as the
+        # viewer route already treats it — otherwise ids can be probed for existence
+        return None
+    return doc
+
+
+def restore_blocked_by(db: Session, doc):
+    """What stands in the way of restoring this document, or None.
+
+    Only the one-at-a-time credentials can be blocked, and the reason is the same one
+    that makes them supersede in the first place: two live CDLs is a question about
+    which is current, asked at a roadside inspection. A driver who removed the new
+    card by mistake restores it, and the old one is then free to come back too.
+
+    Permits never block. A driver legitimately carries several at once, which is why
+    they do not supersede either — the two rules are the same rule.
+    """
+    if doc.doc_type.value not in SUPERSEDING_DOC_TYPES:
+        return None
+    live = documents.documents_for_account(db, doc.account_id, doc_type=doc.doc_type)
+    return live[0] if live else None
+
+
+def archive_own_document(db: Session, account_id, document_id, now=None):
+    """The driver's own removal — what "delete" means in a product that may not delete.
+
+    It leaves the wallet, leaves inspection mode and stops the expiry ladder, and it
+    is recoverable, which is what makes offering it honest. The bytes are untouched:
+    §17 Q16 forbids hard delete, and a CDL removed today is still the answer to what
+    the driver was carrying at an inspection last March.
+    """
+    doc = _own_document(db, account_id, document_id)
+    if doc is None:
+        return None
+    return documents.archive_document(db, doc, documents.ARCHIVE_REMOVED, now=now)
+
+
+def restore_own_document(db: Session, account_id, document_id):
+    doc = _own_document(db, account_id, document_id)
+    if doc is None:
+        return None
+    blocker = restore_blocked_by(db, doc) if doc.archived_at is not None else None
+    if blocker is not None:
+        raise RestoreBlocked(blocker)
+    return documents.restore_document(db, doc)
+
+
+def archived_count(db: Session, account_id) -> int:
+    return len(
+        [
+            d
+            for d in documents.documents_for_account(db, account_id, include_archived=True)
+            if d.archived_at is not None
+        ]
+    )
+
+
+def archived_documents(db: Session, account_id) -> list[dict]:
+    """The wallet's other half, which has existed in the database since 0049 and has
+    never been reachable: `documents_for_account` has taken `include_archived` from
+    the day it was written and no route ever passed it.
+
+    Every row says WHY it is here, because "replaced by the CDL you filed on 26 Jul"
+    and "you removed this" are different facts and lead to different decisions. And
+    every row says whether restoring it will actually work — a Restore control that
+    exists only to fail is the dead-control pattern this surface has already been
+    caught by twice.
+    """
+    rows = []
+    for doc in documents.documents_for_account(db, account_id, include_archived=True):
+        if doc.archived_at is None:
+            continue
+        replacement = (
+            db.get(documents.Document, doc.superseded_by_id)
+            if doc.superseded_by_id is not None
+            else None
+        )
+        blocker = restore_blocked_by(db, doc)
+        rows.append(
+            {
+                "id": str(doc.id),
+                "doc_type": doc.doc_type.value,
+                "expires_on": doc.expires_on.isoformat() if doc.expires_on else None,
+                "archived_at": doc.archived_at.isoformat(),
+                "reason": doc.archive_reason or documents.ARCHIVE_SUPERSEDED,
+                "replaced_by": None
+                if replacement is None
+                else {
+                    "id": str(replacement.id),
+                    "doc_type": replacement.doc_type.value,
+                    "uploaded_at": replacement.uploaded_at.isoformat(),
+                },
+                "restorable": blocker is None,
+                "blocked_by_doc_type": None if blocker is None else blocker.doc_type.value,
+            }
+        )
+    return sorted(rows, key=lambda r: r["archived_at"], reverse=True)
 
 
 def expiry_reminders_due(db: Session, as_of: date | None = None) -> list:

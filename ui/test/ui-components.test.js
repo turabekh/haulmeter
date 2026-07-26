@@ -1598,6 +1598,63 @@ describe("MoneySurface (M4 Money tab, design-prd §10.3)", () => {
 });
 
 describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
+  const WALLET = {
+    documents: [
+      { id: "d-1", doc_type: "cdl", expires_on: "2027-03-01", status: "ok" },
+      { id: "d-2", doc_type: "permit", expires_on: "2026-09-01", status: "ok" },
+      { id: "d-3", doc_type: "permit", expires_on: "2026-12-01", status: "ok" },
+    ],
+    expiring: [],
+    archived_count: 2,
+  };
+  const ARCHIVE = {
+    documents: [
+      {
+        id: "a-1",
+        doc_type: "cdl",
+        expires_on: "2026-03-01",
+        archived_at: "2026-07-26T10:00:00+00:00",
+        reason: "superseded",
+        replaced_by: { id: "d-1", doc_type: "cdl", uploaded_at: "2026-07-26T10:00:00+00:00" },
+        restorable: false,
+        blocked_by_doc_type: "cdl",
+      },
+      {
+        id: "a-2",
+        doc_type: "permit",
+        expires_on: null,
+        archived_at: "2026-07-24T10:00:00+00:00",
+        reason: "removed_by_driver",
+        replaced_by: null,
+        restorable: true,
+        blocked_by_doc_type: null,
+      },
+    ],
+  };
+
+  function stubWallet({ onPost } = {}) {
+    const posts = [];
+    const stub = vi.fn().mockImplementation((url, opts) => {
+      const u = String(url);
+      if (opts?.method === "POST") {
+        posts.push(u);
+        onPost?.(u);
+        return jsonOk({ document_id: "x" });
+      }
+      if (u.includes("/protection/documents/archive")) return jsonOk(ARCHIVE);
+      if (u.includes("/protection/wallet")) return jsonOk(WALLET);
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", stub);
+    return posts;
+  }
+
+  beforeEach(() => useDriverState().setState(DriverState.IDLE));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    logout();
+  });
+
   it("shows inspection button, expiring pills, and the document grid (fixture)", async () => {
     const w = mount(DocsSurface);
     await flushPromises();
@@ -1605,6 +1662,152 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
     expect(w.findAll(".doc")).toHaveLength(4);
     expect(w.text()).toContain("CDL"); // acronym stays English (§12.3)
     expect(w.findAll(".pill").length).toBeGreaterThan(0); // expiring-soon strip
+  });
+
+  it("groups the grid by type (§10.4 'document grid by type')", async () => {
+    setToken("tok-docs");
+    stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+
+    const labels = w.findAll(".group__label").map((n) => n.text());
+    expect(labels).toEqual(["CDL", "Permit"]); // two permits collapse under one heading
+    expect(w.findAll(".group")).toHaveLength(2);
+    expect(w.findAll(".doc")).toHaveLength(3);
+  });
+
+  it("offers the archive with a count, and only when something is in it", async () => {
+    setToken("tok-docs");
+    stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+
+    expect(w.find(".archive").exists()).toBe(true);
+    expect(w.find(".archive__count").text()).toBe("2");
+  });
+
+  it("does not offer the archive when nothing is in it", async () => {
+    setToken("tok-docs");
+    // an "Archived · 0" row is a control that teaches the driver nothing
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url) => {
+        const u = String(url);
+        if (u.includes("/protection/documents/archive")) return jsonOk({ documents: [] });
+        if (u.includes("/protection/wallet")) return jsonOk({ ...WALLET, archived_count: 0 });
+        return jsonOk({});
+      }),
+    );
+    const w = mount(DocsSurface);
+    await flushPromises();
+
+    expect(w.find(".archive").exists()).toBe(false);
+  });
+
+  it("removal asks first and only archives after the confirm (§8)", async () => {
+    setToken("tok-docs");
+    const posts = stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+
+    await w.findAll(".doc")[0].trigger("click"); // open the document
+    await flushPromises();
+    await w.find(".viewer__remove").trigger("click"); // ask
+    await flushPromises();
+
+    expect(posts).toHaveLength(0); // nothing has happened yet
+    const body = w.text();
+    expect(body).toContain("Remove from wallet?");
+    expect(body).toContain("Nothing is deleted"); // the confirm states the limit too
+    expect(body).toContain("stops expiry reminders"); // and the actual consequence
+
+    await w.find(".rm__go").trigger("click");
+    await flushPromises();
+
+    expect(posts.some((u) => u.endsWith("/protection/documents/d-1/archive"))).toBe(true);
+  });
+
+  it("keeping it archives nothing", async () => {
+    setToken("tok-docs");
+    const posts = stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+    await w.findAll(".doc")[0].trigger("click");
+    await flushPromises();
+    await w.find(".viewer__remove").trigger("click");
+    await flushPromises();
+
+    await w.find(".rm__keep").trigger("click");
+    await flushPromises();
+
+    expect(posts).toHaveLength(0);
+    expect(w.find(".rm__go").exists()).toBe(false);
+  });
+
+  it("offers no destructive control while DRIVING (Forbidden #11)", async () => {
+    setToken("tok-docs");
+    stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+    await w.findAll(".doc")[0].trigger("click");
+    await flushPromises();
+    expect(w.find(".viewer__remove").exists()).toBe(true);
+
+    useDriverState().setState(DriverState.DRIVING);
+    await w.vm.$nextTick();
+
+    expect(w.find(".viewer__remove").exists()).toBe(false);
+    expect(w.find(".capture").exists()).toBe(false); // capture chip stays guarded too
+  });
+
+  it("the archive says why each document is there and whether Restore will work", async () => {
+    setToken("tok-docs");
+    stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+
+    await w.find(".archive").trigger("click");
+    await flushPromises();
+
+    const rows = w.findAll(".arch__row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].text()).toContain("Replaced by a newer one");
+    expect(rows[0].find(".arch__restore").exists()).toBe(false); // a live CDL holds the slot
+    expect(rows[0].text()).toContain("already in your wallet"); // and it says so
+    expect(rows[1].text()).toContain("You removed this");
+    expect(rows[1].find(".arch__restore").exists()).toBe(true);
+    expect(w.text()).toContain("Nothing here is deleted");
+  });
+
+  it("restores a removed document", async () => {
+    setToken("tok-docs");
+    const posts = stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+    await w.find(".archive").trigger("click");
+    await flushPromises();
+
+    await w.findAll(".arch__row")[1].find(".arch__restore").trigger("click");
+    await flushPromises();
+
+    expect(posts.some((u) => u.endsWith("/protection/documents/a-2/restore"))).toBe(true);
+  });
+
+  it("an archived document opens, and offers neither edit nor remove", async () => {
+    setToken("tok-docs");
+    stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+    await w.find(".archive").trigger("click");
+    await flushPromises();
+
+    await w.findAll(".arch__doc")[0].trigger("click");
+    await flushPromises();
+
+    // editing an archived document 409s on the server: it records what was true, so
+    // the control is not offered rather than offered and refused
+    expect(w.find(".viewer__edit").exists()).toBe(false);
+    expect(w.find(".viewer__remove").exists()).toBe(false);
   });
 });
 

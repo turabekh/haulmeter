@@ -295,3 +295,92 @@ def test_a_stranger_id_is_indistinguishable_from_a_missing_one(client, db):
     missing = "11111111-2222-3333-4444-555555555555"
 
     assert client.get(f"/protection/documents/{missing}", headers=headers).status_code == 404
+
+
+# --- FR3: removal that is not a delete, and the archive it goes to ---
+def test_removing_a_document_takes_it_out_of_the_wallet_and_into_the_archive(client, db):
+    """The driver's "delete". §17 Q16 forbids destroying it, so what changes is which
+    document the wallet PRODUCES — and it says why it is in the archive."""
+    headers = _headers(client, "rm-doc@example.com")
+    doc_id = _file_doc(client, headers, doc_type="permit")
+
+    resp = client.post(f"/protection/documents/{doc_id}/archive", headers=headers)
+    assert resp.status_code == 200
+
+    wallet = client.get("/protection/wallet", headers=headers).json()
+    assert wallet["documents"] == []
+    assert wallet["archived_count"] == 1
+    archived = client.get("/protection/documents/archive", headers=headers).json()["documents"]
+    assert [(r["id"], r["reason"]) for r in archived] == [(doc_id, "removed_by_driver")]
+
+
+def test_a_removed_document_still_opens(client, db):
+    """It is still the answer to "what were you carrying at that inspection in March".
+    A record kept forever that its owner cannot read is not kept for their benefit."""
+    headers = _headers(client, "rm-open@example.com")
+    doc_id = _file_doc(client, headers, doc_type="permit")
+    client.post(f"/protection/documents/{doc_id}/archive", headers=headers)
+
+    resp = client.get(f"/protection/documents/{doc_id}", headers=headers)
+
+    assert resp.status_code == 200
+    assert resp.content.startswith(b"\x89PNG")
+
+
+def test_restoring_a_removed_document_puts_it_back(client, db):
+    headers = _headers(client, "restore-doc@example.com")
+    doc_id = _file_doc(client, headers, doc_type="permit")
+    client.post(f"/protection/documents/{doc_id}/archive", headers=headers)
+
+    resp = client.post(f"/protection/documents/{doc_id}/restore", headers=headers)
+    assert resp.status_code == 200
+
+    wallet = client.get("/protection/wallet", headers=headers).json()
+    assert [d["id"] for d in wallet["documents"]] == [doc_id]
+    assert wallet["archived_count"] == 0
+
+
+def test_a_restore_that_would_show_two_current_licences_is_refused_by_name(client, db):
+    """Two live CDLs is a question about which is current, asked at a roadside
+    inspection. The refusal names what is in the way rather than saying no."""
+    headers = _headers(client, "two-cdl-api@example.com")
+    old_id = _file_doc(client, headers, doc_type="cdl", expires="2027-01-17")
+    _file_doc(client, headers, doc_type="cdl", expires="2031-01-17")
+
+    resp = client.post(f"/protection/documents/{old_id}/restore", headers=headers)
+
+    assert resp.status_code == 409
+    assert "cdl" in resp.json()["detail"]
+
+
+def test_a_replayed_removal_from_a_dead_zone_succeeds_twice(client, db):
+    """F12 replays a write made with no signal. A second archive must not fail."""
+    headers = _headers(client, "replay-api@example.com")
+    doc_id = _file_doc(client, headers, doc_type="permit")
+
+    first = client.post(f"/protection/documents/{doc_id}/archive", headers=headers)
+    second = client.post(f"/protection/documents/{doc_id}/archive", headers=headers)
+
+    assert (first.status_code, second.status_code) == (200, 200)
+    assert first.json()["archived_at"] == second.json()["archived_at"]
+
+
+def test_another_driver_cannot_remove_your_credential(client, db):
+    """And a stranger's id 404s exactly like a missing one, so ids cannot be probed."""
+    mine = _headers(client, "mine-api@example.com")
+    theirs = _headers(client, "theirs-api@example.com")
+    doc_id = _file_doc(client, mine)
+
+    assert client.post(f"/protection/documents/{doc_id}/archive", headers=theirs).status_code == 404
+    assert client.get("/protection/wallet", headers=mine).json()["archived_count"] == 0
+
+
+def test_the_archive_route_is_not_swallowed_by_the_document_id_route(client, db):
+    """FastAPI matches in declaration order and `{document_id}` is a UUID, so a later
+    /documents/archive would be rejected as a malformed id instead of served."""
+    headers = _headers(client, "route-order@example.com")
+
+    resp = client.get("/protection/documents/archive", headers=headers)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"documents": []}

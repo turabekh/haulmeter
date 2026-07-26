@@ -20,15 +20,17 @@
      × buttons on the screen — visible immediately, invisible to every test. -->
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { FileText, TriangleAlert, Pencil } from "lucide-vue-next";
+import { FileText, TriangleAlert, Pencil, Trash2 } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
+import { useDriverState } from "../state.js";
 import { fetchDocumentBytes, editDocument } from "../api.js";
 
 const props = defineProps({
   document: { type: Object, required: true },
 });
-const emit = defineEmits(["edited"]);
+const emit = defineEmits(["edited", "remove"]);
 const { t } = useI18n();
+const { isDriving } = useDriverState();
 
 const url = ref(null);
 const failed = ref(false);
@@ -101,7 +103,15 @@ onBeforeUnmount(() => {
         {{ t("docs.view_expires") }}
         <span class="viewer__date">{{ savedAt || document.expires_on }}</span>
       </span>
-      <button v-if="!editing" class="viewer__edit" type="button" @click="editing = true">
+      <!-- an archived document refuses edits with a 409: it records what was true,
+           and editing it would rewrite history rather than correct the present. So
+           the control is not offered rather than offered and refused. -->
+      <button
+        v-if="!editing && !document.archived"
+        class="viewer__edit"
+        type="button"
+        @click="editing = true"
+      >
         <Pencil :size="16" :stroke-width="2" aria-hidden="true" />
         {{ t("docs.view_edit") }}
       </button>
@@ -115,6 +125,25 @@ onBeforeUnmount(() => {
         {{ t("portal.vendor.save") }}
       </button>
     </div>
+
+    <!-- AI-CONTEXT: removal — the driver's "delete", which does not delete (§17 Q16).
+         §8: destructive controls are flare-filled and require their own confirm
+         sheet, so this only ASKS; the sheet belongs to the surface, because sheets
+         stack max 1 deep and this component is already inside one.
+
+         DRIVING: a confirm is an interactive prompt (Forbidden #11), so it does not
+         render at speed. The viewer itself deliberately has no DRIVING guard — the
+         driver hands the phone to an officer and by then the truck is stopped — but
+         a destructive decision taken at 65 mph is a different thing entirely. -->
+    <button
+      v-if="!document.archived && !isDriving"
+      class="viewer__remove"
+      type="button"
+      @click="emit('remove', document)"
+    >
+      <Trash2 :size="16" :stroke-width="2" aria-hidden="true" />
+      {{ t("docs.view_remove") }}
+    </button>
   </div>
 </template>
 
@@ -203,6 +232,23 @@ onBeforeUnmount(() => {
 }
 .viewer__save:disabled {
   opacity: 0.5;
+}
+/* §8: destructive = flare. Outlined rather than filled — the sheet it opens carries
+   the filled confirm, and two flare-filled buttons in one flow would make the ask
+   look like the act. */
+.viewer__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  width: 100%;
+  min-height: 48px;
+  border-radius: var(--r-control);
+  background: transparent;
+  border: 1px solid var(--flare-500);
+  color: var(--flare-500);
+  font-size: var(--type-label-size);
+  font-weight: 500;
 }
 .viewer__fallback {
   display: flex;

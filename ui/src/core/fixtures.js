@@ -295,6 +295,7 @@ export const SAMPLE_WALLET = {
     { id: "d-2", doc_type: "med_card", expires_on: "2026-08-01", status: "expiring" },
     { id: "d-3", doc_type: "insurance", expires_on: "2026-01-01", status: "expired" },
   ],
+  archived_count: 0,
 };
 
 export const SAMPLE_CORRIDOR = [

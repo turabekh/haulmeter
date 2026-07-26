@@ -51,7 +51,13 @@ class Document(Base):
     # an inspection six months ago — destroying it would destroy the answer to a
     # question someone may yet ask. So a new one archives the old and points back at
     # it, and the chain of what was held when stays walkable.
+    #
+    # WHY it was archived is a different fact from THAT it was, and the archive list
+    # has to say which: "replaced by your new CDL" and "you removed this" read
+    # differently to the driver deciding whether to restore it. `superseded` is not
+    # restorable while its replacement is live; `removed_by_driver` always is.
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archive_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
     superseded_by_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
     subject_kind: Mapped[str | None] = mapped_column(String(40), nullable=True)
     subject_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
