@@ -19,7 +19,7 @@
      ladder while the row and the bytes stay exactly where they are, restorable from
      the archive sheet. -->
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { ShieldCheck, Plus, Archive, RotateCcw } from "lucide-vue-next";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
@@ -39,6 +39,18 @@ const { isDriving } = useDriverState();
 const data = ref(SAMPLE_WALLET);
 const inspecting = ref(false);
 const capturing = ref(false);
+// AI-CONTEXT: SM-3 — the capture BUTTON was guarded and the SHEET was not.
+//
+// `v-if="!isDriving"` hid the chip, but the sheet is a sibling at the top of the
+// surface, so a driver who opened it while stopped and then pulled away kept a live
+// camera-capture UI — file input, expiry field, submit — on screen at speed. The
+// control that opens a flow and the flow itself are two different things to guard,
+// and only one of them was. §10.4 lets inspection mode survive DRIVING; capture does
+// not, so this closes rather than merely hiding: a sheet that sprang back open at the
+// next stop would be a surprise nobody asked for.
+watch(isDriving, (driving) => {
+  if (driving) capturing.value = false;
+});
 // AI-CONTEXT: the document a driver (or an officer) is looking at. Tapping a row
 // opens it, in the wallet AND in inspection mode — the point of the wallet is
 // producing the credential, not reporting that one exists.

@@ -821,7 +821,7 @@ async function endLoad() {
   padding: var(--s-3);
   border-radius: var(--r-control);
   background: var(--shield-500);
-  color: var(--on-accent, #fff);
+  color: var(--on-accent);
   font-size: var(--type-body-size);
   text-align: center;
 }

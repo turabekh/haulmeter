@@ -10,10 +10,12 @@ import { ref, computed, onMounted } from "vue";
 import { ArrowLeft, Camera, Check } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
+import { useDriverState } from "../core/state.js";
 import { activeStopId, startConditionCapture, addConditionPhoto } from "../core/api.js";
 
 const router = useRouter();
 const { t } = useI18n();
+const { isDriving } = useDriverState();
 
 const sequence = ref([]);
 const index = ref(0);
@@ -87,7 +89,18 @@ async function onCapture(event) {
       <p class="cond__progress">{{ t("cond.step") }} {{ index + 1 }} {{ t("cond.of") }} {{ sequence.length }}</p>
       <h2 class="cond__step">{{ t(`cond.step.${step}`) }}</h2>
 
-      <label class="shoot">
+      <!-- AI-CONTEXT: SM-3, and this screen had no DRIVING behaviour at all.
+           `capture="environment"` opens the rear camera directly, and §22.3's
+           DRIVING box was never filled for this surface — while the route
+           `/protection/condition` carries no guard of its own (the router has only
+           an auth `beforeEach`), so a deep link, the back button or a §13.5
+           notification could open a camera at speed. Forbidden #11.
+
+           Same shape as EvidenceSurface: what you can READ stays — the step and the
+           progress are still there — and only the acting stops. The progress is
+           already durable server-side, so saying so is a fact, not a reassurance. -->
+      <p v-if="isDriving" class="muted">{{ t("cond.driving") }}</p>
+      <label v-else class="shoot">
         <Camera :size="40" :stroke-width="2" aria-hidden="true" />
         <span>{{ t("cond.take") }}</span>
         <input

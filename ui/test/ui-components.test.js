@@ -1042,6 +1042,48 @@ describe("ConditionSurface — cargo-condition capture (M5-FR2)", () => {
     }
   });
 
+  // AI-CONTEXT: §22.3's DRIVING box was never filled for this surface, and the input
+  // carries `capture="environment"` — it opens the rear camera directly. The route
+  // has no guard of its own (the router has only an auth `beforeEach`), so a deep
+  // link, the back button or a §13.5 notification could open a camera at speed.
+  it("does not offer the camera while DRIVING (SM-3, Forbidden #11)", async () => {
+    setToken("tok-cond-driving");
+    setActiveStop("stop-c1");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            capture_id: "cap-1",
+            sequence: ["trailer_exterior", "seals", "load_blocking", "reefer_setpoint"],
+          }),
+      }),
+    );
+    try {
+      const router = testRouter();
+      router.push("/protection/condition");
+      await router.isReady();
+      const w = mount(ConditionSurface, { global: { plugins: [router] } });
+      await flushPromises();
+      expect(w.find(".shoot").exists()).toBe(true);
+
+      useDriverState().setState(DriverState.DRIVING);
+      await w.vm.$nextTick();
+
+      // the shutter goes; what the driver can READ stays, as on EvidenceSurface
+      expect(w.find(".shoot").exists()).toBe(false);
+      expect(w.find("input[type='file']").exists()).toBe(false);
+      expect(w.text()).toContain("Step 1 of 4");
+      expect(w.text()).toContain("Pull over");
+    } finally {
+      useDriverState().setState(DriverState.IDLE);
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
+
   it("prompts to start a load when there's no active stop", async () => {
     logout();
     setActiveStop(null);
@@ -2234,6 +2276,28 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     logout();
+  });
+
+  // AI-CONTEXT: the capture BUTTON was guarded and the SHEET was not. A driver who
+  // opened it while stopped and then pulled away kept a live camera-capture UI on
+  // screen at speed — the control that opens a flow and the flow itself are two
+  // different things to guard, and only one of them was.
+  it("closes an open capture sheet when the truck starts moving (SM-3)", async () => {
+    stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+
+    await w.find(".capture").trigger("click");
+    await flushPromises();
+    expect(w.find(".cap__chip").exists()).toBe(true); // the sheet is open
+
+    useDriverState().setState(DriverState.DRIVING);
+    await flushPromises();
+
+    expect(w.find(".cap__chip").exists()).toBe(false);
+    expect(w.find(".capture").exists()).toBe(false); // and the chip that opens it
+    // §10.4 lets inspection mode survive DRIVING; only capture is withdrawn
+    expect(w.find(".inspect").exists()).toBe(true);
   });
 
   it("shows inspection button, expiring pills, and the document grid (fixture)", async () => {
