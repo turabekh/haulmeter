@@ -41,7 +41,9 @@ const color = computed(() => `var(${METER_VARIANT_TOKEN[props.variant] ?? "--tex
 }
 .meter__figure {
   font-family: var(--font-mono);
-  font-size: var(--type-meter-size);
+  /* T-6: money never truncates — it scales down. The ceiling only bites when the
+     type has been scaled up past what a 360 dp card can hold (T-5). */
+  font-size: min(var(--type-meter-size), var(--type-meter-fluid-max));
   line-height: var(--type-meter-line);
   font-weight: var(--type-meter-weight);
   font-variant-numeric: tabular-nums;

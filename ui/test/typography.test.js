@@ -75,7 +75,13 @@ describe("§6.2 T-2 — The Meter's figures are tabular", () => {
     expect(block).toContain("font-family: var(--font-mono)");
     // the property that actually delivers "zero layout shift while counting"
     expect(block).toContain("font-variant-numeric: tabular-nums");
-    expect(block).toContain("font-size: var(--type-meter-size)");
+    // AI-CONTEXT: the figure is `min(--type-meter-size, --type-meter-fluid-max)` since
+    // §23 entry 63. T-6 forbids truncating money and asks for scaling down instead, and
+    // at 200% text the meter step outgrows a 360 dp card — the ceiling is what keeps the
+    // hero figure inside it. BOTH operands are tokens, which is what this test is for.
+    expect(block).toContain("var(--type-meter-size)");
+    expect(block).toContain("var(--type-meter-fluid-max)");
+    expect(block).not.toMatch(/font-size:\s*[^;]*\d+(px|rem|vw)/); // no literal, only tokens
   });
 
   it("uses no hardcoded size or family anywhere in the signature element", () => {

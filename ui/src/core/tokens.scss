@@ -84,16 +84,38 @@ $font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 $font-gurmukhi: "Noto Sans Gurmukhi", $font-sans;
 
 // AI-CONTEXT: §6.2 Typography — type scale (mobile baseline: size / line-height / weight)
-$type-meter-size: 44px;    $type-meter-line: 48px;    $type-meter-weight: 600;
-$type-display-size: 28px;  $type-display-line: 34px;  $type-display-weight: 600;
-$type-title-size: 20px;    $type-title-line: 26px;    $type-title-weight: 600;
-$type-body-size: 16px;     $type-body-line: 24px;     $type-body-weight: 400;
-$type-label-size: 14px;    $type-label-line: 20px;    $type-label-weight: 500;
-$type-caption-size: 13px;  $type-caption-line: 18px;  $type-caption-weight: 400;
+//
+// THE UNIT IS THE FEATURE (§23 entry 63). These were px, and px is immune to OS and
+// browser font-scaling — so T-5, "user font-scaling honored to 200%: layouts must
+// reflow, never clip", was not merely untested but unsatisfiable by construction. A
+// driver who set their phone to large text got the same 13 px captions as everyone
+// else, and §16 calls that population — older eyes, a cab at night — the accessibility
+// case this product exists in.
+//
+// `rem` scales with the root font size, which is exactly the knob the OS turns. The
+// comment values are the dp at a 16 px root, so the scale still reads as §6.2 states
+// it. SPACE, RADIUS and TOUCH deliberately stay px below: §6.5's 48 dp glove minimum
+// is about fingers, not eyesight, and growing targets with the type would push a
+// two-column row off a 360 dp screen at 200%.
+$type-meter-size: 2.75rem;    $type-meter-line: 3rem;      $type-meter-weight: 600;   // 44 / 48
+$type-display-size: 1.75rem;  $type-display-line: 2.125rem; $type-display-weight: 600; // 28 / 34
+$type-title-size: 1.25rem;    $type-title-line: 1.625rem;  $type-title-weight: 600;   // 20 / 26
+$type-body-size: 1rem;        $type-body-line: 1.5rem;     $type-body-weight: 400;    // 16 / 24
+$type-label-size: 0.875rem;   $type-label-line: 1.25rem;   $type-label-weight: 500;   // 14 / 20
+$type-caption-size: 0.8125rem; $type-caption-line: 1.125rem; $type-caption-weight: 400; // 13 / 18
+// AI-CONTEXT: §6.2 T-6 — "truncation of money, time, or status is forbidden: scale
+// down within token steps or wrap." The Meter's figure is one unbreakable string, so
+// wrapping is not available to it and scaling down is the specified remedy. At 200%
+// root the meter step reaches 88 px and a nine-character money figure runs past a
+// 360 dp screen; this ceiling lets everything else grow for the driver who asked for
+// large text while keeping the hero figure inside the card. Above 15vw the token
+// always wins, so the normal and DRIVING steps are untouched at 100%.
+$type-meter-fluid-max: 15vw;
+
 // AI-CONTEXT: §6.2 T-1 — DRIVING bumps only these three steps, via one state attr
-$type-body-driving: 18px;
-$type-title-driving: 22px;
-$type-meter-driving: 52px;
+$type-body-driving: 1.125rem;  // 18
+$type-title-driving: 1.375rem; // 22
+$type-meter-driving: 3.25rem;  // 52
 
 // AI-CONTEXT: §6.3 Space — 8dp grid; $s-4 is the screen gutter
 $s-1: 4px;
@@ -159,6 +181,7 @@ $icon-lg: 28px;
   --type-meter-size: #{$type-meter-size};
   --type-meter-line: #{$type-meter-line};
   --type-meter-weight: #{$type-meter-weight};
+  --type-meter-fluid-max: #{$type-meter-fluid-max};
   --type-display-size: #{$type-display-size};
   --type-display-line: #{$type-display-line};
   --type-display-weight: #{$type-display-weight};

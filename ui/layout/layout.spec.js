@@ -659,3 +659,79 @@ for (const [name, path, live] of SURFACES) {
     }
   }
 }
+
+// AI-CONTEXT: T-5 / §16 — user font-scaling honored to 200%, "layouts reflow, rows
+// grow, nothing clips or truncates."
+//
+// This box on the §22.3 checklist was ticked for months and could not have been true:
+// every type token was declared in `px`, and px is immune to OS and browser
+// font-scaling. A driver who set their phone to large text got the same 13 dp captions
+// as everyone else. The tokens are `rem` now (§23 entry 63), which is what makes this
+// assertion mean something instead of passing vacuously.
+//
+// Deliberately TWO assertions rather than the full five-per-locale matrix: T-5 and T-6
+// promise reflow and no clipping, and those are the two that can actually break when
+// the type doubles. Running all five across three locales again would triple the
+// runtime of the slowest thing in CI to re-answer questions the 100% pass already
+// answered.
+const ROOT_200_PERCENT = "32px"; // the 16 px default, doubled — what the OS knob does
+
+async function at200(page, path, live) {
+  await prepare(page, { theme: "dark", pseudo: false, live });
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto(`${BASE}${path}`);
+  await settle(page, live);
+  await page.evaluate((size) => {
+    document.documentElement.style.fontSize = size;
+  }, ROOT_200_PERCENT);
+  await page.waitForTimeout(150); // let the reflow settle before measuring it
+}
+
+for (const [name, path, live] of SURFACES) {
+  test(`${name} · 200% — reflows without overflowing 360 dp (T-5)`, async ({ page }) => {
+    await at200(page, path, live);
+
+    const offenders = await page.evaluate(() => {
+      const doc = document.documentElement;
+      const found = [];
+      for (const el of document.querySelectorAll("body *")) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        if (r.right > doc.clientWidth + 1 || r.left < -1) {
+          const style = getComputedStyle(el);
+          const scrolls = ["auto", "scroll"].includes(style.overflowX);
+          const parentScrolls = el.parentElement
+            ? ["auto", "scroll"].includes(getComputedStyle(el.parentElement).overflowX)
+            : false;
+          if (!scrolls && !parentScrolls) {
+            found.push(`${el.tagName.toLowerCase()}.${el.className} @${Math.round(r.right)}`);
+          }
+        }
+      }
+      return found;
+    });
+
+    expect(offenders, `past 360 dp at 200% text: ${offenders.join(" | ")}`).toEqual([]);
+  });
+
+  test(`${name} · 200% — nothing clipped by its line box (T-5/T-6)`, async ({ page }) => {
+    await at200(page, path, live);
+    await page.evaluate(() => document.fonts && document.fonts.ready);
+
+    const clipped = await page.evaluate(() => {
+      const found = [];
+      for (const el of document.querySelectorAll("body *")) {
+        if (!el.childElementCount && el.textContent && el.textContent.trim()) {
+          const style = getComputedStyle(el);
+          if (style.overflow === "visible") continue;
+          if (el.scrollHeight > el.clientHeight + 1) {
+            found.push(`${el.tagName.toLowerCase()}.${el.className} ${el.scrollHeight}>${el.clientHeight}`);
+          }
+        }
+      }
+      return found;
+    });
+
+    expect(clipped, `clipped at 200% text: ${clipped.join(" | ")}`).toEqual([]);
+  });
+}
