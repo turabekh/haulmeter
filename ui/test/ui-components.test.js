@@ -1873,6 +1873,35 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     logout();
   });
 
+  // AI-CONTEXT: §15.5 became load-bearing the moment the meter started depending on
+  // real positions (F3's ping seam, this session). "A single persistent Load-tab card
+  // explaining exactly what stops working, with a one-tap fix — never nags beyond
+  // that card."
+  it("shows one degraded-location card when permission is denied (§15.5)", async () => {
+    const { permission } = await import("../src/core/location.js");
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(w.find(".degraded").exists()).toBe(false);
+
+    permission.value = "denied";
+    await w.vm.$nextTick();
+
+    const cards = w.findAll(".degraded");
+    expect(cards).toHaveLength(1); // ONE card, not a card per render
+    // it states the CONSEQUENCE, not the permission — "the meter arms manually"
+    expect(w.text()).toContain("Start the meter yourself");
+    expect(w.find(".degraded__fix").exists()).toBe(true);
+
+    // "unavailable" is not a permission the driver can restore, so no card and no
+    // one-tap fix that cannot work
+    permission.value = "unavailable";
+    await w.vm.$nextTick();
+    expect(w.find(".degraded").exists()).toBe(false);
+
+    permission.value = "unknown";
+  });
+
   it("previews the next stop (§10.2 anatomy)", async () => {
     const router = testRouter();
     const w = mount(LoadSurface, { global: { plugins: [router] } });

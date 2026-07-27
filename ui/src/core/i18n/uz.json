@@ -408,6 +408,8 @@
   "load.filed": "Da'vo topshirildi",
   "load.filed_frozen": "Da'vo topshirildi — soat to'xtadi",
   "load.free_time": "Bepul vaqt",
+  "load.geo_fix": "Joylashuvni yoqish",
+  "load.geo_off": "Joylashuv o'chirilgan, shuning uchun yetib kelish aniqlanmaydi. Dokka yetganingizda Hisoblagichni o'zingiz ishga tushiring.",
   "load.history": "Oldingi yuklar",
   "load.history_empty": "Yakunlagan yuklaringiz shu yerda qoladi — dalil to'plami, hujjatlar va qarz bo'lgan summa bilan.",
   "load.history_no_money": "detention yo'q",

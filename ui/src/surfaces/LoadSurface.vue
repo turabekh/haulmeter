@@ -38,6 +38,7 @@ import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
 import RateConImportSheet from "../core/components/RateConImportSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
+import { permission as locationPermission, retryLocationPermission } from "../core/location.js";
 import { computeDetentionState, meterVariant, formatClock, formatMoney } from "../core/meter.js";
 import {
   activeStopId,
@@ -119,6 +120,10 @@ async function onBolCaptured() {
   await loadMeter(); // the checklist row closes the moment the BOL lands
 }
 const filed = ref(null); // the generated claim result, once filed
+// §15.5 shows the card for a permission the DRIVER has to restore. "unavailable"
+// (a desktop browser, hardware off) is not that — there is no one-tap fix for it, so
+// offering one would be the dead-control pattern.
+const locationDenied = computed(() => locationPermission.value === "denied");
 let timer = null;
 
 // no load: the Meter rests. Nothing ticks, nothing is owed, nothing is invented.
@@ -329,6 +334,20 @@ async function endLoad() {
     <section class="card meter-card">
       <TheMeter :label="meterLabel" :figure="meterFigure" :variant="variant" :status="meterStatus" />
     </section>
+    <!-- AI-CONTEXT: §15.5's degraded-location card, which became load-bearing the
+         moment the meter started depending on real positions (F3's ping seam).
+         "A single persistent Load-tab card explaining exactly what stops working
+         (the meter arms manually) with a one-tap fix — never nags beyond that card."
+         So: ONE card, on THIS tab, stating the consequence rather than the
+         permission, and no toast, no banner, no second ask. It is deliberately not
+         `flare` — nothing is broken, the app is just working with less. -->
+    <section v-if="locationDenied && !isDriving" class="degraded" role="status">
+      <p class="degraded__text">{{ t("load.geo_off") }}</p>
+      <button class="degraded__fix" type="button" @click="retryLocationPermission">
+        {{ t("load.geo_fix") }}
+      </button>
+    </section>
+
     <!-- §15.3: one sentence of what this is, then one action to start. -->
     <p v-if="!live && !isDriving" class="hint">{{ t("load.empty_hint") }}</p>
     <!-- §10.2 DRIVING: "collapses to Meter-only glance card + voice hint". The hint
@@ -578,6 +597,34 @@ async function endLoad() {
 .meter-card {
   padding: 0;
   position: relative;
+}
+/* calm, not red (§15.1's tone, applied to §15.5): the app still works, it just works
+   with less. Hairline card, `marker` for the one word that matters. */
+.degraded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--line-1);
+  border-left: 2px solid var(--marker-500);
+  border-radius: var(--r-card);
+  background: var(--ink-1);
+}
+.degraded__text {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+.degraded__fix {
+  align-self: flex-start;
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+  font-weight: 500;
 }
 .hint {
   margin: calc(var(--s-2) * -1) 0 var(--s-3);

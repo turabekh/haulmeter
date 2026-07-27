@@ -9,6 +9,7 @@ import { useRoute } from "vue-router";
 import StatusStrip from "./core/components/StatusStrip.vue";
 import TabBar from "./core/components/TabBar.vue";
 import { online, pendingWrites, flushQueue } from "./core/api.js";
+import { startLocationReporting, stopLocationReporting } from "./core/location.js";
 
 const route = useRoute();
 const chrome = computed(() => route.meta.chrome !== false);
@@ -29,8 +30,13 @@ onMounted(() => {
     window.addEventListener("offline", setOffline);
   }
   flushQueue(); // sync anything queued from a previous offline session
+  // F3's sensor. Nothing sent the server a position before this — the geofence could
+  // emit ENTER (from the arrive button, at the facility's own coordinates) and could
+  // never emit EXIT. Adaptive sampling and the battery budget live in core/location.js.
+  startLocationReporting();
 });
 onUnmounted(() => {
+  stopLocationReporting();
   if (typeof window !== "undefined") {
     window.removeEventListener("online", setOnline);
     window.removeEventListener("offline", setOffline);

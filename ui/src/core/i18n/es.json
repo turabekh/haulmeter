@@ -408,6 +408,8 @@
   "load.filed": "Reclamo presentado",
   "load.filed_frozen": "Reclamo presentado — reloj detenido",
   "load.free_time": "Tiempo libre",
+  "load.geo_fix": "Volver a activar la ubicación",
+  "load.geo_off": "La ubicación está desactivada, así que no se detectan las llegadas. Inicia el Medidor tú mismo al llegar a un muelle.",
   "load.history": "Cargas anteriores",
   "load.history_empty": "Las cargas que terminas quedan aquí, con lo que produjeron: el paquete de evidencia, los papeles y lo que se debía.",
   "load.history_no_money": "sin detention",

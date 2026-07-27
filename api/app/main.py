@@ -7,6 +7,7 @@ from app.api import (
     admin,
     auth,
     load,
+    location,
     m01_map,
     m02_facility_intel,
     m03_detention,
@@ -96,6 +97,7 @@ app.include_router(public.router)
 app.include_router(share.router)
 app.include_router(owner.router)
 app.include_router(load.router)
+app.include_router(location.router)
 app.include_router(m01_map.router)
 app.include_router(m02_facility_intel.router)
 app.include_router(m03_detention.router)

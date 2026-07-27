@@ -408,6 +408,8 @@
   "load.filed": "Claim filed",
   "load.filed_frozen": "Claim filed — clock stopped",
   "load.free_time": "Free time",
+  "load.geo_fix": "Turn location back on",
+  "load.geo_off": "Location is off, so arrivals aren't detected. Start the meter yourself when you reach a dock.",
   "load.history": "Past loads",
   "load.history_empty": "Loads you finish are kept here, with whatever they produced — the evidence pack, the paperwork, and what was owed.",
   "load.history_no_money": "no detention",

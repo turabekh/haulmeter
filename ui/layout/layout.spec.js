@@ -49,6 +49,16 @@ const BASE = process.env.UI_BASE || "http://ui:9008";
 // shape (api/app/api/load.py::meter) — a fixture whose shape drifts from its
 // endpoint is exactly the defect that put a raw ISO timestamp on this screen.
 
+// AI-CONTEXT: every Load surface below also renders §15.5's degraded-location card,
+// and that is worth knowing rather than rediscovering. Playwright denies geolocation
+// unless a context grants it, so `watchPosition` fails with PERMISSION_DENIED and
+// core/location.js flips to "denied" — which is the card's condition. It is real
+// coverage at 360 dp under all three locales.
+//
+// It is also IMPLICIT: granting geolocation in a context option here would silently
+// stop measuring the card without failing anything. If that ever happens, give the
+// card its own surface rather than letting the coverage evaporate.
+
 // where the app sends its requests (ui/src/core/api.js). The mock has to intercept
 // that exact origin; if it drifts, the surface's `ready` selector fails rather than
 // quietly measuring the empty state again.

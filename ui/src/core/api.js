@@ -281,6 +281,34 @@ export async function arriveAtStop(stopId) {
   return resp.json();
 }
 
+// AI-CONTEXT: F3's inbound seam, and deliberately NOT a `queuedPost`.
+//
+// Every other write in this file queues through F12 when the signal drops, because a
+// photograph taken in a dead zone is still true an hour later. A POSITION is not: the
+// server evaluates a ping against the geofence using SERVER time (PRD §7.3), so a
+// replayed one would be judged as happening now and could fabricate an ENTER at a
+// dock the driver left this morning. A ping that cannot be sent is dropped.
+//
+// That loses transitions in dead zones, which is real and logged as debt — but a lost
+// EXIT is a gap, and a fabricated one is a lie in an evidence chain.
+export async function sendLocationPing({ lat, lon, accuracyM, speedMps, mode } = {}) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/location/ping`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      lat,
+      lon,
+      client_time: new Date().toISOString(),
+      accuracy_m: accuracyM ?? null,
+      speed_mps: speedMps ?? null,
+      mode: mode ?? null,
+    }),
+  });
+  if (!resp.ok) throw new Error(`ping failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchMeter(stopId) {
   return apiGet(`/load/${stopId}/meter`, `meter:${stopId}`);
 }

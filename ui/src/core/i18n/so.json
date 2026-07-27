@@ -408,6 +408,8 @@
   "load.filed": "Sheegasho la gudbiyay",
   "load.filed_frozen": "Sheegasho la gudbiyay — saacaddu joogsatay",
   "load.free_time": "Wakhti bilaash",
+  "load.geo_fix": "Dib u shid goobta",
+  "load.geo_off": "Goobta waa demis, sidaas darteed imaatinka lama ogaado. Cabbirka isku bilow markaad gaadho barxadda.",
   "load.history": "Xamuulladii hore",
   "load.history_empty": "Xamuulladaad dhammaysato halkan ayay ku hadhayaan, iyo waxay soo saareen: xirmada caddaynta, waraaqaha, iyo wixii lagugu lahaa.",
   "load.history_no_money": "detention ma jirin",
