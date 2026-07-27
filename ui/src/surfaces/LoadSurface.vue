@@ -50,6 +50,7 @@ import {
   endActiveLoad,
   sendDetentionNotice,
   generateClaim,
+  correctAppointment,
   isAuthenticated,
 } from "../core/api.js";
 
@@ -124,6 +125,27 @@ const filed = ref(null); // the generated claim result, once filed
 // (a desktop browser, hardware off) is not that — there is no one-tap fix for it, so
 // offering one would be the dead-control pattern.
 const locationDenied = computed(() => locationPermission.value === "denied");
+// FR1's correction. `datetime-local` wants "YYYY-MM-DDTHH:mm" with no zone.
+const apptFixOpen = ref(false);
+const apptDraft = ref("");
+const apptSaving = ref(false);
+function openApptFix() {
+  apptDraft.value = live.value?.appointment ? String(live.value.appointment).slice(0, 16) : "";
+  apptFixOpen.value = true;
+}
+async function saveAppointment() {
+  if (!activeStopId.value || !apptDraft.value) return;
+  apptSaving.value = true;
+  try {
+    await correctAppointment(activeStopId.value, new Date(apptDraft.value).toISOString());
+    apptFixOpen.value = false;
+    await loadMeter(); // the window AND its provenance both change
+  } catch {
+    /* offline: the window is unchanged and the sheet stays open with what was typed */
+  } finally {
+    apptSaving.value = false;
+  }
+}
 let timer = null;
 
 // no load: the Meter rests. Nothing ticks, nothing is owed, nothing is invented.
@@ -426,6 +448,19 @@ async function endLoad() {
           <span class="context__window">{{ apptWindow }}</span>
         </span>
         <span v-if="apptSourceKey" class="context__source">{{ t(apptSourceKey) }}</span>
+        <!-- AI-CONTEXT: FR1's other half. The window is shown with its provenance so a
+             driver can catch a MIS-PARSED time while they are still approaching — and
+             until now the screen said "this may be wrong" and offered nothing to do
+             about it. F5 owns the field, so the write goes through its own endpoint.
+             Withdrawn at speed like every other acting control (SM-3). -->
+        <button
+          v-if="live && !isDriving"
+          class="context__fix"
+          type="button"
+          @click="openApptFix"
+        >
+          {{ apptWindow ? t("load.appt_fix") : t("load.appt_add") }}
+        </button>
       </div>
 
       <section v-if="live" class="card">
@@ -649,6 +684,21 @@ async function endLoad() {
         <RateConImportSheet @created="onLoadCreated" />
       </BottomSheet>
 
+      <BottomSheet
+        :open="apptFixOpen && !isDriving"
+        :title="t('load.appt_fix')"
+        @close="apptFixOpen = false"
+      >
+        <p class="docs__empty">{{ t("load.appt_fix_hint") }}</p>
+        <label class="appt__field">
+          <span class="appt__label">{{ t("load.appointment") }}</span>
+          <input v-model="apptDraft" class="appt__input" type="datetime-local" />
+        </label>
+        <button class="cta" type="button" :disabled="!apptDraft || apptSaving" @click="saveAppointment">
+          {{ t("load.appt_save") }}
+        </button>
+      </BottomSheet>
+
       <BottomSheet :open="snapping" :title="t('load.cta.bol')" @close="snapping = false">
         <DocumentCaptureSheet
           :stop-id="activeStopId"
@@ -775,6 +825,36 @@ async function endLoad() {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--text-1);
+}
+.context__fix {
+  align-self: flex-start;
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  margin-left: calc(var(--s-2) * -1);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.appt__field {
+  display: block;
+  margin-bottom: var(--s-3);
+}
+.appt__label {
+  display: block;
+  margin-bottom: var(--s-1);
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+}
+.appt__input {
+  width: 100%;
+  min-height: 56px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+  background: var(--ink-0);
+  color: var(--text-1);
+  font-size: var(--type-body-size);
 }
 .context__source {
   font-size: var(--type-caption-size);

@@ -126,6 +126,7 @@ def add_stop(
     appointment_end: datetime | None = None,
     free_time_minutes: int | None = None,
     detention_rate_cents_per_hour: int | None = None,
+    appointment_source: str | None = None,
 ) -> Stop:
     if facility_registry.get_facility(db, facility_id) is None:
         raise FacilityNotFound(str(facility_id))
@@ -139,6 +140,9 @@ def add_stop(
         stop_type=stop_type,
         appointment_start=appointment_start,
         appointment_end=appointment_end,
+        # a window with no value has no provenance to state; claiming one would be the
+        # same defect this field exists to fix, one layer down
+        appointment_source=appointment_source if appointment_start is not None else None,
         free_time_minutes=free_time_minutes,
         detention_rate_cents_per_hour=detention_rate_cents_per_hour,
     )
@@ -178,6 +182,30 @@ def disarm_stop(db: Session, stop: Stop, occurred_at: datetime | None = None) ->
     load = db.get(Load, stop.load_id)
     location.disarm_geofence(db, load.account_id, stop.facility_id, occurred_at)
     stop.geofence_armed = False
+    db.flush()
+    return stop
+
+
+def set_stop_appointment(
+    db: Session,
+    stop: Stop,
+    appointment_start: datetime | None,
+    appointment_end: datetime | None = None,
+    source: str = "manual",
+) -> Stop:
+    """Correct a stop's appointment window (§23 entry 62).
+
+    AI-CONTEXT: F5 owns `Stop.appointment_*`, and nothing could write it after
+    creation — which made M5-FR1 half a feature. FR1 exists so a driver sees a
+    MIS-PARSED window while they are still approaching and can still do something
+    about it; the screen showed the window and its provenance and then offered no way
+    to fix it, so the only remedy was ringing the broker with nowhere to record the
+    answer. Correcting it is the driver's own account of the time, so the provenance
+    becomes `manual` unless a caller states otherwise.
+    """
+    stop.appointment_start = appointment_start
+    stop.appointment_end = appointment_end
+    stop.appointment_source = source if appointment_start is not None else None
     db.flush()
     return stop
 

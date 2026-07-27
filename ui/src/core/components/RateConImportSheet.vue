@@ -45,10 +45,29 @@ const form = reactive({
   facility: "",
   broker: "",
   reference: "",
+  appointment: "",
   freeMin: "",
   rateHr: "",
 });
+// AI-CONTEXT: the parse EXTRACTS an appointment and this sheet used to throw it away.
+//
+// `ratecon.py` has asked the model for it since the parser was written, the draft
+// carries it — and the form had five fields, none of them the appointment, so
+// `createActiveLoad` never sent one. Every load created the way PRD §108 calls PRIMARY
+// therefore had a null window, which is exactly the value M5-FR1 exists to put in
+// front of a driver before they arrive. The Meter meanwhile reported the provenance as
+// "read from your rate con" for a time that had never been read from anything.
+//
+// Holding what the parse said lets the source be honest: keep it and the credit goes
+// to the parse, type over it and the credit is the driver's.
+const parsedAppointment = ref(null);
 
+// the parse only keeps the credit for a value the driver left alone
+const appointmentSource = computed(() =>
+  parsedAppointment.value && form.appointment === String(parsedAppointment.value).slice(0, 16)
+    ? "rate_con_parse"
+    : "manual",
+);
 const readable = computed(() => !!draft.value?.readable);
 const candidates = computed(() => draft.value?.facility_candidates ?? []);
 const silentOn = computed(() => draft.value?.silent_on ?? []);
@@ -83,6 +102,9 @@ async function read() {
     const p = res.parsed ?? {};
     form.facility = p.receiver_name ?? "";
     form.reference = p.reference_number ?? "";
+    // <input type="datetime-local"> wants "YYYY-MM-DDTHH:mm" with no zone
+    parsedAppointment.value = p.appointment ?? null;
+    form.appointment = p.appointment ? String(p.appointment).slice(0, 16) : "";
     form.freeMin = p.free_time_minutes ?? "";
     form.rateHr = p.detention_rate_cents_per_hour
       ? Math.round(p.detention_rate_cents_per_hour / 100)
@@ -111,6 +133,8 @@ async function create() {
       lon: -96.797,
       counterparty: form.broker || "Broker",
       reference_number: form.reference || null,
+      appointment: form.appointment ? new Date(form.appointment).toISOString() : null,
+      appointment_source: form.appointment ? appointmentSource.value : null,
       free_time_minutes: Number(form.freeMin) || null,
       rate_cents_per_hour: form.rateHr ? Math.round(Number(form.rateHr) * 100) : null,
       facility_id: chosenFacility.value,
@@ -182,6 +206,13 @@ async function create() {
       <label class="rc__field">
         <span class="rc__label">{{ t("load.broker") }}</span>
         <input v-model="form.broker" class="rc__input" type="text" />
+      </label>
+      <!-- M5-FR1's window, which the parse extracted and this sheet discarded. It is
+           editable like every other parsed value (M4-FR4), and §8 asks for a native
+           picker for date/time. -->
+      <label class="rc__field">
+        <span class="rc__label">{{ t("load.appointment") }}</span>
+        <input v-model="form.appointment" class="rc__input" type="datetime-local" />
       </label>
       <label class="rc__field">
         <span class="rc__label">{{ t("calc.free_min") }}</span>

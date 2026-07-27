@@ -238,6 +238,104 @@ def test_meter_reports_an_on_time_arrival(client, db):
     assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["on_time"] is True
 
 
+class TestAppointmentProvenanceAndCorrection:
+    """M5-FR1's window: whose value it is, and the fact that it can now be fixed.
+
+    The Meter reported provenance from `load.source` — how the LOAD was created — which
+    is a different fact about a different object. A rate-con import claimed "read from
+    your rate con" for an appointment the confirm sheet never sent, and a correction
+    could not have changed the claim because nothing could write the field at all.
+    """
+
+    def _stop(self, client, headers, **extra):
+        return client.post(
+            "/load",
+            json={
+                "facility_name": "Appt Dock",
+                "lat": DALLAS[0],
+                "lon": DALLAS[1],
+                "counterparty": "Broker",
+                **extra,
+            },
+            headers=headers,
+        ).json()["stop_id"]
+
+    def test_a_window_with_no_value_claims_no_source(self, client, db):
+        """A null appointment has no provenance to state, and claiming one would be
+        the same defect this field exists to fix, one layer down."""
+        headers = _auth(client)
+        stop_id = self._stop(client, headers, appointment_source="rate_con_parse")
+
+        body = client.get(f"/load/{stop_id}/meter", headers=headers).json()
+        assert body["appointment"] is None
+        assert body["appointment_source"] is None
+
+    def test_provenance_belongs_to_the_window_not_the_load(self, client, db):
+        headers = _auth(client)
+        appt = (datetime.now(UTC) + timedelta(hours=3)).isoformat()
+        stop_id = self._stop(
+            client, headers, appointment=appt, appointment_source="rate_con_parse"
+        )
+
+        assert (
+            client.get(f"/load/{stop_id}/meter", headers=headers).json()["appointment_source"]
+            == "rate_con_parse"
+        )
+
+    def test_correcting_the_window_moves_the_credit_to_the_driver(self, client, db):
+        """FR1 exists so a driver can catch a mis-parse while it still matters. Once
+        they have typed their own time, the parse must stop taking the credit."""
+        headers = _auth(client)
+        appt = (datetime.now(UTC) + timedelta(hours=3)).isoformat()
+        stop_id = self._stop(
+            client, headers, appointment=appt, appointment_source="rate_con_parse"
+        )
+        corrected = (datetime.now(UTC) + timedelta(hours=5)).replace(microsecond=0)
+
+        resp = client.patch(
+            f"/load/{stop_id}/appointment",
+            json={"appointment": corrected.isoformat()},
+            headers=headers,
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["appointment_source"] == "manual"
+        meter = client.get(f"/load/{stop_id}/meter", headers=headers).json()
+        assert meter["appointment_source"] == "manual"
+        assert meter["appointment"].startswith(corrected.isoformat()[:16])
+
+    def test_a_correction_carries_the_window_end_too(self, client, db):
+        headers = _auth(client)
+        stop_id = self._stop(client, headers)
+        start = (datetime.now(UTC) + timedelta(hours=2)).replace(microsecond=0)
+        end = start + timedelta(hours=1)
+
+        client.patch(
+            f"/load/{stop_id}/appointment",
+            json={"appointment": start.isoformat(), "appointment_end": end.isoformat()},
+            headers=headers,
+        )
+
+        meter = client.get(f"/load/{stop_id}/meter", headers=headers).json()
+        assert meter["appointment_end"].startswith(end.isoformat()[:16])
+
+    def test_correction_is_gated_to_the_owner(self, client, db):
+        headers = _auth(client)
+        stop_id = self._stop(client, headers)
+        other = client.post(
+            "/auth/register", json={"email": "nosy@example.com", "password": "pw-123456"}
+        )
+        theirs = {"Authorization": f"Bearer {other.json()['token']}"}
+
+        resp = client.patch(
+            f"/load/{stop_id}/appointment",
+            json={"appointment": datetime.now(UTC).isoformat()},
+            headers=theirs,
+        )
+
+        assert resp.status_code == 403
+
+
 def test_notice_flags_notice_sent_on_the_meter(client, db):
     # a detention-start notice, once detention is accruing, is recorded so the
     # Meter/evidence show "notice sent" (was a broken proxy on claim.state)

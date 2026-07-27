@@ -45,6 +45,7 @@ from .domain.service import (
     record_claim,
     record_payment_observation,
     set_load_status,
+    set_stop_appointment,
 )
 
 __all__ = [
@@ -84,4 +85,5 @@ __all__ = [
     "record_claim",
     "record_payment_observation",
     "set_load_status",
+    "set_stop_appointment",
 ]

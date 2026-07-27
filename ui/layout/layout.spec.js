@@ -341,6 +341,11 @@ const SURFACES = [
     mocks: {}, open: [{ click: ".chip", nth: 1 }, ".sleep-cta"], ready: ".sheet__body",
   }],
   ["sheet-map-relay", "/", { mocks: {}, open: [".relay-banner"], ready: ".sheet__body" }],
+  // M5-FR1's correction (§23 entry 62) — a new sheet, so it gets measured with the
+  // rest rather than shipping unseen at 360 dp
+  ["sheet-appointment", "/load", {
+    stop: LIVE_STOP, mocks: LIVE_MOCKS, open: [".context__fix"], ready: ".appt__input",
+  }],
 ];
 const CAPTION_FLOOR_PX = 13; // §6.2: "Nothing smaller exists."
 const TOUCH_MIN_PX = 48; // §6.5 glove spec

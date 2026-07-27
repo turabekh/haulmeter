@@ -92,6 +92,10 @@ class Stop(Base):
         DateTime(timezone=True), nullable=True
     )
     appointment_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # AI-CONTEXT: provenance of THIS window, not of the load it belongs to. M5-FR1
+    # shows it so a driver can weigh a machine read against a value they typed; it was
+    # being reported from `load.source`, a different fact about a different object.
+    appointment_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
     free_time_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     detention_rate_cents_per_hour: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[StopStatus] = mapped_column(

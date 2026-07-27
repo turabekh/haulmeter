@@ -201,7 +201,15 @@ def test_a_load_built_from_a_rate_con_records_that_it_was_read(client, db, monke
     ).json()["stop_id"]
 
     meter = client.get(f"/load/{stop_id}/meter", headers=headers).json()
-    assert meter["appointment_source"] == "rate_con_parse"
+    # AI-CONTEXT: this asserted `appointment_source == "rate_con_parse"` for a load
+    # created WITHOUT an appointment, and that was the defect (§23 entry 62): the
+    # provenance was read off `load.source` — how the LOAD was made — so the Meter
+    # credited a parse for a window that did not exist. Provenance now belongs to the
+    # window, and a null window states no source.
+    assert meter["appointment"] is None
+    assert meter["appointment_source"] is None
+    # the load itself still records that it came from a contract
+    assert meter["facility_name"] == "ACME Distribution Center"
 
 
 def test_a_facility_id_that_is_not_ours_to_use_404s(client, db):

@@ -49,6 +49,9 @@ class CreateLoadIn(BaseModel):
     # rather than typed, and the wallet keeps the contract itself
     rate_con_document_id: uuid.UUID | None = None
     reference_number: str | None = None
+    # where `appointment` came from: "rate_con_parse" when the driver confirmed the
+    # parsed time unchanged, "manual" when they typed it. Ignored without an appointment.
+    appointment_source: str | None = None
 
 
 def _resolve_facility(db: Session, body: CreateLoadIn):
@@ -124,6 +127,10 @@ def create_load(
         appointment_start=body.appointment,
         free_time_minutes=free_time,
         detention_rate_cents_per_hour=rate,
+        # M5-FR1's provenance belongs to the WINDOW. The client says where this one
+        # came from, because only it knows whether the driver kept the parsed time or
+        # typed their own over it — the load's own `source` cannot tell them apart.
+        appointment_source=body.appointment_source,
     )
     loads.arm_stop(db, stop)  # opens the F4 evidence log + arms the F3 geofence
     # the rate con was photographed BEFORE this stop existed, so it was filed against
@@ -295,6 +302,40 @@ def arrive(
     }
 
 
+class AppointmentIn(BaseModel):
+    appointment: datetime
+    appointment_end: datetime | None = None
+
+
+@router.patch("/{stop_id}/appointment")
+def correct_appointment(
+    stop_id: uuid.UUID,
+    body: AppointmentIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """M5-FR1's other half (§23 entry 62).
+
+    FR1 shows the appointment window before arrival, with its provenance, so a driver
+    can catch a MIS-PARSED time while they are still approaching and can still act on
+    it. The screen showed it and then offered no way to fix it — so a wrong window
+    stayed wrong, and the protection FR1 exists to give was a notification that
+    something had already gone silently wrong.
+
+    A correction is the driver's own account of the time, so the window's provenance
+    becomes `manual`: the parse no longer gets the credit for a value it did not
+    supply. F5 owns the field, which is why the write lives behind its public.
+    """
+    stop = _owned_stop(db, stop_id, account)
+    loads.set_stop_appointment(db, stop, body.appointment, body.appointment_end)
+    return {
+        "stop_id": str(stop.id),
+        "appointment": stop.appointment_start.isoformat(),
+        "appointment_end": stop.appointment_end.isoformat() if stop.appointment_end else None,
+        "appointment_source": stop.appointment_source,
+    }
+
+
 @router.post("/{stop_id}/end", status_code=201)
 def end_load(
     stop_id: uuid.UUID,
@@ -380,7 +421,7 @@ def meter(
         # read it. A value typed by hand carries different confidence from one an
         # OCR pass produced, and only the driver knows which is right.
         "appointment_end": stop.appointment_end.isoformat() if stop.appointment_end else None,
-        "appointment_source": load.source.value if load is not None else None,
+        "appointment_source": stop.appointment_source,
         # M5-FR1's VERDICT. It has been computed and stored on every arrival since FR1
         # shipped and reached no screen: the only place the API exposed it was the
         # `/arrive` response, which the Load tab discards, so a reload lost it. FR5's

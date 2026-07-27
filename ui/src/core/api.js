@@ -309,6 +309,21 @@ export async function sendLocationPing({ lat, lon, accuracyM, speedMps, mode } =
   return resp.json();
 }
 
+// AI-CONTEXT: M5-FR1's correction. NOT queued offline: the driver is fixing a value
+// they are about to act on, and a correction that lands silently an hour later — after
+// they have already arrived against the wrong window — is worse than one that visibly
+// did not happen.
+export async function correctAppointment(stopId, appointment, appointmentEnd = null) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/load/${stopId}/appointment`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({ appointment, appointment_end: appointmentEnd }),
+  });
+  if (!resp.ok) throw new Error(`appointment failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchMeter(stopId) {
   return apiGet(`/load/${stopId}/meter`, `meter:${stopId}`);
 }
