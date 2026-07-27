@@ -34,9 +34,64 @@ const BASE = process.env.UI_BASE || "http://ui:9008";
 // where a harness should be spending its time. The parameterised routes render their
 // empty/loading states here, and an empty state is layout too — §15.3 gives it a
 // spec, so it gets checked like anything else.
+
+// AI-CONTEXT: `load` here is the EMPTY state, and for four sessions it was the only
+// Load tab this harness had ever rendered. The surface falls back to its no-load
+// state whenever `GET /load/{stop}/meter` fails, and it always failed here: the
+// planted token is a string, not a session, so the API answers 401. Everything that
+// only exists on a live load — the CTA ladder, the evidence link, the stop context
+// row, the next-stop preview — was therefore never measured, and 136/136 green said
+// nothing about any of it. It hid a `.card__link` at 18 dp against §6.5's 48.
+//
+// `load-live` is that state, mocked. The mock is CANNED rather than seeded through
+// the API, which keeps the rule this file was written on: a failing backend must not
+// read as a layout defect. Its payload is copied from the endpoint's own return
+// shape (api/app/api/load.py::meter) — a fixture whose shape drifts from its
+// endpoint is exactly the defect that put a raw ISO timestamp on this screen.
+
+// where the app sends its requests (ui/src/core/api.js). The mock has to intercept
+// that exact origin; if it drifts, the surface's `ready` selector fails rather than
+// quietly measuring the empty state again.
+const API_BASE = "http://localhost:8008";
+const LIVE_STOP = "00000000-0000-0000-0000-0000000000cc";
+const LIVE_MOCKS = {
+  "/load/active": { stop_id: LIVE_STOP },
+  [`/load/${LIVE_STOP}/meter`]: {
+    stop_id: LIVE_STOP,
+    claim_id: "00000000-0000-0000-0000-0000000000dd",
+    facility_name: "Dallas Cold Storage",
+    counterparty: "Coyote Logistics",
+    appointment: "2026-07-27T04:10:50.993277+00:00",
+    arrived: true,
+    free_time_minutes: 120,
+    rate_cents_per_hour: 7500,
+    phase: "accruing",
+    free_time_remaining_seconds: 0,
+    detention_seconds: 4200,
+    detention_cents: 8750,
+    notice_sent: false,
+    filed: false,
+    photos_captured: 0,
+    photos_required: 4,
+    bol_captured: false,
+    appointment_end: "2026-07-27T06:10:50.993277+00:00",
+    appointment_source: "rate_con_parse",
+    next_stop: {
+      facility_name: "Fort Worth Cross-dock",
+      stop_type: "delivery",
+      appointment: "2026-07-27T14:00:00+00:00",
+    },
+  },
+};
+
 const SURFACES = [
   ["map", "/"],
   ["load", "/load"],
+  // `ready` is the selector that PROVES the mocked state rendered. Without it a
+  // mock that stops matching turns this surface back into a second copy of `load`,
+  // and the harness goes green over the screen it was added to measure — the same
+  // failure as the run that measured Vite's error page six times.
+  ["load-live", "/load", { stop: LIVE_STOP, mocks: LIVE_MOCKS, ready: ".rungs__item" }],
   ["money", "/money"],
   ["docs", "/docs"],
   ["more", "/more"],
@@ -72,11 +127,24 @@ const TARGET_EXEMPT = /(^|\s)(pin|mapboxgl-ctrl[\w-]*|mapboxgl-ctrl-logo)(\s|$)/
 // The session is planted directly in storage rather than driven through the form:
 // this suite is testing LAYOUT, and making it depend on a live API would mean a
 // failing backend reads as a layout defect.
-async function prepare(page, { theme, pseudo }) {
+async function prepare(page, { theme, pseudo, live }) {
+  // a surface that needs server state gets it CANNED, never from the API — see the
+  // note on LIVE_MOCKS. Anything the surface asks for that is not mocked 404s, so a
+  // route the mock forgot shows up as a missing element rather than as live data.
+  if (live) {
+    await page.route(`${API_BASE}/**`, (route) => {
+      const path = new URL(route.request().url()).pathname;
+      const body = live.mocks[path];
+      return body
+        ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) })
+        : route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+    });
+  }
   await page.addInitScript(
-    ([t, p]) => {
+    ([t, p, stop]) => {
       try {
         localStorage.setItem("longhaul.theme", t);
+        if (stop) localStorage.setItem("longhaul.active_stop", stop);
         if (p === "xx-XL") localStorage.setItem("longhaul.locale", "xx-XL");
         else if (p) localStorage.setItem("longhaul.locale", p);
         localStorage.setItem(
@@ -91,14 +159,20 @@ async function prepare(page, { theme, pseudo }) {
         /* storage unavailable */
       }
     },
-    [theme, pseudo],
+    [theme, pseudo, live ? live.stop : null],
   );
 }
 
-async function settle(page) {
+async function settle(page, live) {
   await page.waitForLoadState("networkidle").catch(() => {});
   // the map canvas initialises asynchronously and has no layout contribution here
   await page.waitForTimeout(250);
+  // a mocked surface must PROVE it rendered the state it names before anything is
+  // measured against it. Silence here is the failure mode that kept the live Load
+  // tab unmeasured for four sessions.
+  if (live && live.ready) {
+    await page.waitForSelector(live.ready, { state: "attached", timeout: 5_000 });
+  }
 }
 
 // AI-CONTEXT: the theme dimension was REMOVED on evidence, not on a hunch.
@@ -117,7 +191,7 @@ async function settle(page) {
 // genuinely theme-sensitive property, is computed from tokens in contrast.test.js.
 //
 // The budget went to surfaces instead, which is the dimension that finds bugs.
-for (const [name, path] of SURFACES) {
+for (const [name, path, live] of SURFACES) {
   {
     const theme = "dark";
     // `pa` joins the matrix because §6.2's "metrics-compatible line-height tokens
@@ -129,10 +203,10 @@ for (const [name, path] of SURFACES) {
       const label = `${name}${pseudo ? ` · ${pseudo}` : ""}`;
 
       test(`${label} — no horizontal overflow at 360 dp`, async ({ page }) => {
-        await prepare(page, { theme, pseudo });
+        await prepare(page, { theme, pseudo, live });
         await page.setViewportSize({ width: 360, height: 800 });
         await page.goto(`${BASE}${path}`);
-        await settle(page);
+        await settle(page, live);
         await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
 
         const overflow = await page.evaluate(() => {
@@ -165,10 +239,10 @@ for (const [name, path] of SURFACES) {
       });
 
       test(`${label} — nothing below the 13 dp type floor`, async ({ page }) => {
-        await prepare(page, { theme, pseudo });
+        await prepare(page, { theme, pseudo, live });
         await page.setViewportSize({ width: 360, height: 800 });
         await page.goto(`${BASE}${path}`);
-        await settle(page);
+        await settle(page, live);
 
         const small = await page.evaluate((floor) => {
           const found = [];
@@ -189,10 +263,10 @@ for (const [name, path] of SURFACES) {
       });
 
       test(`${label} — text is not clipped by its line box`, async ({ page }) => {
-        await prepare(page, { theme, pseudo });
+        await prepare(page, { theme, pseudo, live });
         await page.setViewportSize({ width: 360, height: 800 });
         await page.goto(`${BASE}${path}`);
-        await settle(page);
+        await settle(page, live);
         await page.evaluate(() => document.fonts && document.fonts.ready);
 
         const clipped = await page.evaluate(() => {
@@ -229,10 +303,10 @@ for (const [name, path] of SURFACES) {
       // `disabled` is an acceptable answer. Saying "not yet" is honest; saying
       // nothing is not.
       test(`${label} — every control does something, or says it cannot`, async ({ page }) => {
-        await prepare(page, { theme, pseudo });
+        await prepare(page, { theme, pseudo, live });
         await page.setViewportSize({ width: 360, height: 800 });
         await page.goto(`${BASE}${path}`);
-        await settle(page);
+        await settle(page, live);
 
         const inert = await page.evaluate(() => {
           const found = [];
@@ -266,10 +340,10 @@ for (const [name, path] of SURFACES) {
       });
 
       test(`${label} — interactive targets meet the glove spec`, async ({ page }) => {
-        await prepare(page, { theme, pseudo });
+        await prepare(page, { theme, pseudo, live });
         await page.setViewportSize({ width: 360, height: 800 });
         await page.goto(`${BASE}${path}`);
-        await settle(page);
+        await settle(page, live);
 
         const tooSmall = await page.evaluate(
           ([selector, min, exempt]) => {

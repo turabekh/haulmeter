@@ -9,7 +9,24 @@
      §108 calls the parsed rate con the primary way a load is created, and it had
      never existed outside the Foundation e2e — this tab offered a four-field manual
      form in its place, which now lives inside the import sheet as the fallback for a
-     rate con the parse cannot read. -->
+     rate con the parse cannot read.
+
+     AI-CONTEXT: the empty state used to run a FIXTURE LOAD — a ticking $37.52
+     detention Meter, a fake facility, a fake counterparty and a fake evidence
+     checklist — with a "Sample" pill and a grey caption as the only marks that none
+     of it was real. The loudest thing on a screen with no load was money the driver
+     had not earned, and the fake stop row and checklist sat OUTSIDE the dashed card
+     carrying no mark at all. §11.7 is "Never fake confidence" and §15.3 asks an empty
+     state for one sentence of purpose and one starting action. It now renders the
+     Meter AT REST — §9's own `--text-1` countdown color, no figure, no clock — and
+     nothing that is not the driver's own. §23 entry 49.
+
+     The fixture is gone rather than corrected, because its SHAPE was the defect
+     underneath: `SAMPLE_STOP.appointment` was "07:00", a preformatted display string,
+     where the live API returns an ISO timestamp. The demo therefore rendered a tidy
+     "07:00 · Acme Brokerage" while production rendered
+     "2026-07-27T04:10:50.993277+00:00 · TQL" — for every driver, in the one row §10.2
+     specifies. A fixture whose shape does not match its endpoint hides the endpoint. -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { Check, Camera, Send } from "lucide-vue-next";
@@ -22,7 +39,6 @@ import RateConImportSheet from "../core/components/RateConImportSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import { computeDetentionState, meterVariant, formatClock, formatMoney } from "../core/meter.js";
-import { SAMPLE_STOP } from "../core/fixtures.js";
 import {
   activeStopId,
   setActiveStop,
@@ -105,9 +121,10 @@ async function onBolCaptured() {
 const filed = ref(null); // the generated claim result, once filed
 let timer = null;
 
-function setupDemo() {
+// no load: the Meter rests. Nothing ticks, nothing is owed, nothing is invented.
+function clearLoad() {
   live.value = null;
-  arrivalMs.value = Date.now() - SAMPLE_STOP.arrival_offset_min * 60000;
+  arrivalMs.value = null;
 }
 
 function deriveArrival(m) {
@@ -127,8 +144,8 @@ async function loadMeter() {
     live.value = m;
     arrivalMs.value = deriveArrival(m);
   } catch {
-    setActiveStop(null); // stale/offline -> fall back to the demo
-    setupDemo();
+    setActiveStop(null); // stale/offline -> there is no load to show
+    clearLoad();
   }
 }
 
@@ -143,21 +160,23 @@ onMounted(async () => {
     }
   }
   if (activeStopId.value) await loadMeter();
-  else setupDemo();
+  else clearLoad();
   timer = setInterval(() => (now.value = Date.now()), 1000);
 });
 onUnmounted(() => timer && clearInterval(timer));
 
-const freeMin = computed(() => live.value?.free_time_minutes ?? SAMPLE_STOP.free_time_minutes);
-const rateCents = computed(() => live.value?.rate_cents_per_hour ?? SAMPLE_STOP.rate_cents_per_hour);
+const freeMin = computed(() => live.value?.free_time_minutes ?? 0);
+const rateCents = computed(() => live.value?.rate_cents_per_hour ?? 0);
 const preArrival = computed(() => !!live.value && live.value.phase === "not_arrived");
 
-const stopName = computed(() => live.value?.facility_name ?? SAMPLE_STOP.facility_name);
-const stopMeta = computed(() => {
-  const cp = live.value?.counterparty ?? SAMPLE_STOP.counterparty;
-  const appt = live.value ? (live.value.appointment ?? "") : SAMPLE_STOP.appointment;
-  return appt ? `${appt} · ${cp}` : cp;
-});
+const stopName = computed(() => live.value?.facility_name ?? "");
+// AI-CONTEXT: the counterparty ALONE. This row used to append the appointment, and
+// the appointment arrives from the API as an ISO timestamp — so live drivers read
+// "2026-07-27T04:10:50.993277+00:00 · TQL" here. §10.2's anatomy asks the stop
+// context for facility, appointment and counterparty; the appointment has its own
+// row below with its window and its source, which is the one that can say WHERE the
+// value came from (M5-FR1). Printing it twice was the other half of the defect.
+const stopMeta = computed(() => live.value?.counterparty ?? "");
 const noticeSent = computed(() => (live.value ? live.value.notice_sent : false));
 const photosCaptured = computed(() => live.value?.photos_captured ?? 0);
 // §10.2 specifies "photos 2/4". The DENOMINATOR is the feature: a bare count cannot
@@ -214,23 +233,36 @@ const filedAmount = computed(
 
 // once a claim is filed the Meter FREEZES at the filed amount — the clock stops
 // ticking, so what you see matches the claim you filed (§9)
-const meterLabel = computed(() =>
-  preArrival.value ? t("load.waiting") : withinFree.value ? t("load.free_time") : t("load.detention"),
-);
+// with no load the Meter still anchors the screen — §9 makes it the signature
+// element — but it rests: §9's own countdown color (`--text-1`), an em-dash where
+// the figure goes, and no status line. It is the same component in the same place,
+// saying it has nothing to count.
+const meterLabel = computed(() => {
+  if (!live.value) return t("load.empty_title");
+  return preArrival.value
+    ? t("load.waiting")
+    : withinFree.value
+      ? t("load.free_time")
+      : t("load.detention");
+});
 const meterFigure = computed(() => {
+  if (!live.value) return "—";
   if (isFiled.value) return formatMoney(filedAmount.value);
-  if (preArrival.value) return live.value.appointment ? live.value.appointment.slice(11, 16) : "—";
+  if (preArrival.value) return live.value.appointment ? hm(live.value.appointment) : "—";
   return withinFree.value
     ? formatClock(state.value.freeTimeRemainingSeconds)
     : formatMoney(state.value.amountCents);
 });
 const meterStatus = computed(() => {
+  if (!live.value) return "";
   if (isFiled.value) return t("load.filed_frozen");
   return preArrival.value || withinFree.value
     ? ""
     : `${formatClock(state.value.detentionSeconds)} · $${Math.round(rateCents.value / 100)}/h`;
 });
-const variant = computed(() => (preArrival.value ? "countdown" : meterVariant(state.value)));
+const variant = computed(() =>
+  !live.value || preArrival.value ? "countdown" : meterVariant(state.value),
+);
 
 // AI-CONTEXT: §10.2's "state-dependent single CTA (Arm stop -> Snap BOL -> Send
 // notice -> Generate claim)" — one rung at a time, and the ORDER is the spec's.
@@ -286,7 +318,7 @@ async function endLoad() {
   if (stopId) await endActiveLoad(stopId); // durable: departs the stop server-side
   else setActiveStop(null);
   filed.value = null;
-  setupDemo();
+  clearLoad();
 }
 </script>
 
@@ -294,22 +326,25 @@ async function endLoad() {
   <div class="load">
     <p v-if="incidentToast" class="toast" role="status">{{ incidentToast }}</p>
 
-    <section class="card meter-card" :class="{ 'meter-card--sample': !live }">
-      <span v-if="!live" class="sample-tag">{{ t("load.sample") }}</span>
+    <section class="card meter-card">
       <TheMeter :label="meterLabel" :figure="meterFigure" :variant="variant" :status="meterStatus" />
     </section>
-    <p v-if="!live && !isDriving" class="sample-hint">{{ t("load.sample_hint") }}</p>
+    <!-- §15.3: one sentence of what this is, then one action to start. -->
+    <p v-if="!live && !isDriving" class="hint">{{ t("load.empty_hint") }}</p>
     <!-- §10.2 DRIVING: "collapses to Meter-only glance card + voice hint". The hint
          names a real destination — VoiceSheet lives on the Map tab — so this is a
          label pointing somewhere, not the dead-control pattern §23 forbids. It is
          text rather than a control: Forbidden #11 rules out interactive prompts at
          speed, and the driver reaches voice where it already is. -->
-    <p v-if="isDriving" class="sample-hint">{{ t("voice.unavailable") }}</p>
+    <p v-if="isDriving" class="hint">{{ t("voice.unavailable") }}</p>
 
     <template v-if="!isDriving">
-      <div class="context">
+      <!-- everything from here to the ladder describes a REAL stop. With no load
+           there is no stop to describe, so none of it renders — an empty state does
+           not get to borrow the shape of a working one. -->
+      <div v-if="live" class="context">
         <span class="context__name">{{ stopName }}</span>
-        <span class="context__meta">{{ stopMeta }}</span>
+        <span v-if="stopMeta" class="context__meta">{{ stopMeta }}</span>
         <!-- the window, early, in Mono like every other time figure (T-2) -->
         <span v-if="apptWindow" class="context__appt">
           {{ t("load.appointment") }}
@@ -318,13 +353,19 @@ async function endLoad() {
         <span v-if="apptSourceKey" class="context__source">{{ t(apptSourceKey) }}</span>
       </div>
 
-      <section class="card">
+      <section v-if="live" class="card">
         <h2 class="card__title">{{ t("load.evidence") }}</h2>
         <ul class="checklist">
+          <!-- AI-CONTEXT: the LABEL carries the state, not just the icon. This row
+               read "BOL captured" whether or not one had been, so the only thing
+               saying otherwise was a camera glyph — and §16 requires status to be
+               color AND icon AND label, precisely because the glyph alone is what a
+               driver misses. The other two rows already flip ("Notice not sent",
+               "0/4"); this was the one that could only ever read as done. -->
           <li class="checklist__item">
             <Check v-if="bolCaptured" :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
             <Camera v-else :size="20" :stroke-width="2" aria-hidden="true" />
-            {{ t("load.bol") }}
+            {{ bolCaptured ? t("load.bol") : t("load.bol_missing") }}
           </li>
           <li class="checklist__item">
             <Check v-if="photosDone" :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
@@ -385,40 +426,53 @@ async function endLoad() {
         {{ t("load.cta.claim") }}
       </button>
 
-      <!-- passed-over rungs: still available, never competing for the eye -->
-      <button
-        v-if="accruing && !isFiled && rung !== 'claim'"
-        class="cta cta--text"
-        type="button"
-        @click="onGenerateClaim"
-      >
-        {{ t("load.cta.claim") }}
-      </button>
-      <button
-        v-if="accruing && !noticeSent && !isFiled && rung !== 'notice'"
-        class="cta cta--text"
-        type="button"
-        @click="onSendNotice"
-      >
-        {{ t("load.cta.notice") }}
-      </button>
-      <button
-        v-if="live && !preArrival && !bolCaptured && rung !== 'bol'"
-        class="cta cta--text"
-        type="button"
-        @click="snapping = true"
-      >
-        {{ t("load.cta.bol") }}
-      </button>
-      <p v-if="noticeMsg" class="notice-msg">{{ noticeMsg }}</p>
+      <!-- AI-CONTEXT: passed-over rungs, and why they are a ROW rather than a stack.
+           §8 allows exactly one Primary per screen and grades the rest Secondary
+           (outline) then Tertiary (text) — but these were emitted full-bleed, centred
+           and accent-coloured under a full-bleed accent Primary, so three tertiary
+           controls rendered in the Primary's silhouette. The screen read as four
+           stacked buttons, which is the six-button problem §10.2's single-CTA rule
+           exists to prevent, reduced in count and not in kind. Auto width in a
+           wrapping row keeps them reachable (48 dp, §6.5) while giving the Primary
+           back the only full-width shape on the screen.
 
-      <!-- §10.2: "state-dependent SINGLE CTA". These four are real capabilities and
-           none has another home, so they move behind one control into a sheet (NAV-3)
-           rather than stacking six buttons under the Meter. Scoped to this stop, so
-           it is not a nav drawer (Forbidden #2). -->
-      <button v-if="live" class="cta cta--text" type="button" @click="more = true">
-        {{ t("load.more") }}
-      </button>
+           The ORDER is §10.2's ladder — Snap BOL -> Send notice -> Generate claim.
+           These emitted claim above notice, so the nearer rung sat below the further
+           one and the list read against the sequence it was derived from. -->
+      <div v-if="live" class="rungs">
+        <button
+          v-if="!preArrival && !bolCaptured && rung !== 'bol'"
+          class="rungs__item"
+          type="button"
+          @click="snapping = true"
+        >
+          {{ t("load.cta.bol") }}
+        </button>
+        <button
+          v-if="accruing && !noticeSent && !isFiled && rung !== 'notice'"
+          class="rungs__item"
+          type="button"
+          @click="onSendNotice"
+        >
+          {{ t("load.cta.notice") }}
+        </button>
+        <button
+          v-if="accruing && !isFiled && rung !== 'claim'"
+          class="rungs__item"
+          type="button"
+          @click="onGenerateClaim"
+        >
+          {{ t("load.cta.claim") }}
+        </button>
+        <!-- §10.2: "state-dependent SINGLE CTA". These four are real capabilities and
+             none has another home, so they move behind one control into a sheet
+             (NAV-3) rather than stacking six buttons under the Meter. Scoped to this
+             stop, so it is not a nav drawer (Forbidden #2). -->
+        <button class="rungs__item" type="button" @click="more = true">
+          {{ t("load.more") }}
+        </button>
+      </div>
+      <p v-if="noticeMsg" class="notice-msg">{{ noticeMsg }}</p>
 
       <!-- §10.2's empty state: "Add a load (rate-con photo import) as the ONE action".
            PRD §108 calls the parsed rate con the primary way a load is created; the
@@ -522,28 +576,11 @@ async function endLoad() {
   padding: 0;
   position: relative;
 }
-.meter-card--sample {
-  border-style: dashed;
-  opacity: 0.9;
-}
-.sample-tag {
-  position: absolute;
-  top: var(--s-2);
-  right: var(--s-2);
-  z-index: 1;
-  padding: 2px var(--s-2);
-  border-radius: var(--r-pill);
-  background: var(--ink-2, var(--line-1));
-  color: var(--text-3);
-  font-family: var(--font-mono);
+.hint {
+  margin: calc(var(--s-2) * -1) 0 var(--s-3);
+  color: var(--text-2);
   font-size: var(--type-caption-size);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.sample-hint {
-  margin: calc(var(--s-2) * -1) 0 0;
-  color: var(--text-3);
-  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
   text-align: center;
 }
 .notice-msg {
@@ -575,8 +612,14 @@ async function endLoad() {
   color: var(--text-2);
   font-weight: 500;
 }
+/* §6.5 glove spec: this was an 18 dp tap target — the text's own line box — because
+   it carried `padding: 0` and no height. It only ever renders on a LIVE load, which
+   is the state the layout harness had never opened, so nothing measured it. */
 .card__link {
-  margin-top: var(--s-3);
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  margin-top: var(--s-2);
   padding: 0;
   background: transparent;
   border: none;
@@ -678,6 +721,24 @@ async function endLoad() {
   min-height: 48px;
   background: transparent;
   color: var(--shield-500);
+}
+/* §8 Tertiary: text, auto width, wrapping. Not the Primary's full-bleed silhouette
+   — that shape belongs to the one action the ladder chose. Wraps rather than
+   overflows, which is what xx-XL (+40%, §12.5) needs at 360 dp. */
+.rungs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-1) var(--s-3);
+  margin-top: var(--s-2);
+}
+.rungs__item {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+  font-weight: 500;
 }
 .hist {
   list-style: none;

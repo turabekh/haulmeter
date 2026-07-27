@@ -1429,13 +1429,33 @@ describe("The Meter (design-prd §9)", () => {
 });
 
 describe("LoadSurface / Meter card (design-prd §10.2)", () => {
-  it("shows the fixture-demo Meter when there's no active load (accruing)", () => {
+  // AI-CONTEXT: this asserted the OPPOSITE until §23 entry 49 — that a driver with no
+  // load sees an accruing Detention meter. It did, and the figure was $37.52 of money
+  // nobody had earned, ticking, in the largest type on the screen. §11.7 is "Never
+  // fake confidence" and §15.3 wants one sentence of purpose and one starting action.
+  it("rests the Meter when there is no load, and invents nothing (§15.3)", () => {
     logout();
     setActiveStop(null);
     const router = testRouter();
     const w = mount(LoadSurface, { global: { plugins: [router] } });
+
+    // the Meter still anchors the screen (§9) — at rest, with no figure to count
     expect(w.find(".meter__figure").exists()).toBe(true);
-    expect(w.text()).toContain("Detention"); // accruing label
+    expect(w.find(".meter__figure").text()).toBe("—");
+    expect(w.find(".meter__status").exists()).toBe(false);
+    expect(w.text()).not.toContain("Detention");
+    expect(w.text()).not.toMatch(/\$\d/); // no money of any amount
+
+    // and none of a working load's furniture: no stop, no counterparty, no checklist
+    expect(w.find(".context").exists()).toBe(false);
+    expect(w.find(".checklist").exists()).toBe(false);
+    expect(w.text()).not.toContain("Dallas Receiver");
+    expect(w.text()).not.toContain("Acme Brokerage");
+
+    // §15.3: one sentence of purpose, one starting action
+    expect(w.text()).toContain("The Meter runs when you have a load");
+    expect(w.findAll(".cta:not(.cta--text)")).toHaveLength(1);
+    expect(w.find(".cta:not(.cta--text)").text()).toBe("Add a load");
     w.unmount();
   });
 
@@ -1494,13 +1514,17 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       expect(w.text()).toContain("Ending Receiver"); // live
       // §10.2 leaves ONE CTA on the screen; this stop's other actions moved behind
       // "More for this stop" (NAV-3) rather than stacking six buttons under the Meter
-      await w.findAll(".cta").find((b) => b.text().includes("More for this stop")).trigger("click");
+      await w
+        .findAll(".rungs__item")
+        .find((b) => b.text().includes("More for this stop"))
+        .trigger("click");
       await flushPromises();
       const endBtn = w.findAll(".more__item").find((b) => b.text() === "End load");
       await endBtn.trigger("click");
       await flushPromises();
       expect(fetchStub.mock.calls.some((c) => String(c[0]).endsWith("/load/stop-end/end"))).toBe(true);
-      expect(w.text()).not.toContain("Ending Receiver"); // reverted to the fixture demo
+      expect(w.text()).not.toContain("Ending Receiver"); // back to the resting Meter
+      expect(w.find(".meter__figure").text()).toBe("—");
     } finally {
       vi.unstubAllGlobals();
       setActiveStop(null);
@@ -1631,11 +1655,21 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       // a claim filed without the BOL is a weaker claim, but a driver whose receiver
       // has not produced paperwork must still be able to file — the ladder guides,
       // it does not gate
-      const texts = w.findAll(".cta--text").map((b) => b.text());
+      const texts = w.findAll(".rungs__item").map((b) => b.text());
       expect(texts.some((s) => s.includes("Generate claim"))).toBe(true);
 
-      // and the checklist row can finally answer the question it has always asked
-      expect(w.text()).toContain("BOL");
+      // §10.2's ladder is Snap BOL -> Send notice -> Generate claim, and the
+      // passed-over rungs list in that order. They emitted claim ABOVE notice, so
+      // the nearer rung sat below the further one.
+      expect(texts.indexOf("Send notice")).toBeLessThan(texts.indexOf("Generate claim"));
+
+      // the passed-over rungs are §8 Tertiary — they must not wear the Primary's
+      // full-bleed shape, which is what made four controls read as a button stack
+      expect(w.findAll(".rungs__item.cta")).toHaveLength(0);
+
+      // and the checklist row says what is true: this stop has no BOL yet
+      expect(w.text()).toContain("BOL not captured");
+      expect(w.text()).not.toContain("BOL captured");
     } finally {
       vi.unstubAllGlobals();
       setActiveStop(null);
@@ -1849,6 +1883,31 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     expect(w.find(".next__appt").text()).toBe("09:30"); // Mono, like every time figure
   });
 
+  // AI-CONTEXT: the stop context row printed the appointment as the API sends it —
+  // an ISO timestamp. Live drivers read "2026-07-27T04:10:50.993277+00:00 · TQL" in
+  // §10.2's anatomy row, and nothing caught it because the fixture that stood in for
+  // this endpoint carried a PREFORMATTED "07:00": the demo rendered tidily and
+  // production never did. The fixture is deleted; this asserts against the real shape.
+  it("never renders a raw timestamp in the stop context row", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() =>
+        jsonOk({ ...LIVE, appointment: "2026-07-27T04:10:50.993277+00:00" }),
+      ),
+    );
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(w.text()).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
+    // the counterparty stands alone; the appointment has its own row, which is the
+    // one that can say where the value came from (M5-FR1)
+    expect(w.find(".context__meta").text()).toBe("Acme");
+    expect(w.find(".context__window").text()).toBe("04:10");
+    // and it appears ONCE — printing it in both rows was the other half of the defect
+    expect(w.findAll(".context").map((e) => e.text()).join("").match(/04:10/g)).toHaveLength(1);
+  });
+
   it("collapses to a Meter-only glance with a voice hint while DRIVING (§10.2)", async () => {
     const router = testRouter();
     const w = mount(LoadSurface, { global: { plugins: [router] } });
@@ -1873,7 +1932,10 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     expect(w.findAll(".cta:not(.cta--text)")).toHaveLength(0); // in free time nothing is owed yet
     expect(w.findAll(".more__item")).toHaveLength(0); // sheet closed
 
-    await w.findAll(".cta").find((b) => b.text().includes("More for this stop")).trigger("click");
+    await w
+      .findAll(".rungs__item")
+      .find((b) => b.text().includes("More for this stop"))
+      .trigger("click");
     await flushPromises();
 
     const items = w.findAll(".more__item").map((b) => b.text());

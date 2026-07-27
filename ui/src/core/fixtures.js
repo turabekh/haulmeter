@@ -265,15 +265,14 @@ export function sampleFacilityIntel() {
 // AI-CONTEXT: fixture ACTIVE stop for the Load tab / The Meter, pending the
 // active-load API. Arrived 150 min ago with 120 min free time -> detention is
 // accruing (the signature "money ticking up" moment).
-export const SAMPLE_STOP = {
-  facility_name: "Dallas Receiver",
-  counterparty: "Acme Brokerage",
-  appointment: "07:00",
-  arrival_offset_min: 150,
-  free_time_minutes: 120,
-  rate_cents_per_hour: 7500,
-  evidence: { bol: true, photos_taken: 2, photos_total: 4, notice_sent: false },
-};
+// AI-CONTEXT: SAMPLE_STOP was DELETED, not corrected (§23 entry 49). It drove the
+// Load tab's empty state — a ticking $37.52 detention Meter for a load that did not
+// exist — and its shape did not match the endpoint it stood in for: `appointment`
+// was "07:00", a preformatted display string, where GET /load/{stop}/meter returns
+// an ISO timestamp. The demo therefore rendered a tidy "07:00 · Acme Brokerage" in
+// §10.2's stop context row while every live driver got
+// "2026-07-27T04:10:50.993277+00:00 · TQL". A fixture whose shape does not match its
+// endpoint does not preview that endpoint — it hides it.
 
 // AI-CONTEXT: fixture "Money Owed" rows (M3+M4 receivables), pending the live
 // /accessorial/owed API. Shape matches money_owed() exactly.
