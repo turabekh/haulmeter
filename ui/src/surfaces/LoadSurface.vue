@@ -19,7 +19,7 @@
      carrying no mark at all. §11.7 is "Never fake confidence" and §15.3 asks an empty
      state for one sentence of purpose and one starting action. It now renders the
      Meter AT REST — §9's own `--text-1` countdown color, no figure, no clock — and
-     nothing that is not the driver's own. §23 entry 49.
+     nothing that is not the driver's own. §23 entry 52.
 
      The fixture is gone rather than corrected, because its SHAPE was the defect
      underneath: `SAMPLE_STOP.appointment` was "07:00", a preformatted display string,
@@ -56,7 +56,7 @@ const { isDriving } = useDriverState();
 const { t } = useI18n();
 const router = useRouter();
 
-const live = ref(null); // live meter response, or null (fixture demo)
+const live = ref(null); // live meter response, or null (no load)
 const arrivalMs = ref(0); // null while a live load is pre-arrival
 const now = ref(Date.now());
 const reporting = ref(false); // incident sheet open
@@ -151,12 +151,12 @@ async function loadMeter() {
 
 onMounted(async () => {
   // no locally-remembered stop? ask the server if this driver has one armed
-  // (fresh-device resume) before falling back to the demo Meter.
+  // (fresh-device resume) before settling on the resting Meter.
   if (!activeStopId.value && isAuthenticated.value) {
     try {
       await fetchActiveLoad();
     } catch {
-      /* offline — demo below */
+      /* offline — the Meter rests below */
     }
   }
   if (activeStopId.value) await loadMeter();

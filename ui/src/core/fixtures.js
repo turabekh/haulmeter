@@ -265,7 +265,7 @@ export function sampleFacilityIntel() {
 // AI-CONTEXT: fixture ACTIVE stop for the Load tab / The Meter, pending the
 // active-load API. Arrived 150 min ago with 120 min free time -> detention is
 // accruing (the signature "money ticking up" moment).
-// AI-CONTEXT: SAMPLE_STOP was DELETED, not corrected (§23 entry 49). It drove the
+// AI-CONTEXT: SAMPLE_STOP was DELETED, not corrected (§23 entry 52). It drove the
 // Load tab's empty state — a ticking $37.52 detention Meter for a load that did not
 // exist — and its shape did not match the endpoint it stood in for: `appointment`
 // was "07:00", a preformatted display string, where GET /load/{stop}/meter returns
