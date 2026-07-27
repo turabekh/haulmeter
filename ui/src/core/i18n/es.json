@@ -267,6 +267,7 @@
   "docs.view_loading": "Abriendo…",
   "docs.view_open": "Abrir documento",
   "docs.view_remove": "Quitar de la cartera",
+  "driving.paused": "Disponible cuando estés detenido.",
   "equipment.plate_number": "Número de placa",
   "equipment.plate_state": "Estado de la placa",
   "equipment.save": "Guardar equipo",

@@ -13,12 +13,14 @@ import { ref, reactive, computed } from "vue";
 import { ArrowLeft } from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
+import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
 import { calcTrueProfit } from "../core/api.js";
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const { isDriving } = useDriverState();
 
 const form = reactive({
   revenue: 2000, // dollars
@@ -100,7 +102,10 @@ const clears = computed(() => (result.value?.net_cents ?? 0) >= 0);
         <span class="field__label">{{ t("calc.rate_hr") }}</span>
         <input v-model="form.rateHr" class="field__input" type="number" inputmode="decimal" min="0" />
       </label>
-      <button class="cta" type="submit" :disabled="submitting">{{ t("calc.calculate") }}</button>
+      <!-- SM-3: a form of number fields is the definition of an interactive
+           prompt at speed (Forbidden #11). -->
+      <p v-if="isDriving" class="driving-note">{{ t("driving.paused") }}</p>
+      <button v-else class="cta" type="submit" :disabled="submitting">{{ t("calc.calculate") }}</button>
     </form>
 
     <section v-if="result" class="result">

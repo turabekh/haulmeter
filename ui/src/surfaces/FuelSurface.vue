@@ -11,12 +11,14 @@ import { ref, computed } from "vue";
 import { ArrowLeft, Minus, Plus, Fuel } from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
+import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
 import { issuePumpCode } from "../core/api.js";
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const { isDriving } = useDriverState();
 
 const stationId = route.params.stationId;
 const stationName = route.query.name || "";
@@ -105,7 +107,9 @@ async function getCode() {
         </div>
       </section>
 
-      <button class="cta" type="button" :disabled="submitting" @click="getCode">
+      <!-- SM-3: drawing a fuel code is a transaction; it waits for the pump. -->
+      <p v-if="isDriving" class="driving-note">{{ t("driving.paused") }}</p>
+      <button v-else class="cta" type="button" :disabled="submitting" @click="getCode">
         <Fuel :size="20" :stroke-width="2" aria-hidden="true" />
         {{ t("fuel.get_code") }}
       </button>

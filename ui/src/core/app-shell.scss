@@ -51,3 +51,16 @@ button {
   overflow-y: auto;
   padding-bottom: var(--s-4);
 }
+
+// AI-CONTEXT: SM-3's shared line, built once because six surfaces need it (§8).
+//
+// A screen that withdraws its acting controls at speed has to SAY so, or the driver
+// reads a missing button as a broken app and pulls over to find out. Calm rather than
+// alarming (§12.1) and factual rather than instructive — it states when the thing is
+// available, and does not tell a driver what to do with their truck.
+.driving-note {
+  margin: var(--s-3) 0 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}

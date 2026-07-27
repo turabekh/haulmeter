@@ -12,12 +12,14 @@ import { ref, computed } from "vue";
 import { ArrowLeft, Minus, Plus, Check } from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
+import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
 import { bookSpot } from "../core/api.js";
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const { isDriving } = useDriverState();
 
 const spotId = route.params.spotId;
 const propertyName = route.query.name || "";
@@ -107,7 +109,9 @@ async function confirm() {
 
       <p v-if="error" class="book__error" role="alert">{{ error }}</p>
 
-      <button class="cta" type="button" :disabled="submitting" @click="confirm">
+      <!-- SM-3: a booking moves money, and Forbidden #11 bans acting at speed. -->
+      <p v-if="isDriving" class="driving-note">{{ t("driving.paused") }}</p>
+      <button v-else class="cta" type="button" :disabled="submitting" @click="confirm">
         {{ t("facility.book") }} — {{ formatMoney(totalCents) }}
       </button>
     </template>

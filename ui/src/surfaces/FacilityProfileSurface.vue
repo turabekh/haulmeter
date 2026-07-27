@@ -10,6 +10,7 @@ import { useRoute, useRouter } from "vue-router";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import ReviewSheet from "../core/components/ReviewSheet.vue";
 import { useI18n } from "../core/i18n.js";
+import { useDriverState } from "../core/state.js";
 import { formatDwell } from "../core/presentation.js";
 import {
   fetchProfile,
@@ -26,6 +27,7 @@ import { sampleProfile, sampleFacilityIntel, sampleQuestions } from "../core/fix
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const { isDriving } = useDriverState();
 
 const profile = ref(null);
 const intel = ref(null);
@@ -198,18 +200,24 @@ async function onReview(payload) {
         </li>
       </ul>
       <p v-else class="muted">{{ t("qa.empty") }}</p>
-      <button class="cta cta--ghost" type="button" @click="asking = true">{{ t("qa.ask") }}</button>
+      <!-- SM-3: the intel stays readable at speed — that is the point of it — but
+           writing a question or a review is composition, and Forbidden #11 rules out
+           interactive prompts in motion. -->
+      <button v-if="!isDriving" class="cta cta--ghost" type="button" @click="asking = true">
+        {{ t("qa.ask") }}
+      </button>
     </section>
 
-    <button class="add-review" type="button" @click="reviewing = true">
+    <button v-if="!isDriving" class="add-review" type="button" @click="reviewing = true">
       {{ t("profile.add_review") }}
     </button>
+    <p v-else class="driving-note">{{ t("driving.paused") }}</p>
 
-    <BottomSheet :open="reviewing" :title="t('profile.add_review')" @close="reviewing = false">
+    <BottomSheet :open="reviewing && !isDriving" :title="t('profile.add_review')" @close="reviewing = false">
       <ReviewSheet @submit="onReview" />
     </BottomSheet>
 
-    <BottomSheet :open="asking" :title="t('qa.ask')" @close="asking = false">
+    <BottomSheet :open="asking && !isDriving" :title="t('qa.ask')" @close="asking = false">
       <div class="ask">
         <textarea
           v-model="questionText"

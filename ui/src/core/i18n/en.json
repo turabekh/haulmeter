@@ -267,6 +267,7 @@
   "docs.view_loading": "Opening…",
   "docs.view_open": "Open document",
   "docs.view_remove": "Remove from wallet",
+  "driving.paused": "Available when you're stopped.",
   "equipment.plate_number": "Plate number",
   "equipment.plate_state": "Plate state",
   "equipment.save": "Save equipment",

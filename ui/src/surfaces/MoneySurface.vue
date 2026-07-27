@@ -11,12 +11,14 @@ import TheMeter from "../core/components/TheMeter.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import GhostwriterSheet from "../core/components/GhostwriterSheet.vue";
 import { useI18n } from "../core/i18n.js";
+import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
 import { receivableStatusToken } from "../core/presentation.js";
 import { fetchOwed, fetchEarnings, fetchMe } from "../core/api.js";
 import { SAMPLE_OWED, SAMPLE_EARNINGS } from "../core/fixtures.js";
 
 const { t } = useI18n();
+const { isDriving } = useDriverState();
 const router = useRouter();
 const rows = ref(SAMPLE_OWED);
 const earnings = ref(SAMPLE_EARNINGS);
@@ -101,16 +103,27 @@ function stateLabel(state) {
       </li>
     </ul>
 
-    <!-- M9-FR1: the settlement auditor — the company-driver wedge (NAV-5) -->
-    <button class="audit-cta" type="button" @click="router.push('/money/audit')">
-      {{ t("audit.title") }}
-    </button>
-    <!-- M11-FR3: the comms ghostwriter — draft the firm message that unsticks pay -->
-    <button class="audit-cta" type="button" @click="drafting = true">
-      {{ t("ghost.title") }}
-    </button>
+    <!-- AI-CONTEXT: §10.3 SPECIFIES this tab's DRIVING behaviour — "read-only;
+         actions deferred" — and it was never implemented, so both flows opened at
+         speed. The figures above stay readable, which is the whole of what §10.3
+         allows; the two things that ACT withdraw and say when they return.
 
-    <BottomSheet :open="drafting" :title="t('ghost.title')" @close="drafting = false">
+         The ghostwriter sheet closes with them: the control that opens a flow and
+         the flow itself are two different things to guard, which is exactly how the
+         Docs capture sheet stayed open at speed. -->
+    <template v-if="!isDriving">
+      <!-- M9-FR1: the settlement auditor — the company-driver wedge (NAV-5) -->
+      <button class="audit-cta" type="button" @click="router.push('/money/audit')">
+        {{ t("audit.title") }}
+      </button>
+      <!-- M11-FR3: the comms ghostwriter — draft the firm message that unsticks pay -->
+      <button class="audit-cta" type="button" @click="drafting = true">
+        {{ t("ghost.title") }}
+      </button>
+    </template>
+    <p v-else class="driving-note">{{ t("driving.paused") }}</p>
+
+    <BottomSheet :open="drafting && !isDriving" :title="t('ghost.title')" @close="drafting = false">
       <GhostwriterSheet />
     </BottomSheet>
   </div>

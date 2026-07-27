@@ -9,12 +9,14 @@ import { ref, reactive, computed } from "vue";
 import { ArrowLeft } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
+import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
 import { auditSettlement } from "../core/api.js";
 import { sampleAudit } from "../core/fixtures.js";
 
 const router = useRouter();
 const { t } = useI18n();
+const { isDriving } = useDriverState();
 
 const KINDS = ["detention", "layover", "lumper", "tonu"];
 const carrier = ref("");
@@ -66,7 +68,9 @@ const missed = computed(() => result.value?.total_missed_cents ?? 0);
         <span class="field__label">{{ t(`money.kind.${kind}`) }}</span>
         <input v-model="paid[kind]" class="field__input field__input--num" type="number" inputmode="decimal" min="0" />
       </label>
-      <button class="cta" type="submit" :disabled="submitting">{{ t("audit.run") }}</button>
+      <!-- SM-3: same as the calculator — typed figures wait for a stop. -->
+      <p v-if="isDriving" class="driving-note">{{ t("driving.paused") }}</p>
+      <button v-else class="cta" type="submit" :disabled="submitting">{{ t("audit.run") }}</button>
     </form>
 
     <section v-if="result" class="result">
