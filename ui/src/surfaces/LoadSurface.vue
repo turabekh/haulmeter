@@ -29,7 +29,7 @@
      specifies. A fixture whose shape does not match its endpoint hides the endpoint. -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import { Check, Camera, Send } from "lucide-vue-next";
+import { Check, Camera, Send, Clock, TriangleAlert } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
@@ -221,6 +221,21 @@ const apptSourceKey = computed(() => {
   const src = live.value?.appointment_source;
   return src ? `load.appt_from.${src}` : null;
 });
+
+// AI-CONTEXT: M5-FR1's verdict, which had no screen (§23 entry 58).
+//
+// `within_window` is computed and filed on EVERY arrival — in or out of the window,
+// opted in or not, because the artifact is the driver's own protection. It reached
+// nothing: the only place the API exposed it was the `/arrive` response, which
+// `onArrive` discards, so a reload lost it. Meanwhile FR5's protection summary counts
+// FOUR documented items and §10.2's checklist rendered three.
+//
+// The row is a labelled figure, not a sentence: `t()` has no interpolation (F15 debt),
+// and this codebase already says "Photos 0/4" and "Appointment 04:26" rather than
+// concatenating fragments (§12.5). The window it was judged against is two lines
+// above, so repeating it here would be the duplication this tab keeps growing.
+const onTime = computed(() => live.value?.on_time ?? null);
+const arrivedAt = computed(() => hm(live.value?.arrived_at));
 
 const state = computed(() =>
   computeDetentionState(arrivalMs.value ?? now.value, freeMin.value, rateCents.value, now.value),
@@ -422,6 +437,24 @@ async function endLoad() {
                color AND icon AND label, precisely because the glyph alone is what a
                driver misses. The other two rows already flip ("Notice not sent",
                "0/4"); this was the one that could only ever read as done. -->
+          <!-- M5-FR1's verdict — the fourth item FR5 has always computed. Three
+               states, and §16 gives each colour AND icon AND label, because the glyph
+               alone is what a driver misses. -->
+          <li class="checklist__item">
+            <Check v-if="onTime === true" :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
+            <TriangleAlert
+              v-else-if="onTime === false"
+              :size="20"
+              :stroke-width="2"
+              class="late"
+              aria-hidden="true"
+            />
+            <Clock v-else :size="20" :stroke-width="2" aria-hidden="true" />
+            <span :class="{ late: onTime === false }">
+              {{ onTime === null ? t("load.arrival_pending") : onTime ? t("load.on_time") : t("load.late") }}
+            </span>
+            <span v-if="arrivedAt" class="checklist__count">{{ arrivedAt }}</span>
+          </li>
           <li class="checklist__item">
             <Check v-if="bolCaptured" :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
             <Camera v-else :size="20" :stroke-width="2" aria-hidden="true" />
@@ -762,6 +795,11 @@ async function endLoad() {
 }
 .ok {
   color: var(--ledger-500);
+}
+/* late is a fact, not an alarm — `marker` is §9's urgency token, and §12.4 says an
+   unblaming statement. The driver did not choose the traffic. */
+.late {
+  color: var(--marker-500);
 }
 .filed {
   display: flex;

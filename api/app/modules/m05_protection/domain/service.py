@@ -292,6 +292,18 @@ def protection_summary(db: Session, stop) -> dict:
 IRRECOVERABLE_ON_EXIT = ("bol", "pickup_photos", "delivery_photos")
 
 
+def on_time_proof_for_stop(db: Session, stop_ref) -> OnTimeProof | None:
+    """The filed arrival proof, or None before the driver has arrived.
+
+    AI-CONTEXT: `within_window` has been computed and stored on EVERY arrival since
+    FR1 shipped — in or out of the window, opted in or not — and reached no screen.
+    The only place the API ever exposed it was the `/arrive` response, which the Load
+    tab discards, so after a reload the verdict was unrecoverable from the app. A
+    proof the driver cannot see is one they will not think to produce.
+    """
+    return db.scalar(select(OnTimeProof).where(OnTimeProof.stop_ref == stop_ref))
+
+
 def irrecoverable_gaps(db: Session, stop) -> list[str]:
     """What this stop can no longer be documented for, now that the driver has left."""
     missing = protection_summary(db, stop)["missing"]

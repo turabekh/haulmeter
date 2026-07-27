@@ -336,6 +336,7 @@ def meter(
     # once a pack is generated the claim leaves "open" — the Meter FREEZES at the
     # filed amount (§9), and stays frozen across navigations (state is on the claim)
     filed = claim is not None and claim.state.value != "open"
+    proof = m5.on_time_proof_for_stop(db, stop.id)
     phase = "not_arrived"
     free_remaining = None
     detention_seconds = 0
@@ -380,6 +381,13 @@ def meter(
         # OCR pass produced, and only the driver knows which is right.
         "appointment_end": stop.appointment_end.isoformat() if stop.appointment_end else None,
         "appointment_source": load.source.value if load is not None else None,
+        # M5-FR1's VERDICT. It has been computed and stored on every arrival since FR1
+        # shipped and reached no screen: the only place the API exposed it was the
+        # `/arrive` response, which the Load tab discards, so a reload lost it. FR5's
+        # protection summary counts four documented items and §10.2's checklist
+        # rendered three — this is the fourth. `None` until the driver arrives.
+        "on_time": proof.within_window if proof else None,
+        "arrived_at": proof.checked_in_at.isoformat() if proof else None,
         # §10.2's anatomy ends with a next-stop preview and this tab has never had one.
         # `list_stops` has been ordered by sequence since F5 was written and nothing
         # asked it what comes after the dock the driver is standing at.

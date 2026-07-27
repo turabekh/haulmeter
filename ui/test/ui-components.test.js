@@ -1977,6 +1977,34 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     w2.unmount();
   });
 
+  // AI-CONTEXT: M5-FR1's verdict is filed on every arrival and had no screen. FR5's
+  // protection summary counts four documented items; the checklist rendered three.
+  it("shows the on-time verdict as the checklist's fourth row (M5-FR1)", async () => {
+    const rowText = async (extra) => {
+      vi.stubGlobal("fetch", vi.fn().mockImplementation(() => jsonOk({ ...LIVE, ...extra })));
+      const w = mount(LoadSurface, { global: { plugins: [createRouter({ history: createMemoryHistory(), routes })] } });
+      await flushPromises();
+      const first = w.findAll(".checklist__item")[0].text();
+      w.unmount();
+      return first;
+    };
+
+    // not arrived: no verdict exists, and the row says so rather than implying one
+    expect(await rowText({ on_time: null, arrived_at: null })).toContain("Arrival not recorded yet");
+
+    // on time — the label carries the state, and the figure is the arrival (§12.5's
+    // labelled figure, since t() has no interpolation)
+    const ok = await rowText({ on_time: true, arrived_at: "2026-08-04T07:58:00+00:00" });
+    expect(ok).toContain("On time");
+    expect(ok).toContain("07:58");
+
+    // late is stated as a fact, not an accusation
+    const late = await rowText({ on_time: false, arrived_at: "2026-08-04T09:12:00+00:00" });
+    expect(late).toContain("Late");
+    expect(late).toContain("09:12");
+    expect(late).not.toContain("On time");
+  });
+
   it("does not restate the Meter in the filed row", async () => {
     vi.stubGlobal(
       "fetch",

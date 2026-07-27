@@ -4,6 +4,8 @@ create -> arrive -> meter: before arrival the Meter is pre-arrival; after a
 geofence ENTER the detention clock is live.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -179,6 +181,61 @@ def test_meter_pre_arrival_then_live_after_arrive(client, db):
     # just arrived -> within free time, clock live
     assert lbody["phase"] == "within_free_time"
     assert lbody["free_time_remaining_seconds"] is not None
+
+
+def test_meter_carries_the_on_time_verdict(client, db):
+    """M5-FR1's verdict had no route to a screen.
+
+    `within_window` is filed on every arrival — in or out of the window — and the only
+    place the API exposed it was the `/arrive` response, which the Load tab discards.
+    After a reload the driver could not learn whether their own arrival counted as on
+    time. FR5's protection summary counts four documented items; §10.2's checklist
+    rendered three, and this is the fourth.
+    """
+    headers = _auth(client)
+    # an appointment an hour ago -> arriving now is LATE
+    late_appt = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    stop_id = client.post(
+        "/load",
+        json={
+            "facility_name": "Late Dock",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Broker",
+            "appointment": late_appt,
+        },
+        headers=headers,
+    ).json()["stop_id"]
+
+    # before arrival there is no verdict to give, and `null` says so
+    pre = client.get(f"/load/{stop_id}/meter", headers=headers).json()
+    assert pre["on_time"] is None
+    assert pre["arrived_at"] is None
+
+    client.post(f"/load/{stop_id}/arrive", headers=headers)
+
+    body = client.get(f"/load/{stop_id}/meter", headers=headers).json()
+    assert body["on_time"] is False  # the verdict survives the reload
+    assert body["arrived_at"] is not None
+
+
+def test_meter_reports_an_on_time_arrival(client, db):
+    headers = _auth(client)
+    soon = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    stop_id = client.post(
+        "/load",
+        json={
+            "facility_name": "Punctual Dock",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Broker",
+            "appointment": soon,
+        },
+        headers=headers,
+    ).json()["stop_id"]
+    client.post(f"/load/{stop_id}/arrive", headers=headers)
+
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["on_time"] is True
 
 
 def test_notice_flags_notice_sent_on_the_meter(client, db):
