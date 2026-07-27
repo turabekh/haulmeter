@@ -2047,6 +2047,34 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     expect(late).not.toContain("On time");
   });
 
+  // AI-CONTEXT: §5's ON_SITE, narrowed to this tab (§23 entry 64). §5 wants capture
+  // "one tap from anywhere via a persistent action chip"; an app-wide chip is a new
+  // component pattern AND navigation structure, so the owner chose the benefit without
+  // the new component. ON_SITE was derivable but unread — the state changed nothing.
+  it("brings cargo capture one tap away at the dock (§5 ON_SITE)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => jsonOk(LIVE)));
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+
+    const rungs = () => w.findAll(".rungs__item").map((b) => b.text());
+    // IDLE: it lives in the More sheet, two taps away, as it always has
+    expect(rungs().some((s) => s.includes("Capture cargo condition"))).toBe(false);
+
+    useDriverState().setState(DriverState.ON_SITE);
+    await w.vm.$nextTick();
+
+    expect(rungs().some((s) => s.includes("Capture cargo condition"))).toBe(true);
+
+    // and it is a SHORTCUT, not a move — the sheet still lists it
+    await w.find(".rungs__item--more").trigger("click");
+    await flushPromises();
+    expect(w.findAll(".more__item").map((b) => b.text())).toContain("Capture cargo condition");
+
+    useDriverState().setState(DriverState.IDLE);
+    w.unmount();
+  });
+
   it("does not restate the Meter in the filed row", async () => {
     vi.stubGlobal(
       "fetch",

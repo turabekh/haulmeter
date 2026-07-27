@@ -54,7 +54,7 @@ import {
   isAuthenticated,
 } from "../core/api.js";
 
-const { isDriving } = useDriverState();
+const { isDriving, isOnSite } = useDriverState();
 const { t } = useI18n();
 const router = useRouter();
 
@@ -595,6 +595,23 @@ async function endLoad() {
         >
           {{ t("load.cta.claim") }}
         </button>
+        <!-- AI-CONTEXT: §5's ON_SITE, narrowed to this tab by the owner (§23 entry 64).
+             §5 asks for capture actions "one tap from anywhere via a persistent action
+             chip"; an app-wide chip is a new component pattern AND navigation
+             structure, both §22 never-improvise, so the decision was to deliver the
+             benefit inside a surface that already exists. Cargo condition is two taps
+             the rest of the time (More -> Capture) and one while the truck is parked
+             at the dock, which is the only place those photographs can be taken. It
+             stays in the More sheet as well: this is a shortcut, not a move. -->
+        <button
+          v-if="isOnSite"
+          class="rungs__item"
+          type="button"
+          @click="router.push('/protection/condition')"
+        >
+          {{ t("cond.start") }}
+        </button>
+
         <!-- §10.2: "state-dependent SINGLE CTA". These four are real capabilities and
              none has another home, so they move behind one control into a sheet
              (NAV-3) rather than stacking six buttons under the Meter. Scoped to this
