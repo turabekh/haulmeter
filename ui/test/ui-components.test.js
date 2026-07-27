@@ -1609,7 +1609,10 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       await w.find(".cta").trigger("click");
       await flushPromises();
       expect(w.find(".filed").exists()).toBe(true);
-      expect(w.find(".filed").text()).toContain("$37.50"); // filed claim amount
+      // the amount lives in the Meter, which FREEZES at it (§9); the row is the route
+      // to the claim and no longer restates the figure directly above it
+      expect(w.find(".meter__figure").text()).toContain("$37.50");
+      expect(w.find(".filed").text()).toBe("View claim");
     } finally {
       vi.unstubAllGlobals();
       setActiveStop(null);
@@ -1873,6 +1876,43 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     logout();
   });
 
+  // AI-CONTEXT: a claim worth nothing is a TRAP, not just clutter. §9 freezes the
+  // Meter at the filed amount and the UI hides every claim control once filed, so a
+  // driver who tapped the instant free time ran out was left reading "$0.00 · Claim
+  // filed — clock stopped" while detention went on accruing, with no route back.
+  // Measured against the running server: filed at zero, three minutes later the meter
+  // still said $0.00 while the API had $4.42.
+  it("does not offer a claim until there is something to claim", async () => {
+    setToken("tok-zero");
+    setActiveStop("stop-zero");
+    const zero = {
+      stop_id: "stop-zero", claim_id: "c-0", facility_name: "Zero Dock", counterparty: "Acme",
+      appointment: null, arrived: true, free_time_minutes: 0, rate_cents_per_hour: 7500,
+      phase: "accruing", free_time_remaining_seconds: 0, detention_seconds: 0,
+      detention_cents: 0, notice_sent: true, filed: false, bol_captured: true,
+      photos_captured: 0, photos_required: 4,
+    };
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => jsonOk(zero)));
+    try {
+      const router = testRouter();
+      const w = mount(LoadSurface, { global: { plugins: [router] } });
+      await flushPromises();
+
+      // accruing, notice sent, BOL in hand — the ladder would have offered a claim,
+      // and the amount is $0.00
+      const labels = [
+        ...w.findAll(".cta").map((b) => b.text()),
+        ...w.findAll(".rungs__item").map((b) => b.text()),
+      ];
+      expect(labels.some((s) => s.includes("Generate claim"))).toBe(false);
+      w.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
+
   // AI-CONTEXT: §15.5 became load-bearing the moment the meter started depending on
   // real positions (F3's ping seam, this session). "A single persistent Load-tab card
   // explaining exactly what stops working, with a one-tap fix — never nags beyond
@@ -1900,6 +1940,59 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     expect(w.find(".degraded").exists()).toBe(false);
 
     permission.value = "unknown";
+  });
+
+  // AI-CONTEXT: §9 calls this element "the counting figure". Before arrival it used to
+  // render the appointment as a static clock face — the same value the Appointment row
+  // states two lines below, in the largest type on the screen, never moving.
+  it("counts down to the appointment before arrival, and up once it passes (§9)", async () => {
+    const soon = new Date(Date.now() + 2 * 3600_000).toISOString();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() =>
+        jsonOk({ ...LIVE, phase: "not_arrived", arrived: false, appointment: soon }),
+      ),
+    );
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(w.text()).toContain("Until appointment");
+    // a duration that ticks, not the 24h clock face it used to show
+    expect(w.find(".meter__figure").text()).toMatch(/^(2:00:00|1:59:\d\d)$/);
+    w.unmount();
+
+    const late = new Date(Date.now() - 12 * 60_000).toISOString();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() =>
+        jsonOk({ ...LIVE, phase: "not_arrived", arrived: false, appointment: late }),
+      ),
+    );
+    const w2 = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(w2.text()).toContain("Appointment passed");
+    expect(w2.find(".meter__figure").text()).toMatch(/^0:1[12]:\d\d$/);
+    w2.unmount();
+  });
+
+  it("does not restate the Meter in the filed row", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() =>
+        jsonOk({ ...LIVE, phase: "accruing", free_time_remaining_seconds: 0, filed: true, detention_cents: 8750 }),
+      ),
+    );
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+
+    // the Meter carries the fact and the figure; the row carries the route
+    expect(w.find(".meter__status").text()).toContain("Claim filed");
+    expect(w.find(".filed").text()).toBe("View claim");
+    expect(w.findAll(".filed")).toHaveLength(1);
+    w.unmount();
   });
 
   it("previews the next stop (§10.2 anatomy)", async () => {

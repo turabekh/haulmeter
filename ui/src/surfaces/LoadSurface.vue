@@ -236,24 +236,46 @@ const filedAmount = computed(
   () => filed.value?.amount_cents ?? live.value?.detention_cents ?? 0,
 );
 
+// AI-CONTEXT: BEFORE ARRIVAL, the Meter counts down to the appointment (§23 entry 57).
+//
+// It used to render the appointment as a static `08:26` — the same figure the
+// Appointment row states two lines below it, in the largest type on the screen, never
+// moving. §9 defines this element as "the counting figure that means your time is
+// being measured", so a clock face that never counts is the signature element used as
+// a label, and the duplication was the tell.
+//
+// Seconds to the appointment IS measured time and does tick. Past the appointment it
+// counts up instead and takes `marker` — an existing §9 token for exactly this
+// urgency, not a new colour — because a driver running late is the case where the
+// figure matters most.
+const apptMs = computed(() => {
+  const iso = live.value?.appointment;
+  return iso ? Date.parse(iso) : null;
+});
+const apptDeltaSeconds = computed(() =>
+  apptMs.value === null ? null : Math.round((apptMs.value - now.value) / 1000),
+);
+const apptPassed = computed(() => apptDeltaSeconds.value !== null && apptDeltaSeconds.value < 0);
+
 // once a claim is filed the Meter FREEZES at the filed amount — the clock stops
-// ticking, so what you see matches the claim you filed (§9)
-// with no load the Meter still anchors the screen — §9 makes it the signature
-// element — but it rests: §9's own countdown color (`--text-1`), an em-dash where
-// the figure goes, and no status line. It is the same component in the same place,
-// saying it has nothing to count.
+// ticking, so what you see matches the claim you filed (§9). With no load it rests:
+// §9's own countdown colour (`--text-1`), an em-dash where the figure goes, and no
+// status line — the same component in the same place, saying it has nothing to count.
 const meterLabel = computed(() => {
   if (!live.value) return t("load.empty_title");
-  return preArrival.value
-    ? t("load.waiting")
-    : withinFree.value
-      ? t("load.free_time")
-      : t("load.detention");
+  if (preArrival.value) {
+    if (apptDeltaSeconds.value === null) return t("load.waiting");
+    return apptPassed.value ? t("load.appt_passed") : t("load.until_appt");
+  }
+  return withinFree.value ? t("load.free_time") : t("load.detention");
 });
 const meterFigure = computed(() => {
   if (!live.value) return "—";
   if (isFiled.value) return formatMoney(filedAmount.value);
-  if (preArrival.value) return live.value.appointment ? hm(live.value.appointment) : "—";
+  if (preArrival.value) {
+    if (apptDeltaSeconds.value === null) return "—";
+    return formatClock(Math.abs(apptDeltaSeconds.value));
+  }
   return withinFree.value
     ? formatClock(state.value.freeTimeRemainingSeconds)
     : formatMoney(state.value.amountCents);
@@ -265,9 +287,11 @@ const meterStatus = computed(() => {
     ? ""
     : `${formatClock(state.value.detentionSeconds)} · $${Math.round(rateCents.value / 100)}/h`;
 });
-const variant = computed(() =>
-  !live.value || preArrival.value ? "countdown" : meterVariant(state.value),
-);
+const variant = computed(() => {
+  if (!live.value) return "countdown";
+  if (preArrival.value) return apptPassed.value ? "warning" : "countdown";
+  return meterVariant(state.value);
+});
 
 // AI-CONTEXT: §10.2's "state-dependent single CTA (Arm stop -> Snap BOL -> Send
 // notice -> Generate claim)" — one rung at a time, and the ORDER is the spec's.
@@ -278,14 +302,29 @@ const variant = computed(() =>
 // file — so the rungs the ladder passes over stay reachable as secondary text
 // controls. A ladder that removed capability would be a gate, and §10.2 asks for
 // guidance.
+// AI-CONTEXT: a claim is only offered once there is something to claim (§23 entry 57).
+//
+// `accruing` turns true the instant free time runs out, when the amount is still
+// $0.00, and the claim controls carried no amount guard — so a driver could file a
+// claim worth nothing. That is not merely useless: §9 FREEZES the Meter at the filed
+// amount, and the UI hides every claim control once `isFiled`, so the screen then
+// reads "$0.00 · Claim filed — clock stopped" while detention goes on accruing, with
+// no way back. Measured: filed at zero, three minutes later the meter still said
+// $0.00 while the server had $4.42, and the only route to the correction was the API.
+//
+// Guarding the OFFER is the fix rather than unfreezing the Meter, because the freeze
+// is deliberate (§9: what you see matches the claim you filed). Nothing is taken away
+// — the driver waits seconds, not minutes, for a claim that is worth filing.
+const claimable = computed(() => accruing.value && state.value.amountCents > 0);
+
 const rung = computed(() => {
   if (!live.value) return "start";
   if (isFiled.value) return null;
   if (preArrival.value) return "arrive";
   if (!bolCaptured.value) return "bol";
   if (accruing.value && !noticeSent.value) return "notice";
-  if (accruing.value) return "claim";
-  return null; // arrived, BOL filed, still inside free time: nothing is owed yet
+  if (claimable.value) return "claim";
+  return null; // arrived, BOL filed, and nothing owed yet
 });
 
 async function onArrive() {
@@ -298,7 +337,9 @@ async function onArrive() {
   }
 }
 async function onGenerateClaim() {
-  if (!activeStopId.value || filed.value) return;
+  // `claimable` also gates the controls; this is the same rule at the point of action,
+  // so a stale render or a double tap cannot file a claim worth nothing.
+  if (!activeStopId.value || filed.value || !claimable.value) return;
   try {
     filed.value = await generateClaim(activeStopId.value); // arrive->accrue->FILE (freezes Meter)
     await loadMeter();
@@ -425,9 +466,12 @@ async function endLoad() {
         type="button"
         @click="router.push(`/claim/${activeStopId}`)"
       >
+        <!-- AI-CONTEXT: this row said "Claim filed · $0.00" directly under a Meter
+             already reading "$0.00 / Claim filed — clock stopped" — the same fact and
+             the same figure, twice, adjacent. What the Meter cannot do is take you to
+             the claim, so that is all this row is now. -->
         <Check :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
-        <span>{{ t("load.filed") }} · {{ formatMoney(filedAmount) }}</span>
-        <span class="filed__link">{{ t("claim.view") }}</span>
+        <span>{{ t("claim.view") }}</span>
       </button>
 
       <!-- §10.2: ONE state-dependent CTA. The ladder picks the rung; the rungs it
@@ -476,7 +520,7 @@ async function endLoad() {
           {{ t("load.cta.notice") }}
         </button>
         <button
-          v-if="accruing && !isFiled && rung !== 'claim'"
+          v-if="claimable && !isFiled && rung !== 'claim'"
           class="rungs__item"
           type="button"
           @click="onGenerateClaim"
@@ -733,13 +777,6 @@ async function endLoad() {
   color: var(--text-1);
   text-align: left;
   cursor: pointer;
-}
-.filed__link {
-  margin-left: auto;
-  background: transparent;
-  color: var(--shield-500);
-  font-size: var(--type-label-size);
-  font-weight: 500;
 }
 .toast {
   margin: 0 0 var(--s-2);
