@@ -55,9 +55,22 @@ fmt:
 # AI-CONTEXT: the LAW 0 harness (design-prd §22.3). Deliberately NOT part of `make
 # test`: the unit suite finishes in seconds and putting a browser on that path would
 # cost the tight red-green loop. `make ci` runs both.
+#
+# `up -d ui` is load-bearing, and its absence made `make ci` unrunnable. The harness
+# targets http://ui:9008, which only resolves while the ui SERVICE is up — but
+# `compose run` replaces the container's command, so the one-off runner never starts
+# vite and nothing is listening. That left the two gates mutually exclusive:
+# `preflight` demands the host ports be FREE, `ui-layout` demands the dev server be
+# UP, so `make ci` could not pass in either state. It failed with
+# `net::ERR_NAME_NOT_RESOLVED` on all 466 checks from a cold stack, and had evidently
+# never been run end to end — everyone ran `make up` and then `make ui-layout`.
 ui-layout: env
+	$(COMPOSE) up -d ui
 	$(COMPOSE) run --rm --entrypoint sh ui -c "npx --yes playwright install --with-deps chromium >/dev/null 2>&1 || npx --yes playwright install chromium; npm run layout"
 
+# preflight runs FIRST, while everything is still down; ui-layout then brings up the
+# one service it needs. Order matters — reversing them puts the port check after the
+# thing that binds the port.
 ci: env preflight lint test ui-layout
 
 # --- Real POI data (PRD §12) — live pulls only, never in CI ---
