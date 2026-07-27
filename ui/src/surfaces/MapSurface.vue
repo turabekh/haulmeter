@@ -666,9 +666,11 @@ async function submitPrice(cents) {
   width: 72px;
   height: 72px;
 }
+/* §6.5 is 48; §11.2's 44 is a map-PIN exemption and does not reach a button that
+   happens to sit on the map. */
 .sleep-cta {
   margin: var(--s-2) var(--s-4) 0;
-  min-height: 44px;
+  min-height: 48px;
   border-radius: var(--r-control);
   background: var(--ink-1);
   border: 1px solid var(--line-1);

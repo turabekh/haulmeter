@@ -157,6 +157,41 @@ const RATE_CON_DRAFT = {
   ],
 };
 
+const MONEY_MOCKS = {
+  "/accessorial/owed": [
+    { receivable_id: "r-1", kind: "detention", amount_cents: 8750, state: "invoiced", aging_days: 12, is_reimbursement: false },
+    { receivable_id: "r-2", kind: "lumper", amount_cents: 12500, state: "disputed", aging_days: 31, is_reimbursement: true },
+  ],
+  "/money/earnings": {
+    recovered_cents: 42500,
+    fuel_saved_cents: 18600,
+    flagged_cents: 7500,
+    ddd_cents: 61100,
+  },
+  "/auth/me": { email: "driver@example.com", verified: true, authority: "owner_operator" },
+};
+
+const EVIDENCE_STOP = "00000000-0000-0000-0000-0000000000aa";
+const EVIDENCE_MOCKS = {
+  [`/load/${EVIDENCE_STOP}/evidence`]: {
+    stop_id: EVIDENCE_STOP,
+    facility: "Dallas Cold Storage",
+    documents: [{ doc_type: "bol", uploaded_at: "2026-07-24T15:00:00+00:00" }],
+    chain_valid: true,
+    record_count: 3,
+    photo_count: 2,
+    timeline: [
+      { type: "geofence_enter", occurred_at: "2026-07-24T13:58:00+00:00" },
+      { type: "arrival_confirmed", occurred_at: "2026-07-24T14:02:00+00:00" },
+      { type: "geofence_exit", occurred_at: "2026-07-24T17:31:00+00:00" },
+    ],
+    photos: [
+      { artifact_id: "a-1", prompt: "trailer_corner", content_hash: "a".repeat(64), captured_at: "2026-07-24T14:05:00+00:00", has_image: true },
+      { artifact_id: "a-2", prompt: "seal", content_hash: "b".repeat(64), captured_at: "2026-07-24T14:06:00+00:00", has_image: true },
+    ],
+  },
+};
+
 const DOC_ID = "00000000-0000-0000-0000-00000000000a";
 const WALLET_MOCKS = {
   "/protection/wallet": {
@@ -251,6 +286,51 @@ const SURFACES = [
     open: [".cta:not(.cta--text)", { upload: ".rc__input" }, ".rc__cta"],
     ready: ".rc__match",
   }],
+  // the OTHER half of the import: a rate con the parse could not read. It is a
+  // different screen — no match list, no "read from your rate con", the manual form
+  // carrying the whole load — and §12.4 gives it copy to get right at 360 dp.
+  ["sheet-unreadable", "/load", {
+    mocks: {
+      ...NO_LOAD_MOCKS,
+      "/load/import": { document_id: RATE_CON_DRAFT.document_id, parsed: null, silent_on: [], facility_candidates: [], readable: false },
+    },
+    open: [".cta:not(.cta--text)", { upload: ".rc__input" }, ".rc__cta"],
+    ready: ".rc__unread",
+  }],
+  ["sheet-viewer-edit", "/docs", {
+    mocks: WALLET_MOCKS, open: [".doc", ".viewer__edit"], ready: ".viewer__form",
+  }],
+  // removing a document is destructive-adjacent (§17 Q16 makes it reversible), and
+  // §8 gives destructive actions their own confirm sheet — this is that sheet
+  ["sheet-remove", "/docs", {
+    mocks: WALLET_MOCKS, open: [".doc", ".viewer__remove"], ready: ".rm__go",
+  }],
+  ["sheet-incident", "/load", {
+    stop: LIVE_STOP, mocks: LIVE_MOCKS,
+    open: [".rungs__item--more", { click: ".more__item", nth: 1 }],
+    ready: ".chips",
+  }],
+  ["sheet-ghostwriter", "/money", {
+    // TWO controls carry `.audit-cta` — the settlement auditor routes away, the
+    // ghostwriter opens the sheet. First-match would have measured /money/audit.
+    mocks: MONEY_MOCKS, open: [{ click: ".audit-cta", nth: 1 }], ready: ".tone",
+  }],
+  ["sheet-share", `/load/${EVIDENCE_STOP}/evidence`, {
+    mocks: EVIDENCE_MOCKS, open: [".cta--secondary"], ready: "input[type='email']",
+  }],
+  ["sheet-ask", "/facility/00000000-0000-0000-0000-0000000000bb", {
+    mocks: {}, open: [".cta--ghost"], ready: ".sheet__body",
+  }],
+  ["sheet-review", "/facility/00000000-0000-0000-0000-0000000000bb", {
+    mocks: {}, open: [".add-review"], ready: ".sheet__body",
+  }],
+  ["sheet-map-report", "/", { mocks: {}, open: [".report-chip"], ready: ".sheet__body" }],
+  ["sheet-map-voice", "/", { mocks: {}, open: [".voice-chip"], ready: ".sheet__body" }],
+  // the sleep solver hangs off the Tonight preset, so the preset chip is step one
+  ["sheet-map-sleep", "/", {
+    mocks: {}, open: [{ click: ".chip", nth: 1 }, ".sleep-cta"], ready: ".sheet__body",
+  }],
+  ["sheet-map-relay", "/", { mocks: {}, open: [".relay-banner"], ready: ".sheet__body" }],
 ];
 const CAPTION_FLOOR_PX = 13; // §6.2: "Nothing smaller exists."
 const TOUCH_MIN_PX = 48; // §6.5 glove spec
@@ -339,6 +419,10 @@ async function settle(page, live) {
         mimeType: "image/png",
         buffer: Buffer.from(PNG_1PX, "base64"),
       });
+    } else if (step.click) {
+      // `nth` for rows in a list that share a class — index, not label, for the
+      // same locale reason the steps are CSS in the first place
+      await page.locator(step.click).nth(step.nth ?? 0).click();
     } else {
       await page.locator(step).first().click();
     }

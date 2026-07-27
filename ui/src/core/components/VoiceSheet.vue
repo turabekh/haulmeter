@@ -205,8 +205,12 @@ onBeforeUnmount(() => {
   align-items: stretch;
   gap: var(--s-2);
 }
+/* `min-width: 0` is what lets this shrink. A flex item's default `min-width: auto`
+   floors it at its intrinsic content width, so once the send button stopped
+   collapsing, the row overflowed 360 dp instead — the two rules only work together. */
 .voice__input {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 56px;
   padding: 0 var(--s-3);
   border-radius: var(--r-control);
@@ -215,8 +219,13 @@ onBeforeUnmount(() => {
   color: var(--text-1);
   font-size: var(--type-body-size);
 }
+/* `width: 56px` is not a floor — as a flex child it shrank to 32 dp beside a growing
+   input, so the send button rendered narrower than §6.5 allows while its declared
+   width said otherwise. `flex: none` is what makes the 56 real. */
 .voice__send {
+  flex: none;
   width: 56px;
+  min-width: 56px;
   min-height: 56px;
   border-radius: var(--r-control);
   background: var(--accent-fill);

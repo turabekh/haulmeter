@@ -100,9 +100,10 @@ async function claim(h) {
   color: var(--text-3);
   font-size: var(--type-caption-size);
 }
+/* §6.5 glove spec — 44 is §11.2's map-pin number and has no standing in a sheet */
 .claim {
   flex: none;
-  min-height: 44px;
+  min-height: 48px;
   padding: 0 var(--s-4);
   border-radius: var(--r-control);
   background: var(--accent-fill);

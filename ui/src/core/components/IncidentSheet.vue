@@ -109,8 +109,13 @@ async function submit() {
   flex-wrap: wrap;
   gap: var(--s-2);
 }
+/* §6.5 glove spec. These shipped at 44 dp — §11.2's 44 is a MAP-PIN exemption and
+   does not reach a sheet — and survived because the harness had never opened this
+   sheet. Same finding as PresetChips at 40 dp, two sessions apart, for the same
+   reason. `min-width` because a chip is as wide as its label (see cap__chip). */
 .chip {
-  min-height: 44px;
+  min-height: 48px;
+  min-width: 48px;
   padding: 0 var(--s-4);
   border: 1px solid var(--line-1);
   border-radius: var(--r-pill);

@@ -419,4 +419,84 @@ function photoLabel(prompt) {
   font-size: var(--type-body-size);
   margin: 0;
 }
+
+/* AI-CONTEXT: these nine rules did not exist. The template names `.cta`,
+   `.cta--secondary`, `.field*`, `.pending`, `.shared` and `.sheet__lead`, and this
+   block styled none of them — and `scoped` means no other component's `.cta` could
+   reach in. So Export PDF, Share, the recipient field and Create link all rendered
+   as bare 24 dp text with no fill, no border and no target, on the surface that
+   produces the pack a driver hands a broker.
+
+   It survived because the harness only ever loaded this route at an id with no
+   evidence, where `v-if="!isDriving"` sits inside a `<template>` that never renders
+   — the measured state was not the state with the bug. Same shape as the Load tab.
+
+   §8 grades: Primary filled `shield`, Secondary hairline outline, inputs 56 dp,
+   labels above fields. Tokens only. */
+.cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  width: 100%;
+  min-height: 56px;
+  margin-top: var(--s-2);
+  border-radius: var(--r-control);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.cta:disabled {
+  opacity: 0.6;
+}
+.cta--secondary {
+  background: transparent;
+  border: 1px solid var(--line-1);
+  color: var(--text-1);
+}
+.sheet__lead {
+  margin: 0 0 var(--s-3);
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.field {
+  display: block;
+  margin-bottom: var(--s-2);
+}
+.field__label {
+  display: block;
+  margin-bottom: var(--s-1);
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+}
+.field__input {
+  width: 100%;
+  min-height: 56px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+  background: var(--ink-0);
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+}
+.field__hint {
+  margin: 0 0 var(--s-3);
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+.pending,
+.shared {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: var(--s-2) 0 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+}
+.shared {
+  color: var(--ledger-500);
+}
 </style>
