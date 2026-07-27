@@ -18,6 +18,7 @@
 // while a stop is armed, which is exactly when a wrong boundary crossing costs money.
 import { ref } from "vue";
 import { sendLocationPing, isAuthenticated, activeStopId } from "./api.js";
+import { observeMotion } from "./state.js";
 
 // how far and how often a fix has to move before it is worth a request. The armed
 // numbers are tighter because that is when ±3 minutes of arrival detection (PRD §7.3)
@@ -41,6 +42,7 @@ export const lastFix = ref(null);
 export const lastEvents = ref([]);
 
 let watchId = null;
+let lastFixAt = null;
 let watchedHighAccuracy = null;
 let lastSentAt = 0;
 let lastSentAt_lat = null;
@@ -75,19 +77,36 @@ export function shouldSend(fix, now) {
   return metersBetween(lastSentAt_lat, lastSentAt_lon, fix.lat, fix.lon) >= minM;
 }
 
+// AI-CONTEXT: many devices report `coords.speed` as null — desktop browsers always,
+// phones often on the first fix — and §5's DRIVING trigger is a speed. Deriving it
+// from displacement over elapsed time keeps the state machine alive on those devices
+// instead of leaving every driver permanently IDLE, which is the failure this whole
+// deriver exists to end.
+function effectiveSpeed(coords, fix, now) {
+  if (typeof coords.speed === "number" && !Number.isNaN(coords.speed)) return coords.speed;
+  const prev = lastFix.value;
+  if (!prev || !lastFixAt) return null;
+  const seconds = (now - lastFixAt) / 1000;
+  if (seconds <= 0) return null;
+  return metersBetween(prev.lat, prev.lon, fix.lat, fix.lon) / seconds;
+}
+
 async function onFix(position) {
   permission.value = "granted";
+  const now = Date.now();
   const fix = {
     lat: position.coords.latitude,
     lon: position.coords.longitude,
     accuracyM: position.coords.accuracy ?? null,
     speedMps: position.coords.speed ?? null,
   };
+  // SM-4: the state machine owns the decision; this only hands it the reading.
+  observeMotion({ speedMps: effectiveSpeed(position.coords, fix, now), now });
+  lastFixAt = now;
   lastFix.value = fix;
   // arming can change between fixes (the driver starts a load), and the watch has to
   // be re-opened to change accuracy — the browser fixes options at watch time
   if (watchedHighAccuracy !== armed()) restart();
-  const now = Date.now();
   if (!isAuthenticated.value || !shouldSend(fix, now)) return;
   // AI-CONTEXT: the throttle is claimed BEFORE the await, not after it.
   //
@@ -101,7 +120,15 @@ async function onFix(position) {
   lastSentAt_lon = fix.lon;
   try {
     const res = await sendLocationPing({ ...fix, mode: samplingMode() });
-    if (res && res.events && res.events.length) lastEvents.value = res.events;
+    if (res && res.events && res.events.length) {
+      lastEvents.value = res.events;
+      // §5's ON_SITE is "inside an armed stop's geofence", and the server is the only
+      // thing that knows: geofence radii live in F2 and the evaluation in F3.
+      for (const event of res.events) {
+        if (event.event_type === "ENTER") observeMotion({ present: true });
+        if (event.event_type === "EXIT") observeMotion({ present: false });
+      }
+    }
   } catch {
     // offline, or the session expired. Deliberately NOT queued — see
     // api.js sendLocationPing: a replayed position is evaluated at server-now and
@@ -154,6 +181,7 @@ export function retryLocationPermission() {
 // reads the previous test's last position.
 export function __resetForTests() {
   stopLocationReporting();
+  lastFixAt = null;
   lastSentAt = 0;
   lastSentAt_lat = null;
   lastSentAt_lon = null;

@@ -183,6 +183,53 @@ describe("F3 location reporting (PRD §7.3)", () => {
     expect(fetchStub).not.toHaveBeenCalled();
   });
 
+  // AI-CONTEXT: the seam that makes §5 real. The state machine was inert not because
+  // its logic was wrong but because nothing fed it — this asserts the sensor reaches
+  // it, which is the only reason any DRIVING behaviour in the app can ever fire.
+  describe("feeding the §5 state machine", () => {
+    it("puts the app into DRIVING from sustained motion", async () => {
+      const { DriverState, useDriverState, DRIVING_SUSTAIN_MS, __resetStateForTests } =
+        await import("../src/core/state.js");
+      __resetStateForTests();
+      const { state } = useDriverState();
+      startLocationReporting();
+
+      const t0 = Date.now();
+      vi.setSystemTime(t0);
+      geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon, accuracy: 10, speed: 25 });
+      expect(state.value).toBe(DriverState.IDLE); // one fix is not "sustained"
+
+      vi.setSystemTime(t0 + DRIVING_SUSTAIN_MS);
+      geo.emit({ latitude: DALLAS.lat + 0.05, longitude: DALLAS.lon, accuracy: 10, speed: 25 });
+
+      expect(state.value).toBe(DriverState.DRIVING);
+      __resetStateForTests();
+      vi.useRealTimers();
+    });
+
+    it("derives speed from displacement when the device reports none", async () => {
+      const { DriverState, useDriverState, DRIVING_SUSTAIN_MS, __resetStateForTests } =
+        await import("../src/core/state.js");
+      __resetStateForTests();
+      const { state } = useDriverState();
+      startLocationReporting();
+
+      const t0 = Date.now();
+      vi.setSystemTime(t0);
+      // `speed` omitted entirely — a desktop browser, or a phone's first fix
+      geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon, accuracy: 10 });
+      vi.setSystemTime(t0 + 60_000);
+      // ~0.05 degrees of latitude in a minute is roughly 90 km/h
+      geo.emit({ latitude: DALLAS.lat + 0.05, longitude: DALLAS.lon, accuracy: 10 });
+      vi.setSystemTime(t0 + 60_000 + DRIVING_SUSTAIN_MS);
+      geo.emit({ latitude: DALLAS.lat + 0.1, longitude: DALLAS.lon, accuracy: 10 });
+
+      expect(state.value).toBe(DriverState.DRIVING);
+      __resetStateForTests();
+      vi.useRealTimers();
+    });
+  });
+
   // §15.5: the card is for a permission the DRIVER has to restore. A timeout or a bad
   // sky view is transient and must not light it up.
   describe("§15.5 degraded location", () => {
