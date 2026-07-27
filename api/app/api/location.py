@@ -29,9 +29,36 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
+from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
+from app.foundation.f05_load import public as loads
+from app.foundation.f08_notifications import public as notify
+from app.modules.m05_protection import public as m5
 
 router = APIRouter(prefix="/location", tags=["location"])
+
+_GATEWAY = notify.RecordingNotificationGateway()  # F8 seam (dev)
+
+
+def _warn_of_unrecoverable_gaps(db, account, facility_id, now) -> None:
+    """M5-FR5 at the moment the gap stops being fixable.
+
+    Scoped to the stop the driver is actually working: an EXIT from a truck stop they
+    happened to be armed at is not a delivery, and M5 only has something to say about
+    the facility this stop belongs to.
+    """
+    stop = loads.active_stop_for_account(db, account.id)
+    if stop is None or stop.facility_id != facility_id:
+        return
+    fac = facility.get_facility(db, facility_id)
+    m5.notify_protection_gap(
+        db,
+        stop,
+        account.id,
+        gateway=_GATEWAY,
+        now=now,
+        facility_name=fac.name if fac else None,
+    )
 
 
 class PingIn(BaseModel):
@@ -86,6 +113,13 @@ def ping(
         speed_mps=body.speed_mps,
         mode=mode,
     )
+    # M5-FR5's EXIT carve-out. This is the composition point — the same shape as
+    # `/load/{stop}/arrive`, which already joins F3, M3 and M5 — because a foundation
+    # must not reach up into a module to tell it something happened.
+    for event in events:
+        if event.event_type is location.GeofenceEventType.EXIT:
+            _warn_of_unrecoverable_gaps(db, account, event.facility_id, now)
+
     # the events go back so the client can react to its own movement without polling —
     # an EXIT is what tells the Load tab the driver has left the dock.
     return {

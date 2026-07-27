@@ -12,6 +12,7 @@ driver who leaves gets an EXIT.
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from datetime import time as dt_time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,10 +22,30 @@ from app.api.deps import get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
+from app.foundation.f05_load import public as loads
+from app.foundation.f06_documents import public as documents
+from app.foundation.f08_notifications import public as notify
 from app.main import app
+from app.modules.m05_protection import public as m5
 
 DALLAS = (32.7767, -96.7970)
 FAR = (32.9000, -96.8000)
+# AI-CONTEXT: a FIXED daytime instant, because §13.3's default quiet hours are
+# 22:00-06:00 and `datetime.now()` walks into them for a third of the day. The first
+# run of these tests was at 04:00 UTC and every dispatch came back `quiet_hours` —
+# the same shape as the m13 flake in HANDOFF-091: a clock the test does not control
+# is a clock the test is at the mercy of.
+NOON = datetime(2026, 7, 27, 15, 0, tzinfo=UTC)
+
+
+def _awake(db, account):
+    """Put the account's quiet hours somewhere this test is not. The ROUTE takes server
+    time and cannot be injected, so the account is moved instead of the clock."""
+    prefs = notify.get_or_create_prefs(db, account.id)
+    prefs.quiet_start = dt_time(2, 0)
+    prefs.quiet_end = dt_time(3, 0)
+    db.flush()
+    return prefs
 
 
 @pytest.fixture
@@ -137,6 +158,182 @@ def test_unknown_sampling_mode_does_not_cost_the_fix(client, db):
 
     assert resp.status_code == 201
     assert [e["event_type"] for e in resp.json()["events"]] == ["ENTER"]
+
+
+class TestExitCarveOut:
+    """M5-FR5's EXIT carve-out (§23 entry 56).
+
+    An irrecoverable gap at a state transition is a deadline, not a nag: once the
+    driver has pulled off the dock they cannot photograph that trailer at that
+    facility, ever. Three sessions of handoffs deferred this because its precondition
+    — a geofence EXIT that actually fires — did not exist until this session.
+    """
+
+    def _armed_stop(self, db, account, fac):
+        cp = loads.create_counterparty(db, "Coyote", loads.CounterpartyKind.broker)
+        load = loads.create_load(db, account.id, counterparty_id=cp.id)
+        stop = loads.add_stop(db, load, fac.id, loads.StopType.delivery)
+        loads.arm_stop(db, stop)
+        return stop
+
+    def test_leaving_with_no_bol_warns_the_driver(self, client, db):
+        account, headers = _driver(client, db)
+        _awake(db, account)
+        fac = _armed_facility(db, account)
+        stop = self._armed_stop(db, account, fac)
+
+        client.post("/location/ping", json={"lat": DALLAS[0], "lon": DALLAS[1]}, headers=headers)
+        client.post("/location/ping", json={"lat": FAR[0], "lon": FAR[1]}, headers=headers)
+
+        sent = db.scalars(
+            select(notify.Notification).where(
+                notify.Notification.account_id == account.id,
+                notify.Notification.category == notify.PROTECTION_GAP_CLASS,
+            )
+        ).all()
+        assert len(sent) == 1
+        assert sent[0].status == notify.NotificationStatus.sent
+        assert "BOL" in sent[0].title
+        # §13.5: deep-links to the exact screen, never a tab root
+        assert sent[0].deep_link == f"/load/{stop.id}/evidence"
+
+    def test_a_documented_stop_is_not_nudged(self, client, db):
+        """The whole point of a budget is that we only interrupt for something. A stop
+        whose recoverable evidence is complete must produce silence."""
+        account, headers = _driver(client, db)
+        _awake(db, account)
+        fac = _armed_facility(db, account)
+        stop = self._armed_stop(db, account, fac)
+        assert m5.irrecoverable_gaps(db, stop) != []  # nothing captured yet
+
+        documents.store_document(
+            db, account.id, documents.DocType.bol, b"scan", filename="bol.jpg",
+            subject_kind="stop", subject_ref=stop.id,
+        )
+        for phase in (m5.CapturePhase.pickup, m5.CapturePhase.delivery):
+            capture = m5.start_condition_capture(db, stop, account.id, phase)
+            m5.add_condition_photo(db, capture, "trailer_corner", content_hash="h" * 64)
+
+        assert m5.irrecoverable_gaps(db, stop) == []
+
+        client.post("/location/ping", json={"lat": DALLAS[0], "lon": DALLAS[1]}, headers=headers)
+        client.post("/location/ping", json={"lat": FAR[0], "lon": FAR[1]}, headers=headers)
+
+        assert (
+            db.scalar(
+                select(notify.Notification).where(
+                    notify.Notification.category == notify.PROTECTION_GAP_CLASS
+                )
+            )
+            is None
+        )
+
+    def test_on_time_proof_is_not_treated_as_irrecoverable(self, client, db):
+        """F5 files on-time proof from the arrival record at `/arrive`, so driving away
+        changes nothing about it. Warning about it here would be the nag §13.1 exists
+        to prevent."""
+        account, headers = _driver(client, db)
+        fac = _armed_facility(db, account)
+        stop = self._armed_stop(db, account, fac)
+
+        assert "on_time_proof" in m5.protection_summary(db, stop)["missing"]
+        assert "on_time_proof" not in m5.irrecoverable_gaps(db, stop)
+
+    def test_the_deadline_survives_a_spent_budget(self, client, db):
+        """The carve-out itself. A driver who already had their two ordinary nudges
+        today must still be told that evidence just became uncapturable."""
+        account, headers = _driver(client, db)
+        _awake(db, account)
+        fac = _armed_facility(db, account)
+        self._armed_stop(db, account, fac)
+        gateway = notify.RecordingNotificationGateway()
+        now = NOON
+        for i in range(notify.MAX_UNPROMPTED_P1_PER_DAY):
+            notify.dispatch(
+                db, account.id, notify.NotificationTier.P1, "free_time",
+                f"ordinary {i}", "body", "/load", gateway, now=now,
+            )
+        assert notify.p1_budget_used(db, account.id, now) >= notify.MAX_UNPROMPTED_P1_PER_DAY
+
+        client.post("/location/ping", json={"lat": DALLAS[0], "lon": DALLAS[1]}, headers=headers)
+        client.post("/location/ping", json={"lat": FAR[0], "lon": FAR[1]}, headers=headers)
+
+        gap = db.scalar(
+            select(notify.Notification).where(
+                notify.Notification.category == notify.PROTECTION_GAP_CLASS
+            )
+        )
+        assert gap.status == notify.NotificationStatus.sent
+
+    def test_the_deadline_does_not_spend_the_ordinary_budget(self, db):
+        """Both halves of 'exempt'. A class that skipped the check but still consumed a
+        slot would take one of the driver's two ordinary nudges to pay for itself."""
+        account = identity.register_account(db, "budget@example.com", "pw-123456")
+        gateway = notify.RecordingNotificationGateway()
+        now = NOON
+
+        notify.dispatch(
+            db, account.id, notify.NotificationTier.P1, notify.PROTECTION_GAP_CLASS,
+            "Missing: BOL", "body", "/load/x/evidence", gateway, now=now,
+        )
+
+        assert notify.p1_budget_used(db, account.id, now) == 0
+
+    def test_quiet_hours_still_apply(self, db):
+        """Exempt from the BUDGET is not exempt from the driver's sleep (§13.3)."""
+        account = identity.register_account(db, "quiet@example.com", "pw-123456")
+        gateway = notify.RecordingNotificationGateway()
+        night = NOON.replace(hour=23)  # inside the default 22:00-06:00 window
+
+        out = notify.dispatch(
+            db, account.id, notify.NotificationTier.P1, notify.PROTECTION_GAP_CLASS,
+            "Missing: BOL", "body", "/load/x/evidence", gateway, now=night,
+        )
+
+        assert out.status == notify.NotificationStatus.suppressed
+        assert out.suppress_reason == notify.SuppressReason.quiet_hours
+
+    def test_at_most_one_a_day(self, db):
+        """Capped at one: a driver bouncing in and out of a geofence on a bad GPS day
+        must not be told four times."""
+        account = identity.register_account(db, "capped@example.com", "pw-123456")
+        gateway = notify.RecordingNotificationGateway()
+        now = NOON
+
+        first = notify.dispatch(
+            db, account.id, notify.NotificationTier.P1, notify.PROTECTION_GAP_CLASS,
+            "Missing: BOL", "body", "/load/x/evidence", gateway, now=now,
+        )
+        second = notify.dispatch(
+            db, account.id, notify.NotificationTier.P1, notify.PROTECTION_GAP_CLASS,
+            "Missing: BOL", "body", "/load/x/evidence", gateway, now=now,
+        )
+
+        assert first.status == notify.NotificationStatus.sent
+        assert second.status == notify.NotificationStatus.suppressed
+        assert second.suppress_reason == notify.SuppressReason.budget
+
+    def test_leaving_a_facility_that_is_not_the_stop_says_nothing(self, client, db):
+        """An EXIT from a truck stop the driver happened to be armed at is not a
+        delivery, and M5 has nothing to say about it."""
+        account, headers = _driver(client, db)
+        _awake(db, account)
+        elsewhere = facility.create_facility(
+            db, facility.FacilityType.truck_stop, "Not The Dock", *DALLAS
+        )
+        location.arm_geofence(db, account.id, elsewhere.id)
+
+        client.post("/location/ping", json={"lat": DALLAS[0], "lon": DALLAS[1]}, headers=headers)
+        client.post("/location/ping", json={"lat": FAR[0], "lon": FAR[1]}, headers=headers)
+
+        assert (
+            db.scalar(
+                select(notify.Notification).where(
+                    notify.Notification.category == notify.PROTECTION_GAP_CLASS
+                )
+            )
+            is None
+        )
 
 
 def test_high_accuracy_mode_is_carried_onto_the_trace(client, db):

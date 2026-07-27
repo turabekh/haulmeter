@@ -279,6 +279,73 @@ def protection_summary(db: Session, stop) -> dict:
     return {"documented": documented, "missing": missing}
 
 
+# AI-CONTEXT: M5-FR5's EXIT carve-out — "nudges before gaps become risks", at the one
+# moment the gap stops being fixable.
+#
+# Not everything missing is urgent, and the difference is whether LEAVING closes the
+# door on it. A trailer photograph and a signed BOL can only be taken at that dock:
+# once the driver is on the highway the evidence does not exist and never will. On-time
+# proof is different — F5 files it from the arrival record at `/arrive`, so it is
+# either already there or was never going to be, and driving away changes nothing
+# about it. Warning about the second kind at EXIT would be a nag, which is exactly what
+# §13.1's budget exists to prevent.
+IRRECOVERABLE_ON_EXIT = ("bol", "pickup_photos", "delivery_photos")
+
+
+def irrecoverable_gaps(db: Session, stop) -> list[str]:
+    """What this stop can no longer be documented for, now that the driver has left."""
+    missing = protection_summary(db, stop)["missing"]
+    return [k for k in IRRECOVERABLE_ON_EXIT if k in missing]
+
+
+def notify_protection_gap(
+    db: Session,
+    stop,
+    account_id,
+    gateway,
+    now: datetime | None = None,
+    driver_state=None,
+    facility_name: str | None = None,
+):
+    """Fire the EXIT deadline, or return None when there is nothing unrecoverable.
+
+    §23 entry 56 settles the class: P1, exempt from §13.1's 2/day budget because a
+    deadline must not lose to two softer nudges already spent, capped at one a day,
+    and still silent in quiet hours and while RESTING. The driver is almost certainly
+    DRIVING when this fires — they have just pulled off the dock — so it carries no
+    interactive prompt (Forbidden #11); F8 renders it as an audio line plus a tray
+    entry, and the deep link is what they act on when they stop.
+    """
+    gaps = irrecoverable_gaps(db, stop)
+    if not gaps:
+        return None
+    now = now or datetime.now(UTC)
+    where = f" {facility_name}" if facility_name else " the facility"
+    # §12.2: lead with the fact, name the consequence, one action. Never scold — the
+    # driver did not forget on purpose, and most of the time they were rushed off.
+    labels = ", ".join(_GAP_LABELS.get(g, g) for g in gaps)
+    return notify.dispatch(
+        db,
+        account_id,
+        notify.NotificationTier.P1,
+        notify.PROTECTION_GAP_CLASS,
+        f"Missing: {labels}",
+        f"You've left{where}. This can't be captured there now — check the record.",
+        f"/load/{stop.id}/evidence",
+        gateway,
+        now=now,
+        driver_state=driver_state or notify.DriverState.driving,
+        subject_ref=str(stop.id),
+    )
+
+
+_GAP_LABELS = {
+    "bol": "BOL",
+    "pickup_photos": "pickup photos",
+    "delivery_photos": "delivery photos",
+}
+
+
 # --- FR2/FR4 export + share (design-prd §17) ---
 def condition_pack(db: Session, stop_ref, phase: CapturePhase | None = None):
     """FR2's "one-tap condition report". A stop's condition captures share one

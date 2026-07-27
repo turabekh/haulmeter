@@ -41,9 +41,15 @@ class NotificationClassSpec:
     max_per_day: int
     opt_in_default: bool = False
     route_relevant_only: bool = True
+    # AI-CONTEXT: §13.1's budget is a defence against nagging, and a DEADLINE is not a
+    # nag. A budget-exempt class neither loses to the 2/day pool nor spends it — both
+    # halves matter, because a class that skipped the check while still consuming a
+    # slot would quietly cost the driver one of their two ordinary nudges.
+    budget_exempt: bool = False
 
 
 VENDOR_ALERT_CLASS = "vendor_alert"
+PROTECTION_GAP_CLASS = "protection_gap"
 
 NOTIFICATION_CLASSES: dict[str, NotificationClassSpec] = {
     # M13-FR6 anti-spam laws are PART of the class definition: opt-in only, at most
@@ -56,7 +62,29 @@ NOTIFICATION_CLASSES: dict[str, NotificationClassSpec] = {
         opt_in_default=False,
         route_relevant_only=True,
     ),
+    # M5-FR5's EXIT carve-out (§23 entry 56, owner-approved — a notification class is
+    # a §22 never-improvise category and was not composed here unilaterally).
+    #
+    # An irrecoverable gap at a state transition is a DEADLINE, not a nag: once the
+    # driver has pulled off the dock they cannot photograph that trailer at that
+    # facility, ever. So it is exempt from the 2/day budget — a deadline must not lose
+    # to two softer nudges already spent — but capped at one a day, still muted in
+    # quiet hours and while RESTING, and on by default because a driver cannot opt in
+    # to a warning they have never seen.
+    PROTECTION_GAP_CLASS: NotificationClassSpec(
+        key=PROTECTION_GAP_CLASS,
+        tier=NotificationTier.P1,
+        max_per_day=1,
+        opt_in_default=True,
+        route_relevant_only=False,
+        budget_exempt=True,
+    ),
 }
+
+# the categories whose sends do not count against anyone's §13.1 allowance
+BUDGET_EXEMPT_CLASSES = frozenset(
+    key for key, spec in NOTIFICATION_CLASSES.items() if spec.budget_exempt
+)
 
 
 def get_class(key: str) -> NotificationClassSpec | None:
@@ -94,6 +122,9 @@ def in_quiet_hours(prefs: NotificationPrefs, now: datetime) -> bool:
 
 
 def p1_budget_used(db: Session, account_id, now: datetime) -> int:
+    # a budget-exempt class does not SPEND the allowance either — see
+    # NotificationClassSpec.budget_exempt. Skipping the check while still consuming a
+    # slot would take one of the driver's two ordinary nudges to pay for a deadline.
     return db.scalar(
         select(func.count())
         .select_from(Notification)
@@ -102,6 +133,7 @@ def p1_budget_used(db: Session, account_id, now: datetime) -> int:
             Notification.tier == NotificationTier.P1,
             Notification.status == NotificationStatus.sent,
             Notification.dispatched_at >= now - BUDGET_WINDOW,
+            Notification.category.notin_(BUDGET_EXEMPT_CLASSES),
         )
     )
 
@@ -312,8 +344,12 @@ def dispatch(
     prefs = get_or_create_prefs(db, account_id)
     if in_quiet_hours(prefs, now):
         return _suppress(SuppressReason.quiet_hours)
-    if p1_budget_used(db, account_id, now) >= MAX_UNPROMPTED_P1_PER_DAY:
-        return _suppress(SuppressReason.budget)
+    # a budget-exempt class has already passed its own per-day cap above; it does not
+    # then have to win a place in the shared 2/day pool. Quiet hours and RESTING still
+    # apply — exempt from the BUDGET is not exempt from the driver's sleep.
+    if not (spec is not None and spec.budget_exempt):
+        if p1_budget_used(db, account_id, now) >= MAX_UNPROMPTED_P1_PER_DAY:
+            return _suppress(SuppressReason.budget)
     return _send(_push_channel(driver_state))
 
 

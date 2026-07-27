@@ -30,8 +30,10 @@ from .domain.models import (
     OutboundThread,
 )
 from .domain.service import (
+    BUDGET_EXEMPT_CLASSES,
     MAX_UNPROMPTED_P1_PER_DAY,
     NOTIFICATION_CLASSES,
+    PROTECTION_GAP_CLASS,
     VENDOR_ALERT_CLASS,
     CounterpartyMustBeEnglish,
     MissingDeepLink,
@@ -65,6 +67,7 @@ from .domain.service import (
 __all__ = [
     "NotificationClassPref",
     "NOTIFICATION_CLASSES",
+    "PROTECTION_GAP_CLASS",
     "VENDOR_ALERT_CLASS",
     "NotificationClassSpec",
     "NotRouteRelevant",
@@ -95,6 +98,7 @@ __all__ = [
     "NotificationTemplate",
     "OutboundMessage",
     "OutboundThread",
+    "BUDGET_EXEMPT_CLASSES",
     "MAX_UNPROMPTED_P1_PER_DAY",
     "CounterpartyMustBeEnglish",
     "MissingDeepLink",
