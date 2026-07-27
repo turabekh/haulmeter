@@ -468,7 +468,10 @@ async function endLoad() {
              none has another home, so they move behind one control into a sheet
              (NAV-3) rather than stacking six buttons under the Meter. Scoped to this
              stop, so it is not a nav drawer (Forbidden #2). -->
-        <button class="rungs__item" type="button" @click="more = true">
+        <!-- the modifier is how the layout harness opens this sheet. It cannot click
+             by label: every surface is measured under en, xx-XL and pa, so any
+             text-based step would break in two of the three. -->
+        <button class="rungs__item rungs__item--more" type="button" @click="more = true">
           {{ t("load.more") }}
         </button>
       </div>

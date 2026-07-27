@@ -82,6 +82,124 @@ const LIVE_MOCKS = {
       appointment: "2026-07-27T14:00:00+00:00",
     },
   },
+  "/load/history": {
+    loads: [
+      {
+        load_id: "l-1",
+        stop_id: "00000000-0000-0000-0000-0000000000ee",
+        facility_name: "ACME Distribution Center",
+        reference_number: "L-9001",
+        created_at: "2026-07-24T14:00:00+00:00",
+        status: "completed",
+        stop_count: 2,
+        detention_cents: 8750,
+        claim_state: "invoiced",
+        evidence_count: 6,
+        documents: ["bol", "rate_con"],
+      },
+      {
+        load_id: "l-2",
+        stop_id: "00000000-0000-0000-0000-0000000000ef",
+        facility_name: "Quiet Dock",
+        reference_number: null,
+        created_at: "2026-07-20T09:00:00+00:00",
+        status: "completed",
+        stop_count: 1,
+        detention_cents: null,
+        claim_state: null,
+        evidence_count: 0,
+        documents: [],
+      },
+    ],
+  },
+};
+
+// the same tab with NO load. `/load/active` has to answer null here: the surface asks
+// it on mount for fresh-device resume, so a mock that always names a stop puts every
+// Load-tab surface into the live state and the empty-state sheets never open.
+const NO_LOAD_MOCKS = { ...LIVE_MOCKS, "/load/active": { stop_id: null } };
+
+// AI-CONTEXT: the SHEETS. §8 calls the bottom sheet "the workhorse (NAV-3)" and this
+// harness had never opened one — it measured nine base surfaces, so the archive, the
+// viewer, the capture sheet, the rate-con import, "More for this stop", past loads
+// and inspection mode were all unmeasured at 360 dp. That is where the newest and
+// densest UI in the project lives, and a sheet is exactly where a 48 dp target or a
+// +40% label is most likely to break: it opens into a fraction of the viewport.
+//
+// `open` is a list of CSS selectors clicked in order. They are CSS and never text,
+// because every surface is measured under en, xx-XL and pa — a step that clicked a
+// label would silently stop finding it in two locales out of three, and the surface
+// would go green having opened nothing. `ready` is what makes that impossible.
+// a 1×1 PNG. The viewer fetches BYTES and builds an object URL from the blob, so a
+// JSON stand-in would render a broken <img> — and a broken image has no intrinsic
+// size, which means the harness would skip it and report the viewer as measured.
+const PNG_1PX =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const binary = (contentType, base64) => ({ __binary: { contentType, base64 } });
+
+// the parse result the confirm screen renders (F5 ratecon.draft + the route's
+// document_id). Terms the contract is silent on are said as SILENCE, never as zero.
+const RATE_CON_DRAFT = {
+  document_id: "00000000-0000-0000-0000-00000000000f",
+  readable: true,
+  parsed: {
+    receiver_name: "ACME Distribution Center",
+    broker_name: "Coyote Logistics",
+    reference_number: "L-9001",
+    linehaul_cents: 250000,
+    free_time_minutes: 120,
+    detention_cents_per_hour: 7500,
+  },
+  silent_on: ["tonu"],
+  facility_candidates: [
+    { facility_id: "00000000-0000-0000-0000-0000000000b1", name: "ACME Distribution Ctr", address: "1 Dock Rd, Dallas TX", score: 0.68 },
+    { facility_id: "00000000-0000-0000-0000-0000000000b2", name: "Dallas Distribution Center", address: "9 Loop 12, Dallas TX", score: 0.65 },
+  ],
+};
+
+const DOC_ID = "00000000-0000-0000-0000-00000000000a";
+const WALLET_MOCKS = {
+  "/protection/wallet": {
+    documents: [
+      { id: DOC_ID, doc_type: "cdl", expires_on: "2027-03-01", status: "ok" },
+      { id: "00000000-0000-0000-0000-00000000000b", doc_type: "med_card", expires_on: "2026-08-10", status: "expiring" },
+      { id: "00000000-0000-0000-0000-00000000000c", doc_type: "bol", expires_on: null, status: "ok" },
+    ],
+    expiring: [
+      { id: "00000000-0000-0000-0000-00000000000b", doc_type: "med_card", expires_on: "2026-08-10", status: "expiring" },
+    ],
+    archived_count: 2,
+  },
+  "/protection/documents/types": {
+    types: ["cdl", "med_card", "insurance", "permit", "rate_con", "bol", "pod", "other"],
+    expiring: ["cdl", "med_card", "insurance", "permit"],
+    superseding: ["cdl", "med_card", "insurance"],
+  },
+  "/protection/documents/archive": {
+    documents: [
+      {
+        id: "00000000-0000-0000-0000-00000000000d",
+        doc_type: "cdl",
+        expires_on: "2026-01-01",
+        archived_at: "2026-07-19T10:00:00+00:00",
+        reason: "superseded",
+        replaced_by: { id: DOC_ID, doc_type: "cdl", uploaded_at: "2026-07-19T10:00:00+00:00" },
+        restorable: false,
+        blocked_by_doc_type: "cdl",
+      },
+      {
+        id: "00000000-0000-0000-0000-00000000000e",
+        doc_type: "permit",
+        expires_on: null,
+        archived_at: "2026-07-11T08:00:00+00:00",
+        reason: "removed",
+        replaced_by: null,
+        restorable: true,
+        blocked_by_doc_type: null,
+      },
+    ],
+  },
+  [`/protection/documents/${DOC_ID}`]: binary("image/png", PNG_1PX),
 };
 
 const SURFACES = [
@@ -93,12 +211,46 @@ const SURFACES = [
   // failure as the run that measured Vite's error page six times.
   ["load-live", "/load", { stop: LIVE_STOP, mocks: LIVE_MOCKS, ready: ".rungs__item" }],
   ["money", "/money"],
-  ["docs", "/docs"],
+  ["docs", "/docs", { mocks: WALLET_MOCKS, ready: ".doc" }],
   ["more", "/more"],
   ["login", "/login"],
   ["evidence", "/load/00000000-0000-0000-0000-0000000000aa/evidence"],
   ["condition", "/protection/condition"],
   ["facility", "/facility/00000000-0000-0000-0000-0000000000bb"],
+
+  // the seven sheets (§8 NAV-3), each opened and measured where it actually renders
+  ["sheet-more", "/load", {
+    stop: LIVE_STOP, mocks: LIVE_MOCKS, open: [".rungs__item--more"], ready: ".more__item",
+  }],
+  ["sheet-history", "/load", {
+    mocks: NO_LOAD_MOCKS, open: [".cta--text"], ready: ".hist__row",
+  }],
+  ["sheet-import", "/load", {
+    mocks: NO_LOAD_MOCKS, open: [".cta:not(.cta--text)"], ready: ".rc__cta",
+  }],
+  ["sheet-bol", "/load", {
+    stop: LIVE_STOP, mocks: LIVE_MOCKS, open: [".cta:not(.cta--text)"], ready: ".cap__input",
+  }],
+  ["sheet-inspection", "/docs", {
+    mocks: WALLET_MOCKS, open: [".inspect"], ready: ".doc--inspect",
+  }],
+  ["sheet-capture", "/docs", {
+    mocks: WALLET_MOCKS, open: [".capture"], ready: ".cap__chip",
+  }],
+  ["sheet-archive", "/docs", {
+    mocks: WALLET_MOCKS, open: [".archive"], ready: ".arch__row",
+  }],
+  ["sheet-viewer", "/docs", {
+    mocks: WALLET_MOCKS, open: [".doc"], ready: ".viewer__frame",
+  }],
+  // the rate-con CONFIRM step — the densest screen in the app and the one M4-FR4
+  // exists for. Reaching it needs a file on the input before the read, so the step
+  // list carries an upload as well as clicks.
+  ["sheet-confirm", "/load", {
+    mocks: { ...NO_LOAD_MOCKS, "/load/import": RATE_CON_DRAFT },
+    open: [".cta:not(.cta--text)", { upload: ".rc__input" }, ".rc__cta"],
+    ready: ".rc__match",
+  }],
 ];
 const CAPTION_FLOOR_PX = 13; // §6.2: "Nothing smaller exists."
 const TOUCH_MIN_PX = 48; // §6.5 glove spec
@@ -135,9 +287,19 @@ async function prepare(page, { theme, pseudo, live }) {
     await page.route(`${API_BASE}/**`, (route) => {
       const path = new URL(route.request().url()).pathname;
       const body = live.mocks[path];
-      return body
-        ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) })
-        : route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+      if (!body) return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+      if (body.__binary) {
+        return route.fulfill({
+          status: 200,
+          contentType: body.__binary.contentType,
+          body: Buffer.from(body.__binary.base64, "base64"),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(body),
+      });
     });
   }
   await page.addInitScript(
@@ -167,6 +329,21 @@ async function settle(page, live) {
   await page.waitForLoadState("networkidle").catch(() => {});
   // the map canvas initialises asynchronously and has no layout contribution here
   await page.waitForTimeout(250);
+  // drive the surface into the state it names — opening a sheet, usually. CSS only,
+  // never labels: three locales run per surface and a text step would stop matching
+  // in two of them.
+  for (const step of (live && live.open) || []) {
+    if (step.upload) {
+      await page.locator(step.upload).first().setInputFiles({
+        name: "rate-con.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(PNG_1PX, "base64"),
+      });
+    } else {
+      await page.locator(step).first().click();
+    }
+    await page.waitForTimeout(150);
+  }
   // a mocked surface must PROVE it rendered the state it names before anything is
   // measured against it. Silence here is the failure mode that kept the live Load
   // tab unmeasured for four sessions.
@@ -349,7 +526,21 @@ for (const [name, path, live] of SURFACES) {
           ([selector, min, exempt]) => {
             const found = [];
             for (const el of document.querySelectorAll(selector)) {
-              const r = el.getBoundingClientRect();
+              let r = el.getBoundingClientRect();
+              // AI-CONTEXT: a radio or checkbox is a GLYPH inside its target. The
+              // browser delivers the tap to the enclosing <label>, so that is what
+              // §6.5 governs — the rate-con confirm screen's facility radios render
+              // 13×13 inside labels measuring 328×48, and reporting the glyph would
+              // have sent someone to inflate a control that is already reachable.
+              //
+              // This narrows to radio/checkbox deliberately. It is NOT a general
+              // "labels count" rule: a text input inside a label would borrow the
+              // caption's height and a genuinely short field would pass. And a radio
+              // with no label, or one in an undersized label, still fails here.
+              if (el.tagName === "INPUT" && (el.type === "radio" || el.type === "checkbox")) {
+                const label = el.closest("label");
+                if (label) r = label.getBoundingClientRect();
+              }
               if (r.width === 0 || r.height === 0) continue; // not rendered
               if (getComputedStyle(el).visibility === "hidden") continue;
               if (new RegExp(exempt).test(el.className) || el.closest(".mapboxgl-ctrl")) continue;

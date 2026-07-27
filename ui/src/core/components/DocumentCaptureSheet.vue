@@ -193,8 +193,13 @@ async function submit() {
   margin: 0 0 var(--s-4);
   padding: 0;
 }
+/* §6.5 is 48 dp in BOTH axes, and only the height was set. A chip is as wide as its
+   label, so the shortest label in the shortest locale decides — "BOL" in Punjabi
+   renders 42 dp wide. Height alone cannot carry the glove spec for content-sized
+   controls; found the first time this sheet was measured at 360 dp. */
 .cap__chip {
   min-height: 48px;
+  min-width: 48px;
   padding: 0 var(--s-3);
   border: 1px solid var(--line-1);
   border-radius: var(--r-pill);
