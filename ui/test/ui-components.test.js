@@ -3,6 +3,8 @@
 // (NAV-1), preset chips (§11.3), facility card single primary CTA + report, and
 // DRIVING → Corridor mode (§11.4).
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import TabBar from "../src/core/components/TabBar.vue";
@@ -64,9 +66,49 @@ describe("PresetChips (design-prd §11.3)", () => {
     const w = mount(PresetChips, { props: { modelValue: "drive" } });
     const chips = w.findAll(".chip");
     expect(chips).toHaveLength(5);
-    expect(chips[4].text()).toBe("Food");
     await chips[1].trigger("click");
     expect(w.emitted()["update:modelValue"][0]).toEqual(["tonight"]);
+  });
+
+  // AI-CONTEXT: this asserted `chips[4].text()` === "Food", which was right until the
+  // chips became icons (§23 entry 89). The name is not gone — it moved to where a
+  // screen reader and a long-press can still reach it, which is the property actually
+  // worth holding. An icon row whose glyphs are anonymous to assistive tech would be
+  // a worse screen than the text row it replaced, in the one way nobody screenshots.
+  it("keeps every preset's translated name reachable without rendering it", () => {
+    const w = mount(PresetChips, { props: { modelValue: "drive" } });
+    const chips = w.findAll(".chip");
+    expect(chips.map((c) => c.attributes("aria-label"))).toEqual([
+      en["map.preset.drive"],
+      en["map.preset.tonight"],
+      en["map.preset.work"],
+      en["map.preset.fuel"],
+      en["map.preset.food"],
+    ]);
+    // long-press / hover reaches the same name
+    expect(chips[4].attributes("title")).toBe(en["map.preset.food"]);
+    // and no chip carries visible text any more — that is the density change
+    expect(chips[4].text()).toBe("");
+  });
+
+  it("marks the selected preset by more than colour (C-1)", () => {
+    // a text chip could lean on hue because the LABEL carried the meaning; an icon
+    // chip cannot, so selection is a fill plus aria-selected
+    const w = mount(PresetChips, { props: { modelValue: "work" } });
+    const chips = w.findAll(".chip");
+    expect(chips[2].classes()).toContain("chip--active");
+    expect(chips[2].attributes("aria-selected")).toBe("true");
+    expect(chips[0].attributes("aria-selected")).toBe("false");
+  });
+
+  it("meets the glove spec in BOTH axes, which a text chip got for free", () => {
+    // an icon chip is only as wide as it is told to be — the same defect the Docs
+    // capture chip was caught by when its shortest locale rendered 42 dp wide
+    const src = readFileSync(
+      resolve(__dirname, "../src/core/components/PresetChips.vue"), "utf8",
+    );
+    expect(src).toMatch(/min-height:\s*48px/);
+    expect(src).toMatch(/min-width:\s*48px/);
   });
 });
 

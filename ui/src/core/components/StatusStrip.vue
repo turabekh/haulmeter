@@ -1,24 +1,44 @@
-<!-- AI-CONTEXT: Top context strip (design-prd §7.2) — read-only state + connectivity
-     plus the persistent voice mic (§14.2, 48 dp). Nothing else interactive in the
-     top zone (§7.3). Offline is a calm banner, never red (§15.1). -->
+<!-- AI-CONTEXT: Top context strip (design-prd §7.2) — connectivity only, and only
+     when there is something to say.
+
+     It used to carry two things that earned no space, on EVERY driver screen:
+
+     · THE STATE LABEL rendered `state.value` raw — "idle", "on_site" — untranslated
+       in all six locales, capitalised by CSS. §7.2 asks the strip for "read-only
+       state", and this was the enum, not a state a driver reads. DRIVING is already
+       visible without being named: the type scale steps up, the Map becomes the
+       corridor, acting controls withdraw. A word for the state the app is in is the
+       app talking about itself.
+     · THE MIC had never had a handler. Its own note said so — six sessions of every
+       screen carrying a control that did nothing — and it was left `disabled` as the
+       honest version of that. Honest, but a permanently dead control on all thirteen
+       driver screens is clutter with a good excuse. The working affordance is the Map
+       surface's voice chip; a GLOBAL one needs the voice sheet mounted at app level,
+       which is M11's to build. Labelled, never linked (§23's registry precedent) —
+       and a thing that is not there needs no label at all.
+
+     What remains is genuinely conditional, so the strip now renders NOTHING when the
+     driver is online with nothing queued — which is almost always. That is ~56 dp
+     returned to every screen in the app, and on the Map it is 56 dp of map.
+     Owner-requested (§23 entry 89). -->
 <script setup>
 import { computed } from "vue";
-import { Mic, WifiOff, CloudOff } from "lucide-vue-next";
-import { useDriverState } from "../state.js";
+import { WifiOff, CloudOff } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 
 const props = defineProps({
   online: { type: Boolean, default: true },
   pending: { type: Number, default: 0 },
 });
-const { state } = useDriverState();
 const { t } = useI18n();
-const stateLabel = computed(() => state.value);
+// the strip is for facts a driver cannot see anywhere else. Both of these are
+// invisible without it, and neither is true most of the time.
+const hasSomethingToSay = computed(() => !props.online || props.pending > 0);
 </script>
 
 <template>
-  <header class="strip">
-    <span class="strip__state">{{ stateLabel }}</span>
+  <header v-if="hasSomethingToSay" class="strip">
+    <!-- offline is a calm banner, never red (§15.1) -->
     <span v-if="!online" class="strip__offline">
       <WifiOff :size="16" :stroke-width="2" aria-hidden="true" />
       {{ t("system.offline") }}
@@ -28,23 +48,6 @@ const stateLabel = computed(() => state.value);
       <CloudOff :size="14" :stroke-width="2" aria-hidden="true" />
       {{ pending }}
     </span>
-    <!-- AI-CONTEXT: §14.2 asks for a persistent voice mic and this button has never
-         had a handler — six sessions of every screen carrying a control that does
-         nothing when pressed. The working affordance is the Map surface's voice chip;
-         a GLOBAL one needs the voice sheet mounted at app level, which is M11 work
-         and not M5's to invent. So it follows §23's registry precedent: a capability
-         whose destination does not exist is labelled, never linked. Disabled and
-         titled is the honest state — "not yet" is a fact; silence is not. -->
-    <button
-      class="strip__mic"
-      type="button"
-      disabled
-      aria-disabled="true"
-      :aria-label="t('voice.mic')"
-      :title="t('voice.unavailable')"
-    >
-      <Mic :size="20" :stroke-width="2" aria-hidden="true" />
-    </button>
   </header>
 </template>
 
@@ -58,9 +61,6 @@ const stateLabel = computed(() => state.value);
   color: var(--text-2);
   font-size: var(--type-caption-size);
 }
-.strip__state {
-  text-transform: capitalize;
-}
 .strip__offline {
   display: inline-flex;
   align-items: center;
@@ -73,17 +73,5 @@ const stateLabel = computed(() => state.value);
   gap: var(--s-1);
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
-}
-.strip__mic {
-  margin-left: auto;
-  /* declared 48 and RENDERED 47: a flex parent was shrinking it below the §6.5
-     floor. `flex: 0 0` is what makes the declaration true. */
-  flex: 0 0 48px;
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--shield-500);
 }
 </style>

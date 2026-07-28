@@ -199,7 +199,12 @@ onMounted(async () => {
       trackUserLocation: true,
       showUserHeading: true,
     });
-    map.addControl(geolocate, "bottom-right");
+    // AI-CONTEXT: TOP-right, not bottom-right (§23 entry 89). Mapbox puts this
+    // control, its attribution bar and its logo along the bottom edge — which is
+    // exactly where §10.1 puts the floating report chip and §14 puts the voice chip.
+    // Four controls from two owners in one corner, overlapping, was what the owner
+    // saw. Ours keep the thumb zone; the library's furniture moves out of it.
+    map.addControl(geolocate, "top-right");
     geolocate.on("geolocate", (e) => {
       // the control recenters the map -> its moveend re-emits `bounds` -> refetch
       emit("located", { lat: e.coords.latitude, lon: e.coords.longitude });
@@ -347,8 +352,13 @@ function stale(pin) {
     >
       <span class="cluster__count">{{ cl.count }}</span>
     </button>
-    <!-- data attribution — OSM-derived rows require ODbL credit (PRD §12) -->
-    <span class="canvas__credit">{{ t("map.data_credit") }}</span>
+    <!-- AI-CONTEXT: ODbL credit for our OSM-derived facility rows (PRD §12), shown
+         only when there is no basemap to carry it. Mapbox's own attribution bar
+         already reads "© OpenStreetMap contributors", so while tiles are live this
+         printed the same sentence a second time, on top of the first — two identical
+         credits stacked in the corner. One visible credit naming OSM contributors
+         discharges the obligation; two is not twice as compliant, it is clutter. -->
+    <span v-if="!live" class="canvas__credit">{{ t("map.data_credit") }}</span>
   </div>
 </template>
 

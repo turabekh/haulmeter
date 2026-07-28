@@ -1,7 +1,27 @@
 <!-- AI-CONTEXT: Map presets (design-prd §11.3) — presets ARE the interface, not
-     filters. Scrollable chip row at the top of the Map surface. One "More
-     filters" sheet exists elsewhere; these four are the interface. -->
+     filters. Scrollable chip row at the top of the Map surface. One "More filters"
+     sheet exists elsewhere; these five are the interface.
+
+     AI-CONTEXT: ICONS, not words — owner-requested, logged as §23 entry 89.
+     Three things that decision has to survive, each handled here rather than hoped for:
+
+     · MEANING. The icons are not chosen freshly. Three of the five are the SAME glyphs
+       the map already draws on its pins (Warehouse = shipper_receiver, Fuel =
+       fuel_station, UtensilsCrossed = the food badge), so a chip and the pins it
+       reveals now say the same thing. That shared vocabulary is the only reason an
+       icon can carry a word's meaning at all.
+     · THE NAME IS NOT LOST. Every chip keeps its translated name as `aria-label` and
+       as `title`, so a screen reader and a long-press both still say "Tonight". Six
+       locales keep working; the icons simply stop needing translation.
+     · C-1. Colour may never be the only signal. A text chip could lean on it because
+       the LABEL carried the meaning; an icon chip cannot. Selection is now a FILL — a
+       shape and weight change, not a hue change — plus `aria-selected`, so the pressed
+       chip is obvious with no colour perception at all.
+
+     Density is the point: five 48 dp squares instead of five text pills, in a row
+     56 dp tall rather than 64. -->
 <script setup>
+import { Navigation, Moon, Warehouse, Fuel, UtensilsCrossed } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 
 const props = defineProps({
@@ -9,16 +29,15 @@ const props = defineProps({
 });
 const emit = defineEmits(["update:modelValue"]);
 const { t } = useI18n();
-// M13 / §23 E-D2: "Food" joins the four §11.3 presets as an approved addition —
-// composed from the existing chip, no new visual class. The row already scrolls
-// horizontally, so the fifth chip costs nothing at 360 dp. (NAV-1 governs TABS and
-// is untouched: this is a filter row, not navigation.)
+// M13 / §23 E-D2: "Food" joins the four §11.3 presets as an approved addition. The row
+// already scrolls horizontally, so a fifth chip costs nothing at 360 dp. (NAV-1 governs
+// TABS and is untouched: this is a filter row, not navigation.)
 const presets = [
-  { key: "drive", label: "map.preset.drive" },
-  { key: "tonight", label: "map.preset.tonight" },
-  { key: "work", label: "map.preset.work" },
-  { key: "fuel", label: "map.preset.fuel" },
-  { key: "food", label: "map.preset.food" },
+  { key: "drive", label: "map.preset.drive", icon: Navigation },
+  { key: "tonight", label: "map.preset.tonight", icon: Moon },
+  { key: "work", label: "map.preset.work", icon: Warehouse },
+  { key: "fuel", label: "map.preset.fuel", icon: Fuel },
+  { key: "food", label: "map.preset.food", icon: UtensilsCrossed },
 ];
 </script>
 
@@ -32,9 +51,11 @@ const presets = [
       :class="{ 'chip--active': modelValue === p.key }"
       role="tab"
       :aria-selected="modelValue === p.key"
+      :aria-label="t(p.label)"
+      :title="t(p.label)"
       @click="emit('update:modelValue', p.key)"
     >
-      {{ t(p.label) }}
+      <component :is="p.icon" :size="22" :stroke-width="2" aria-hidden="true" />
     </button>
   </div>
 </template>
@@ -44,7 +65,9 @@ const presets = [
   display: flex;
   gap: var(--s-2);
   overflow-x: auto;
-  padding: var(--s-2) var(--s-4);
+  /* was `var(--s-2) var(--s-4)`. This row sits on the daily-open screen above a map
+     that wants every pixel, and an icon needs no vertical breathing room to read. */
+  padding: var(--s-1) var(--s-4);
   scrollbar-width: none;
 }
 .chips::-webkit-scrollbar {
@@ -52,20 +75,22 @@ const presets = [
 }
 .chip {
   flex: 0 0 auto;
-  /* §6.5 glove spec floor. These shipped at 40 dp and were re-approved in a §23
-     entry without anyone measuring them — the layout harness found it in its
-     first real run. */
+  /* §6.5 glove spec floor, in BOTH axes. A text chip was as wide as its label; an
+     icon chip is only as wide as it is told to be, so the width is declared. */
   min-height: 48px;
-  padding: 0 var(--s-4);
+  min-width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--r-pill);
   border: 1px solid var(--line-1);
   background: var(--ink-1);
   color: var(--text-2);
-  font-size: var(--type-label-size);
-  font-weight: 500;
 }
+/* C-1: selection is a FILL, not a hue — legible with no colour perception at all. */
 .chip--active {
-  border-color: var(--shield-500);
-  color: var(--shield-500);
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 </style>

@@ -860,10 +860,14 @@ async function submitPrice(cents) {
   height: 100%;
   position: relative;
 }
+/* AI-CONTEXT: `--s-5` off the bottom, not `--s-4` (§23 entry 89). Mapbox's logo and
+   attribution bar occupy the bottom ~24 dp of the canvas, so a chip at 16 dp sat on
+   top of them. Both floating chips clear that strip now; the library's furniture
+   keeps the very bottom edge and ours keeps the thumb zone above it. */
 .voice-chip {
   position: absolute;
   left: var(--s-4);
-  bottom: var(--s-4);
+  bottom: var(--s-5);
   width: 56px;
   height: 56px;
   border-radius: var(--r-pill);
@@ -1019,7 +1023,7 @@ async function submitPrice(cents) {
 .report-chip {
   position: absolute;
   right: var(--s-4);
-  bottom: var(--s-4);
+  bottom: var(--s-5);
   width: 56px;
   height: 56px;
   border-radius: var(--r-pill);
