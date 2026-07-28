@@ -1033,7 +1033,10 @@ export async function exportProtectionPack(kind, ref) {
   const resp = await fetch(`${API_BASE}/protection/${kind}/${ref}/export`, { headers: headers() });
   if (!resp.ok) throw new Error(`export failed: ${resp.status}`);
   const blob = await resp.blob();
-  return URL.createObjectURL(blob);
+  // the server names the file; fall back so a download is never called "download"
+  const disposition = resp.headers.get("Content-Disposition") || "";
+  const match = /filename="?([^";]+)"?/.exec(disposition);
+  return { url: URL.createObjectURL(blob), filename: match ? match[1] : `${kind}-${ref}.pdf` };
 }
 
 // SHARE pins what is sent, so it queues like any other write (F12). §15.1: the

@@ -503,3 +503,89 @@ def test_generate_claim_closes_the_loop(client, db):
     m = client.get(f"/load/{stop_id}/meter", headers=headers).json()
     assert m["filed"] is True
     assert m["detention_cents"] == body["amount_cents"]  # frozen at the filed amount
+
+
+class TestEvidenceTimelineSaysWhatHappened:
+    """§23 entry 70 — the pack said an event occurred and not which.
+
+    A stop that had been armed, arrived at, notified on and departed produced ONE
+    record: the on-time proof check. Geofence ENTER/EXIT are F3 events and nothing
+    bridged them into F4; the notice and the departure were never recorded. And the API
+    then dropped each record's payload, so the only label available was the RecordType
+    — which is how a broker came to receive a timeline reading "Event recorded 03:14".
+    """
+
+    def _run_a_stop(self, client, headers):
+        stop_id = client.post(
+            "/load",
+            json={
+                "facility_name": "Dispute Dock",
+                "lat": DALLAS[0],
+                "lon": DALLAS[1],
+                "counterparty": "Broker",
+                "free_time_minutes": 0,  # detention accrues at once, so a notice sends
+            },
+            headers=headers,
+        ).json()["stop_id"]
+        client.post(f"/load/{stop_id}/arrive", headers=headers)
+        client.post(f"/load/{stop_id}/notice", headers=headers)
+        client.post(f"/load/{stop_id}/end", headers=headers)
+        return stop_id
+
+    def test_the_three_moments_a_dispute_turns_on_are_recorded(self, client, db):
+        headers = _auth(client)
+        stop_id = self._run_a_stop(client, headers)
+
+        body = client.get(f"/load/{stop_id}/evidence", headers=headers).json()
+        events = [e["event"] for e in body["timeline"]]
+
+        assert "arrived" in events
+        assert "notice_sent" in events
+        assert "departed" in events
+        assert body["chain_valid"] is True
+
+    def test_every_entry_says_what_it_was(self, client, db):
+        """The label is the point: a timeline of unnamed events proves nothing."""
+        headers = _auth(client)
+        stop_id = self._run_a_stop(client, headers)
+
+        timeline = client.get(f"/load/{stop_id}/evidence", headers=headers).json()["timeline"]
+
+        assert timeline, "a run stop must produce a timeline"
+        assert all(e["event"] for e in timeline), (
+            f"unnamed entries: {[e for e in timeline if not e['event']]}"
+        )
+
+    def test_the_timeline_is_in_the_order_it_happened(self, client, db):
+        headers = _auth(client)
+        stop_id = self._run_a_stop(client, headers)
+
+        timeline = client.get(f"/load/{stop_id}/evidence", headers=headers).json()["timeline"]
+        events = [e["event"] for e in timeline]
+
+        assert events.index("arrived") < events.index("departed")
+
+    def test_a_notice_that_did_not_send_is_not_recorded(self, client, db):
+        """"We told them at 10:05" is the fact a dispute turns on, so logging an attempt
+        that no-oped inside free time would assert it falsely."""
+        headers = _auth(client)
+        stop_id = client.post(
+            "/load",
+            json={
+                "facility_name": "Quiet Dock",
+                "lat": DALLAS[0],
+                "lon": DALLAS[1],
+                "counterparty": "Broker",
+                "free_time_minutes": 240,  # nothing owed yet, so no notice goes out
+            },
+            headers=headers,
+        ).json()["stop_id"]
+        client.post(f"/load/{stop_id}/arrive", headers=headers)
+
+        assert client.post(f"/load/{stop_id}/notice", headers=headers).json()["sent"] is False
+
+        events = [
+            e["event"]
+            for e in client.get(f"/load/{stop_id}/evidence", headers=headers).json()["timeline"]
+        ]
+        assert "notice_sent" not in events

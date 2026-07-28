@@ -222,7 +222,7 @@ def _context_for(db: Session, kind: str, ref: uuid.UUID):
     """A condition report with no parties on it is a photo album. The clerk reading
     this did not take the pictures and needs to know whose load, whose dock and which
     reference before the images mean anything (§17)."""
-    if kind != "condition":
+    if kind not in ("condition", "stop"):
         return evidence.PackContext()
     stop = loads.get_stop(db, ref)
     if stop is None:
@@ -244,6 +244,12 @@ def _context_for(db: Session, kind: str, ref: uuid.UUID):
 def _pack_for(db: Session, account, kind: str, ref: uuid.UUID):
     """One resolver so export and share can never disagree about what a given id
     means — the two endpoints must produce the SAME document for the same input."""
+    if kind == "stop":
+        # the whole record of one stop — what the Evidence surface shows
+        pack = m5.stop_pack(db, ref)
+        if pack is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "nothing recorded for that stop")
+        return pack
     if kind == "condition":
         pack = m5.condition_pack(db, ref)
         if pack is None:
@@ -265,7 +271,7 @@ def export_pack(
     """The driver's own copy. Regenerated on demand because rendering is
     deterministic — this is a VIEW of the chain and always current, which is exactly
     what a share must not be."""
-    if kind not in ("condition", "incident"):
+    if kind not in ("stop", "condition", "incident"):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown pack kind")
     pack = _pack_for(db, account, kind, ref)
     content = m5.render_pack(db, pack, _context_for(db, kind, ref))
@@ -287,7 +293,7 @@ def share(
     """Pins what is being sent. From here the bytes are frozen: the chain may grow,
     and the link will keep serving the document the counterparty was actually
     given."""
-    if kind not in ("condition", "incident"):
+    if kind not in ("stop", "condition", "incident"):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown pack kind")
     pack = _pack_for(db, account, kind, ref)
     shared = m5.share_pack(

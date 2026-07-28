@@ -30,19 +30,30 @@ import {
 import { useDriverState } from "../core/state.js";
 import BottomSheet from "../core/components/BottomSheet.vue";
 
+const route = useRoute();
 const { isDriving } = useDriverState();
 const sharing = ref(false);
 const recipient = ref("");
 const busy = ref(false);
 const queued = ref(false);
 const shareUrl = ref(null);
+const exportFailed = ref(false);
 
 // AI-CONTEXT: this surface serves both pack kinds. Condition packs key on the STOP;
 // an incident keys on the incident itself, which is why the id in the path means
 // different things and the kind has to come with it rather than be guessed.
-const packKind = () => (useRoute().query.kind === "incident" ? "incident" : "condition");
+// AI-CONTEXT: this surface is a STOP's record, and its export asked for the cargo-
+// condition pack — which 404s unless condition photos exist (§23 entry 71). So the
+// document that argues a detention claim could not leave the phone, and the button
+// swallowed the failure and did nothing at all.
+// AI-CONTEXT: reads the route captured in SETUP, and that is the whole bug (§23 entry
+// 72). This called `useRoute()` itself — inside a click handler, which is outside the
+// setup context where the injection exists — so it returned undefined and the handler
+// threw on `.query` before it ever reached the network. Both buttons on this card have
+// therefore never worked: Export and Share both start by calling this. The `catch`
+// swallowed it, so tapping either did nothing at all, forever.
+const packKind = () => (route.query.kind === "incident" ? "incident" : "stop");
 
-const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 
@@ -88,19 +99,50 @@ const EV = {
   USER_ACTION: { key: "claim.ev_action", icon: ShieldAlert },
   SYSTEM: { key: "claim.ev_system", icon: ShieldCheck },
 };
-const evLabel = (type) => t(EV[type]?.key ?? "claim.ev_system");
+// AI-CONTEXT: label by WHAT HAPPENED, falling back to the record type (§23 entry 70).
+//
+// This read the RecordType alone, so a driver disputing detention was handed a pack
+// whose timeline said "Event recorded 03:14" — the record's payload named the event
+// and the API dropped it. Both halves are fixed: the API carries `event`, and a known
+// event gets its own words. An unknown one still falls back rather than showing a raw
+// key, because an evidence pack is read by brokers, not developers.
+const evLabel = (e) => {
+  const known = e.event ? t(`evidence.ev.${e.event}`) : null;
+  if (known && known !== `evidence.ev.${e.event}`) return known;
+  return t(EV[e.type]?.key ?? "claim.ev_system");
+};
 const evIcon = (type) => (EV[type] ?? EV.SYSTEM).icon;
 const time = (iso) => (iso ? iso.slice(11, 16) : "");
 // guided prompts have friendly names; fall back to the raw prompt
 async function openExport() {
   busy.value = true;
   try {
-    const url = await exportProtectionPack(packKind(), route.params.stopId);
-    if (url && typeof window !== "undefined") window.open(url, "_blank");
+    // AI-CONTEXT: NOT `window.open` (§23 entry 72).
+    //
+    // It sat behind two awaits — the fetch and the blob — and a browser only honours
+    // a popup while it can still see the user's gesture. After an await that gesture
+    // is gone, so `window.open` was blocked and returned null, silently: the driver
+    // tapped Export and the app did nothing at all. An anchor with `download` needs
+    // no popup permission, and carries the server's filename.
+    const pack = await exportProtectionPack(packKind(), route.params.stopId);
+    if (pack && typeof document !== "undefined") {
+      const a = document.createElement("a");
+      a.href = pack.url;
+      a.download = pack.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // the blob is held only long enough for the download to start
+      setTimeout(() => URL.revokeObjectURL(pack.url), 30000);
+    }
   } catch {
-    /* offline: the export is a live render and needs the server. Nothing to queue —
-       the driver's own copy is not a promise to anyone, so we simply do not claim
-       one was produced. */
+    // §12.4: what happened and what to do. This used to swallow the error entirely,
+    // so a driver tapped Export and the app did nothing whatsoever — the dead-control
+    // pattern, on the one button that produces the artifact this product exists for.
+    // Nothing is queued: the driver's own copy is not a promise to anyone, so a
+    // failure is stated rather than deferred.
+    exportFailed.value = true;
+    setTimeout(() => (exportFailed.value = false), 6000);
   } finally {
     busy.value = false;
   }
@@ -174,7 +216,7 @@ function photoLabel(prompt) {
         <ul v-else class="tl">
           <li v-for="(e, i) in data.timeline" :key="i" class="tl__item">
             <component :is="evIcon(e.type)" :size="16" :stroke-width="2" class="tl__icon" aria-hidden="true" />
-            <span class="tl__label">{{ evLabel(e.type) }}</span>
+            <span class="tl__label">{{ evLabel(e) }}</span>
             <span class="tl__time mono">{{ time(e.occurred_at) }}</span>
           </li>
         </ul>
@@ -223,6 +265,7 @@ function photoLabel(prompt) {
           <Share2 :size="18" :stroke-width="2" aria-hidden="true" />
           {{ t("evidence.share") }}
         </button>
+        <p v-if="exportFailed" class="pending" role="alert">{{ t("evidence.export_failed") }}</p>
         <!-- §15.1: queued work carries a subtle pending glyph and completion is
              SILENT. No toast parade when the link finally goes out. -->
         <p v-if="queued" class="pending">

@@ -138,6 +138,13 @@ def stop_evidence(db: Session, stop_ref) -> dict:
             timeline.append(
                 {
                     "type": record.record_type.value,
+                    # AI-CONTEXT: WHAT happened, not merely that something did
+                    # (§23 entry 70). Every record's payload names its event and this
+                    # view dropped it, so the timeline could only be labelled by
+                    # RecordType — and a driver disputing detention was handed a pack
+                    # reading "Event recorded 03:14". The payload itself stays out:
+                    # a timeline is a sequence of facts, not a dump of internals.
+                    "event": (record.payload or {}).get("event"),
                     "occurred_at": record.occurred_at,
                     "log": log.label,
                 }
@@ -164,6 +171,7 @@ def stop_evidence(db: Session, stop_ref) -> dict:
         "timeline": [
             {
                 "type": t["type"],
+                "event": t["event"],
                 "occurred_at": t["occurred_at"].isoformat() if t["occurred_at"] else None,
             }
             for t in timeline
@@ -253,6 +261,66 @@ def _latest_anchor(db: Session, log_id) -> ChainAnchor | None:
         .where(ChainAnchor.log_id == log_id)
         .order_by(ChainAnchor.anchored_at.desc())
         .limit(1)
+    )
+
+
+def compose_stop_pack(db: Session, stop_ref, template: PackTemplate) -> EvidencePack | None:
+    """Every log tied to a stop, as one document (§23 entry 71).
+
+    AI-CONTEXT: `compose_pack` renders ONE log, and a stop has several — its own
+    (arrival, notice, departure), M5's on-time proof, and a log per condition capture.
+    The only export a driver could reach composed the condition capture alone, so a
+    stop without photos 404'd and the detention argument could not leave the phone.
+
+    Chains are verified per LOG and the pack is valid only if all of them are: merging
+    the views must not merge the guarantees, because each chain proves its own records
+    and nothing about its neighbours.
+    """
+    logs = list(db.scalars(select(EvidenceLog).where(EvidenceLog.stop_ref == stop_ref)))
+    if not logs:
+        return None
+    timeline: list[dict] = []
+    artifacts: list[dict] = []
+    parts: list[dict] = []
+    all_valid = True
+    for log in logs:
+        pack = compose_pack(db, log, template)
+        v = pack.verification
+        if not v.get("chain_valid", False):
+            all_valid = False
+        parts.append(v)
+        timeline.extend(pack.timeline)
+        artifacts.extend(pack.artifacts)
+    timeline.sort(key=lambda r: (r["occurred_at"] is None, r["occurred_at"]))
+    artifacts.sort(key=lambda a: (a.get("received_at") is None, a.get("received_at")))
+    # AI-CONTEXT: the verification block must speak the SAME dict a single-log pack
+    # does, or the renderer reads nothing and prints "HASH CHAIN BROKEN — do not rely
+    # on this pack" over evidence whose chains are all intact. That is worse than the
+    # missing export it replaced: it tells a broker the driver's proof is worthless.
+    # Caught by rendering the PDF and looking at it, not by the suite.
+    #
+    # `head_seq`/`head_hash`/`broken_at` stay per-log and are reported for the FIRST
+    # broken chain, or the primary log when all are sound — a merged head hash would
+    # be a number that verifies nothing.
+    first_broken = next((v for v in parts if not v.get("chain_valid", False)), None)
+    head = first_broken or parts[0]
+    return EvidencePack(
+        template=template,
+        log_id=logs[0].id,
+        label=logs[0].label,
+        timeline=timeline,
+        artifacts=artifacts,
+        verification={
+            "chain_valid": all_valid,
+            "record_count": len(timeline),
+            "head_seq": head.get("head_seq"),
+            "head_hash": head.get("head_hash"),
+            "broken_at": head.get("broken_at"),
+            "reason": head.get("reason"),
+            "anchored": any(v.get("anchored") for v in parts),
+            "anchor_ref": next((v.get("anchor_ref") for v in parts if v.get("anchor_ref")), None),
+            "log_count": len(logs),
+        },
     )
 
 

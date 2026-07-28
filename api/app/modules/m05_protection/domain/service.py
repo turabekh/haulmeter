@@ -359,6 +359,16 @@ _GAP_LABELS = {
 
 
 # --- FR2/FR4 export + share (design-prd §17) ---
+def stop_pack(db: Session, stop_ref):
+    """Everything recorded at one stop, as one document (§23 entry 71).
+
+    The Evidence surface is a STOP's record — timeline, documents, photos — and its
+    only export rendered the cargo-condition capture alone, which 404'd for any stop
+    without photos. So the pack that argues a detention claim, the product's whole
+    reason for existing, had no way out of the phone."""
+    return evidence.compose_stop_pack(db, stop_ref, evidence.PackTemplate.stop_record)
+
+
 def condition_pack(db: Session, stop_ref, phase: CapturePhase | None = None):
     """FR2's "one-tap condition report". A stop's condition captures share one
     subject, so the export is per-STOP rather than per-capture session: a clerk

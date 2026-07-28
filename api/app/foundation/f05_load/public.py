@@ -28,6 +28,9 @@ from .domain.ratecon import (
     silent_terms,
 )
 from .domain.service import (
+    EVENT_ARRIVED,
+    EVENT_DEPARTED,
+    EVENT_NOTICE_SENT,
     FacilityNotFound,
     active_stop_for_account,
     add_stop,
@@ -46,6 +49,7 @@ from .domain.service import (
     list_stops,
     record_claim,
     record_payment_observation,
+    record_stop_event,
     set_load_status,
     set_stop_appointment,
 )
@@ -79,6 +83,9 @@ __all__ = [
     "create_load_from_parsed_terms",
     "depart_stop",
     "disarm_stop",
+    "EVENT_ARRIVED",
+    "EVENT_DEPARTED",
+    "EVENT_NOTICE_SENT",
     "effective_detention_terms",
     "get_counterparty",
     "get_load",
@@ -87,6 +94,7 @@ __all__ = [
     "list_loads",
     "list_stops",
     "record_claim",
+    "record_stop_event",
     "record_payment_observation",
     "set_load_status",
     "set_stop_appointment",

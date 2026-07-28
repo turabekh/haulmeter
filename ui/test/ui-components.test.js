@@ -2415,6 +2415,114 @@ describe("MoneySurface (M4 Money tab, design-prd §10.3)", () => {
   });
 });
 
+describe("EvidenceSurface — export (§23 entries 71, 72)", () => {
+  const EVIDENCE = {
+    stop_id: "s-1",
+    facility: "Metro Market Warehouse",
+    documents: [],
+    chain_valid: true,
+    record_count: 4,
+    photo_count: 0,
+    timeline: [
+      { type: "USER_ACTION", event: "arrived", occurred_at: "2026-07-28T03:43:29+00:00" },
+      { type: "USER_ACTION", event: "departed", occurred_at: "2026-07-28T03:43:31+00:00" },
+    ],
+    photos: [],
+  };
+
+  function mountEvidence() {
+    const router = createRouter({ history: createMemoryHistory(), routes });
+    router.push("/load/s-1/evidence");
+    return router.isReady().then(() => mount(EvidenceSurface, { global: { plugins: [router] } }));
+  }
+
+  beforeEach(() => setToken("tok-ev"));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    logout();
+  });
+
+  // AI-CONTEXT: the timeline used to be labelled by RecordType alone, so a pack read
+  // "Event recorded 03:14". The API now carries what happened (§23 entry 70).
+  it("names each event rather than its record type", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => jsonOk(EVIDENCE)));
+    const w = await mountEvidence();
+    await flushPromises();
+
+    expect(w.text()).toContain("Arrived");
+    expect(w.text()).toContain("Departed");
+    w.unmount();
+  });
+
+  // AI-CONTEXT: `window.open` after an await is blocked — the gesture is gone — so the
+  // button did nothing at all (§23 entry 72). A download anchor needs no popup.
+  it("downloads the pack instead of opening a blocked popup", async () => {
+    const pdf = new Blob(["%PDF-1.4"], { type: "application/pdf" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url) => {
+        if (String(url).includes("/export")) {
+          return Promise.resolve({
+            ok: true,
+            blob: () => Promise.resolve(pdf),
+            headers: { get: () => 'inline; filename="stop-3c222255.pdf"' },
+          });
+        }
+        return jsonOk(EVIDENCE);
+      }),
+    );
+    // only the two methods — replacing the whole URL global breaks the DOM's own URL
+    // parsing the moment an anchor's href is assigned
+    const realCreateURL = URL.createObjectURL;
+    const realRevokeURL = URL.revokeObjectURL;
+    URL.createObjectURL = () => "blob:pack";
+    URL.revokeObjectURL = () => {};
+    const opened = vi.fn();
+    vi.stubGlobal("open", opened);
+    const w = await mountEvidence();
+    await flushPromises();
+
+    const clicked = [];
+    const realCreate = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag) => {
+      const el = realCreate(tag);
+      if (tag === "a") el.click = () => clicked.push({ href: el.href, download: el.download });
+      return el;
+    });
+
+    await w.find(".cta").trigger("click");
+    await flushPromises();
+
+    // eslint-disable-next-line no-console
+    expect(opened).not.toHaveBeenCalled(); // never a popup
+    expect(clicked).toHaveLength(1);
+    expect(clicked[0].download).toBe("stop-3c222255.pdf"); // the server's own name
+    document.createElement.mockRestore();
+    URL.createObjectURL = realCreateURL;
+    URL.revokeObjectURL = realRevokeURL;
+    w.unmount();
+  });
+
+  it("says so when the pack cannot be built, rather than doing nothing (§12.4)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url) =>
+        String(url).includes("/export")
+          ? Promise.resolve({ ok: false, status: 404 })
+          : jsonOk(EVIDENCE),
+      ),
+    );
+    const w = await mountEvidence();
+    await flushPromises();
+
+    await w.find(".cta").trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain("Couldn't build the PDF");
+    w.unmount();
+  });
+});
+
 describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
   const WALLET = {
     documents: [

@@ -44,6 +44,7 @@ from .domain.service import (
     set_on_time_consent,
     share_pack,
     start_condition_capture,
+    stop_pack,
     superseded_by_capturing,
     wallet,
 )
@@ -74,6 +75,7 @@ __all__ = [
     "capture_incident",
     "condition_photo_count",
     "condition_pack",
+    "stop_pack",
     "dispatch_expiry_reminders",
     "expiry_reminders_due",
     "superseded_by_capturing",

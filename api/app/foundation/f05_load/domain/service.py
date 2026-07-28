@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -164,6 +164,46 @@ def effective_detention_terms(db: Session, stop: Stop) -> tuple[int | None, int 
     return free_time, rate
 
 
+# AI-CONTEXT: the moments a dispute turns on (§23 entry 70).
+#
+# F4's whole purpose is "artifacts that survive a dispute", and a stop that had been
+# armed, arrived at, notified on and departed produced ONE record — the on-time proof
+# check — because nothing else ever wrote to the stop's log. Geofence ENTER/EXIT are F3
+# events and nothing bridged them into F4; the notice and the departure were not
+# recorded at all. So the pack a broker receives said an event occurred and not which.
+#
+# These are the three a detention argument is actually made of: when the driver got
+# there, when the counterparty was told the clock had started, and when the truck left.
+EVENT_ARRIVED = "arrived"
+EVENT_NOTICE_SENT = "notice_sent"
+EVENT_DEPARTED = "departed"
+
+
+def record_stop_event(
+    db: Session,
+    stop: Stop,
+    event: str,
+    occurred_at: datetime | None = None,
+    record_type=None,
+    **extra,
+) -> None:
+    """Append one fact to the stop's hash-chained log. Silent when the stop has no log
+    yet — an unarmed stop has nothing to append to, and losing the event is better than
+    refusing the action that produced it."""
+    if stop.evidence_log_id is None:
+        return
+    log = db.get(evidence.EvidenceLog, stop.evidence_log_id)
+    if log is None:
+        return
+    evidence.append_record(
+        db,
+        log,
+        record_type or evidence.RecordType.USER_ACTION,
+        {"event": event, **extra},
+        occurred_at=occurred_at or datetime.now(UTC),
+    )
+
+
 def arm_stop(db: Session, stop: Stop) -> Stop:
     load = db.get(Load, stop.load_id)
     if stop.evidence_log_id is None:
@@ -216,6 +256,8 @@ def depart_stop(db: Session, stop: Stop, occurred_at: datetime | None = None) ->
     disarm_stop(db, stop, occurred_at)
     stop.status = StopStatus.departed
     stop.departed_at = occurred_at
+    # the moment the truck left, in the chain — half of every detention argument
+    record_stop_event(db, stop, EVENT_DEPARTED, occurred_at)
     db.flush()
     return stop
 

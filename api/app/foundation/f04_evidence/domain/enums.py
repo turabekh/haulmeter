@@ -30,3 +30,9 @@ class PackTemplate(enum.Enum):
     on_time_proof = "on_time_proof"
     cargo_condition = "cargo_condition"
     incident = "incident"
+    # AI-CONTEXT: what happened at ONE STOP — arrival, notice, departure, and the
+    # paperwork filed there (§23 entry 71). Added for the same reason `incident` was:
+    # the only export a driver could reach rendered as a "Cargo condition report", and
+    # it 404'd outright unless condition photos existed — so the pack that argues a
+    # detention claim had no way out of the phone at all.
+    stop_record = "stop_record"

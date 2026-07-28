@@ -100,6 +100,7 @@ TEMPLATE_TITLES = {
     PackTemplate.on_time_proof: "On-time arrival proof",
     PackTemplate.cargo_condition: "Cargo condition report",
     PackTemplate.incident: "Incident report",
+    PackTemplate.stop_record: "Stop record",
 }
 
 _fonts_registered = False

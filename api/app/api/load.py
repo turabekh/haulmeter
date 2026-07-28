@@ -329,14 +329,26 @@ def load_history(
                 # and a $0.00 row would read as a claim that failed
                 "detention_cents": claim.amount_cents if claim else None,
                 "claim_state": claim.state.value if claim else None,
-                # AI-CONTEXT: what the log CONTAINS, not whether one exists.
+                # AI-CONTEXT: what the DRIVER captured (§23 entries 48, 70).
                 #
-                # `arm_stop` opens an evidence log for every stop, so
-                # `evidence_log_id is not None` is true for every load ever created —
-                # an indicator that always says yes, which is decoration. The first
-                # live run showed "evidence pack" against a load where nothing had
-                # been captured. Same shape as the BOL row that could never say no.
-                "evidence_count": len(evidence.stop_evidence(db, first.id)["timeline"]),
+                # `arm_stop` opens a log for every stop, so "does a log exist" always
+                # said yes — decoration. Entry 48 changed it to count what the log
+                # CONTAINS, and entry 70 then began recording arrival, notice and
+                # departure automatically, which made every load contain something and
+                # re-broke it in the same direction: an indicator that can only answer
+                # one way. It counts PHOTOS — the things a driver chose to capture.
+                # The automatic trail is real evidence and lives in the timeline, where
+                # it is read; documents are listed beside this on their own.
+                #
+                # The rule: everything EXCEPT the bare departure. Ending a load happens
+                # on every load whatever the driver did, so counting it makes the
+                # indicator unfalsifiable again. An arrival does not — it only exists
+                # if the driver got there, which is exactly the question this answers.
+                "evidence_count": sum(
+                    1
+                    for e in evidence.stop_evidence(db, first.id)["timeline"]
+                    if e.get("event") != loads.EVENT_DEPARTED
+                ),
                 "documents": sorted({d.doc_type.value for d in docs}),
             }
         )
@@ -365,6 +377,8 @@ def arrive(
     lat, lon = facility.coordinates(db, fac)
     # a geofence ENTER at the stop is the arrival the detention clock triggers on
     location.evaluate_ping(db, account.id, lat, lon, occurred_at=datetime.now(UTC))
+    # the arrival, in the chain: the pack used to say an event occurred and not which
+    loads.record_stop_event(db, stop, loads.EVENT_ARRIVED, datetime.now(UTC))
     claim = m3.claim_for_stop(db, stop.id) or m3.start_claim(db, stop)
     # M5-FR1: the arrival that starts the detention clock IS the arrival that proves
     # the driver was on time, so the proof is filed here rather than on its own
@@ -659,8 +673,14 @@ def send_notice(
     db: Session = Depends(get_db),
 ) -> dict:
     # M3 counterparty notice — no-ops while still within free time (nothing owed yet)
-    claim = _claim_or_409(db, _owned_stop(db, stop_id, account))
-    message = m3.send_detention_start_notice(db, claim, _GATEWAY, datetime.now(UTC))
+    stop = _owned_stop(db, stop_id, account)
+    claim = _claim_or_409(db, stop)
+    now = datetime.now(UTC)
+    message = m3.send_detention_start_notice(db, claim, _GATEWAY, now)
+    # recorded only when one actually went out: "we told them at 10:05" is the fact a
+    # dispute turns on, and logging an attempt that no-oped would assert it falsely
+    if message is not None:
+        loads.record_stop_event(db, stop, loads.EVENT_NOTICE_SENT, now)
     return {"sent": message is not None}
 
 
