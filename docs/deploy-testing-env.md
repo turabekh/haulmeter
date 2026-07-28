@@ -75,6 +75,58 @@ along on the first deploy. `COPYFILE_DISABLE=1` prevents them; the `find -name '
 Also excluded: `api/data`, which is ingest SOURCE (OSM extracts) read only by the
 `make ingest-*` targets. Including it made the first bundle 889 MB instead of 1.8 MB.
 
+## Copying the local database up
+
+The test box is worth more with the ingested facility data than with the demo seed —
+4,568 facilities against 13. A full dump/restore rather than a table-by-table copy,
+because the dump carries `alembic_version` too, so schema and data cannot drift apart.
+
+```bash
+# 1. dump locally (custom format, compressed — 59 MB of database is a 2.1 MB dump)
+docker compose --project-directory infra exec -T postgres \
+  pg_dump -U longhaul -d longhaul -p 5438 -Fc --no-owner --no-acl > /tmp/longhaul.dump
+
+# 2. copy up
+gcloud compute scp /tmp/longhaul.dump haulmeter-test:/opt/haulmeter/longhaul.dump \
+  --project=uzimiz-prod --zone=us-central1-a
+
+# 3. on the VM: stop the writers, restore, restart
+#    --clean --if-exists so a re-run is safe; api and worker are stopped so nothing
+#    races the restore or holds a connection to a table being dropped
+cd /opt/haulmeter/infra
+C="sudo docker compose -f docker-compose.deploy.yml --env-file .env"
+$C stop api worker
+sudo docker cp /opt/haulmeter/longhaul.dump $($C ps -q postgres):/tmp/longhaul.dump
+$C exec -T postgres pg_restore -U longhaul -d longhaul -p 5438 \
+  --clean --if-exists --no-owner --no-acl /tmp/longhaul.dump
+$C start api worker
+```
+
+`--clean --if-exists` prints a wall of "does not exist, skipping" on a first run. That
+is the flag working, not an error.
+
+## Test accounts
+
+| Account | Roles | For |
+|---|---|---|
+| `driver@haulmeter.online` | `driver` | ordinary driver — the whole app |
+| `admin@haulmeter.online` | `driver`, `platform_admin` | the `/admin` console, and the driver app |
+
+Both carry an `own_mc` driver profile, so detention claims render as **money owed to
+them** rather than as an evidence pack handed to a carrier (M3 claim mode) — the more
+useful of the two paths to exercise.
+
+**Passwords are not in this repo and never will be** (rule 9). They were handed over
+once, out of band. To issue new ones, create a new account: F1 offers no `set_password`
+by design — `reset_credential` issues a temporary password and forces a change, because
+"support that can read a password is support that can be social-engineered into
+surrendering one".
+
+Verified after creation: the driver logs in (200) and is **refused** `/admin/flags`
+(403); the admin logs in and reaches it (200). The refusal is the half worth checking —
+a role that grants nothing looks identical to one that grants everything until someone
+tries the door.
+
 ## Operating it
 
 ```
