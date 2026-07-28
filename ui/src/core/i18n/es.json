@@ -870,10 +870,13 @@
   "voice.listening": "Escuchando…",
   "voice.mic": "Voz",
   "voice.mic_blocked": "El micrófono está apagado — escribe tu pregunta.",
+  "voice.net_down": "La voz necesita conexión ahora mismo. Escribe en su lugar.",
+  "voice.no_mic": "Este dispositivo no tiene micrófono: escribe tu pregunta.",
   "voice.placeholder": "Pregunta sobre estacionamiento, combustible o lo que te deben",
   "voice.replay": "Reproducir respuesta",
   "voice.retry": "No te entendí — inténtalo otra vez o escribe.",
   "voice.stop": "Detener",
   "voice.title": "Copiloto",
-  "voice.unavailable": "Por ahora, la voz está en la pestaña Mapa."
+  "voice.unavailable": "Por ahora, la voz está en la pestaña Mapa.",
+  "voice.unsupported": "La voz no está disponible aquí: escribe tu pregunta."
 }

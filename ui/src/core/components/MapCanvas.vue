@@ -189,7 +189,17 @@ onMounted(async () => {
       style: STYLE,
       center: US_CENTER,
       zoom: US_ZOOM,
+      // AI-CONTEXT: Mapbox's default attribution sits BOTTOM-RIGHT, which is where
+      // §10.1 puts the report chip, so the compact "i" landed on top of it. Moving it
+      // bottom-LEFT only traded one collision for another — measured, it then sat
+      // inside the voice chip. It goes TOP-left: the only corner neither of our
+      // floating controls uses, and the locate control has the other one.
+      //
+      // The Mapbox LOGO cannot be repositioned and stays bottom-left, which is why
+      // the voice chip moves rather than the logo (see MapSurface).
+      attributionControl: false,
     });
+    map.addControl(new mapboxgl.AttributionControl({ compact: true }), "top-left");
 
     // "locate me": a blue dot + heading that centers on the driver's GPS, with a
     // tap control to re-center. Auto-triggered on load — a driver's map opens on

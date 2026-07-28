@@ -14,6 +14,7 @@ import { askVoice } from "../api.js";
 import {
   recognitionSupported,
   createRecognizer,
+  speechFailureKind,
   synthesisSupported,
   speak,
   cancelSpeech,
@@ -45,15 +46,27 @@ function startListening() {
     },
     onError: (err) => {
       listening.value = false;
-      // one graceful re-ask, then the visible input is the fallback (§14.5)
-      hint.value = err === "not-allowed" ? t("voice.mic_blocked") : t("voice.retry");
+      // AI-CONTEXT: say which failure it was (§23 entry 90). Every error but
+      // `not-allowed` used to collapse into "Didn't catch that — try again", so a
+      // device with NO MICROPHONE and one that cannot reach the recognition service
+      // both invited the driver to retry, forever, at something that cannot work.
+      // §14.5's "one graceful re-ask" is the right answer only when re-asking could
+      // succeed; the rest is §12.4 — what happened, and what to do instead.
+      hint.value = {
+        blocked: t("voice.mic_blocked"),
+        no_mic: t("voice.no_mic"),
+        network: t("voice.net_down"),
+        unavailable: t("voice.unsupported"),
+        retry: t("voice.retry"),
+      }[speechFailureKind(err)];
     },
     onEnd: () => {
       listening.value = false;
     },
   });
-  listening.value = true;
-  recognizer.start();
+  // listening is TRUE only once the recogniser has actually started. Setting it
+  // first is what left the sheet claiming to listen after a failed start.
+  listening.value = recognizer.start() !== false;
 }
 
 function stopListening() {

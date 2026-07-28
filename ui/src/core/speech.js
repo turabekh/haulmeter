@@ -47,15 +47,30 @@ export function createRecognizer(locale, { onResult, onError, onEnd } = {}) {
   rec.onerror = (e) => {
     if (onError) onError(e?.error || "error");
   };
+  // AI-CONTEXT: `nomatch` fires when the service heard audio and could not resolve
+  // it — the ONE case "didn't catch that" is literally true. It is not an error, so
+  // without this the sheet would show nothing and keep claiming to listen.
+  rec.onnomatch = () => {
+    if (onError) onError("no-match");
+  };
   rec.onend = () => {
     if (onEnd) onEnd();
   };
   return {
+    // AI-CONTEXT: a failed start must REACH the caller (§23 entry 90).
+    //
+    // This swallowed the throw with a comment claiming "the caller's error path
+    // handles it" — and it does not: `rec.start()` throwing synchronously means
+    // `onerror` never fires, so the sheet sat on "Listening…" forever with a dead
+    // mic. That is exactly what the owner reported. The catch is the caller's error
+    // path now, rather than a comment pointing at one.
     start() {
       try {
         rec.start();
+        return true;
       } catch {
-        /* already started / no gesture — the caller's error path handles it */
+        if (onError) onError("start-failed");
+        return false;
       }
     },
     stop() {
@@ -66,6 +81,27 @@ export function createRecognizer(locale, { onResult, onError, onEnd } = {}) {
       }
     },
   };
+}
+
+// AI-CONTEXT: the Web Speech spec's error strings, sorted by what a DRIVER can do
+// about them. They were all collapsed into one re-ask — so a phone with no
+// microphone, and a device that cannot reach the recognition service, both told the
+// driver to "try again", forever, at something that could never work. §12.4 asks for
+// what happened and what to do; "try again" is only honest for the last group.
+export const SPEECH_FAILURE = {
+  "not-allowed": "blocked", // permission refused or never granted
+  "service-not-allowed": "blocked",
+  "audio-capture": "no_mic", // no microphone on the device
+  network: "network", // Chrome ships audio to a remote recogniser; it is unreachable
+  "start-failed": "unavailable", // start() threw — no gesture, or already running
+  "language-not-supported": "unavailable",
+  "no-speech": "retry", // heard nothing
+  "no-match": "retry", // heard something, could not resolve it
+  aborted: "retry",
+};
+
+export function speechFailureKind(error) {
+  return SPEECH_FAILURE[error] || "retry";
 }
 
 export function synthesisSupported() {

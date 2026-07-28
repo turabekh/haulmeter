@@ -63,11 +63,20 @@ const presets = [
 <style scoped>
 .chips {
   display: flex;
+  /* AI-CONTEXT: SPREAD, not packed. Five 48 dp squares left-aligned with an 8 dp gap
+     left a third of the row empty on the right and read as crowded rather than
+     dense — the owner's word was "squished". `space-between` distributes the 88 dp
+     of slack into four 22 dp gaps, so the row uses the width it occupies.
+     `gap` stays as the floor for the case `space-between` cannot help: a narrower
+     viewport, where the row scrolls instead.
+     And 12 dp above and below rather than 4 — the strip that used to sit above this
+     row is gone (§23 entry 89), so these chips are now the topmost thing on the
+     screen and need the breathing room it used to provide. Still 56 dp cheaper than
+     strip-plus-row was. */
+  justify-content: space-between;
   gap: var(--s-2);
   overflow-x: auto;
-  /* was `var(--s-2) var(--s-4)`. This row sits on the daily-open screen above a map
-     that wants every pixel, and an icon needs no vertical breathing room to read. */
-  padding: var(--s-1) var(--s-4);
+  padding: var(--s-3) var(--s-4);
   scrollbar-width: none;
 }
 .chips::-webkit-scrollbar {

@@ -860,13 +860,19 @@ async function submitPrice(cents) {
   height: 100%;
   position: relative;
 }
-/* AI-CONTEXT: `--s-5` off the bottom, not `--s-4` (§23 entry 89). Mapbox's logo and
-   attribution bar occupy the bottom ~24 dp of the canvas, so a chip at 16 dp sat on
-   top of them. Both floating chips clear that strip now; the library's furniture
-   keeps the very bottom edge and ours keeps the thumb zone above it. */
+/* AI-CONTEXT: CENTRED, and that is a fix rather than a preference (§23 entry 90).
+   Mapbox's logo cannot be repositioned — it is bottom-left by their ToS and by their
+   API — and that is exactly where this chip was, measured overlapping it. Everything
+   else moved out of our corners; this is the one piece of furniture that could not,
+   so the chip moved instead.
+   Centre rather than a third corner because `.voice-chip--driving` was ALREADY
+   centred: the control now stays put when DRIVING begins instead of jumping from the
+   left edge to the middle, which is a better answer than the one the collision
+   forced. `--s-5` off the bottom keeps it clear of the logo strip. */
 .voice-chip {
   position: absolute;
-  left: var(--s-4);
+  left: 50%;
+  transform: translateX(-50%);
   bottom: var(--s-5);
   width: 56px;
   height: 56px;
@@ -880,10 +886,10 @@ async function submitPrice(cents) {
   box-shadow: var(--shadow-float);
   z-index: 2;
 }
-/* voice is the DRIVING input (§14): a bigger, centered target in Corridor mode */
+/* voice is the DRIVING input (§14): a bigger target in Corridor mode. It no longer
+   needs to re-centre — the chip is centred in both states now, so this changes only
+   the thing that should change at speed, which is the size of the target. */
 .voice-chip--driving {
-  left: 50%;
-  transform: translateX(-50%);
   width: 72px;
   height: 72px;
 }

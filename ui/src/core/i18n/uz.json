@@ -870,10 +870,13 @@
   "voice.listening": "Tinglayapman…",
   "voice.mic": "Ovoz",
   "voice.mic_blocked": "Mikrofon o‘chiq — savolingizni yozing.",
+  "voice.net_down": "Ovoz uchun hozir aloqa kerak. Yozib yuboring.",
+  "voice.no_mic": "Bu qurilmada mikrofon yo'q — savolingizni yozing.",
   "voice.placeholder": "Parkovka, yoqilg'i yoki qarz haqida so'rang",
   "voice.replay": "Javobni eshittirish",
   "voice.retry": "Tushunmadim — qayta ayting yoki yozing.",
   "voice.stop": "To‘xtatish",
   "voice.title": "Kopilot",
-  "voice.unavailable": "Hozircha ovoz Xarita bo'limida."
+  "voice.unavailable": "Hozircha ovoz Xarita bo'limida.",
+  "voice.unsupported": "Bu yerda ovoz ishlamaydi — savolingizni yozing."
 }

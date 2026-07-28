@@ -870,10 +870,13 @@
   "voice.listening": "Listening…",
   "voice.mic": "Voice",
   "voice.mic_blocked": "Mic is off — type your question.",
+  "voice.net_down": "Voice needs a connection right now. Type instead.",
+  "voice.no_mic": "No microphone on this device — type your question.",
   "voice.placeholder": "Ask about parking, fuel, or what you're owed",
   "voice.replay": "Play answer",
   "voice.retry": "Didn't catch that — try again or type.",
   "voice.stop": "Stop",
   "voice.title": "Copilot",
-  "voice.unavailable": "Voice is on the Map tab for now."
+  "voice.unavailable": "Voice is on the Map tab for now.",
+  "voice.unsupported": "Voice isn't available here — type your question."
 }

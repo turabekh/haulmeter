@@ -870,10 +870,13 @@
   "voice.listening": "Waan dhegeysanayaa…",
   "voice.mic": "Cod",
   "voice.mic_blocked": "Maykaha waa la damiyay — su'aashaada qor.",
+  "voice.net_down": "Codku hadda xiriir buu u baahan yahay. Halkii qor.",
+  "voice.no_mic": "Qalabkan makarafoon ma leh — su'aashaada qor.",
   "voice.placeholder": "Weydii baabuur-dhigasho, shidaal ama waxa lagugu leeyahay",
   "voice.replay": "Ka dhig jawaabta",
   "voice.retry": "Ma maqlin — mar kale isku day ama qor.",
   "voice.stop": "Jooji",
   "voice.title": "Kaaliye",
-  "voice.unavailable": "Hadda codku wuxuu ku jiraa tabka Khariidadda."
+  "voice.unavailable": "Hadda codku wuxuu ku jiraa tabka Khariidadda.",
+  "voice.unsupported": "Codku halkan lama heli karo — su'aashaada qor."
 }
