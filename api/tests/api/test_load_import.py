@@ -59,7 +59,17 @@ FULL_TERMS = {
     "reference_number": "L-9001",
     "detention_rate_cents_per_hour": 7500,
     "free_time_minutes": 120,
-    "receiver_name": "ACME Distribution Center",
+    # AI-CONTEXT: a rate con is a ROUTE (§23 entry 68). The parse used to return one
+    # receiver; it now returns the stops table, pickups included.
+    "stops": [
+        {
+            "stop_type": "delivery",
+            "name": "ACME Distribution Center",
+            "address": None,
+            "appointment_start": None,
+            "appointment_end": None,
+        }
+    ],
     "accessorial_terms": {"tonu": "50% of linehaul"},
 }
 
@@ -133,7 +143,9 @@ def test_the_draft_offers_a_facility_we_already_know(client, db, monkeypatch):
 
     body = _import(client, headers).json()
 
-    assert [c["facility_id"] for c in body["facility_candidates"]] == [str(known.id)]
+    # candidates now hang off the STOP they belong to: a route is two different docks,
+    # and the delivery's matches are no use to the pickup (§23 entry 68)
+    assert [c["facility_id"] for c in body["stops"][0]["facility_candidates"]] == [str(known.id)]
 
 
 # --- The duplicate-facility defect the import surfaced ---
@@ -547,3 +559,185 @@ def test_history_counts_what_was_captured_not_whether_a_log_exists(client, db):
 
     assert rows["Quiet Dock"]["evidence_count"] == 0
     assert rows["Busy Dock"]["evidence_count"] > 0
+
+
+# --- A rate con is a ROUTE (§23 entry 68) ---
+TWO_STOPS = {
+    "reference_number": "BRL-78426",
+    "broker_name": "Blue Road Logistics LLC",
+    "detention_rate_cents_per_hour": 5000,
+    "free_time_minutes": 120,
+    "stops": [
+        {
+            "stop_type": "pickup",
+            "name": "Harvest Foods DC",
+            "address": "1200 Commerce Pkwy, Dallas, TX 75212",
+            "appointment_start": "2026-08-03T08:00:00",
+            "appointment_end": "2026-08-03T10:00:00",
+        },
+        {
+            "stop_type": "delivery",
+            "name": "Metro Market Warehouse",
+            "address": "8450 Lakeside Ave, Columbus, OH 43228",
+            "appointment_start": "2026-08-05T07:30:00",
+            "appointment_end": None,
+        },
+    ],
+    "accessorial_terms": {},
+}
+
+
+def test_the_draft_carries_every_stop_in_order(client, db, monkeypatch):
+    """The parse used to return one receiver, so a two-stop contract lost its pickup —
+    and with it any detention claim at the shipper, which detains drivers as often as a
+    receiver does."""
+    _with_parse(monkeypatch, TWO_STOPS)
+    headers = _headers(client, "route-draft@example.com")
+
+    stops = _import(client, headers).json()["stops"]
+
+    assert [s["stop_type"] for s in stops] == ["pickup", "delivery"]
+    assert [s["name"] for s in stops] == ["Harvest Foods DC", "Metro Market Warehouse"]
+    # the pickup's WINDOW survives: "08:00 - 10:00" is two times, and collapsing it to
+    # one loses the half a driver is judged on
+    assert stops[0]["appointment_start"].startswith("2026-08-03T08:00")
+    assert stops[0]["appointment_end"].startswith("2026-08-03T10:00")
+    # each stop gets its own candidates — the delivery's matches are no use to a pickup
+    assert "facility_candidates" in stops[0]
+    assert "facility_candidates" in stops[1]
+
+
+def test_confirming_a_route_creates_a_stop_for_each(client, db):
+    headers = _headers(client, "route-create@example.com")
+
+    resp = client.post(
+        "/load",
+        json={
+            "facility_name": "unused when stops are given",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Blue Road Logistics LLC",
+            "stops": [
+                {
+                    "facility_name": "Harvest Foods DC",
+                    "lat": 32.7767,
+                    "lon": -96.797,
+                    "stop_type": "pickup",
+                    "appointment": "2026-08-03T08:00:00Z",
+                    "appointment_end": "2026-08-03T10:00:00Z",
+                    "create_new_facility": True,
+                },
+                {
+                    "facility_name": "Metro Market Warehouse",
+                    "lat": 39.9612,
+                    "lon": -83.0907,
+                    "stop_type": "delivery",
+                    "appointment": "2026-08-05T07:30:00Z",
+                    "create_new_facility": True,
+                },
+            ],
+        },
+        headers=headers,
+    )
+
+    assert resp.status_code == 201
+    assert len(resp.json()["stop_ids"]) == 2
+
+    from app.foundation.f05_load import public as loads
+
+    load = loads.get_load(db, uuid.UUID(resp.json()["load_id"]))
+    stops = loads.list_stops(db, load)
+    assert [s.stop_type.value for s in stops] == ["pickup", "delivery"]
+    # each dock is filed where it actually is — the delivery is in Ohio, not Texas
+    assert stops[0].facility_id != stops[1].facility_id
+
+    # §10.2's next-stop preview finally has something to preview: it could never
+    # render for an imported load, because there was never a second stop
+    meter = client.get(f"/load/{stops[0].id}/meter", headers=headers).json()
+    assert meter["next_stop"]["facility_name"] == "Metro Market Warehouse"
+
+
+def test_only_the_first_stop_is_armed(client, db):
+    """Arming opens an F4 evidence log and a live geofence, and a driver is at one dock
+    at a time."""
+    headers = _headers(client, "route-arm@example.com")
+    resp = client.post(
+        "/load",
+        json={
+            "facility_name": "x",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Broker",
+            "stops": [
+                {"facility_name": "First Dock", "lat": 32.7767, "lon": -96.797,
+                 "stop_type": "pickup", "create_new_facility": True},
+                {"facility_name": "Second Dock", "lat": 39.9612, "lon": -83.0907,
+                 "stop_type": "delivery", "create_new_facility": True},
+            ],
+        },
+        headers=headers,
+    )
+
+    active = client.get("/load/active", headers=headers).json()["stop_id"]
+    assert active == resp.json()["stop_ids"][0]
+
+
+def test_leaving_a_stop_advances_to_the_next_one(client, db):
+    """§23 entry 69 — the delivery existed and no screen could reach it.
+
+    Multi-stop loads arm only their first stop, and nothing armed the next: departing
+    the pickup left zero armed stops, so `/load/active` answered null and the Load tab
+    fell back to its empty state while the delivery sat `pending` in the database.
+    """
+    headers = _headers(client, "advance@example.com")
+    created = client.post(
+        "/load",
+        json={
+            "facility_name": "x",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Blue Road",
+            "stops": [
+                {"facility_name": "Harvest Foods DC", "lat": 32.7767, "lon": -96.797,
+                 "stop_type": "pickup", "create_new_facility": True},
+                {"facility_name": "Metro Market Warehouse", "lat": 39.9612, "lon": -83.0907,
+                 "stop_type": "delivery", "create_new_facility": True},
+            ],
+        },
+        headers=headers,
+    ).json()
+    pickup, delivery = created["stop_ids"]
+    assert client.get("/load/active", headers=headers).json()["stop_id"] == pickup
+
+    ended = client.post(f"/load/{pickup}/end", headers=headers).json()
+
+    # the route moves on rather than the load disappearing
+    assert ended["next_stop_id"] == delivery
+    assert ended["load_status"] != "completed"  # a pickup is not the end of a load
+    assert client.get("/load/active", headers=headers).json()["stop_id"] == delivery
+    meter = client.get(f"/load/{delivery}/meter", headers=headers).json()
+    assert meter["facility_name"] == "Metro Market Warehouse"
+
+
+def test_leaving_the_last_stop_ends_the_load(client, db):
+    headers = _headers(client, "advance-last@example.com")
+    created = client.post(
+        "/load",
+        json={
+            "facility_name": "x",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Blue Road",
+            "stops": [
+                {"facility_name": "Only Dock", "lat": 32.7767, "lon": -96.797,
+                 "stop_type": "delivery", "create_new_facility": True},
+            ],
+        },
+        headers=headers,
+    ).json()
+
+    ended = client.post(f"/load/{created['stop_ids'][0]}/end", headers=headers).json()
+
+    assert ended["next_stop_id"] is None
+    assert ended["load_status"] == "completed"
+    assert client.get("/load/active", headers=headers).json()["stop_id"] is None

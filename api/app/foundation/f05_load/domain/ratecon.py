@@ -67,9 +67,7 @@ RATE_CON_SCHEMA = {
         "rate_cents",
         "detention_rate_cents_per_hour",
         "free_time_minutes",
-        "receiver_name",
-        "receiver_address",
-        "appointment",
+        "stops",
         "accessorial_terms",
     ],
     "properties": {
@@ -78,9 +76,36 @@ RATE_CON_SCHEMA = {
         "rate_cents": _nullable("integer"),
         "detention_rate_cents_per_hour": _nullable("integer"),
         "free_time_minutes": _nullable("integer"),
-        "receiver_name": _nullable("string"),
-        "receiver_address": _nullable("string"),
-        "appointment": _nullable("string"),
+        # AI-CONTEXT: a rate con is a ROUTE, and this schema described one delivery
+        # (§23 entry 68). A real contract's stops table carried a pickup at Harvest
+        # Foods DC on 08/03 08:00-10:00 and a delivery in Columbus on 08/05 07:30; the
+        # parse kept the second and threw the first away. So detention at the SHIPPER
+        # could never be claimed — shippers detain drivers as often as receivers do —
+        # and §10.2's next-stop preview could never render for an imported load,
+        # because there was never a second stop to preview.
+        "stops": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "stop_type",
+                    "name",
+                    "address",
+                    "appointment_start",
+                    "appointment_end",
+                ],
+                "properties": {
+                    "stop_type": {"type": "string", "enum": ["pickup", "delivery"]},
+                    "name": _nullable("string"),
+                    "address": _nullable("string"),
+                    # a window, not a moment: the pickup row read "08:00 - 10:00" and
+                    # collapsing that to one time loses the half a driver is judged on
+                    "appointment_start": _nullable("string"),
+                    "appointment_end": _nullable("string"),
+                },
+            },
+        },
         "accessorial_terms": {
             "type": "array",
             "items": {
@@ -100,8 +125,11 @@ PROMPT_TEMPLATE = (
     "rate_cents (integer total linehaul in cents, or null), "
     "detention_rate_cents_per_hour (integer cents per hour, or null), "
     "free_time_minutes (integer minutes of free time before detention accrues, or null), "
-    "receiver_name (string or null), receiver_address (string or null), "
-    "appointment (ISO 8601 datetime string or null), "
+    "stops (a list, IN THE ORDER THE DRIVER RUNS THEM, of "
+    "{stop_type: \"pickup\" or \"delivery\", name, address, appointment_start, "
+    "appointment_end} — one entry for EVERY row of the stops table, pickups included; "
+    "appointment_start/appointment_end are ISO 8601 datetimes or null, and a stop "
+    "given a window like \"08:00 - 10:00\" has both), "
     "accessorial_terms (a list of {term, wording} taken from the contract, may be empty). "
     "Use null for anything the document does not state. Never infer a market-standard "
     "value for a term the document is silent on. The rate confirmation is attached. {doc}"
@@ -115,8 +143,28 @@ PROMPT_TEMPLATE = (
 READABLE_KEYS = ["detention_rate_cents_per_hour", "free_time_minutes", "rate_cents"]
 
 
+def parsed_stops(parsed: dict | None) -> list[dict]:
+    """The route the contract describes, in order, pickups included.
+
+    Defensive about shape because a model can return null for an array it found
+    nothing for, and `stops: null` and `stops: []` mean the same thing to a driver."""
+    rows = (parsed or {}).get("stops") or []
+    return [r for r in rows if isinstance(r, dict)]
+
+
 def has_terms(parsed: dict | None) -> bool:
-    return bool(parsed) and any(parsed.get(k) is not None for k in READABLE_KEYS)
+    # a route the driver can check is a read worth showing, even from a contract that
+    # states no money terms at all
+    return bool(parsed) and (
+        any(parsed.get(k) is not None for k in READABLE_KEYS) or bool(parsed_stops(parsed))
+    )
+
+
+def facility_candidates(db: Session, parsed: dict, limit: int = 3) -> list[dict]:
+    """Back-compat shim: the first stop's name, which is what "the receiver" meant when
+    a parse only ever had one."""
+    rows = parsed_stops(parsed)
+    return facility_candidates_for(db, (rows[0].get("name") if rows else "") or "", limit)
 
 
 def register_rate_con_prompt(db: Session) -> None:
@@ -201,7 +249,7 @@ def silent_terms(parsed: dict) -> list[str]:
     return gaps
 
 
-def facility_candidates(db: Session, parsed: dict, limit: int = 3) -> list[dict]:
+def facility_candidates_for(db: Session, name: str, limit: int = 3) -> list[dict]:
     """What the parsed receiver might already be in the registry.
 
     Matched rather than created, because `POST /load` creating a facility
@@ -219,7 +267,7 @@ def facility_candidates(db: Session, parsed: dict, limit: int = 3) -> list[dict]
     match costs one tap to notice, and a wrong default costs a load attached to a dock
     they never visited, taking its dwell history with it.
     """
-    name = (parsed.get("receiver_name") or "").strip()
+    name = (name or "").strip()
     if not name:
         return []
     rows = facility_registry.search_by_name(db, name, limit=limit)
@@ -263,15 +311,31 @@ def draft_from_rate_con(
     # 1,500 km away and ENTER could never fire for a real delivery. The geocoder
     # proposes; the driver disposes. Its own wording for the place travels with it so
     # the confirm screen can show what was matched rather than asserting it (§11.7).
-    place = None
+    stops = []
     if readable:
-        found = facility_registry.geocode(parsed.get("receiver_address") or "", limit=1)
-        if found:
-            place = {"lat": found[0].lat, "lon": found[0].lon, "label": found[0].label}
+        for index, row in enumerate(parsed_stops(parsed)):
+            place = None
+            found = facility_registry.geocode(row.get("address") or "", limit=1)
+            if found:
+                place = {"lat": found[0].lat, "lon": found[0].lon, "label": found[0].label}
+            stops.append(
+                {
+                    "sequence": index,
+                    "stop_type": row.get("stop_type") or "delivery",
+                    "name": row.get("name"),
+                    "address": row.get("address"),
+                    "appointment_start": row.get("appointment_start"),
+                    "appointment_end": row.get("appointment_end"),
+                    "location": place,
+                    "facility_candidates": facility_candidates_for(db, row.get("name") or ""),
+                }
+            )
     return {
         "parsed": parsed if readable else None,
         "readable": readable,
         "silent_on": silent_terms(parsed) if readable else [],
-        "facility_candidates": facility_candidates(db, parsed) if readable else [],
-        "location": place,
+        # every stop carries its OWN candidates and its own geocode: a route is two
+        # different docks, and offering the delivery's matches for a pickup would be
+        # the pre-ticking defect (entry 65) wearing a different hat
+        "stops": stops,
     }

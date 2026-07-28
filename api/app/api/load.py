@@ -31,6 +31,25 @@ router = APIRouter(prefix="/load", tags=["load"])
 _GATEWAY = notify.RecordingNotificationGateway()  # F8 seam (dev)
 
 
+class StopIn(BaseModel):
+    """One confirmed stop of the route (§23 entry 68).
+
+    Coordinates are required because the geofence is armed on them — a stop the driver
+    could not place is a stop whose arrival can never be detected, so the import screen
+    refuses to file it rather than inventing one.
+    """
+
+    facility_name: str
+    lat: float
+    lon: float
+    stop_type: str = "delivery"
+    appointment: datetime | None = None
+    appointment_end: datetime | None = None
+    appointment_source: str | None = None
+    facility_id: uuid.UUID | None = None
+    create_new_facility: bool = False
+
+
 class CreateLoadIn(BaseModel):
     facility_name: str
     lat: float
@@ -56,9 +75,14 @@ class CreateLoadIn(BaseModel):
     # Distinct from simply not choosing: a null `facility_id` means "no opinion", this
     # means "I looked at your candidates and this dock is not one of them."
     create_new_facility: bool = False
+    # AI-CONTEXT: the ROUTE, when the driver confirmed more than one stop (§23 entry
+    # 68). The flat fields above stay for the single-stop and manual paths — a driver
+    # typing one dock into the fallback form should not have to describe a route — and
+    # when `stops` is present it wins, in the order given.
+    stops: list[StopIn] | None = None
 
 
-def _resolve_facility(db: Session, body: CreateLoadIn):
+def _resolve_facility(db: Session, body):
     """Reuse before create. `facility_id` is the confirmed match from the import
     screen; without one, fall back to the same name+geohash rule ingest already
     trusts to merge two records unattended — a dock at the same coordinates with
@@ -141,19 +165,47 @@ def create_load(
             else loads.LoadSource.manual
         ),
     )
-    stop = loads.add_stop(
-        db,
-        load,
-        fac.id,
-        loads.StopType.delivery,
-        appointment_start=body.appointment,
-        free_time_minutes=free_time,
-        detention_rate_cents_per_hour=rate,
-        # M5-FR1's provenance belongs to the WINDOW. The client says where this one
-        # came from, because only it knows whether the driver kept the parsed time or
-        # typed their own over it — the load's own `source` cannot tell them apart.
-        appointment_source=body.appointment_source,
-    )
+    # AI-CONTEXT: one stop per confirmed row, IN ORDER (§23 entry 68). A rate con is a
+    # route and this route used to build a single delivery from it, so a pickup and its
+    # detention were discarded and §10.2's next-stop preview had nothing to preview.
+    rows = body.stops or [
+        StopIn(
+            facility_name=body.facility_name,
+            lat=body.lat,
+            lon=body.lon,
+            appointment=body.appointment,
+            appointment_source=body.appointment_source,
+            facility_id=body.facility_id,
+            create_new_facility=body.create_new_facility,
+        )
+    ]
+    stops = []
+    for row in rows:
+        row_fac = fac if row is rows[0] and body.stops is None else _resolve_facility(db, row)
+        try:
+            stop_type = loads.StopType(row.stop_type)
+        except ValueError:
+            stop_type = loads.StopType.delivery
+        stop = loads.add_stop(
+            db,
+            load,
+            row_fac.id,
+            stop_type,
+            appointment_start=row.appointment,
+            appointment_end=row.appointment_end,
+            free_time_minutes=free_time,
+            detention_rate_cents_per_hour=rate,
+            # M5-FR1's provenance belongs to the WINDOW. The client says where this one
+            # came from, because only it knows whether the driver kept the parsed time
+            # or typed their own over it — the load's `source` cannot tell them apart.
+            appointment_source=row.appointment_source,
+        )
+        stops.append(stop)
+
+    # ARM THE FIRST stop, not every one: arming opens an F4 evidence log and a live
+    # geofence, and a driver is at one dock at a time. The rest arm as the load
+    # advances — `active_stop_for_account` reads the most recent armed stop.
+    stop = stops[0]
     loads.arm_stop(db, stop)  # opens the F4 evidence log + arms the F3 geofence
     # the rate con was photographed BEFORE this stop existed, so it was filed against
     # the account. Now that we know which stop it describes, attach it — otherwise the
@@ -165,7 +217,11 @@ def create_load(
             documents.set_document_subject(db, rate_con, "stop", stop.id)
     # F14: North Star funnel step 1 — a live load exists (feeds /admin/analytics)
     admin.emit(db, "load_added", "m03", datetime.now(UTC), account_id=account.id)
-    return {"load_id": str(load.id), "stop_id": str(stop.id)}
+    return {
+        "load_id": str(load.id),
+        "stop_id": str(stop.id),
+        "stop_ids": [str(x.id) for x in stops],
+    }
 
 
 class ImportRateConIn(BaseModel):
@@ -227,7 +283,7 @@ def import_rate_con(
             "document_id": str(document.id),
             "parsed": None,
             "silent_on": [],
-            "facility_candidates": [],
+            "stops": [],
             "readable": False,
         }
     return {"document_id": str(document.id), **draft}
@@ -368,16 +424,38 @@ def end_load(
     # resurfacing it (ownership-checked — a driver only ends their own stop)
     stop = _owned_stop(db, stop_id, account)
     loads.depart_stop(db, stop, occurred_at=datetime.now(UTC))
+    load = loads.get_load(db, stop.load_id)
+
+    # AI-CONTEXT: THE ROUTE ADVANCES (§23 entry 69).
+    #
+    # Multi-stop loads arm only their first stop, because arming opens an F4 evidence
+    # log and a live geofence and a driver is at one dock at a time — and nothing then
+    # armed the next one. `active_stop_for_account` reads the most recent ARMED stop,
+    # so departing the pickup left zero armed stops and the delivery sat `pending` and
+    # unreachable: it existed in the database and no screen could open it. Leaving a
+    # stop is not ending a load unless it was the last one.
+    next_stop = None
+    if load is not None:
+        later = [
+            s
+            for s in loads.list_stops(db, load)
+            if s.sequence > stop.sequence and s.status == loads.StopStatus.pending
+        ]
+        if later:
+            next_stop = later[0]
+            loads.arm_stop(db, next_stop)
+
     # ...and the LOAD reaches a terminal state, which nothing ever did before: every
     # load ever created sat in `draft` because `set_load_status` was never called from
     # anywhere, so "completed" could not be listed even by something that wanted to.
-    load = loads.get_load(db, stop.load_id)
     if load is not None:
         loads.complete_load_if_finished(db, load)
     return {
         "stop_id": str(stop.id),
         "status": stop.status.value,
         "load_status": load.status.value if load else None,
+        # the client switches to this rather than clearing the tab
+        "next_stop_id": str(next_stop.id) if next_stop else None,
     }
 
 

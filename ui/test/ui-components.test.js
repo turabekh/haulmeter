@@ -1565,6 +1565,7 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       await endBtn.trigger("click");
       await flushPromises();
       expect(fetchStub.mock.calls.some((c) => String(c[0]).endsWith("/load/stop-end/end"))).toBe(true);
+      // a single-stop load has nowhere to advance to, so the tab rests (§23 entry 69)
       expect(w.text()).not.toContain("Ending Receiver"); // back to the resting Meter
       expect(w.find(".meter__figure").text()).toBe("—");
     } finally {
@@ -1777,6 +1778,8 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
 });
 
 describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
+  // AI-CONTEXT: the draft is a ROUTE now (§23 entry 68) — the parse returns the whole
+  // stops table, and each stop carries its own geocode and its own candidates.
   const DRAFT = {
     document_id: "doc-rc",
     readable: true,
@@ -1784,16 +1787,23 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
       reference_number: "L-9001",
       detention_rate_cents_per_hour: 7500,
       free_time_minutes: 120,
-      receiver_name: "ACME Distribution Center",
     },
     silent_on: ["tonu"],
-    facility_candidates: [
-      { facility_id: "fac-1", name: "ACME Distribution Center", address: null, score: 0.68 },
-      { facility_id: "fac-2", name: "Dallas Distribution Center", address: null, score: 0.65 },
+    stops: [
+      {
+        sequence: 0,
+        stop_type: "delivery",
+        name: "ACME Distribution Center",
+        address: "8450 Lakeside Ave, Columbus, OH 43228",
+        appointment_start: null,
+        appointment_end: null,
+        location: { lat: 39.9612, lon: -83.0907, label: "8450 Lakeside Ave, Columbus, OH" },
+        facility_candidates: [
+          { facility_id: "fac-1", name: "ACME Distribution Center", address: null, score: 0.68 },
+          { facility_id: "fac-2", name: "Dallas Distribution Center", address: null, score: 0.65 },
+        ],
+      },
     ],
-    // the server geocodes the parsed receiver address into a proposed location; the
-    // load cannot be filed without one, because the geofence is armed on it
-    location: { lat: 39.9612, lon: -83.0907, label: "8450 Lakeside Ave, Columbus, OH" },
   };
 
   function stub(draft) {
@@ -1841,7 +1851,7 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
   // could never fire an ENTER. Refusing to file a load we cannot place is the honest
   // replacement for inventing a coordinate (§23 entry 67).
   it("will not file a load it cannot place", async () => {
-    const posts = stub({ ...DRAFT, location: null, parsed: { ...DRAFT.parsed, receiver_address: "" } });
+    const posts = stub({ ...DRAFT, stops: [{ ...DRAFT.stops[0], address: "", location: null }] });
     const w = mount(RateConImportSheet);
     await pickFile(w);
     await w.find(".rc__cta").trigger("click");
@@ -1870,6 +1880,47 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     const created = posts.find((p) => p.url.endsWith("/load") && p.body);
     expect(created.body.lat).toBeCloseTo(39.9612);
     expect(created.body.lon).toBeCloseTo(-83.0907);
+  });
+
+  // AI-CONTEXT: the defect this replaced — the parse returned one receiver, so a
+  // two-stop contract lost its pickup, and with it any detention claim at the shipper.
+  it("shows every stop of the route, pickup first", async () => {
+    const posts = stub({
+      ...DRAFT,
+      stops: [
+        {
+          sequence: 0, stop_type: "pickup", name: "Harvest Foods DC",
+          address: "1200 Commerce Pkwy, Dallas, TX", appointment_start: "2026-08-03T08:00:00",
+          appointment_end: "2026-08-03T10:00:00",
+          location: { lat: 32.7767, lon: -96.797, label: "Dallas, TX" },
+          facility_candidates: [],
+        },
+        DRAFT.stops[0],
+      ],
+    });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    const blocks = w.findAll(".rc__stop");
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].text()).toContain("Pickup");
+    expect(blocks[1].text()).toContain("Delivery");
+    // the name is an editable field, so read its value rather than the block's text
+    expect(blocks[0].findAll("input")[0].element.value).toBe("Harvest Foods DC");
+    expect(blocks[1].findAll("input")[0].element.value).toBe("ACME Distribution Center");
+
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+    const created = posts.find((p) => p.url.endsWith("/load") && p.body);
+    expect(created.body.stops.map((s) => s.stop_type)).toEqual(["pickup", "delivery"]);
+    // each dock is filed where it is: Dallas and Columbus are not the same place
+    expect(created.body.stops[0].lat).toBeCloseTo(32.7767);
+    expect(created.body.stops[1].lat).toBeCloseTo(39.9612);
+    // the pickup's WINDOW survives — "08:00 - 10:00" is two times
+    expect(created.body.stops[0].appointment).toBeTruthy();
+    expect(created.body.stops[0].appointment_end).toBeTruthy();
   });
 
   it("pre-selects no facility answer at all, including none-of-these", async () => {
@@ -1913,11 +1964,12 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     await w.find(".rc__cta").trigger("click");
     await settle(w);
 
+    // the answer belongs to the STOP it was asked about (§23 entry 68)
     const created = posts.find((p) => p.url.endsWith("/load") && p.body);
-    expect(created.body.facility_id).toBe(null); // the sentinel never leaves the client
+    expect(created.body.stops[0].facility_id).toBe(null); // the sentinel stays client-side
     // ...and the rejection travels as a statement rather than as silence, so the API
     // stops running its own name+geohash match over the answer (§23 entry 66)
-    expect(created.body.create_new_facility).toBe(true);
+    expect(created.body.stops[0].create_new_facility).toBe(true);
   });
 
   it("reads the rate con and creates nothing until the driver confirms", async () => {
@@ -1973,8 +2025,8 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     await settle(w);
 
     const create = posts.find((p) => p.url.endsWith("/load"));
-    expect(create.body.facility_id).toBe("fac-1");
-    expect(create.body.create_new_facility).toBe(false); // a pick is not a rejection
+    expect(create.body.stops[0].facility_id).toBe("fac-1");
+    expect(create.body.stops[0].create_new_facility).toBe(false); // a pick is not a rejection
     expect(create.body.rate_con_document_id).toBe("doc-rc");
   });
 
@@ -2187,6 +2239,24 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     w.unmount();
   });
 
+  it("says 'End load' only on the last stop of the route (§12.2)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => jsonOk({ ...LIVE, next_stop: null })),
+    );
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await w.find(".rungs__item--more").trigger("click");
+    await flushPromises();
+
+    const items = w.findAll(".more__item").map((b) => b.text());
+    expect(items).toContain("End load");
+    expect(items).not.toContain("Leave this stop");
+    w.unmount();
+  });
+
   it("previews the next stop (§10.2 anatomy)", async () => {
     const router = testRouter();
     const w = mount(LoadSurface, { global: { plugins: [router] } });
@@ -2252,8 +2322,11 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
       .trigger("click");
     await flushPromises();
 
+    // AI-CONTEXT: §12.2 — the control says what will actually happen. LIVE has a next
+    // stop, so leaving this dock opens that one; it does not end the load (entry 69).
     const items = w.findAll(".more__item").map((b) => b.text());
-    expect(items).toContain("End load");
+    expect(items).toContain("Leave this stop");
+    expect(items).not.toContain("End load");
     expect(items).toContain("Check load profit");
   });
 });

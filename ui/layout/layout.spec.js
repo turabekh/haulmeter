@@ -153,20 +153,43 @@ const RATE_CON_DRAFT = {
   document_id: "00000000-0000-0000-0000-00000000000f",
   readable: true,
   parsed: {
-    receiver_name: "ACME Distribution Center",
     broker_name: "Coyote Logistics",
     reference_number: "L-9001",
     linehaul_cents: 250000,
     free_time_minutes: 120,
-    detention_cents_per_hour: 7500,
+    detention_rate_cents_per_hour: 7500,
   },
   silent_on: ["tonu"],
-  facility_candidates: [
-    { facility_id: "00000000-0000-0000-0000-0000000000b1", name: "ACME Distribution Ctr", address: "1 Dock Rd, Dallas TX", score: 0.68 },
-    { facility_id: "00000000-0000-0000-0000-0000000000b2", name: "Dallas Distribution Center", address: "9 Loop 12, Dallas TX", score: 0.65 },
+  // AI-CONTEXT: a ROUTE (§23 entry 68) — two stops, so the confirm screen is measured
+  // the way a real contract renders it rather than at its shortest.
+  stops: [
+    {
+      sequence: 0,
+      stop_type: "pickup",
+      name: "Harvest Foods DC",
+      address: "1200 Commerce Pkwy, Dallas, TX 75212",
+      appointment_start: "2026-08-03T08:00:00",
+      appointment_end: "2026-08-03T10:00:00",
+      location: { lat: 32.7767, lon: -96.797, label: "1200 Commerce Street, Dallas, Texas 75208" },
+      facility_candidates: [
+        { facility_id: "00000000-0000-0000-0000-0000000000b3", name: "Harvest Foods DC", address: null, score: 0.91 },
+      ],
+    },
+    {
+      sequence: 1,
+      stop_type: "delivery",
+      name: "Metro Market Warehouse",
+      address: "8450 Lakeside Ave, Columbus, OH 43228",
+      appointment_start: "2026-08-05T07:30:00",
+      appointment_end: null,
+      location: { lat: 39.9612, lon: -83.0907, label: "Columbus, Ohio 43228, United States" },
+      facility_candidates: [
+        { facility_id: "00000000-0000-0000-0000-0000000000b1", name: "ACME Distribution Ctr", address: "1 Dock Rd, Dallas TX", score: 0.68 },
+        { facility_id: "00000000-0000-0000-0000-0000000000b2", name: "Dallas Distribution Center", address: "9 Loop 12, Dallas TX", score: 0.65 },
+      ],
+    },
   ],
 };
-
 const MONEY_MOCKS = {
   "/accessorial/owed": [
     { receivable_id: "r-1", kind: "detention", amount_cents: 8750, state: "invoiced", aging_days: 12, is_reimbursement: false },
@@ -302,7 +325,7 @@ const SURFACES = [
   ["sheet-unreadable", "/load", {
     mocks: {
       ...NO_LOAD_MOCKS,
-      "/load/import": { document_id: RATE_CON_DRAFT.document_id, parsed: null, silent_on: [], facility_candidates: [], readable: false },
+      "/load/import": { document_id: RATE_CON_DRAFT.document_id, parsed: null, silent_on: [], stops: [], readable: false },
     },
     open: [".cta:not(.cta--text)", { upload: ".rc__input" }, ".rc__cta"],
     ready: ".rc__unread",

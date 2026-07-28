@@ -377,14 +377,25 @@ export async function fetchActiveLoad() {
   return data.stop_id;
 }
 
+// AI-CONTEXT: leaving a stop ADVANCES the route (§23 entry 69).
+//
+// This dropped local state unconditionally, which was right when a load was one dock
+// and wrong the moment it became a route: departing the pickup cleared the tab while
+// the delivery sat `pending` and unreachable. The server names the next stop; the
+// client switches to it and only clears when there is nothing left to run.
 export async function endActiveLoad(stopId) {
-  // durable end: mark the stop departed server-side, then drop local state
+  let nextStopId = null;
   try {
-    await fetch(`${API_BASE}/load/${stopId}/end`, { method: "POST", headers: headers() });
+    const resp = await fetch(`${API_BASE}/load/${stopId}/end`, {
+      method: "POST",
+      headers: headers(),
+    });
+    if (resp.ok) nextStopId = (await resp.json()).next_stop_id ?? null;
   } catch {
-    /* offline — local clear still happens; server stays armed until next end */
+    /* offline — the local switch still happens; the server stays armed until next end */
   }
-  setActiveStop(null);
+  setActiveStop(nextStopId);
+  return nextStopId;
 }
 
 export async function sendDetentionNotice(stopId) {

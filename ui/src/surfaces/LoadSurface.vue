@@ -398,10 +398,17 @@ async function onSendNotice() {
 async function endLoad() {
   history.value = []; // re-read on next open: this load just joined it
   const stopId = activeStopId.value;
-  if (stopId) await endActiveLoad(stopId); // durable: departs the stop server-side
-  else setActiveStop(null);
   filed.value = null;
-  clearLoad();
+  if (!stopId) {
+    setActiveStop(null);
+    clearLoad();
+    return;
+  }
+  // durable: departs the stop server-side, and hands back the next one if the route
+  // has further to run (§23 entry 69). Only the last stop empties this tab.
+  const next = await endActiveLoad(stopId);
+  if (next) await loadMeter();
+  else clearLoad();
 }
 </script>
 
@@ -691,8 +698,10 @@ async function endLoad() {
           <li><button class="more__item" type="button" @click="go('/load/calc')">
             {{ t("load.check_profit") }}
           </button></li>
+          <!-- §12.2: the button says what will actually happen. On a route this leaves
+               THIS dock and opens the next; only the last stop ends the load. -->
           <li><button class="more__item" type="button" @click="more = false; endLoad()">
-            {{ t("load.end") }}
+            {{ nextStop ? t("load.leave_stop") : t("load.end") }}
           </button></li>
         </ul>
       </BottomSheet>

@@ -173,7 +173,7 @@ def test_the_parsed_receiver_is_matched_against_facilities_we_already_know(db):
     aggregates over."""
     known = _facility(db, name="ACME Distribution Center")
 
-    candidates = loads.facility_candidates(db, {"receiver_name": "Acme Distribution"})
+    candidates = loads.facility_candidates_for(db, "Acme Distribution")
 
     assert [c["facility_id"] for c in candidates] == [str(known.id)]
     assert candidates[0]["score"] > 0
@@ -183,7 +183,7 @@ def test_a_rate_con_with_no_receiver_name_offers_no_match(db):
     """Rather than matching everything, or nothing, by accident."""
     _facility(db, name="Somewhere Else")
 
-    assert loads.facility_candidates(db, {"receiver_name": None}) == []
+    assert loads.facility_candidates_for(db, None) == []
     assert loads.facility_candidates(db, {}) == []
 
 
@@ -196,7 +196,7 @@ def test_name_similarity_cannot_tell_the_right_dock_from_a_wrong_one(db):
     _facility(db, name="Dallas Distribution Center")
     _facility(db, name="ACME Distribution Ctr", coords=(32.9, -96.9))
 
-    ranked = loads.facility_candidates(db, {"receiver_name": "ACME Distribution Center"})
+    ranked = loads.facility_candidates_for(db, "ACME Distribution Center")
 
     by_name = {c["name"]: c["score"] for c in ranked}
     assert by_name["ACME Distribution Ctr"] - by_name["Dallas Distribution Center"] < 0.05
@@ -208,7 +208,7 @@ def test_an_unrelated_facility_is_not_offered_at_all(db):
     """Below F2's suggestion floor there is no useful signal left."""
     _facility(db, name="Memphis Cold Storage")
 
-    assert loads.facility_candidates(db, {"receiver_name": "ACME Distribution Center"}) == []
+    assert loads.facility_candidates_for(db, "ACME Distribution Center") == []
 
 
 def test_a_term_the_contract_states_is_not_called_silence_over_a_capital_letter(db):
