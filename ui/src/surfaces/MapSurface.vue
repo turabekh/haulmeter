@@ -97,9 +97,36 @@ const geo = ref({ lat: 32.78, lon: -96.8 });
 // the driver, so until this is true no origin is sent and no distance is shown —
 // a figure measured from a default would be confidently wrong (§11.7).
 const located = ref(false);
+// AI-CONTEXT: THROTTLED, and the lack of it took the API down (§23 entry 93).
+//
+// Mapbox's geolocate control runs with `trackUserLocation: true`, so this fires on
+// EVERY position update — several per second on a phone holding a high-accuracy fix.
+// Each one called `loadHandoffs()`, which is a database-backed request. Measured on
+// the deployed box from a single handset: enough concurrent calls to exhaust
+// SQLAlchemy's pool (`QueuePool limit of size 5 overflow 10 reached`), after which the
+// API refused connections and Caddy answered 502. **One driver was a denial of
+// service against the whole environment.**
+//
+// The discipline already existed ten lines away and was not applied here:
+// `core/location.js` throttles its OWN pings to 250 m / 5 minutes precisely because
+// `watchPosition` fires as often as the OS pleases. Mapbox's control is a SECOND
+// position stream, and it arrived without inheriting that rule.
+//
+// Spots opening nearby do not change every metre. Position is still updated on every
+// fix — that is free — and only the REQUEST is rationed.
+const HANDOFF_REFRESH_METERS = 250;
+const HANDOFF_REFRESH_MS = 60_000;
+let handoffAt = 0;
+let handoffFrom = null;
+
 function onLocated({ lat, lon }) {
   geo.value = { lat, lon };
   located.value = true;
+  const moved =
+    !handoffFrom || metersBetween(handoffFrom.lat, handoffFrom.lon, lat, lon) >= HANDOFF_REFRESH_METERS;
+  if (!moved && Date.now() - handoffAt < HANDOFF_REFRESH_MS) return;
+  handoffAt = Date.now();
+  handoffFrom = { lat, lon };
   loadHandoffs(); // the map's recenter fires @bounds -> overlay refetch on its own
 }
 

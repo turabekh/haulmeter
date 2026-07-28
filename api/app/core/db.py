@@ -19,7 +19,25 @@ class Base(DeclarativeBase):
 
 
 _settings = get_settings()
-engine = create_engine(_settings.database_url, future=True, pool_pre_ping=True)
+# AI-CONTEXT: the pool, sized deliberately after it ran out (§23 entry 93).
+#
+# The default is 5 connections with 10 overflow. A single phone whose map was
+# refetching on every GPS fix exhausted it, and an exhausted pool does not degrade —
+# requests block for 30 s and then raise, so the API stops answering and the proxy
+# returns 502. The CAUSE was the client hammering (fixed there); this is the second
+# line of defence, so the next unthrottled caller degrades instead of failing over.
+#
+# `pool_recycle` matters more here than the size: this runs against a Postgres in a
+# sibling container and a connection idle across a restart is a connection that will
+# fail on first use. `pool_pre_ping` already catches that; recycling keeps it rare.
+engine = create_engine(
+    _settings.database_url,
+    future=True,
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
+    pool_recycle=1800,
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
