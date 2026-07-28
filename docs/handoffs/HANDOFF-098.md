@@ -142,6 +142,19 @@ Four headings, four answers. **Before this session every one of those calls retu
   097 §5's own species — "a test asserted the defect as correct" — and it is worth
   noticing that a *placeholder plus a test of the placeholder* is indistinguishable from
   a finished feature at the level of a green suite.
+- **The layout harness was made cheap, and the fix was structural.** It ran FIVE
+  `test()` blocks per surface-variant and each did its own `prepare` + `goto` + `settle`
+  — five identical page loads to ask five questions of one screen. Same four states,
+  same four workers: **168 s → 45 s.** The rules and their number are unchanged; they
+  are `expect.soft`, so a screen breaking three of them reports all three from one load.
+- **Raising workers 2→4 without raising the timeouts made it look flaky**, and that was
+  mine. A test now covers five evaluations, so the 30 s per-test and 5 s `ready` budgets
+  were tuned for the old shape; three map states "failed" a run in which nothing about
+  them was wrong. 60 s / 15 s now, and the same subset passes 16/16 at four workers.
+- **The policy is written into the Makefile rather than left as a habit**: iterate with
+  `ui-layout-only STATE=…`; the full sweep is for a shared token, a global stylesheet,
+  `layout.spec.js` itself, a handoff, or `make ci`. Running it after every edit is what
+  made it unusable, and **a check that is painful to run stops being run.**
 - `make test` and `make ui-layout` were never run concurrently (097 §5).
 
 ## 6. Exact next task — Session 19
@@ -227,8 +240,8 @@ DOCS design-prd.md §23 entries 81–83
 ```
 make up          # preflight, then the full stack
 make test        # 1066 pytest + 496 vitest
-make ui-layout   # 681 mobile-first checks at 360 dp (~10 min) — RUN IT ALONE
-make ui-layout-only STATE=load-calc   # one state (~17 s) while iterating
+make ui-layout-only STATE=<screen>    # ~45 s — the one you want while building
+make ui-layout                        # the full sweep — RUN IT ALONE, and rarely
 ```
 
 **The standing warning, still earned.** Seven Map-tab defects were found this session by

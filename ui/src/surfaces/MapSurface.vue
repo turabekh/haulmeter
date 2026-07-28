@@ -884,9 +884,16 @@ async function submitPrice(cents) {
   height: 72px;
 }
 /* §6.5 is 48; §11.2's 44 is a map-PIN exemption and does not reach a button that
-   happens to sit on the map. */
+   happens to sit on the map.
+   AI-CONTEXT: these three stacked controls (sleep, relay, saved) all carried
+   `margin: … 0` on the BOTTOM, so whichever one rendered last sat flush against the
+   map canvas — measured at 360×800, the relay banner ended at y=232 and the canvas
+   began at y=232. A 1 px hairline butted against a dark basemap reads as a control
+   that has been CUT OFF, which is how the owner saw it. The bottom margin makes the
+   gap between two stacked controls 16 and the gap before the canvas 8, both from the
+   existing scale — §22 forbids inventing a spacing value, not using one. */
 .sleep-cta {
-  margin: var(--s-2) var(--s-4) 0;
+  margin: var(--s-2) var(--s-4);
   min-height: 48px;
   border-radius: var(--r-control);
   background: var(--ink-1);
@@ -896,7 +903,7 @@ async function submitPrice(cents) {
   font-weight: 500;
 }
 .relay-banner {
-  margin: var(--s-2) var(--s-4) 0;
+  margin: var(--s-2) var(--s-4);
   min-height: 48px; /* §6.5 glove spec — was 44 */
   border-radius: var(--r-control);
   background: var(--shield-500);
@@ -935,7 +942,7 @@ async function submitPrice(cents) {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  margin: var(--s-2) var(--s-4) 0;
+  margin: var(--s-2) var(--s-4);
   min-height: 48px;
   padding: 0 var(--s-3);
   border-radius: var(--r-control);

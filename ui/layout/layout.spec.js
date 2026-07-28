@@ -665,7 +665,11 @@ async function settle(page, live) {
   // measured against it. Silence here is the failure mode that kept the live Load
   // tab unmeasured for four sessions.
   if (live && live.ready) {
-    await page.waitForSelector(live.ready, { state: "attached", timeout: 5_000 });
+    // 15 s, not 5. Under four workers the mocked overlay can land later than a
+    // lightly-loaded machine suggests, and a `ready` that times out looks exactly
+    // like a broken surface — which is how three states "failed" a run in which
+    // nothing about them was wrong.
+    await page.waitForSelector(live.ready, { state: "attached", timeout: 15_000 });
   }
 }
 
@@ -685,211 +689,212 @@ async function settle(page, live) {
 // genuinely theme-sensitive property, is computed from tokens in contrast.test.js.
 //
 // The budget went to surfaces instead, which is the dimension that finds bugs.
-for (const [name, path, live] of SURFACES) {
+// AI-CONTEXT: ONE PAGE LOAD PER STATE, not one per assertion.
+//
+// This ran five `test()` blocks per surface-variant and every one of them did its own
+// `prepare` + `goto` + `settle` — five identical page loads to ask five questions of
+// the same screen. 40 states x 3 locales x 5 = 600 navigations, plus 80 more at 200%,
+// for a suite that measures 40 screens. It took eleven minutes, and a check that slow
+// stops being run, which costs more than any assertion in it can pay back.
+//
+// The rules are unchanged and so is their number. They are `expect.soft`, so a screen
+// that breaks three of them still reports all three from a single load rather than
+// hiding the second and third behind the first.
+const CHECKS = [
   {
-    const theme = "dark";
-    // `pa` joins the matrix because §6.2's "metrics-compatible line-height tokens
-    // verified" is a LAYOUT claim, and this harness is the only thing that can
-    // answer it. Gurmukhi carries matras above AND below the baseline, so a line
-    // height tuned for Latin is exactly the kind of thing that clips silently — and
-    // "verified" was asserted in the constitution without anyone rendering it.
-    for (const pseudo of [false, "xx-XL", "pa"]) {
-      const label = `${name}${pseudo ? ` · ${pseudo}` : ""}`;
-
-      test(`${label} — no horizontal overflow at 360 dp`, async ({ page }) => {
-        await prepare(page, { theme, pseudo, live });
-        await page.setViewportSize({ width: 360, height: 800 });
-        await page.goto(`${BASE}${path}`);
-        await settle(page, live);
-        await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
-
-        const overflow = await page.evaluate(() => {
-          const doc = document.documentElement;
-          const offenders = [];
-          for (const el of document.querySelectorAll("body *")) {
-            const r = el.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) continue;
-            // 1 px of tolerance: sub-pixel rounding is not a layout defect
-            if (r.right > doc.clientWidth + 1 || r.left < -1) {
-              const style = getComputedStyle(el);
-              // an element that scrolls its own overflow is doing so ON PURPOSE
-              // (the preset chip row, the portal rail) — that is a pattern the
-              // constitution approves, not a break
-              const scrolls = ["auto", "scroll"].includes(style.overflowX);
-              const parentScrolls = el.parentElement
-                ? ["auto", "scroll"].includes(getComputedStyle(el.parentElement).overflowX)
-                : false;
-              if (!scrolls && !parentScrolls) {
-                offenders.push(`${el.tagName.toLowerCase()}.${el.className} @${Math.round(r.right)}`);
-              }
+    name: "no horizontal overflow at 360 dp",
+    async run(page) {
+      const overflow = await page.evaluate(() => {
+        const doc = document.documentElement;
+        const offenders = [];
+        for (const el of document.querySelectorAll("body *")) {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) continue;
+          // 1 px of tolerance: sub-pixel rounding is not a layout defect
+          if (r.right > doc.clientWidth + 1 || r.left < -1) {
+            const style = getComputedStyle(el);
+            // an element that scrolls its own overflow is doing so ON PURPOSE
+            // (the preset chip row, the portal rail) — that is a pattern the
+            // constitution approves, not a break
+            const scrolls = ["auto", "scroll"].includes(style.overflowX);
+            const parentScrolls = el.parentElement
+              ? ["auto", "scroll"].includes(getComputedStyle(el.parentElement).overflowX)
+              : false;
+            if (!scrolls && !parentScrolls) {
+              offenders.push(`${el.tagName.toLowerCase()}.${el.className} @${Math.round(r.right)}`);
             }
           }
-          return { docScroll: doc.scrollWidth, clientWidth: doc.clientWidth, offenders };
-        });
-
-        expect(overflow.offenders, `elements past 360 dp: ${overflow.offenders.join(" | ")}`)
-          .toEqual([]);
-        expect(overflow.docScroll).toBeLessThanOrEqual(overflow.clientWidth + 1);
+        }
+        if (doc.scrollWidth > doc.clientWidth + 1) {
+          offenders.push(`document scrolls ${doc.scrollWidth}>${doc.clientWidth}`);
+        }
+        return offenders;
       });
-
-      test(`${label} — nothing below the 13 dp type floor`, async ({ page }) => {
-        await prepare(page, { theme, pseudo, live });
-        await page.setViewportSize({ width: 360, height: 800 });
-        await page.goto(`${BASE}${path}`);
-        await settle(page, live);
-
-        const small = await page.evaluate((floor) => {
+      return [overflow, `elements past 360 dp: ${overflow.join(" | ")}`];
+    },
+  },
+  {
+    name: "nothing below the 13 dp type floor",
+    async run(page) {
+      const small = await page.evaluate((floor) => {
+        const found = [];
+        for (const el of document.querySelectorAll("body *")) {
+          if (!el.textContent || !el.textContent.trim()) continue;
+          // AI-CONTEXT: Mapbox's own furniture is not our type scale.
+          //
+          // Every OTHER check here already skips `mapboxgl-*`; this one never did, so
+          // `mapboxgl-map` and the compact attribution — all 12px, all injected by the
+          // library — failed §6.2 the moment GL got far enough to render them. It was
+          // LATENT: WebGL init is unreliable in the container, so it passed four
+          // consecutive runs before failing the fifth with nothing changed. A harness
+          // that fails on a coin flip teaches everyone to re-run rather than look.
+          //
+          // `.mapboxgl-map` is the container the library takes over; our own pins are
+          // siblings of it inside `.canvas`, so nothing of ours is exempted.
+          if (el.closest(".mapboxgl-map")) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) continue;
+          const size = parseFloat(getComputedStyle(el).fontSize);
+          if (size && size < floor) {
+            found.push(`${el.tagName.toLowerCase()}.${el.className} @${size}px`);
+          }
+        }
+        return found;
+      }, CAPTION_FLOOR_PX);
+      return [small, `§6.2 says nothing smaller than 13 dp exists: ${small.join(" | ")}`];
+    },
+  },
+  {
+    name: "text is not clipped by its line box",
+    async run(page) {
+      await page.evaluate(() => document.fonts && document.fonts.ready);
+      const clipped = await page.evaluate(() => {
+        const found = [];
+        for (const el of document.querySelectorAll("body *")) {
+          if (!el.childElementCount && el.textContent && el.textContent.trim()) {
+            const style = getComputedStyle(el);
+            if (style.overflow === "visible") continue; // nothing to clip against
+            if (el.scrollHeight > el.clientHeight + 1) {
+              found.push(`${el.tagName.toLowerCase()}.${el.className} ${el.scrollHeight}>${el.clientHeight}`);
+            }
+          }
+        }
+        return found;
+      });
+      return [clipped, `clipped text: ${clipped.join(" | ")}`];
+    },
+  },
+  {
+    // AI-CONTEXT: the assertion with the best odds of paying for its runtime. A
+    // <button> with no handler is the FIFTH instance of one bug class in this project:
+    // the "suggest a cook" control with no destination, `categories` collected and
+    // never read, `portions` carried through three API layers to nowhere,
+    // `followers_notified` returned and rendered nowhere, and the Docs capture chip.
+    // The near side of a seam gets built, the far side does not, and every one of
+    // those passes review — the code looks finished from whichever side you read it.
+    //
+    // A control that reports nothing when pressed is worse than an absent one: it
+    // spends the driver's trust. §23 settled the principle for the module registry —
+    // a capability whose destination does not exist is LABELLED, never linked — and
+    // this is that rule, enforced. `disabled` is an acceptable answer: saying "not
+    // yet" is honest; saying nothing is not.
+    name: "every control does something, or says it cannot",
+    async run(page) {
+      const inert = await page.evaluate(() => {
+        const found = [];
+        for (const el of document.querySelectorAll("button")) {
+          const r = el.getBoundingClientRect();
+          if (!r.width || !r.height) continue;
+          if (el.disabled || el.getAttribute("aria-disabled") === "true") continue;
+          // a <button type=submit> inside a form acts through the form
+          if (el.type === "submit" && el.closest("form")) continue;
+          // Vue compiles @click to a listener; getEventListeners is devtools-only, so
+          // the reliable signal is the framework's own bookkeeping on the node
+          const vue = el.__vnode || el.__vueParentComponent;
+          const props = vue && vue.props;
+          const hasVueHandler = !!(
+            props &&
+            Object.keys(props).some((k) => /^on[A-Z]/.test(k) && typeof props[k] === "function")
+          );
+          const hasDomHandler = typeof el.onclick === "function";
+          // Mapbox attaches its listeners imperatively, so neither Vue's bookkeeping
+          // nor `onclick` can see them. Same exemption, same reason: not our furniture.
+          if (el.closest(".mapboxgl-ctrl") || /mapboxgl/.test(el.className)) continue;
+          if (!hasVueHandler && !hasDomHandler && !el.closest("a[href]")) {
+            found.push(`${el.className || el.tagName.toLowerCase()}: "${(el.textContent || "").trim().slice(0, 32)}"`);
+          }
+        }
+        return found;
+      });
+      return [inert, `controls that do nothing when pressed: ${inert.join(" | ")}`];
+    },
+  },
+  {
+    name: "interactive targets meet the glove spec",
+    async run(page) {
+      const tooSmall = await page.evaluate(
+        ([selector, min, exempt]) => {
           const found = [];
-          for (const el of document.querySelectorAll("body *")) {
-            if (!el.textContent || !el.textContent.trim()) continue;
-            // AI-CONTEXT: Mapbox's own furniture is not our type scale.
+          for (const el of document.querySelectorAll(selector)) {
+            let r = el.getBoundingClientRect();
+            // AI-CONTEXT: a radio or checkbox is a GLYPH inside its target. The browser
+            // delivers the tap to the enclosing <label>, so that is what §6.5 governs —
+            // the rate-con facility radios render 13x13 inside labels measuring 328x48,
+            // and reporting the glyph would have sent someone to inflate a control that
+            // is already reachable.
             //
-            // Every OTHER check in this file already skips `mapboxgl-*` (see
-            // TARGET_EXEMPT and the `.closest(".mapboxgl-ctrl")` guards); this one
-            // never did, so `mapboxgl-map`, `mapboxgl-ctrl-attrib` and the compact
-            // attribution — all 12px, all injected by the library — failed §6.2 the
-            // moment GL got far enough to render them. It was LATENT rather than
-            // constant: WebGL init is unreliable in the container, so the elements
-            // only sometimes exist, and the check passed on four consecutive runs
-            // before failing on the fifth with nothing about it changed. A harness
-            // that fails on a coin flip teaches everyone to re-run rather than look.
-            //
-            // `.mapboxgl-map` is the container the library takes over; our own pins
-            // are siblings of it inside `.canvas`, so nothing of ours is exempted.
-            if (el.closest(".mapboxgl-map")) continue;
-            const r = el.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) continue;
-            const size = parseFloat(getComputedStyle(el).fontSize);
-            if (size && size < floor) {
-              found.push(`${el.tagName.toLowerCase()}.${el.className} @${size}px`);
+            // Narrowed to radio/checkbox deliberately. NOT a general "labels count"
+            // rule: a text input inside a label would borrow the caption's height and a
+            // genuinely short field would pass. A radio with no label, or one in an
+            // undersized label, still fails here.
+            if (el.tagName === "INPUT" && (el.type === "radio" || el.type === "checkbox")) {
+              const label = el.closest("label");
+              if (label) r = label.getBoundingClientRect();
+            }
+            if (r.width === 0 || r.height === 0) continue; // not rendered
+            if (getComputedStyle(el).visibility === "hidden") continue;
+            if (new RegExp(exempt).test(el.className) || el.closest(".mapboxgl-ctrl")) continue;
+            if (r.height < min - 0.5 || r.width < min - 0.5) {
+              found.push(
+                `${el.tagName.toLowerCase()}.${el.className} ${Math.round(r.width)}x${Math.round(r.height)}`,
+              );
             }
           }
           return found;
-        }, CAPTION_FLOOR_PX);
+        },
+        [TARGET_SELECTOR, TOUCH_MIN_PX, TARGET_EXEMPT.source],
+      );
+      return [tooSmall, `§6.5 glove spec — under 48 dp: ${tooSmall.join(" | ")}`];
+    },
+  },
+];
 
-        expect(small, `§6.2 says nothing smaller than 13 dp exists: ${small.join(" | ")}`)
-          .toEqual([]);
-      });
+for (const [name, path, live] of SURFACES) {
+  const theme = "dark";
+  // `pa` joins the matrix because §6.2's "metrics-compatible line-height tokens
+  // verified" is a LAYOUT claim, and this harness is the only thing that can answer
+  // it. Gurmukhi carries matras above AND below the baseline, so a line height tuned
+  // for Latin is exactly the kind of thing that clips silently — and "verified" was
+  // asserted in the constitution without anyone rendering it.
+  for (const pseudo of [false, "xx-XL", "pa"]) {
+    const label = `${name}${pseudo ? ` · ${pseudo}` : ""}`;
 
-      test(`${label} — text is not clipped by its line box`, async ({ page }) => {
-        await prepare(page, { theme, pseudo, live });
-        await page.setViewportSize({ width: 360, height: 800 });
-        await page.goto(`${BASE}${path}`);
-        await settle(page, live);
-        await page.evaluate(() => document.fonts && document.fonts.ready);
+    test(`${label} — §22.3 layout rules`, async ({ page }) => {
+      await prepare(page, { theme, pseudo, live });
+      await page.setViewportSize({ width: 360, height: 800 });
+      await page.goto(`${BASE}${path}`);
+      await settle(page, live);
+      // stamped once for the whole load. It used to be stamped inside the first
+      // assertion only, so the other four measured whatever the system happened to
+      // prefer — harmless, because §23 makes type/space/radius theme-invariant, but
+      // it was never the intent.
+      await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
 
-        const clipped = await page.evaluate(() => {
-          const found = [];
-          for (const el of document.querySelectorAll("body *")) {
-            if (!el.childElementCount && el.textContent && el.textContent.trim()) {
-              const style = getComputedStyle(el);
-              if (style.overflow === "visible") continue; // nothing to clip against
-              if (el.scrollHeight > el.clientHeight + 1) {
-                found.push(`${el.tagName.toLowerCase()}.${el.className} ${el.scrollHeight}>${el.clientHeight}`);
-              }
-            }
-          }
-          return found;
-        });
-
-        expect(clipped, `clipped text: ${clipped.join(" | ")}`).toEqual([]);
-      });
-
-      // AI-CONTEXT: the fifth assertion, and the one with the best odds of paying for
-      // its runtime. A <button> with no handler is the FIFTH instance of one bug
-      // class in this project: the "suggest a cook" control with no destination,
-      // `categories` collected and never read, `portions` carried through three API
-      // layers to nowhere, `followers_notified` returned and rendered nowhere, and
-      // the Docs capture chip. The near side of a seam gets built, the far side does
-      // not, and nothing in §22.3 catches it because every one of those passes review
-      // — the code looks finished from whichever side you are reading.
-      //
-      // A control that reports nothing when pressed is worse than an absent one: it
-      // spends the driver's trust. §23 already settled the principle for the module
-      // registry — a capability whose destination does not exist is LABELLED, never
-      // linked — and this is that rule, enforced.
-      //
-      // `disabled` is an acceptable answer. Saying "not yet" is honest; saying
-      // nothing is not.
-      test(`${label} — every control does something, or says it cannot`, async ({ page }) => {
-        await prepare(page, { theme, pseudo, live });
-        await page.setViewportSize({ width: 360, height: 800 });
-        await page.goto(`${BASE}${path}`);
-        await settle(page, live);
-
-        const inert = await page.evaluate(() => {
-          const found = [];
-          for (const el of document.querySelectorAll("button")) {
-            const r = el.getBoundingClientRect();
-            if (!r.width || !r.height) continue;
-            if (el.disabled || el.getAttribute("aria-disabled") === "true") continue;
-            // a <button type=submit> inside a form acts through the form
-            if (el.type === "submit" && el.closest("form")) continue;
-            // Vue compiles @click to a listener; getEventListeners is devtools-only,
-            // so the reliable signal is the framework's own bookkeeping on the node
-            const vue = el.__vnode || el.__vueParentComponent;
-            const props = vue && vue.props;
-            const hasVueHandler = !!(
-              props &&
-              Object.keys(props).some((k) => /^on[A-Z]/.test(k) && typeof props[k] === "function")
-            );
-            const hasDomHandler = typeof el.onclick === "function";
-            // Mapbox attaches its own listeners imperatively, so neither Vue's
-            // bookkeeping nor `onclick` can see them. Same exemption the glove-spec
-            // check already carries, and for the same reason: not our furniture.
-            if (el.closest(".mapboxgl-ctrl") || /mapboxgl/.test(el.className)) continue;
-            if (!hasVueHandler && !hasDomHandler && !el.closest("a[href]")) {
-              found.push(`${el.className || el.tagName.toLowerCase()}: "${(el.textContent || "").trim().slice(0, 32)}"`);
-            }
-          }
-          return found;
-        });
-
-        expect(inert, `controls that do nothing when pressed: ${inert.join(" | ")}`).toEqual([]);
-      });
-
-      test(`${label} — interactive targets meet the glove spec`, async ({ page }) => {
-        await prepare(page, { theme, pseudo, live });
-        await page.setViewportSize({ width: 360, height: 800 });
-        await page.goto(`${BASE}${path}`);
-        await settle(page, live);
-
-        const tooSmall = await page.evaluate(
-          ([selector, min, exempt]) => {
-            const found = [];
-            for (const el of document.querySelectorAll(selector)) {
-              let r = el.getBoundingClientRect();
-              // AI-CONTEXT: a radio or checkbox is a GLYPH inside its target. The
-              // browser delivers the tap to the enclosing <label>, so that is what
-              // §6.5 governs — the rate-con confirm screen's facility radios render
-              // 13×13 inside labels measuring 328×48, and reporting the glyph would
-              // have sent someone to inflate a control that is already reachable.
-              //
-              // This narrows to radio/checkbox deliberately. It is NOT a general
-              // "labels count" rule: a text input inside a label would borrow the
-              // caption's height and a genuinely short field would pass. And a radio
-              // with no label, or one in an undersized label, still fails here.
-              if (el.tagName === "INPUT" && (el.type === "radio" || el.type === "checkbox")) {
-                const label = el.closest("label");
-                if (label) r = label.getBoundingClientRect();
-              }
-              if (r.width === 0 || r.height === 0) continue; // not rendered
-              if (getComputedStyle(el).visibility === "hidden") continue;
-              if (new RegExp(exempt).test(el.className) || el.closest(".mapboxgl-ctrl")) continue;
-              if (r.height < min - 0.5 || r.width < min - 0.5) {
-                found.push(
-                  `${el.tagName.toLowerCase()}.${el.className} ${Math.round(r.width)}×${Math.round(r.height)}`,
-                );
-              }
-            }
-            return found;
-          },
-          [TARGET_SELECTOR, TOUCH_MIN_PX, TARGET_EXEMPT.source],
-        );
-
-        expect(tooSmall, `§6.5 glove spec — under 48 dp: ${tooSmall.join(" | ")}`).toEqual([]);
-      });
-    }
+      for (const check of CHECKS) {
+        const [offenders, message] = await check.run(page);
+        expect.soft(offenders, `${check.name} — ${message}`).toEqual([]);
+      }
+    });
   }
 }
 
@@ -921,50 +926,37 @@ async function at200(page, path, live) {
 }
 
 for (const [name, path, live] of SURFACES) {
-  test(`${name} · 200% — reflows without overflowing 360 dp (T-5)`, async ({ page }) => {
+  test(`${name} · 200% — reflow and clipping (T-5/T-6)`, async ({ page }) => {
     await at200(page, path, live);
+    await page.evaluate(() => document.fonts && document.fonts.ready);
 
-    const offenders = await page.evaluate(() => {
+    const [offenders, clipped] = await page.evaluate(() => {
       const doc = document.documentElement;
-      const found = [];
+      const past = [];
+      const clip = [];
       for (const el of document.querySelectorAll("body *")) {
         const r = el.getBoundingClientRect();
-        if (r.width === 0 || r.height === 0) continue;
-        if (r.right > doc.clientWidth + 1 || r.left < -1) {
+        if (r.width !== 0 && r.height !== 0 && (r.right > doc.clientWidth + 1 || r.left < -1)) {
           const style = getComputedStyle(el);
           const scrolls = ["auto", "scroll"].includes(style.overflowX);
           const parentScrolls = el.parentElement
             ? ["auto", "scroll"].includes(getComputedStyle(el.parentElement).overflowX)
             : false;
           if (!scrolls && !parentScrolls) {
-            found.push(`${el.tagName.toLowerCase()}.${el.className} @${Math.round(r.right)}`);
+            past.push(`${el.tagName.toLowerCase()}.${el.className} @${Math.round(r.right)}`);
           }
         }
-      }
-      return found;
-    });
-
-    expect(offenders, `past 360 dp at 200% text: ${offenders.join(" | ")}`).toEqual([]);
-  });
-
-  test(`${name} · 200% — nothing clipped by its line box (T-5/T-6)`, async ({ page }) => {
-    await at200(page, path, live);
-    await page.evaluate(() => document.fonts && document.fonts.ready);
-
-    const clipped = await page.evaluate(() => {
-      const found = [];
-      for (const el of document.querySelectorAll("body *")) {
         if (!el.childElementCount && el.textContent && el.textContent.trim()) {
           const style = getComputedStyle(el);
-          if (style.overflow === "visible") continue;
-          if (el.scrollHeight > el.clientHeight + 1) {
-            found.push(`${el.tagName.toLowerCase()}.${el.className} ${el.scrollHeight}>${el.clientHeight}`);
+          if (style.overflow !== "visible" && el.scrollHeight > el.clientHeight + 1) {
+            clip.push(`${el.tagName.toLowerCase()}.${el.className} ${el.scrollHeight}>${el.clientHeight}`);
           }
         }
       }
-      return found;
+      return [past, clip];
     });
 
-    expect(clipped, `clipped at 200% text: ${clipped.join(" | ")}`).toEqual([]);
+    expect.soft(offenders, `past 360 dp at 200% text: ${offenders.join(" | ")}`).toEqual([]);
+    expect.soft(clipped, `clipped at 200% text: ${clipped.join(" | ")}`).toEqual([]);
   });
 }

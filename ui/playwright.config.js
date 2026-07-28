@@ -5,8 +5,11 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./layout",
-  timeout: 30_000,
-  expect: { timeout: 5_000 },
+  // AI-CONTEXT: a test now loads a page ONCE and runs five checks against it, so the
+  // per-test budget covers five evaluations rather than one. 30 s was tuned when each
+  // test asked a single question and was the reason four workers looked flaky.
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
   fullyParallel: true,
   // AI-CONTEXT: the harness was pinned at 2 workers on an 8-core machine and took
   // ~13 minutes for 612 checks, which is long enough that it stops being run — and a

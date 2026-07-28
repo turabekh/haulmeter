@@ -19,7 +19,7 @@ help:
 	@echo "  test       run the full suite (api + ui) in compose"
 	@echo "  lint       run ruff + import-linter in the api container"
 	@echo "  ci         preflight + lint + test (compose parity with CI)"
-	@echo "  ui-layout-only STATE=x   one layout state instead of all (iterate)"
+	@echo "  ui-layout-only STATE=x   ONE layout state (~45s) — prefer this while building"
 
 env:
 	@test -f infra/.env || (cp infra/.env.example infra/.env && echo "created infra/.env from example")
@@ -69,9 +69,18 @@ ui-layout: env
 	$(COMPOSE) up -d ui
 	$(COMPOSE) run --rm --entrypoint sh ui -c "npx --yes playwright install --with-deps chromium >/dev/null 2>&1 || npx --yes playwright install chromium; npm run layout"
 
-# One state (or any -g pattern) instead of all of them, for the loop you are actually
-# in while building a screen. The full sweep still has to pass before a change is done
-# — this is for iterating, not for replacing it.
+# AI-CONTEXT: RUN THIS, NOT THE FULL SWEEP, unless you have a reason.
+#
+# `ui-layout` is the slowest thing in the project. Running it after every edit is what
+# made it feel unusable — and a check that is painful to run stops being run, which
+# costs more than any assertion in it can pay back.
+#
+# The policy, so nobody has to rediscover it:
+#   · while building a screen  -> `ui-layout-only STATE=<that screen>`  (~45 s)
+#   · touched a shared token, a global stylesheet, or layout.spec itself -> full sweep
+#   · before a handoff, and in `make ci` -> full sweep
+# Nothing else needs the full sweep. A change to one surface cannot break another's
+# geometry unless it went through something shared, and that case is named above.
 #   make ui-layout-only STATE=load-calc
 #   make ui-layout-only STATE="sheet-map"      # every map sheet
 ui-layout-only: env
