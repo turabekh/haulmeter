@@ -9,13 +9,14 @@
      precision). Live via api.js; offline it degrades honestly (fuel + dwell
      need a session, and it says so). -->
 <script setup>
-import { ref, reactive, computed } from "vue";
+import { ref, reactive, computed, onMounted } from "vue";
 import { ArrowLeft } from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
-import { calcTrueProfit } from "../core/api.js";
+import { calcTrueProfit, activeStopId, fetchMeter } from "../core/api.js";
+import { lastFix } from "../core/location.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -32,6 +33,41 @@ const form = reactive({
 const result = ref(null);
 const submitting = ref(false);
 
+// AI-CONTEXT: the load this calculator was opened FROM (§23 entry 85).
+//
+// It is reached from the Load tab's More sheet as a bare `/load/calc` — no query
+// params — while reading `route.query.receiver`, `.lat` and `.lon` and falling back to
+// the NIL UUID and a hardcoded Dallas. Those three parameters have never been supplied
+// by anything, so every true-profit figure computed in production valued detention at a
+// facility that does not exist and routed fuel from a city the driver was not in.
+//
+// The load knows its own Rate, its free time, its detention rate and its receiver.
+// Asking a driver to retype the first while defaulting the fourth to nothing is the
+// same shape as the rate con parsed into fields nobody read.
+const prefilled = ref(false);
+const loadFacility = ref(null);
+
+onMounted(async () => {
+  if (!activeStopId.value) return; // pre-acceptance use: nothing to prefill from
+  try {
+    const meter = await fetchMeter(activeStopId.value);
+    loadFacility.value = meter.facility_id ?? null;
+    // §11.7: prefill only what the load actually STATES. A rate con silent on the
+    // linehaul leaves the field as it was rather than gaining a confident zero.
+    if (meter.rate_cents) {
+      form.revenue = (meter.rate_cents / 100).toFixed(2);
+      prefilled.value = true;
+    }
+    if (meter.free_time_minutes != null) form.freeMin = meter.free_time_minutes;
+    if (meter.rate_cents_per_hour != null) {
+      form.rateHr = Math.round(meter.rate_cents_per_hour / 100);
+    }
+  } catch {
+    /* offline / no session: the form keeps its own defaults and says nothing it
+       cannot support — the calculation itself already degrades honestly below */
+  }
+});
+
 function toCents(dollars) {
   return Math.round(Number(dollars || 0) * 100);
 }
@@ -43,11 +79,19 @@ async function calculate() {
     loaded_miles: Number(form.miles) || 0,
     mpg: 6.0,
     tolls_cents: toCents(form.tolls),
-    receiver_facility_id: route.query.receiver || "00000000-0000-0000-0000-000000000000",
+    // the dock this load is actually going to, before the query param nothing sets
+    // and before the nil UUID that made the detention estimate meaningless
+    receiver_facility_id:
+      loadFacility.value || route.query.receiver || "00000000-0000-0000-0000-000000000000",
     free_time_minutes: Number(form.freeMin) || 0,
     rate_cents_per_hour: toCents(form.rateHr),
-    origin_lat: Number(route.query.lat) || 32.7767,
-    origin_lon: Number(route.query.lon) || -96.797,
+    // where the driver IS, which is what a route-fuel estimate is measured from. The
+    // Dallas constant behind it is the same invented coordinate §23 entry 67 removed
+    // from the import sheet; it stays only as the last resort on a device with no fix.
+    // `||` rather than `??` on the query fallback: an absent param makes `Number()`
+    // return NaN, which `??` would happily pass through as an origin.
+    origin_lat: lastFix.value?.lat ?? (Number(route.query.lat) || 32.7767),
+    origin_lon: lastFix.value?.lon ?? (Number(route.query.lon) || -96.797),
   };
   try {
     result.value = await calcTrueProfit(payload);
@@ -85,6 +129,11 @@ const clears = computed(() => (result.value?.net_cents ?? 0) >= 0);
       <label class="field">
         <span class="field__label">{{ t("calc.revenue") }}</span>
         <input v-model="form.revenue" class="field__input" type="number" inputmode="decimal" min="0" />
+        <!-- §11.7: the figure NAMES WHO IS SPEAKING. A rate carried over from the load
+             and a rate the driver typed carry different confidence, and only the driver
+             knows whether the contract is right. Editable either way — this is a
+             calculator, not a record. -->
+        <span v-if="prefilled" class="field__from">{{ t("calc.from_load") }}</span>
       </label>
       <label class="field">
         <span class="field__label">{{ t("calc.miles") }}</span>
@@ -176,6 +225,13 @@ const clears = computed(() => (result.value?.net_cents ?? 0) >= 0);
 .field__label {
   font-size: var(--type-label-size);
   color: var(--text-2);
+}
+/* provenance, in the same quiet register the Load tab uses for the appointment's
+   source — a caption under the figure, never a badge competing with it */
+.field__from {
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
 }
 .field__input {
   min-height: 56px;

@@ -65,11 +65,22 @@ const BASE = process.env.UI_BASE || "http://ui:9008";
 const API_BASE = "http://localhost:8008";
 const LIVE_STOP = "00000000-0000-0000-0000-0000000000cc";
 const LIVE_MOCKS = {
-  "/load/active": { stop_id: LIVE_STOP },
+  "/load/active": {
+    stop_id: LIVE_STOP,
+    // §23 entry 82 — this route names the dock now, not just the stop
+    facility_id: "00000000-0000-0000-0000-0000000000b3",
+    facility_name: "Dallas Cold Storage",
+  },
   [`/load/${LIVE_STOP}/meter`]: {
     stop_id: LIVE_STOP,
     claim_id: "00000000-0000-0000-0000-0000000000dd",
     facility_name: "Dallas Cold Storage",
+    // AI-CONTEXT: shape-matched to the endpoint (§23 entries 84/85). The meter now
+    // carries the facility id and the load's linehaul rate, and a mock missing them
+    // would render the profit calculator with no prefill — measuring the screen
+    // without the thing that was just added to it.
+    facility_id: "00000000-0000-0000-0000-0000000000b3",
+    rate_cents: 285000,
     counterparty: "Coyote Logistics",
     appointment: "2026-07-27T04:10:50.993277+00:00",
     arrived: true,
@@ -304,6 +315,16 @@ const WALLET_MOCKS = {
 const SURFACES = [
   ["map", "/"],
   ["load", "/load"],
+  // AI-CONTEXT: `/load/calc` had NO harness state at all — a full-screen form with five
+  // number inputs and a Meter-treatment headline, never measured at 360 dp. Two states,
+  // because the surface has two genuinely different shapes: opened with no load it shows
+  // its own defaults, and opened from a load it prefills and gains a provenance caption
+  // (§23 entry 85). `ready` proves the prefill rendered rather than measuring the empty
+  // form twice under two names.
+  ["load-calc", "/load/calc", { mocks: NO_LOAD_MOCKS, ready: ".cta" }],
+  ["load-calc-prefilled", "/load/calc", {
+    stop: LIVE_STOP, mocks: LIVE_MOCKS, ready: ".field__from",
+  }],
   // `ready` is the selector that PROVES the mocked state rendered. Without it a
   // mock that stops matching turns this surface back into a second copy of `load`,
   // and the harness goes green over the screen it was added to measure — the same
@@ -613,6 +634,21 @@ for (const [name, path, live] of SURFACES) {
           const found = [];
           for (const el of document.querySelectorAll("body *")) {
             if (!el.textContent || !el.textContent.trim()) continue;
+            // AI-CONTEXT: Mapbox's own furniture is not our type scale.
+            //
+            // Every OTHER check in this file already skips `mapboxgl-*` (see
+            // TARGET_EXEMPT and the `.closest(".mapboxgl-ctrl")` guards); this one
+            // never did, so `mapboxgl-map`, `mapboxgl-ctrl-attrib` and the compact
+            // attribution — all 12px, all injected by the library — failed §6.2 the
+            // moment GL got far enough to render them. It was LATENT rather than
+            // constant: WebGL init is unreliable in the container, so the elements
+            // only sometimes exist, and the check passed on four consecutive runs
+            // before failing on the fifth with nothing about it changed. A harness
+            // that fails on a coin flip teaches everyone to re-run rather than look.
+            //
+            // `.mapboxgl-map` is the container the library takes over; our own pins
+            // are siblings of it inside `.canvas`, so nothing of ours is exempted.
+            if (el.closest(".mapboxgl-map")) continue;
             const r = el.getBoundingClientRect();
             if (r.width === 0 || r.height === 0) continue;
             const size = parseFloat(getComputedStyle(el).fontSize);

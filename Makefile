@@ -2,7 +2,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci \
-        seed seed-wallet purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales ui-layout
+        seed seed-wallet purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales ui-layout ui-layout-only
 
 STATE ?= wisconsin
 # osmium-tool is packaged in Debian/Ubuntu; install it in a slim base at run time
@@ -19,6 +19,7 @@ help:
 	@echo "  test       run the full suite (api + ui) in compose"
 	@echo "  lint       run ruff + import-linter in the api container"
 	@echo "  ci         preflight + lint + test (compose parity with CI)"
+	@echo "  ui-layout-only STATE=x   one layout state instead of all (iterate)"
 
 env:
 	@test -f infra/.env || (cp infra/.env.example infra/.env && echo "created infra/.env from example")
@@ -67,6 +68,16 @@ fmt:
 ui-layout: env
 	$(COMPOSE) up -d ui
 	$(COMPOSE) run --rm --entrypoint sh ui -c "npx --yes playwright install --with-deps chromium >/dev/null 2>&1 || npx --yes playwright install chromium; npm run layout"
+
+# One state (or any -g pattern) instead of all of them, for the loop you are actually
+# in while building a screen. The full sweep still has to pass before a change is done
+# — this is for iterating, not for replacing it.
+#   make ui-layout-only STATE=load-calc
+#   make ui-layout-only STATE="sheet-map"      # every map sheet
+ui-layout-only: env
+	@test -n "$(STATE)" || (echo "usage: make ui-layout-only STATE=<name or pattern>"; exit 1)
+	$(COMPOSE) up -d ui
+	$(COMPOSE) run --rm --entrypoint sh ui -c "npx --yes playwright install --with-deps chromium >/dev/null 2>&1 || npx --yes playwright install chromium; npx playwright test -g '$(STATE)'"
 
 # preflight runs FIRST, while everything is still down; ui-layout then brings up the
 # one service it needs. Order matters — reversing them puts the port check after the

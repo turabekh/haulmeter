@@ -36,6 +36,7 @@ import SleepSheet from "../src/core/components/SleepSheet.vue";
 import HandoffSheet from "../src/core/components/HandoffSheet.vue";
 import { routes, installAuthGuard } from "../src/router.js";
 import { setToken, logout, isAuthenticated, setActiveStop, setActiveFleet } from "../src/core/api.js";
+import en from "../src/core/i18n/en.json";
 import { useDriverState, DriverState } from "../src/core/state.js";
 
 const routerStub = { global: { stubs: { "router-link": { template: "<a class='rl'><slot/></a>" } } } };
@@ -439,6 +440,103 @@ describe("LoadCalcSurface — true-profit calculator (M8-FR1, §11.7 basis)", ()
     await flushPromises();
     return w;
   }
+
+  // AI-CONTEXT: the calculator knew nothing about the load it was opened from (§23
+  // entry 85). It is reached as a bare `/load/calc` while reading query params nothing
+  // supplies, so it asked the driver to retype a Rate the load already knew and valued
+  // detention at the NIL UUID — a facility that does not exist — from a hardcoded
+  // Dallas origin.
+  const METER = {
+    stop_id: "s-1",
+    facility_id: "fac-77",
+    facility_name: "Harvest Foods DC",
+    rate_cents: 285000,
+    free_time_minutes: 90,
+    rate_cents_per_hour: 6000,
+    phase: "not_arrived",
+    detention_cents: 0,
+    detention_seconds: 0,
+    photos_captured: 0,
+    photos_required: 4,
+  };
+
+  async function mountCalcWithLoad(meter = METER) {
+    setActiveStop("s-1");
+    setToken("tok-calc");
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url) => {
+      if (String(url).includes("/meter")) return jsonOk(meter);
+      return Promise.reject(new Error("no session"));
+    }));
+    const w = await mountCalc();
+    await flushPromises();
+    return w;
+  }
+
+  it("prefills the rate from the load rather than asking for it again", async () => {
+    try {
+      const w = await mountCalcWithLoad();
+      expect(w.findAll(".field__input").at(0).element.value).toBe("2850.00");
+      // §11.7: the figure names who is speaking
+      expect(w.text()).toContain(en["calc.from_load"]);
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
+
+  it("carries the load's detention terms across too", async () => {
+    try {
+      const w = await mountCalcWithLoad();
+      const inputs = w.findAll(".field__input");
+      expect(inputs.at(3).element.value).toBe("90"); // free time
+      expect(inputs.at(4).element.value).toBe("60"); // $/hr
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
+
+  it("values detention at the real receiver, not the nil UUID", async () => {
+    setActiveStop("s-1");
+    setToken("tok-calc");
+    const posts = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url, opts) => {
+      posts.push({ url: String(url), body: opts?.body ? JSON.parse(opts.body) : null });
+      if (String(url).includes("/meter")) return jsonOk(METER);
+      return jsonOk({ revenue_cents: 285000, fuel_cost_cents: 1, tolls_cents: 0,
+        expected_detention_cents: 0, net_cents: 1, rpm_after_cents: 1,
+        basis: { fuel: "live", detention_sample_size: 3 } });
+    }));
+    try {
+      const w = await mountCalc();
+      await flushPromises();
+      await w.find("form").trigger("submit");
+      await flushPromises();
+      const calc = posts.find((p) => p.body && p.body.receiver_facility_id);
+      expect(calc.body.receiver_facility_id).toBe("fac-77");
+      expect(calc.body.revenue_cents).toBe(285000);
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
+
+  it("says nothing about a rate the contract never stated", async () => {
+    // §11.7: a rate con silent on the linehaul must not hand the driver a confident
+    // figure they did not type and the paper does not contain
+    try {
+      const w = await mountCalcWithLoad({ ...METER, rate_cents: null });
+      expect(w.text()).not.toContain(en["calc.from_load"]);
+      expect(w.findAll(".field__input").at(0).element.value).toBe("2000");
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveStop(null);
+      logout();
+    }
+  });
 
   it("computes an honest offline net (revenue − tolls) with basis shown", async () => {
     const fetchStub = vi.fn().mockRejectedValue(new Error("no session"));

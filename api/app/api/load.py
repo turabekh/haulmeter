@@ -619,6 +619,15 @@ def meter(
         "stop_id": str(stop.id),
         "claim_id": str(claim.id) if claim else None,
         "facility_name": fac.name,
+        # AI-CONTEXT: what the profit calculator needs to stop inventing (§23 entry 85).
+        #
+        # M8's calculator asks a driver to type a Rate the load already knows, and
+        # defaults its receiver to the NIL UUID and its origin to a hardcoded Dallas —
+        # so every "true profit" computed in production valued detention at a facility
+        # that does not exist. The meter already returns this load's free time and
+        # detention rate; these two are the rest of the same economics.
+        "facility_id": str(stop.facility_id),
+        "rate_cents": load.rate_cents if load else None,
         "counterparty": cp.name if cp else None,
         "appointment": stop.appointment_start.isoformat() if stop.appointment_start else None,
         "arrived": arrived,

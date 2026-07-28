@@ -19,8 +19,8 @@ never captured a heading.
 | Thing | Value |
 |---|---|
 | Migrations | head **0052_m03_claim_clock_since** (untouched — this session added no schema) |
-| Tests | **pytest 1057 · vitest 481 · layout 579 · ruff clean · import-linter 30/30** |
-| §23 decision log | **84 entries** (81–84 added) |
+| Tests | **pytest 1059 · vitest 485 · layout 613 · ruff clean · import-linter 30/30** |
+| §23 decision log | **85 entries** (81–85 added) |
 | Handoffs | 000 → 098 |
 | Git | `main` local only, never pushed · `3ca1f3d` (Map tab) + the rate/terms commit |
 | Services | **running** |
@@ -117,6 +117,18 @@ Four headings, four answers. **Before this session every one of those calls retu
   permanently blank, and would have kept doing so after entry 84 added one. Entry 52's
   rule *inside the harness itself*. Fixed, plus real `accessorial_terms`, so the new
   block is measured at 360 dp rather than skipped; re-run green at 579.
+- **The harness took 13 minutes and now takes 8**, and the reason it was slow is worth
+  recording: `workers: 2` on an 8-core machine. Raised to 4 (env-overridable via
+  `PW_WORKERS`) — deliberately not higher, because each worker is a Chromium holding a
+  WebGL context and the map surfaces flake first under memory pressure. `make
+  ui-layout-only STATE=<pattern>` runs one state in ~17 s for the loop you are actually
+  in while building a screen; the full sweep still has to pass before a change is done.
+- **A latent harness flake was found and fixed.** The type-floor check was the only one
+  of the four with no `mapboxgl-*` exemption, so Mapbox's own injected furniture — the
+  map container and the compact attribution, all 12px — failed §6.2 **whenever WebGL
+  initialised far enough to render them**. It passed four consecutive runs and failed
+  the fifth with nothing about it changed. A check that fails on a coin flip teaches
+  everyone to re-run rather than look.
 - `make test` and `make ui-layout` were never run concurrently (097 §5).
 
 ## 6. Exact next task — Session 19
@@ -153,9 +165,14 @@ alone. Left for the owner rather than swept into one commit.
   finally real, but nothing calls it. Either wire it or delete it — the pre-acceptance
   warning a driver actually sees comes from `silent_on` in the draft, so a second path
   would duplicate it. Owner call.
-- **`Load.rate_cents` is stored and read by nothing yet.** The obvious consumer is M8's
-  profit calculator (`/load/calc`), which currently asks the driver to type a rate the
-  load already knows. One prefill away.
+- **The profit calculator still opens on invented defaults** (`revenue 2000 / miles 500
+  / tolls 30`, fixed `mpg 6.0`) when there is no active load. Money on a screen that
+  nobody entered — the shape §23 entry 52 removed from the Load tab — but what an EMPTY
+  calculator should show is a product decision, not a passing one.
+- **`FacilityCard` has no layout-harness state**, so §10.1's whole contextual CTA ladder
+  — Book, Fuel here, Navigate and the new "This is your stop" — has never been measured
+  at 360 dp. It needs a map state that opens a pin whose facility matches the mocked
+  armed stop.
 - **§11.2's clock / dwell-risk badge slot** has no signal behind it. M2 computes dwell
   statistics; nothing puts them on the overlay payload. The slot stays empty on purpose.
 - **§11.6 is only half-honoured.** `MapCanvas` uses Mapbox Standard's `lightPreset` keyed
@@ -200,8 +217,9 @@ DOCS design-prd.md §23 entries 81–83
 
 ```
 make up          # preflight, then the full stack
-make test        # 1057 pytest + 481 vitest
-make ui-layout   # 579 mobile-first checks at 360 dp (~12 min) — RUN IT ALONE
+make test        # 1059 pytest + 485 vitest
+make ui-layout   # 613 mobile-first checks at 360 dp (~8 min) — RUN IT ALONE
+make ui-layout-only STATE=load-calc   # one state (~17 s) while iterating
 ```
 
 **The standing warning, still earned.** Seven Map-tab defects were found this session by

@@ -157,6 +157,38 @@ def test_m04_finally_judges_a_load_against_terms_it_actually_has(client, db):
     assert set(quiet_check["missing"]) == {"tonu", "layover"}
 
 
+def test_meter_carries_what_the_profit_calculator_needs(client, db):
+    """§23 entry 85. M8's calculator asked the driver to retype a Rate the load already
+    knew, and defaulted its receiver to the NIL UUID — so every true-profit figure in
+    production valued detention at a facility that does not exist."""
+    headers = _auth(client)
+    stop_id = client.post(
+        "/load",
+        json={
+            "facility_name": "Dallas Receiver",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Acme Brokerage",
+            "rate_cents": 285000,
+            "free_time_minutes": 90,
+            "rate_cents_per_hour": 6000,
+        },
+        headers=headers,
+    ).json()["stop_id"]
+    meter = client.get(f"/load/{stop_id}/meter", headers=headers).json()
+    assert meter["rate_cents"] == 285000
+    assert meter["facility_id"] is not None
+    # the terms the calculator also stops guessing at
+    assert meter["free_time_minutes"] == 90 and meter["rate_cents_per_hour"] == 6000
+
+
+def test_meter_states_no_rate_when_the_contract_did_not(client, db):
+    # §11.7: a rate con silent on the linehaul must not become a confident zero
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["rate_cents"] is None
+
+
 def test_end_load_departs_the_stop_and_clears_active(client, db):
     headers = _auth(client)
     stop_id = _create(client, headers)
