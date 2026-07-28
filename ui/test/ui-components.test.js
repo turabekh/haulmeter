@@ -112,6 +112,60 @@ describe("PresetChips (design-prd §11.3)", () => {
   });
 });
 
+// AI-CONTEXT: the voice sheet's honesty, which is the whole of §14.5 (§23 entry 91).
+// Reported twice by the owner as "listening but not working" — first because a failed
+// start() left `listening` true forever, then because a mic that CANNOT work in an
+// insecure context still presented itself as one.
+describe("speech availability (§14.5 / §12.4)", () => {
+  it("does not call an unusable recogniser 'supported'", async () => {
+    // Chrome exposes webkitSpeechRecognition over plain http and then refuses to
+    // start one. A constructor that exists but can never run is not support.
+    const speech = await import("../src/core/speech.js");
+    const orig = Object.getOwnPropertyDescriptor(window, "isSecureContext");
+    Object.defineProperty(window, "isSecureContext", { value: false, configurable: true });
+    try {
+      expect(speech.recognitionSupported()).toBe(false);
+      expect(speech.recognitionUnavailableReason()).toBe("insecure");
+    } finally {
+      if (orig) Object.defineProperty(window, "isSecureContext", orig);
+    }
+  });
+
+  it("sorts failures by what the DRIVER can do about them", async () => {
+    const { speechFailureKind } = await import("../src/core/speech.js");
+    // every one of these used to say "didn't catch that — try again", which invited
+    // a retry at something that could not succeed
+    expect(speechFailureKind("audio-capture")).toBe("no_mic");
+    expect(speechFailureKind("network")).toBe("network");
+    expect(speechFailureKind("not-allowed")).toBe("blocked");
+    expect(speechFailureKind("service-not-allowed")).toBe("blocked");
+    expect(speechFailureKind("start-failed")).toBe("unavailable");
+    // and the two where re-asking IS the right answer
+    expect(speechFailureKind("no-speech")).toBe("retry");
+    expect(speechFailureKind("no-match")).toBe("retry");
+  });
+
+  it("reports a failed start instead of swallowing it", async () => {
+    // the defect behind "says listening but is not working": start() threw, the catch
+    // ate it, onerror never fired, and `listening` had already been set true
+    const { createRecognizer } = await import("../src/core/speech.js");
+    class Throwing {
+      start() { throw new Error("no gesture"); }
+      stop() {}
+    }
+    const prev = window.SpeechRecognition;
+    window.SpeechRecognition = Throwing;
+    try {
+      const errors = [];
+      const rec = createRecognizer("en", { onError: (e) => errors.push(e) });
+      expect(rec.start()).toBe(false);
+      expect(errors).toEqual(["start-failed"]);
+    } finally {
+      window.SpeechRecognition = prev;
+    }
+  });
+});
+
 describe("FacilityCard (design-prd §10.1)", () => {
   it("shows Navigate as the primary CTA and emits navigate", async () => {
     const pin = {
@@ -865,6 +919,23 @@ describe("FacilityProfileSurface — driver Q&A (M10-FR4)", () => {
 });
 
 describe("VoiceSheet — copilot ask/answer (M11-FR1)", () => {
+  // AI-CONTEXT: these mount a sheet that is meant to have a WORKING recogniser, and
+  // `recognitionSupported()` now also requires a secure context (§23 entry 91) —
+  // because Chrome exposes the constructor over plain http and then refuses to start
+  // it, which is what "listening but not working" turned out to be. The test runner
+  // is not a browsing context, so it has to say which case it is simulating. Three
+  // tests failed on this guard and they were RIGHT to: they had been asserting that a
+  // mic works without ever stating the condition under which one can.
+  let secureCtx;
+  beforeEach(() => {
+    secureCtx = Object.getOwnPropertyDescriptor(window, "isSecureContext");
+    Object.defineProperty(window, "isSecureContext", { value: true, configurable: true });
+  });
+  afterEach(() => {
+    if (secureCtx) Object.defineProperty(window, "isSecureContext", secureCtx);
+    else delete window.isSecureContext;
+  });
+
   it("asks over /voice/ask and shows the intent-routed spoken answer", async () => {
     const fetchStub = vi.fn().mockResolvedValue({
       ok: true,

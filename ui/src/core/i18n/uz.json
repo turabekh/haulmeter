@@ -867,6 +867,7 @@
   "vendor.where": "Qayerda",
   "vendor.your_documents": "Nima yuborgansiz",
   "voice.ask": "So'rash",
+  "voice.insecure": "Ovoz uchun xavfsiz ulanish (https) kerak. Savolingizni yozing.",
   "voice.listening": "Tinglayapman…",
   "voice.mic": "Ovoz",
   "voice.mic_blocked": "Mikrofon o‘chiq — savolingizni yozing.",

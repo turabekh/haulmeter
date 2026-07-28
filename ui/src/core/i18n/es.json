@@ -867,6 +867,7 @@
   "vendor.where": "Dónde",
   "vendor.your_documents": "Lo que has enviado",
   "voice.ask": "Preguntar",
+  "voice.insecure": "La voz necesita una conexión segura (https). Escribe tu pregunta.",
   "voice.listening": "Escuchando…",
   "voice.mic": "Voz",
   "voice.mic_blocked": "El micrófono está apagado — escribe tu pregunta.",

@@ -25,8 +25,28 @@ function RecognitionCtor() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
+// AI-CONTEXT: a constructor that exists but can never start is NOT support.
+//
+// Chrome exposes `webkitSpeechRecognition` in insecure contexts and then refuses to
+// start one — so this returned true, the sheet opened, called start(), and failed.
+// That is the shape of "listening still not working at all": the app served over a
+// LAN IP (or any plain http:// host) rather than localhost or HTTPS. `isSecureContext`
+// is the browser's own answer to the question we were guessing at.
+//
+// Reported as UNSUPPORTED rather than as an error, because the difference matters to
+// the driver: an error invites a retry, and this cannot succeed until the page is
+// served differently. §14.5 degrades to typing, and now says why.
 export function recognitionSupported() {
+  if (typeof window === "undefined") return false;
+  if (window.isSecureContext === false) return false;
   return !!RecognitionCtor();
+}
+
+// why the mic is not on offer, for a sheet that would otherwise just hide it
+export function recognitionUnavailableReason() {
+  if (typeof window === "undefined") return "unavailable";
+  if (window.isSecureContext === false) return "insecure";
+  return RecognitionCtor() ? null : "unsupported";
 }
 
 // A single-utterance recognizer: start() listens, calls onResult with the final

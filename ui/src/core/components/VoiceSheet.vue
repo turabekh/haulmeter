@@ -13,6 +13,7 @@ import { useI18n } from "../i18n.js";
 import { askVoice } from "../api.js";
 import {
   recognitionSupported,
+  recognitionUnavailableReason,
   createRecognizer,
   speechFailureKind,
   synthesisSupported,
@@ -97,7 +98,20 @@ function replay() {
 
 onMounted(() => {
   // opened from a mic tap (a user gesture) -> start listening; errors fall back
-  if (micOn) startListening();
+  if (micOn) {
+    startListening();
+    return;
+  }
+  // AI-CONTEXT: SAY WHY (§23 entry 91). With no recogniser the mic button simply
+  // vanished and the sheet offered a text box with no explanation — so a driver whose
+  // voice had worked yesterday, on a phone that had since been served over plain
+  // http, learned nothing. "Voice is not available here" is a fact; a missing button
+  // is a puzzle. The commonest cause by far is an insecure context, which is a
+  // deployment fact rather than anything the driver did, so it gets its own sentence.
+  hint.value =
+    recognitionUnavailableReason() === "insecure"
+      ? t("voice.insecure")
+      : t("voice.unsupported");
 });
 onBeforeUnmount(() => {
   stopListening();

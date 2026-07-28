@@ -860,20 +860,20 @@ async function submitPrice(cents) {
   height: 100%;
   position: relative;
 }
-/* AI-CONTEXT: CENTRED, and that is a fix rather than a preference (§23 entry 90).
-   Mapbox's logo cannot be repositioned — it is bottom-left by their ToS and by their
-   API — and that is exactly where this chip was, measured overlapping it. Everything
-   else moved out of our corners; this is the one piece of furniture that could not,
-   so the chip moved instead.
-   Centre rather than a third corner because `.voice-chip--driving` was ALREADY
-   centred: the control now stays put when DRIVING begins instead of jumping from the
-   left edge to the middle, which is a better answer than the one the collision
-   forced. `--s-5` off the bottom keeps it clear of the logo strip. */
+/* AI-CONTEXT: LEFT, and lifted over Mapbox's logo rather than dodging sideways
+   (§23 entry 91). Centring it was my answer to that collision and the owner's answer
+   is better: the thumb zone for a left-handed grab is the left edge, and a control
+   that lives in a corner is easier to find without looking than one floating in the
+   middle of a moving map.
+   The logo is the reason the collision existed — it is bottom-left by Mapbox's API
+   and their ToS, and cannot be moved — so the chip clears it VERTICALLY instead.
+   `--s-5 + --s-4` is 40 dp, measured to leave 11 dp above the logo's top edge; both
+   floating chips use it so they stay level with each other. Composed from the scale,
+   not a new value (§22). */
 .voice-chip {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: var(--s-5);
+  left: var(--s-4);
+  bottom: calc(var(--s-5) + var(--s-4));
   width: 56px;
   height: 56px;
   border-radius: var(--r-pill);
@@ -886,9 +886,9 @@ async function submitPrice(cents) {
   box-shadow: var(--shadow-float);
   z-index: 2;
 }
-/* voice is the DRIVING input (§14): a bigger target in Corridor mode. It no longer
-   needs to re-centre — the chip is centred in both states now, so this changes only
-   the thing that should change at speed, which is the size of the target. */
+/* voice is the DRIVING input (§14): a bigger target in Corridor mode. It stays on the
+   left in both states, so the control does not move under the driver's thumb when the
+   truck starts rolling — only its size changes, which is the thing that should. */
 .voice-chip--driving {
   width: 72px;
   height: 72px;
@@ -1029,7 +1029,8 @@ async function submitPrice(cents) {
 .report-chip {
   position: absolute;
   right: var(--s-4);
-  bottom: var(--s-5);
+  /* level with the voice chip — see its note for why 40 dp */
+  bottom: calc(var(--s-5) + var(--s-4));
   width: 56px;
   height: 56px;
   border-radius: var(--r-pill);
