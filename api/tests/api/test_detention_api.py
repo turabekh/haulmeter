@@ -12,6 +12,7 @@ from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
 from app.foundation.f05_load import public as loads
 from app.main import app
+from app.modules.m03_detention import public as m3
 
 DALLAS = (32.7767, -96.7970)
 FAR = (32.9000, -96.8000)
@@ -56,6 +57,12 @@ def test_detention_start_and_pack_flow(client, db):
     assert start.status_code == 201
     claim_id = start.json()["claim_id"]
     assert start.json()["mode"] == "invoice"
+
+    # the claim's clock is scoped to the visit that belongs to it, and this one opened
+    # before the driver got there — which is the real order, even though the request
+    # above ran at wall-clock now while the pings below are dated five hours back
+    m3.get_claim(db, uuid.UUID(claim_id)).clock_since = t0 - timedelta(minutes=1)
+    db.flush()
 
     # arrival 5h ago, departure 1h ago -> 4h dwell, 2h free -> 2h detention accrued
     location.evaluate_ping(db, account.id, *DALLAS, occurred_at=t0)

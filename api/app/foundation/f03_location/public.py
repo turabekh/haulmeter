@@ -30,6 +30,7 @@ from .domain.service import (
     list_events,
     purge_pings_older_than,
     record_ping,
+    visit_window,
 )
 
 __all__ = [
@@ -55,4 +56,5 @@ __all__ = [
     "list_events",
     "purge_pings_older_than",
     "record_ping",
+    "visit_window",
 ]

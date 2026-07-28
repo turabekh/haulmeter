@@ -28,6 +28,10 @@ from app.modules.m05_protection import public as m5
 
 router = APIRouter(prefix="/load", tags=["load"])
 
+# which of a route's claim states a single summed figure should report. Declaration
+# order, so `escalated` — the only one asking the driver to do something — wins.
+_CLAIM_STATE_ORDER = {state: i for i, state in enumerate(m3.ClaimState)}
+
 _GATEWAY = notify.RecordingNotificationGateway()  # F8 seam (dev)
 
 
@@ -312,23 +316,50 @@ def load_history(
         stops = loads.list_stops(db, load)
         if not stops:
             continue
-        first = stops[0]
-        fac = facility.get_facility(db, first.facility_id)
-        claim = m3.claim_for_stop(db, first.id)
-        docs = documents.documents_for_subject(db, "stop", first.id)
+        # AI-CONTEXT: a load is a ROUTE, and this row reports all of it (§23 entry 74).
+        #
+        # Every figure here was read off `stops[0]` alone. A pickup-and-delivery load
+        # showed its PICKUP's facility name, its PICKUP's claim, its PICKUP's photos and
+        # its PICKUP's documents, with no sign that a second stop existed — so a driver
+        # who ran a two-stop load and recovered detention at both saw one of the two
+        # amounts and had no way to tell it was one of two. Measured on a real load:
+        # $83.67 shown against $271.43 actually claimed.
+        #
+        # Third time the same shape: the import learned routes (entry 68), the advance
+        # learned routes (entry 69), and every read built before them still assumed one
+        # stop. `stop_count` has been in this response since entry 68 and nothing has
+        # ever rendered it, which is how the singular kept looking correct.
+        first, last = stops[0], stops[-1]
+        origin = facility.get_facility(db, first.facility_id)
+        destination = facility.get_facility(db, last.facility_id)
+        claims = [c for c in (m3.claim_for_stop(db, s.id) for s in stops) if c is not None]
+        earned = [c for c in claims if c.amount_cents]
+        docs = [d for s in stops for d in documents.documents_for_subject(db, "stop", s.id)]
         rows.append(
             {
                 "load_id": str(load.id),
                 "stop_id": str(first.id),
-                "facility_name": fac.name if fac else None,
+                "facility_name": origin.name if origin else None,
+                # the far end of the route, and only when there IS one: a single-stop
+                # load has no destination distinct from where it started
+                "destination_name": (
+                    destination.name if destination and len(stops) > 1 else None
+                ),
                 "reference_number": load.reference_number,
                 "created_at": load.created_at.isoformat(),
                 "status": load.status.value,
                 "stop_count": len(stops),
                 # money only when there is money: a load that ran clean owes nothing,
                 # and a $0.00 row would read as a claim that failed
-                "detention_cents": claim.amount_cents if claim else None,
-                "claim_state": claim.state.value if claim else None,
+                "detention_cents": sum(c.amount_cents for c in earned) or None,
+                # one state for a summed figure. Every stop on a load belongs to one
+                # driver in one mode, so these agree in practice; where they do not it
+                # is because one was escalated, which is the one a driver needs to see.
+                "claim_state": (
+                    max(earned, key=lambda c: _CLAIM_STATE_ORDER[c.state]).state.value
+                    if earned
+                    else None
+                ),
                 # AI-CONTEXT: what the DRIVER captured (§23 entries 48, 70).
                 #
                 # `arm_stop` opens a log for every stop, so "does a log exist" always
@@ -346,7 +377,8 @@ def load_history(
                 # if the driver got there, which is exactly the question this answers.
                 "evidence_count": sum(
                     1
-                    for e in evidence.stop_evidence(db, first.id)["timeline"]
+                    for s in stops
+                    for e in evidence.stop_evidence(db, s.id)["timeline"]
                     if e.get("event") != loads.EVENT_DEPARTED
                 ),
                 "documents": sorted({d.doc_type.value for d in docs}),

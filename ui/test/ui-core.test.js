@@ -116,6 +116,21 @@ describe("i18n (F15)", () => {
     setLocale("en");
     expect(t("does.not.exist")).toBe("does.not.exist");
   });
+
+  it("substitutes {placeholders} (\u00a723 entry 74)", () => {
+    // `t` took a key and nothing else and ignored a second argument, so a real vendor
+    // was told "you did not show up {n} time(s) in a row". Both the catalogs and the
+    // pseudo-locale generator were built around placeholders; only the substitution
+    // at the point of use was missing.
+    const { t, setLocale } = useI18n();
+    setLocale("en");
+    expect(t("load.history_stops", { n: 2 })).toBe("2 stops");
+    expect(t("vendor.no_shows_warning", { n: 3 })).toContain("3 time(s)");
+    // no params, or a name the string does not carry: leave it visible rather than
+    // rendering a gap, because an empty slot reads as a finished sentence
+    expect(t("load.history_stops")).toBe("{n} stops");
+    expect(t("load.history_stops", { other: 9 })).toBe("{n} stops");
+  });
 });
 
 describe("F12 read-cache (design-prd §15.1: offline is a mode)", () => {

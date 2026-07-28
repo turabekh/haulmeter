@@ -31,8 +31,23 @@ if (typeof document !== "undefined") {
   document.documentElement.setAttribute("lang", locale.value);
 }
 
+// AI-CONTEXT: `{placeholder}` substitution (§23 entry 74). `t` took a key and nothing
+// else, and silently ignored a second argument — so `t("vendor.no_shows_warning", {n})`
+// rendered "you did not show up {n} time(s) in a row" at a real vendor. The catalogs
+// and the pseudo-locale generator were both built for placeholders (§12.5 preserves
+// them "untouched so message structure is exercised"); the substitution step at the
+// point of use was never written. An unknown name is left as it stands rather than
+// blanked: a visible `{n}` is a bug report, and an empty gap is a sentence that lies.
+function fill(raw, params) {
+  if (!params) return raw;
+  return raw.replace(/\{(\w+)\}/g, (match, name) =>
+    Object.hasOwn(params, name) ? String(params[name]) : match,
+  );
+}
+
 export function useI18n() {
-  const t = (key) => messages[locale.value]?.[key] ?? messages[DEFAULT_LOCALE][key] ?? key;
+  const t = (key, params) =>
+    fill(messages[locale.value]?.[key] ?? messages[DEFAULT_LOCALE][key] ?? key, params);
   const setLocale = (next) => {
     if (LAUNCH_LOCALES.includes(next)) {
       locale.value = next;

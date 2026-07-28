@@ -110,7 +110,7 @@ def test_full_platform_synthetic_end_to_end(db):
         db, driver.id, *AWAY, occurred_at=T0 + timedelta(hours=3)
     )  # EXIT = departure
     location.disarm_geofence(db, driver.id, receiver.id, occurred_at=T0 + timedelta(hours=3))
-    claim = m3.start_claim(db, stop)
+    claim = m3.start_claim(db, stop, started_at=T0)
     m3.generate_pack(db, claim, now=T0 + timedelta(hours=4))
     assert claim.amount_cents == 7500  # 3h dwell - 2h free = 1h detention @ $75
     assert claim.receivable_ref is not None

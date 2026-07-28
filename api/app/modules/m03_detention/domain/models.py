@@ -44,6 +44,11 @@ class DetentionClaim(Base):
     start_notice_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # AI-CONTEXT: when this claim began watching the stop (§23 entry 73). The clock may
+    # not start before it, which is what keeps a previous visit to the same dock out of
+    # this load's money. Explicit rather than read off `created_at`: the anchor the
+    # amount depends on should be statable by a caller and printable on the invoice.
+    clock_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     state: Mapped[ClaimState] = mapped_column(
         Enum(ClaimState, name="claim_state", schema=SCHEMA), default=ClaimState.open
     )

@@ -2348,6 +2348,14 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
         detention_cents: null, claim_state: null,
         evidence_count: 0, documents: [],
       },
+      {
+        load_id: "l-3", stop_id: "s-3", facility_name: "Harvest Foods DC",
+        destination_name: "Metro Market Warehouse",
+        reference_number: "BRL-78426", created_at: "2026-07-28T04:00:00+00:00",
+        status: "completed", stop_count: 2,
+        detention_cents: 27143, claim_state: "exported",
+        evidence_count: 4, documents: ["rate_con"],
+      },
     ],
   };
 
@@ -2378,7 +2386,7 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
     await flushPromises();
 
     const rows = w.findAll(".hist__row");
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows[0].text()).toContain("ACME Distribution Center");
     expect(rows[0].text()).toContain("$87.50"); // Mono, like every money figure
     expect(rows[0].text()).toContain("Invoiced");
@@ -2400,6 +2408,38 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
     expect(quiet).toContain("no detention");
     expect(quiet).toContain("nothing was captured");
     expect(quiet).not.toContain("$0.00"); // a zero would read as a claim that failed
+  });
+
+  it("names the whole route, not the stop it started at (\u00a723 entry 74)", async () => {
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    await w.findAll(".cta").find((b) => b.text() === "Past loads").trigger("click");
+    await flushPromises();
+
+    const route = w.findAll(".hist__row")[2].text();
+    // both ends of the load, and how many stops it had. Every figure on this row used
+    // to be the FIRST stop's, so a two-stop load was indistinguishable from a delivery
+    // to its pickup's dock -- and showed one of its two claims as if it were the total.
+    expect(route).toContain("Harvest Foods DC");
+    expect(route).toContain("Metro Market Warehouse");
+    expect(route).toContain("2 stops");
+    expect(route).toContain("$271.43");
+  });
+
+  it("labels a company driver's claim state rather than printing its key", async () => {
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    await w.findAll(".cta").find((b) => b.text() === "Past loads").trigger("click");
+    await flushPromises();
+
+    // `exported` is where a claim lands for a driver without their own authority -- a
+    // pack for their carrier, no invoice -- and it had no label in any of the six
+    // locales, so the commonest outcome rendered as "money.state.exported".
+    const route = w.findAll(".hist__row")[2].text();
+    expect(route).toContain("Sent to carrier");
+    expect(route).not.toContain("money.state");
   });
 });
 

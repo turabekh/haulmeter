@@ -63,7 +63,7 @@ def _arrive_and_leave(db, account, arrival, departure):
 
 def test_start_claim_arms_and_sets_invoice_mode(db):
     account, broker, load, stop = _setup(db)
-    claim = m3.start_claim(db, stop)
+    claim = m3.start_claim(db, stop, started_at=T0)
     assert stop.geofence_armed is True
     assert claim.mode == m3.ClaimMode.invoice  # own authority can invoice
     assert claim.evidence_log_ref is not None
@@ -71,13 +71,13 @@ def test_start_claim_arms_and_sets_invoice_mode(db):
 
 def test_company_driver_is_evidence_only(db):
     account, broker, load, stop = _setup(db, authority=identity.AuthorityType.company)
-    claim = m3.start_claim(db, stop)
+    claim = m3.start_claim(db, stop, started_at=T0)
     assert claim.mode == m3.ClaimMode.evidence_only
 
 
 def test_accrue_events_is_idempotent_and_chain_valid(db):
     account, broker, load, stop = _setup(db)
-    claim = m3.start_claim(db, stop)
+    claim = m3.start_claim(db, stop, started_at=T0)
     _arrive_and_leave(db, account, T0, T0 + timedelta(minutes=240))
     assert m3.accrue_events(db, claim) == 2  # ENTER + EXIT
     assert m3.accrue_events(db, claim) == 0  # idempotent
@@ -89,7 +89,7 @@ def test_accrue_events_is_idempotent_and_chain_valid(db):
 
 def test_generate_pack_invoice_opens_receivable_and_notifies(db):
     account, broker, load, stop = _setup(db)
-    claim = m3.start_claim(db, stop)
+    claim = m3.start_claim(db, stop, started_at=T0)
     _arrive_and_leave(db, account, T0, T0 + timedelta(minutes=240))
     gateway = notify.RecordingNotificationGateway()
 
@@ -108,7 +108,7 @@ def test_generate_pack_invoice_opens_receivable_and_notifies(db):
 
 def test_generate_pack_company_mode_no_invoice(db):
     account, broker, load, stop = _setup(db, authority=identity.AuthorityType.company)
-    claim = m3.start_claim(db, stop)
+    claim = m3.start_claim(db, stop, started_at=T0)
     _arrive_and_leave(db, account, T0, T0 + timedelta(minutes=240))
     result = m3.generate_pack(db, claim, now=T0 + timedelta(minutes=240))
     assert result["receivable"] is None
@@ -118,7 +118,7 @@ def test_generate_pack_company_mode_no_invoice(db):
 
 def test_pre_detention_notice_within_threshold(db):
     account, broker, load, stop = _setup(db)
-    claim = m3.start_claim(db, stop)
+    claim = m3.start_claim(db, stop, started_at=T0)
     location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0)  # arrival
     gateway = notify.RecordingNotificationGateway()
     # 100 min after arrival: 20 min of free time left (< 30 min threshold)
@@ -167,3 +167,65 @@ def test_the_invoice_reproduces_from_the_figures_printed_on_it():
     assert state.amount_cents == round(38 / 3600 * 12000)  # 127, not 129
     # and the reader's own arithmetic lands on the same number
     assert state.amount_cents == 127
+
+
+# --- the visit, not the facility's history (§23 entry 73) ---
+def test_an_earlier_visit_to_the_same_dock_does_not_start_this_claim(db):
+    """The money defect, reproduced.
+
+    The clock replayed EVERY geofence event ever recorded for the account at this
+    facility and took the earliest ENTER. A driver returning to a dock they had
+    visited before therefore billed from the FIRST visit. Measured on a real
+    two-stop load: a delivery the driver stood at for 53 seconds billed 2h20m —
+    $187.76 against $0.00 owed."""
+    account, broker, load, stop = _setup(db)
+
+    # yesterday's load to the same dock: armed, arrived, left, disarmed. Events only
+    # exist while a geofence is armed, so this has to be a real prior load — an
+    # unarmed "visit" records nothing and would prove the opposite of the point.
+    yesterday = T0 - timedelta(days=1)
+    location.arm_geofence(db, account.id, stop.facility_id)
+    _arrive_and_leave(db, account, yesterday, yesterday + timedelta(hours=4))
+    location.disarm_geofence(db, account.id, stop.facility_id, yesterday + timedelta(hours=4))
+
+    # today's visit: 30 minutes, well inside the 2h free time
+    claim = m3.start_claim(db, stop, started_at=T0)
+    _arrive_and_leave(db, account, T0 + timedelta(minutes=5), T0 + timedelta(minutes=35))
+
+    state = m3.clock(db, claim, now=T0 + timedelta(minutes=40))
+    assert state.detention_seconds == 0
+    assert state.amount_cents == 0
+
+
+def test_departure_is_this_visits_exit_not_the_latest_ever(db):
+    """`departure` took the LAST EXIT on file, which need not belong to this visit —
+    and a departure lifted from a later visit runs the clock through the gap between
+    them, billing for hours the truck spent somewhere else entirely."""
+    account, broker, load, stop = _setup(db)
+    claim = m3.start_claim(db, stop, started_at=T0)
+
+    # this visit: arrive, wait 3h (1h past free time), leave
+    _arrive_and_leave(db, account, T0, T0 + timedelta(hours=3))
+    # and a later, unrelated visit to the same dock
+    _arrive_and_leave(db, account, T0 + timedelta(days=2), T0 + timedelta(days=2, hours=1))
+
+    state = m3.clock(db, claim, now=T0 + timedelta(days=3))
+    assert state.detention_seconds == 3600
+    assert state.amount_cents == 7500  # 1h @ $75 — not two days of it
+
+
+def test_a_driver_already_at_the_dock_keeps_their_real_arrival(db):
+    """Scoping the clock to the claim must not clip a visit that was already under
+    way. The driver who is standing at the dock when the claim starts arrived
+    BEFORE it — and that earlier moment is the honest one to bill from."""
+    account, broker, load, stop = _setup(db)
+
+    loads.arm_stop(db, stop)
+    location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0)  # already inside
+    claim = m3.start_claim(db, stop, started_at=T0 + timedelta(minutes=10))
+    location.evaluate_ping(db, account.id, *FAR, occurred_at=T0 + timedelta(hours=3))
+
+    state = m3.clock(db, claim, now=T0 + timedelta(hours=4))
+    # billed from T0, the real arrival, not from the claim's own start
+    assert state.detention_seconds == 3600
+    assert state.amount_cents == 7500

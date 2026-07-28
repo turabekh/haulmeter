@@ -100,6 +100,13 @@ const more = ref(false);
 // opening a sheet (NAV-3), because a load is what this tab is about.
 const history = ref([]);
 const historyOpen = ref(false);
+// AI-CONTEXT: a finished load is named by its ROUTE (§23 entry 74). The row showed
+// the first stop's facility alone, so a pickup-and-delivery load was indistinguishable
+// from a single delivery to the pickup's dock — and the money beside it was the
+// pickup's claim, not the load's.
+function routeLabel(h) {
+  return h.destination_name ? `${h.facility_name} → ${h.destination_name}` : h.facility_name;
+}
 async function openHistory() {
   historyOpen.value = true;
   try {
@@ -660,8 +667,12 @@ async function endLoad() {
         <ul v-else class="hist">
           <li v-for="h in history" :key="h.load_id" class="hist__row">
             <button class="hist__main" type="button" @click="go(`/load/${h.stop_id}/evidence`)">
-              <span class="hist__name">{{ h.facility_name }}</span>
-              <span class="hist__date">{{ h.created_at.slice(0, 10) }}</span>
+              <span class="hist__name">{{ routeLabel(h) }}</span>
+              <span class="hist__date">
+                {{ h.created_at.slice(0, 10)
+                }}<template v-if="h.stop_count > 1">
+                  · {{ t("load.history_stops", { n: h.stop_count }) }}</template>
+              </span>
             </button>
             <span v-if="h.detention_cents" class="hist__money">
               {{ formatMoney(h.detention_cents) }} · {{ t(`money.state.${h.claim_state}`) }}

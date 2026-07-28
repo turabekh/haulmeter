@@ -13,14 +13,18 @@ contract is a proposal: only the driver can see both the paper and the screen.
 
 import base64
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.api.deps import get_db
 from app.foundation.f02_facility import public as facility
+from app.foundation.f03_location import public as location
 from app.foundation.f09_ai_gateway import public as ai
 from app.main import app
+from app.modules.m03_detention import public as m3
 
 RATE_CON = base64.b64encode(b"%PDF-1.4 rate confirmation").decode()
 DALLAS = (32.7767, -96.7970)
@@ -523,15 +527,30 @@ def test_history_shows_only_what_the_load_produced(client, db, monkeypatch):
 
 
 def test_history_states_money_when_a_claim_was_filed(client, db):
+    """This asserted `is not None` against an amount that was always ZERO — the driver
+    arrived and claimed in the same millisecond, so nothing accrued. It passed because
+    the endpoint returned a literal 0, which the row renders as "no money". A test that
+    can only be satisfied by the value the screen ignores is not testing the screen.
+    The driver now waits three hours at the dock, which is what a claim is FOR."""
     headers = _headers(client, "money-history@example.com")
     stop_id = _run_load(client, headers, "Slow Dock")
     client.post(f"/load/{stop_id}/arrive", headers=headers)
+
+    waited = datetime.now(UTC) - timedelta(hours=3)
+    presence = db.scalars(select(location.GeofencePresence)).one()
+    presence.entered_at = waited
+    db.flush()
+
     client.post(f"/load/{stop_id}/claim", headers=headers)
 
     [row] = client.get("/load/history", headers=headers).json()["loads"]
 
-    assert row["detention_cents"] is not None
-    assert row["claim_state"] is not None
+    assert row["detention_cents"] > 0
+    # a company driver's claim ends `exported` — a pack for their carrier, no invoice.
+    # The row renders `money.state.<state>` and that key existed for three of the five
+    # states a claim can hold, so this, the commonest outcome for a driver without their
+    # own authority, printed the raw key at them.
+    assert row["claim_state"] == "exported"
 
 
 def test_history_is_yours_only(client, db):
@@ -741,3 +760,59 @@ def test_leaving_the_last_stop_ends_the_load(client, db):
     assert ended["next_stop_id"] is None
     assert ended["load_status"] == "completed"
     assert client.get("/load/active", headers=headers).json()["stop_id"] is None
+
+
+def test_history_reports_the_whole_route_not_its_first_stop(client, db):
+    """Every figure on a history row was read off `stops[0]`.
+
+    A pickup-and-delivery load showed the PICKUP's facility name, the PICKUP's claim
+    and the PICKUP's documents, with nothing saying a second stop existed. Measured on
+    a real two-stop load the owner ran: $83.67 shown against $271.43 actually claimed —
+    the delivery's money simply absent, and no way to tell from the row.
+    """
+    from app.foundation.f05_load import public as loads
+
+    headers = _headers(client, "route-history@example.com")
+    pickup_id = _run_load(client, headers, "Harvest Foods DC")
+    pickup = loads.get_stop(db, uuid.UUID(pickup_id))
+    load = loads.get_load(db, pickup.load_id)
+    dest = facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, "Metro Market Warehouse", 39.96, -83.09
+    )
+    loads.add_stop(db, load, dest.id, loads.StopType.delivery)
+
+    # detention at BOTH ends: three hours at each dock
+    for stop_id in (pickup_id, None):
+        if stop_id is None:
+            stop_id = client.post(f"/load/{pickup_id}/end", headers=headers).json()["next_stop_id"]
+        client.post(f"/load/{stop_id}/arrive", headers=headers)
+        presence = db.scalars(
+            select(location.GeofencePresence).where(location.GeofencePresence.active.is_(True))
+        ).one()
+        presence.entered_at = datetime.now(UTC) - timedelta(hours=3)
+        db.flush()
+        client.post(f"/load/{stop_id}/claim", headers=headers)
+
+    [row] = client.get("/load/history", headers=headers).json()["loads"]
+
+    assert row["stop_count"] == 2
+    assert row["facility_name"] == "Harvest Foods DC"
+    assert row["destination_name"] == "Metro Market Warehouse"
+    # both claims, summed — not the pickup's alone
+    claims = [
+        m3.claim_for_stop(db, s.id) for s in loads.list_stops(db, loads.get_load(db, load.id))
+    ]
+    assert row["detention_cents"] == sum(c.amount_cents for c in claims)
+    assert row["detention_cents"] > max(c.amount_cents for c in claims)
+
+
+def test_history_names_no_destination_for_a_single_stop_load(client, db):
+    """A one-stop load has no far end, and "Dock -> Dock" would invent a route it
+    never had."""
+    headers = _headers(client, "one-stop-history@example.com")
+    _run_load(client, headers, "Only Dock")
+
+    [row] = client.get("/load/history", headers=headers).json()["loads"]
+
+    assert row["stop_count"] == 1
+    assert row["destination_name"] is None

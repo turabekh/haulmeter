@@ -10,7 +10,7 @@ validation gates.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -107,6 +107,7 @@ def start_claim(
     stop,
     mode: ClaimMode | None = None,
     trigger: DetentionTrigger = DetentionTrigger.arrival,
+    started_at: datetime | None = None,
 ) -> DetentionClaim:
     load = loads.get_load(db, stop.load_id)
     if not stop.geofence_armed:
@@ -122,6 +123,7 @@ def start_claim(
         free_time_minutes=free_time,
         detention_rate_cents_per_hour=rate,
         evidence_log_ref=stop.evidence_log_id,
+        clock_since=started_at or datetime.now(UTC),
     )
     db.add(claim)
     db.flush()
@@ -148,13 +150,19 @@ def accrue_events(db: Session, claim: DetentionClaim) -> int:
 
 
 def _arrival_departure(db: Session, claim: DetentionClaim):
-    arrival = departure = None
-    for event in location.list_events(db, claim.account_id, claim.facility_ref):
-        if event.event_type == location.GeofenceEventType.ENTER and arrival is None:
-            arrival = event.occurred_at
-        elif event.event_type == location.GeofenceEventType.EXIT:
-            departure = event.occurred_at
-    return arrival, departure
+    """This visit's arrival and departure — not the facility's whole history.
+
+    AI-CONTEXT: the money defect (§23 entry 73). This replayed EVERY geofence event
+    ever recorded for the account at this facility and took the earliest ENTER and
+    the latest EXIT, so any previous visit to the same dock became the start of this
+    claim's clock. Measured on a real two-stop load: a delivery the driver was at for
+    53 seconds billed 2h20m — $187.76 against $0.00 owed — because an ENTER from an
+    earlier run that afternoon was still the earliest one on file. F3 had the correct
+    answer the whole time in its presence sessions; the question was never asked.
+    """
+    if claim.clock_since is None:
+        return None, None
+    return location.visit_window(db, claim.account_id, claim.facility_ref, claim.clock_since)
 
 
 def clock(db: Session, claim: DetentionClaim, now: datetime) -> DetentionState:

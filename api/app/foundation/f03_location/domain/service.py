@@ -73,6 +73,37 @@ def _active_presence(db: Session, account_id, facility_id) -> GeofencePresence |
     )
 
 
+def visit_window(
+    db: Session, account_id, facility_id, since: datetime
+) -> tuple[datetime | None, datetime | None]:
+    """ONE visit to a facility: when the truck arrived and when it left (§23 entry 73).
+
+    AI-CONTEXT: F3 has always recorded visits as `GeofencePresence` rows — one per
+    arrival, closed on exit — and nothing outside F3 could read them, so M3 rebuilt
+    the notion of "this visit" by replaying raw ENTER/EXIT events and took the
+    EARLIEST enter and the LATEST exit ever recorded at that facility. A driver's
+    second load to the same dock therefore billed from their first visit. This
+    returns the visit belonging to `since`: the session still open at that moment
+    (the driver was already inside) or, failing that, the next one to begin. Sessions
+    that had already closed before `since` belong to an earlier load and are skipped.
+    """
+    sessions = db.scalars(
+        select(GeofencePresence)
+        .where(
+            GeofencePresence.account_id == account_id,
+            GeofencePresence.facility_id == facility_id,
+        )
+        .order_by(GeofencePresence.entered_at)
+    )
+    floor = _as_utc(since)
+    for session in sessions:
+        if session.exited_at is not None and _as_utc(session.exited_at) <= floor:
+            continue
+        exited = _as_utc(session.exited_at) if session.exited_at is not None else None
+        return _as_utc(session.entered_at), exited
+    return None, None
+
+
 def _emit(db, account_id, facility_id, event_type, occurred_at, lat, lon) -> GeofenceEvent:
     event = GeofenceEvent(
         account_id=account_id,
