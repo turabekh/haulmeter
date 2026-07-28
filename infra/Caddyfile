@@ -1,0 +1,45 @@
+# AI-CONTEXT: the edge for the deployed testing environment (§23 entry 92).
+#
+# Caddy rather than nginx for one reason that matters here: it obtains and renews the
+# TLS certificate itself, from the domain name alone. That is not a convenience —
+# HTTPS is a FUNCTIONAL requirement for this product, not a hardening step:
+#
+#   · SpeechRecognition (the M11 copilot) refuses to run outside a secure context, so
+#     the voice sheet is dead over plain http. §23 entry 91 is exactly that bug seen
+#     from the other side.
+#   · Geolocation is the same. F3's whole sensor — arrival detection, the detention
+#     clock, ON_SITE — needs `navigator.geolocation`, which browsers gate on a secure
+#     context. Over http the product's core loop cannot start.
+#
+# ONE ORIGIN. The UI is static files served from disk; `/api/*` is proxied to the API
+# with the prefix stripped. Same origin means no CORS, no allowlist to keep in step
+# with the domain, and no mixed-content trap. See `API_BASE` in ui/src/core/api.js.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$SITE_ADDRESS} {
+	encode gzip zstd
+
+	# the API, same-origin under /api. `handle_path` strips the prefix, so the routers
+	# keep their own paths (/load, /map, /auth …) and nothing in the API knows it is
+	# mounted under a prefix.
+	handle_path /api/* {
+		reverse_proxy api:{$API_PORT}
+	}
+
+	# everything else is the built SPA. `try_files` sends unknown paths to index.html
+	# so a deep link (/load/<id>/evidence, which §13.5 requires notifications to use)
+	# is answered by the app rather than by a 404 from the filesystem.
+	handle {
+		root * /srv/ui
+		try_files {path} /index.html
+		file_server
+	}
+
+	# testing environment: keep it out of search results. This is not a security
+	# control — it is honesty about what the box is.
+	header X-Robots-Tag "noindex, nofollow"
+	header -Server
+}

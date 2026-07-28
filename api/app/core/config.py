@@ -9,6 +9,9 @@ class Settings(BaseSettings):
 
     app_name: str = "longhaul-api"
     environment: str = Field(default="dev")
+    # extra browser origins allowed to call this API, comma-separated. Empty in the
+    # same-origin deployment, where the proxy makes CORS irrelevant.
+    cors_origins: str = Field(default="")
 
     postgres_host: str = Field(default="postgres")
     postgres_port: int = Field(default=5438)

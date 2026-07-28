@@ -6,7 +6,18 @@
 // talks to the backend — swap-friendly (§19).
 import { ref, computed } from "vue";
 
-export const API_BASE = "http://localhost:8008";
+// AI-CONTEXT: WHOSE localhost? (§23 entry 92)
+//
+// This was the literal string "http://localhost:8008", which is correct in dev and
+// wrong everywhere else: in a browser, `localhost` is the DEVICE running the browser.
+// Deployed, a driver's phone would have asked ITSELF for the API and failed every
+// request. The bug is invisible locally, because locally the two are the same machine.
+//
+// Deployments set `VITE_API_BASE=/api` and the reverse proxy routes that prefix to the
+// API — SAME ORIGIN, which means no CORS preflight, no allowlist to keep in step with
+// a domain, and no mixed-content trap when the page is https and the API is not. The
+// dev default is unchanged, so `make up` behaves exactly as before.
+export const API_BASE = import.meta.env?.VITE_API_BASE ?? "http://localhost:8008";
 const SESSION_KEY = "longhaul.session";
 
 function loadSession() {

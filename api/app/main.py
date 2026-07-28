@@ -82,9 +82,19 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 # 9008 / 3008 fallback (HANDOFF §2). Dev CORS is scoped to those origins.
 app.add_middleware(
     CORSMiddleware,
+    # AI-CONTEXT: a deployment serves the UI and the API on ONE origin (the proxy
+    # routes /api to here), so CORS does not apply there at all. This list stays for
+    # local development, where Vite is on 9008 and the API on 8008 — two origins.
+    # `CORS_ORIGINS` exists for a deployment that ever splits them again; leaving it
+    # unset is the correct state for the same-origin arrangement.
     allow_origins=[
-        "http://localhost:9008",
-        "http://localhost:3008",
+        o
+        for o in [
+            "http://localhost:9008",
+            "http://localhost:3008",
+            *(x.strip() for x in (settings.cors_origins or "").split(",")),
+        ]
+        if o
     ],
     allow_credentials=True,
     allow_methods=["*"],

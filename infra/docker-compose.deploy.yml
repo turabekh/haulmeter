@@ -1,0 +1,144 @@
+# AI-CONTEXT: the DEPLOYED stack (§23 entry 92). A testing environment on one VM,
+# every service in a container — no managed database, by the owner's decision.
+#
+# What makes this different from docker-compose.yml, and why each difference exists:
+#
+#  · NO SOURCE BIND MOUNTS. The dev compose mounts ../api and ../ui into the running
+#    containers and runs uvicorn --reload and the Vite dev server. Here the images
+#    contain the code; a deploy rebuilds rather than reaching into a running container.
+#  · NOTHING IS PUBLISHED BUT THE PROXY. Postgres, Redis, MinIO, Mailpit and the API
+#    have no `ports:` at all — they are reachable on the compose network and nowhere
+#    else. The dev file publishes every one of them to the host, which is right on a
+#    laptop behind a NAT and wrong on a box with a public address.
+#  · MAILPIT AND THE MINIO CONSOLE STAY INTERNAL. Both are useful and neither should
+#    be answerable from the internet. Reach them over an SSH tunnel.
+#  · MIGRATIONS RUN ONCE, in the api command, before uvicorn — same as dev, because a
+#    deploy that skips them is a deploy that lies about its schema.
+#
+# The database and object store keep their data in named volumes, so `docker compose
+# down` does not destroy the test data and `docker compose up --build` is a safe deploy.
+name: haulmeter
+
+services:
+  postgres:
+    build:
+      context: ./postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: ["postgres", "-p", "${POSTGRES_PORT}"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -p ${POSTGRES_PORT}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--port", "${REDIS_PORT}"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "${REDIS_PORT}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--address", ":${MINIO_API_PORT}", "--console-address", ":${MINIO_CONSOLE_PORT}"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - miniodata:/data
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    environment:
+      MP_SMTP_BIND_ADDR: "0.0.0.0:${MAILPIT_SMTP_PORT}"
+      MP_UI_BIND_ADDR: "0.0.0.0:${MAILPIT_UI_PORT}"
+
+  api:
+    build:
+      context: ../api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MINIO_ENDPOINT: "minio:${MINIO_API_PORT}"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    # no --reload: the code is in the image, and a reloader on a public box is a
+    # filesystem watcher with a restart button attached
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${API_PORT}"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MINIO_ENDPOINT: "minio:${MINIO_API_PORT}"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # builds the SPA and copies it into the volume Caddy serves, then exits. It is a
+  # build step wearing a service's clothes, which is why it has no restart policy.
+  ui:
+    build:
+      context: ../ui
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: /api
+        VITE_MAPBOX_TOKEN: ${MAPBOX_TOKEN:-}
+    volumes:
+      - uiassets:/dist
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+      ACME_EMAIL: ${ACME_EMAIL}
+      API_PORT: ${API_PORT}
+    # the ONLY published ports in the stack. 80 is not redundant: it is where the ACME
+    # HTTP challenge lands and where Caddy redirects http -> https from.
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - uiassets:/srv/ui:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - api
+      - ui
+
+volumes:
+  pgdata:
+  miniodata:
+  uiassets:
+  caddydata:
+  caddyconfig:
