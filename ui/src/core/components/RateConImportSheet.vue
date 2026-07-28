@@ -61,6 +61,17 @@ const form = reactive({
 // Holding what the parse said lets the source be honest: keep it and the credit goes
 // to the parse, type over it and the credit is the driver's.
 const parsedAppointment = ref(null);
+// AI-CONTEXT: "none of these" needs a value of its OWN (§23 entry 65).
+//
+// `chosenFacility` starts at null to mean "not answered", and the none-of-these radio
+// carried `:value="null"` — so `v-model` matched it and Vue rendered that option
+// CHECKED on arrival. The comment two lines down said nothing was pre-selected and the
+// screen pre-selected something, which is the worst combination of the two.
+//
+// And it pre-selected the harmful one: none-of-these is what tells the API not to
+// reuse a dock, and a duplicated dock splits that facility's dwell history in two —
+// the exact defect entry 47 was written to fix.
+const NO_MATCH = "__none";
 
 // the parse only keeps the credit for a value the driver left alone
 const appointmentSource = computed(() =>
@@ -101,6 +112,7 @@ async function read() {
     documentId.value = res.document_id;
     const p = res.parsed ?? {};
     form.facility = p.receiver_name ?? "";
+    form.broker = p.broker_name ?? "";
     form.reference = p.reference_number ?? "";
     // <input type="datetime-local"> wants "YYYY-MM-DDTHH:mm" with no zone
     parsedAppointment.value = p.appointment ?? null;
@@ -137,7 +149,7 @@ async function create() {
       appointment_source: form.appointment ? appointmentSource.value : null,
       free_time_minutes: Number(form.freeMin) || null,
       rate_cents_per_hour: form.rateHr ? Math.round(Number(form.rateHr) * 100) : null,
-      facility_id: chosenFacility.value,
+      facility_id: chosenFacility.value === NO_MATCH ? null : chosenFacility.value,
       rate_con_document_id: documentId.value,
     });
     emit("created");
@@ -194,7 +206,7 @@ async function create() {
           <span>{{ c.name }}</span>
         </label>
         <label class="rc__opt">
-          <input v-model="chosenFacility" type="radio" :value="null" />
+          <input v-model="chosenFacility" type="radio" :value="NO_MATCH" />
           <span>{{ t("load.rc_no_match") }}</span>
         </label>
       </div>

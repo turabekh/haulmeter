@@ -1829,6 +1829,55 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     logout();
   });
 
+  // AI-CONTEXT: the code said "NOTHING is pre-selected" and the screen arrived with
+  // "None of these" ticked (§23 entry 65). `chosenFacility` starts at null to mean
+  // "not answered" and that option carried `:value="null"`, so v-model matched it.
+  // A comment is not a test, and this is the test.
+  it("pre-selects no facility answer at all, including none-of-these", async () => {
+    stub(DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    const radios = w.findAll(".rc__opt input");
+    expect(radios.length).toBe(3); // two candidates + none-of-these
+    expect(radios.filter((r) => r.element.checked)).toHaveLength(0);
+  });
+
+  it("keeps the broker name the parse read", async () => {
+    // it was extracted and dropped: the read handler filled five fields and this was
+    // not one of them, so a parsed rate con arrived with an empty Broker box
+    const posts = stub({ ...DRAFT, parsed: { ...DRAFT.parsed, broker_name: "Coyote Logistics" } });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(w.findAll(".rc__input").some((i) => i.element.value === "Coyote Logistics")).toBe(true);
+
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+    const created = posts.find((p) => p.url.endsWith("/load") && p.body);
+    expect(created.body.counterparty).toBe("Coyote Logistics");
+  });
+
+  it("sends no facility id when the driver rejects every candidate", async () => {
+    const posts = stub(DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    const radios = w.findAll(".rc__opt input");
+    await radios[radios.length - 1].setValue(); // none of these
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    const created = posts.find((p) => p.url.endsWith("/load") && p.body);
+    expect(created.body.facility_id).toBe(null); // the sentinel never leaves the client
+  });
+
   it("reads the rate con and creates nothing until the driver confirms", async () => {
     const posts = stub(DRAFT);
     const w = mount(RateConImportSheet);
@@ -1868,12 +1917,14 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
 
     expect(w.text()).toContain("Is this the same place?");
 
-    // no CANDIDATE is pre-selected — pg_trgm scores the wrong dock 0.65 and the right
-    // one 0.68, so no threshold tells them apart. "None of these" is the default,
-    // which is the honest one: the driver picks a match or the load creates its own.
+    // AI-CONTEXT: this used to assert that "None of these" arrived CHECKED and called
+    // that "the honest one" — contradicting §23 entry 47, which says the match must
+    // never be pre-ticked because no threshold separates a right dock from a wrong one
+    // (0.68 against 0.65). The screen was pre-selecting the answer that creates a
+    // duplicate dock, and this test held it in place. Nothing is pre-selected now;
+    // the dedicated assertion for it lives above.
     const radios = w.findAll(".rc__opt input");
-    expect(radios.slice(0, 2).some((i) => i.element.checked)).toBe(false);
-    expect(radios[radios.length - 1].element.checked).toBe(true); // "None of these"
+    expect(radios.some((i) => i.element.checked)).toBe(false);
 
     await w.findAll(".rc__opt input")[0].setValue(); // the driver picks
     await w.find(".rc__cta").trigger("click"); // now the create button
