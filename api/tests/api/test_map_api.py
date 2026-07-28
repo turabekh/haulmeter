@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from app.api.deps import get_db
 from app.foundation.f02_facility import public as facility
 from app.main import app
+from app.modules.m07_fuel import public as m7
 
 DALLAS = (32.7767, -96.7970)
 
@@ -199,3 +200,70 @@ def test_corridor_endpoint(client, db):
     )
     assert resp.status_code == 200
     assert [e["name"] for e in resp.json()] == ["Ahead"]
+
+
+def test_corridor_carries_what_the_stack_renders(client, db):
+    """§23 entry 81. CorridorStack renders a status pill and §11.4's price, and this
+    route returned neither — which is why the surface kept a fixture that did. The
+    contract is asserted here so the next person to wire a component to this endpoint
+    finds out at test time, not by reading a hardcoded truck stop at 65 mph."""
+    headers = _auth(client)
+    facility.create_facility(db, facility.FacilityType.truck_stop, "Ahead", 32.90, -96.7970)
+    resp = client.get(
+        "/map/corridor",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "heading_deg": 0, "max_distance_m": 40000},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    entry = resp.json()[0]
+    # every key the component reads, present even when there is nothing to say
+    assert set(entry) >= {
+        "facility_id",
+        "name",
+        "facility_type",
+        "distance_m",
+        "status",
+        "reported_at",
+        "sample_size",
+        "badges",
+    }
+    assert entry["status"] is None  # nobody has reported: said, not guessed
+    assert entry["badges"] == []
+
+
+def test_corridor_quotes_a_station_the_same_price_the_pin_does(client, db):
+    """One pump, one figure, whichever screen the driver is reading. The badge comes
+    from the same `_fuel_badge` the overlay uses, so the two cannot drift."""
+    headers = _auth(client)
+    station = facility.create_facility(
+        db, facility.FacilityType.fuel_station, "Pump", 32.90, -96.7970
+    )
+    m7.set_station_pricing(db, station.id, gross_cents_per_gal=419, discount_cents_per_gal=32)
+    corridor = client.get(
+        "/map/corridor",
+        params={
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "heading_deg": 0,
+            "max_distance_m": 40000,
+            "preset": "fuel",
+        },
+        headers=headers,
+    ).json()
+    overlay = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 40000, "preset": "fuel"},
+        headers=headers,
+    ).json()
+    corridor_badge = next(
+        (b for b in corridor[0]["badges"] if b["kind"] == "fuel_net"),
+        None,
+    )
+    pin_badge = next(
+        (b for b in overlay["pins"][0]["badges"] if b["kind"] == "fuel_net"),
+        None,
+    )
+    # both-None would pass this vacuously, which is the shape §23 entry 42 keeps
+    # catching: a test that asserts agreement between two absences
+    assert pin_badge is not None
+    assert corridor_badge == pin_badge

@@ -101,6 +101,7 @@ TEMPLATE_TITLES = {
     PackTemplate.cargo_condition: "Cargo condition report",
     PackTemplate.incident: "Incident report",
     PackTemplate.stop_record: "Stop record",
+    PackTemplate.load_record: "Load record",
 }
 
 _fonts_registered = False
@@ -270,7 +271,12 @@ def _chronological(records, key="occurred_at"):
     nothing about the evidence: the verification block still covers the seq-ordered
     chain, and every row still carries the hash it was recorded under.
     """
-    return sorted(records, key=lambda r: (r.get(key) is None, r.get(key)))
+    # A pack spanning a route sorts by STOP first (§23 entry 78). Time alone would
+    # interleave two docks the moment a driver doubles back, and the section headings
+    # would then repeat and contradict the order they announce.
+    return sorted(
+        records, key=lambda r: (r.get("group_order", 0), r.get(key) is None, r.get(key))
+    )
 
 
 def _divergence_note(record) -> str:
@@ -307,7 +313,18 @@ def _timeline(cur, pack):
     cur.need(S6)
     cur.text("Event timeline", SANS_SEMI, TITLE)
     cur.space(S4 + S2)
+    group = None
     for record in _chronological(pack.timeline):
+        # AI-CONTEXT: a pack spanning a ROUTE says which dock each row happened at
+        # (§23 entry 78). Without it, two stops' events run together as one confused
+        # visit, and the broker cannot tell the pickup's four photos from the
+        # delivery's. A single-stop pack carries no group and renders exactly as before.
+        if record.get("group") and record["group"] != group:
+            group = record["group"]
+            cur.need(BODY_LINE + S4)
+            cur.space(S2)
+            cur.text(group, SANS_SEMI, BODY, TEXT_1)
+            cur.space(BODY_LINE)
         cur.need(BODY_LINE + S2)
         # T-2: time is ALWAYS Mono + tabular, in every surface including this one
         filed = _divergence_note(record)
@@ -458,7 +475,21 @@ def _artifacts(cur, pack, context):
     gap = S4
     column = 0
     row_top = cur.y
+    group = None
     for artifact in pack.artifacts:
+        # AI-CONTEXT: which dock each photo came from (§23 entry 78). A route's pack
+        # showed eight thumbnails in one grid, four from the pickup and four from the
+        # delivery, with nothing separating them — so a clerk arguing about damage
+        # found at the receiver could not tell which four were taken there.
+        if artifact.get("group") and artifact["group"] != group:
+            group = artifact["group"]
+            if column:  # close the part-filled row before starting a new section
+                cur.space(thumb + CAPTION_LINE + S4)
+                column = 0
+            cur.need(BODY_LINE + thumb + CAPTION_LINE + S4)
+            cur.space(S2)
+            cur.text(group, SANS_SEMI, BODY, TEXT_1)
+            cur.space(BODY_LINE)
         if column == 0:
             cur.need(thumb + CAPTION_LINE + S4)
             row_top = cur.y

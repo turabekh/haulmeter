@@ -264,6 +264,75 @@ def _latest_anchor(db: Session, log_id) -> ChainAnchor | None:
     )
 
 
+def compose_grouped_pack(
+    db: Session, groups, template: PackTemplate, label: str | None = None
+) -> EvidencePack | None:
+    """Several stops' records as ONE document, each section labelled (§23 entry 78).
+
+    AI-CONTEXT: entry 71 found that a per-LOG export could only ever show a fragment
+    of a stop. This is the same sentence one layer up: a per-STOP export can only show
+    a fragment of a ROUTE. A driver who ran a pickup and a delivery and photographed
+    both had eight photos in the system and no document that contained more than four
+    — and the four they could reach were whichever stop the row happened to link to.
+
+    `groups` is [(label, stop_ref)] and F4 does not know what a label MEANS. "Pickup ·
+    Harvest Foods DC" is F5's sentence about F5's objects; this file merges chains and
+    refuses to learn what a stop type is.
+
+    Chains are verified per LOG and the pack is valid only if every one of them is:
+    merging the views must not merge the guarantees.
+    """
+    timeline: list[dict] = []
+    artifacts: list[dict] = []
+    parts: list[dict] = []
+    logs: list[EvidenceLog] = []
+    all_valid = True
+    for order, (group_label, stop_ref) in enumerate(groups):
+        for log in db.scalars(select(EvidenceLog).where(EvidenceLog.stop_ref == stop_ref)):
+            logs.append(log)
+            pack = compose_pack(db, log, template)
+            v = pack.verification
+            if not v.get("chain_valid", False):
+                all_valid = False
+            parts.append(v)
+            for record in pack.timeline:
+                # the section this row belongs to, and its place in the route. A pack
+                # sorted by time alone would interleave two docks the moment a driver
+                # doubles back, and read as one confused visit.
+                timeline.append({**record, "group": group_label, "group_order": order})
+            for artifact in pack.artifacts:
+                artifacts.append({**artifact, "group": group_label, "group_order": order})
+    if not logs:
+        return None
+    timeline.sort(key=lambda r: (r["group_order"], r["occurred_at"] is None, r["occurred_at"]))
+    artifacts.sort(
+        key=lambda a: (a["group_order"], a.get("received_at") is None, a.get("received_at"))
+    )
+    first_broken = next((v for v in parts if not v.get("chain_valid", False)), None)
+    head = first_broken or parts[0]
+    return EvidencePack(
+        template=template,
+        log_id=logs[0].id,
+        # a document about a ROUTE must not be captioned with one stop's log label:
+        # "stop-0" in the corner of a load record is a smaller lie than a wrong number
+        # and reads the same way — as a document that does not know what it is about
+        label=label,
+        timeline=timeline,
+        artifacts=artifacts,
+        verification={
+            "chain_valid": all_valid,
+            "record_count": len(timeline),
+            "head_seq": head.get("head_seq"),
+            "head_hash": head.get("head_hash"),
+            "broken_at": head.get("broken_at"),
+            "reason": head.get("reason"),
+            "anchored": any(v.get("anchored") for v in parts),
+            "anchor_ref": next((v.get("anchor_ref") for v in parts if v.get("anchor_ref")), None),
+            "log_count": len(logs),
+        },
+    )
+
+
 def compose_stop_pack(db: Session, stop_ref, template: PackTemplate) -> EvidencePack | None:
     """Every log tied to a stop, as one document (§23 entry 71).
 

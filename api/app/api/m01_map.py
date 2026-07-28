@@ -103,6 +103,33 @@ def overlay(
     }
 
 
+def _fuel_badge(db: Session, facility_id, lat: float, lon: float) -> dict | None:
+    """AI-CONTEXT: ONE definition of a station's price badge, because two screens now
+    render it. The map pin and the corridor stack must not be able to quote a driver
+    different figures for the same pump — which is exactly what a second, hand-rolled
+    price read on the corridor path would eventually do.
+
+    net feed price -> crowd consensus -> EIA regional baseline (§ m7.fuel_summary).
+    lat/lon let the regional fallback pick the right PADD when no per-station price.
+    """
+    summary = m7.fuel_summary(db, facility_id, lat=lat, lon=lon)
+    if not summary:
+        return None
+    return {
+        "kind": "fuel_net",
+        "value": summary["net"],
+        "net": summary["net"],
+        "gross": summary["gross"],
+        "savings": summary["savings"],
+        "is_network": summary["is_network"],
+        "source": summary["source"],
+        "indicative": summary["indicative"],
+        "as_of": summary["as_of"],
+        "sample_size": summary["sample_size"],
+        "station_ref": str(facility_id),
+    }
+
+
 def _enrich(db: Session, pin) -> dict:
     # M1 can't import later modules, so the marketplace badges (M6 bookable spot,
     # M7 net fuel price) that drive the map's Book / Fuel actions are attached here
@@ -119,25 +146,9 @@ def _enrich(db: Session, pin) -> dict:
                 }
             )
     elif pin.facility_type == "fuel_station":
-        # net feed price -> crowd consensus -> EIA regional baseline (§ m7.fuel_summary).
-        # lat/lon let the regional fallback pick the right PADD when no per-station price.
-        summary = m7.fuel_summary(db, pin.facility_id, lat=pin.lat, lon=pin.lon)
-        if summary:
-            data["badges"].append(
-                {
-                    "kind": "fuel_net",
-                    "value": summary["net"],
-                    "net": summary["net"],
-                    "gross": summary["gross"],
-                    "savings": summary["savings"],
-                    "is_network": summary["is_network"],
-                    "source": summary["source"],
-                    "indicative": summary["indicative"],
-                    "as_of": summary["as_of"],
-                    "sample_size": summary["sample_size"],
-                    "station_ref": str(pin.facility_id),
-                }
-            )
+        badge = _fuel_badge(db, pin.facility_id, pin.lat, pin.lon)
+        if badge is not None:
+            data["badges"].append(badge)
     return data
 
 
@@ -151,18 +162,42 @@ def corridor(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> list[dict]:
-    entries = m1.corridor_view(
+    """AI-CONTEXT: §11.4's stack, and until now nothing had ever called it.
+
+    The endpoint shipped with M1 and the Map surface passed a hardcoded
+    `SAMPLE_CORRIDOR` to the component instead — three invented facilities with
+    invented parking statuses, rendered in DRIVING, the one state where a driver
+    cannot look anything up. The fixture carried a `status` this route did not
+    return, which is why wiring it was never as simple as swapping the prop: a
+    fixture whose shape does not match its endpoint hides the endpoint.
+
+    So the response now carries what the component renders — the crowd status with
+    its freshness, and the same fuel badge the pin behind it would show.
+    """
+    rows = []
+    for entry in m1.corridor_ahead(
         db, account.id, lat, lon, heading_deg, max_distance_m, preset=m1.Preset(preset)
-    )
-    return [
-        {
-            "facility_id": str(e.facility_id),
-            "name": e.name,
-            "facility_type": e.facility_type,
-            "distance_m": e.distance_m,
-        }
-        for e in entries
-    ]
+    ):
+        badges = []
+        if entry["facility_type"] == "fuel_station":
+            badge = _fuel_badge(db, entry["facility_id"], entry["lat"], entry["lon"])
+            if badge is not None:
+                badges.append(badge)
+        rows.append(
+            {
+                "facility_id": str(entry["facility_id"]),
+                "name": entry["name"],
+                "facility_type": entry["facility_type"],
+                "distance_m": entry["distance_m"],
+                "status": entry["status"],
+                "reported_at": (
+                    entry["reported_at"].isoformat() if entry["reported_at"] else None
+                ),
+                "sample_size": entry["sample_size"],
+                "badges": badges,
+            }
+        )
+    return rows
 
 
 class ReportIn(BaseModel):

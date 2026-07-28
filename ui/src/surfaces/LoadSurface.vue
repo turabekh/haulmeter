@@ -29,7 +29,7 @@
      specifies. A fixture whose shape does not match its endpoint hides the endpoint. -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import { Check, Camera, Send, Clock, TriangleAlert } from "lucide-vue-next";
+import { Check, Camera, Send, Clock, TriangleAlert, ChevronDown } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
@@ -51,6 +51,7 @@ import {
   sendDetentionNotice,
   generateClaim,
   correctAppointment,
+  exportProtectionPack,
   isAuthenticated,
 } from "../core/api.js";
 
@@ -104,6 +105,36 @@ const historyOpen = ref(false);
 // the first stop's facility alone, so a pickup-and-delivery load was indistinguishable
 // from a single delivery to the pickup's dock — and the money beside it was the
 // pickup's claim, not the load's.
+const expanded = ref(new Set());
+const loadExportFailed = ref(null);
+// a one-stop load has nothing to expand, so the row goes where it always went
+function openRow(h) {
+  if ((h.stops?.length ?? 0) < 2) return go(`/load/${h.stop_id}/evidence`);
+  const next = new Set(expanded.value);
+  next.has(h.load_id) ? next.delete(h.load_id) : next.add(h.load_id);
+  expanded.value = next;
+}
+
+async function exportLoad(h) {
+  try {
+    const pack = await exportProtectionPack("load", h.load_id);
+    if (pack && typeof document !== "undefined") {
+      const a = document.createElement("a");
+      a.href = pack.url;
+      a.download = pack.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(pack.url), 30000);
+    }
+  } catch {
+    // §12.4: say what happened. An empty catch here is the defect entry 72 records —
+    // a control that runs, fails, and leaves the screen exactly as it was.
+    loadExportFailed.value = h.load_id;
+    setTimeout(() => (loadExportFailed.value = null), 6000);
+  }
+}
+
 function routeLabel(h) {
   return h.destination_name ? `${h.facility_name} → ${h.destination_name}` : h.facility_name;
 }
@@ -666,8 +697,16 @@ async function endLoad() {
         <p v-if="!history.length" class="docs__empty">{{ t("load.history_empty") }}</p>
         <ul v-else class="hist">
           <li v-for="h in history" :key="h.load_id" class="hist__row">
-            <button class="hist__main" type="button" @click="go(`/load/${h.stop_id}/evidence`)">
-              <span class="hist__name">{{ routeLabel(h) }}</span>
+            <button class="hist__main" type="button" @click="openRow(h)">
+              <span class="hist__name">
+                {{ routeLabel(h) }}
+                <ChevronDown
+                  v-if="h.stop_count > 1"
+                  :size="16"
+                  :stroke-width="2"
+                  aria-hidden="true"
+                />
+              </span>
               <span class="hist__date">
                 <!-- the load's own number, because a driver who runs the same lane
                      twice in a week gets rows identical in every other respect -->
@@ -688,6 +727,40 @@ async function endLoad() {
               ].filter(Boolean).join(" · ") }}
             </span>
             <span v-else class="hist__quiet">{{ t("load.history_nothing") }}</span>
+
+            <!-- §23-approved (entry 78): a route's row opens to its stops. Rolled-up
+                 totals fixed what the row SAYS; the row still reached only stops[0],
+                 so a driver who photographed both ends of a load could open half of
+                 their own evidence. A one-stop load has nothing to open and goes
+                 straight there instead, so the control's shape says what it does. -->
+            <ul v-if="expanded.has(h.load_id)" class="hist__stops">
+              <li v-for="s in h.stops" :key="s.stop_id">
+                <button
+                  class="hist__stop"
+                  type="button"
+                  @click="go(`/load/${s.stop_id}/evidence`)"
+                >
+                  <span class="hist__stopname">
+                    {{ s.sequence + 1 }} · {{ t(`load.stop.${s.stop_type}`) }} ·
+                    {{ s.facility_name }}
+                  </span>
+                  <span class="hist__stopmeta">
+                    {{ s.detention_cents
+                      ? formatMoney(s.detention_cents)
+                      : t("load.history_no_money") }}
+                    · {{ t("load.history_photos", { n: s.photo_count }) }}
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button class="hist__stop hist__export" type="button" @click="exportLoad(h)">
+                  {{ t("load.history_export_load") }}
+                </button>
+                <p v-if="loadExportFailed === h.load_id" class="hist__quiet">
+                  {{ t("evidence.export_failed") }}
+                </p>
+              </li>
+            </ul>
           </li>
         </ul>
       </BottomSheet>
@@ -1013,8 +1086,49 @@ async function endLoad() {
 }
 .hist__name {
   flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
   font-size: var(--type-body-size);
   color: var(--text-1);
+}
+/* §23 entry 78: the route, opened. Tokens only — this borrows the row's own type and
+   spacing rather than introducing a scale for a nested list. */
+.hist__stops {
+  list-style: none;
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  border-top: 1px solid var(--line-1);
+  padding-top: var(--s-3);
+}
+.hist__stop {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-1);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--s-2) 0;
+  background: none;
+  border: 0;
+  text-align: left;
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+  cursor: pointer;
+}
+.hist__stopname {
+  color: var(--text-1);
+}
+.hist__stopmeta {
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+}
+.hist__export {
+  color: var(--shield-500);
 }
 .hist__date,
 .hist__money {

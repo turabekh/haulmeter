@@ -69,6 +69,23 @@ def test_active_load_resumes_the_current_stop(client, db):
     assert active.json()["stop_id"] == stop_id  # a fresh device can resume here
 
 
+def test_active_load_names_the_dock_not_just_the_stop(client, db):
+    """§23 entry 82. §11.3's Work preset is "armed stop + its facility intel" and
+    §10.1's contextual CTA is "Arm stop" — both need to know WHICH facility the armed
+    stop is at, and this route returned an opaque id. So the Map tab could not tell the
+    driver's own dock from any other receiver on screen."""
+    headers = _auth(client)
+    empty = client.get("/load/active", headers=headers).json()
+    # the keys are present even with no load: a caller must not have to guess whether
+    # absence means "no load" or "this endpoint doesn't answer that"
+    assert empty["facility_id"] is None and empty["facility_name"] is None
+
+    _create(client, headers)
+    active = client.get("/load/active", headers=headers).json()
+    assert active["facility_id"] is not None
+    assert active["facility_name"] == "Dallas Receiver"
+
+
 def test_end_load_departs_the_stop_and_clears_active(client, db):
     headers = _auth(client)
     stop_id = _create(client, headers)

@@ -2375,6 +2375,14 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
         status: "completed", stop_count: 2,
         detention_cents: 27143, claim_state: "exported",
         evidence_count: 4, documents: ["rate_con"],
+        stops: [
+          { stop_id: "s-3a", sequence: 0, stop_type: "pickup",
+            facility_name: "Harvest Foods DC", detention_cents: 8367,
+            claim_state: "exported", photo_count: 4 },
+          { stop_id: "s-3b", sequence: 1, stop_type: "delivery",
+            facility_name: "Metro Market Warehouse", detention_cents: null,
+            claim_state: "open", photo_count: 4 },
+        ],
       },
     ],
   };
@@ -2447,6 +2455,46 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
     expect(route).toContain("$271.43");
     // five loads down the same lane in one week are otherwise identical rows
     expect(route).toContain("BRL-78426");
+  });
+
+  it("opens a route's row to its stops, so every photo is reachable (\u00a723 entry 78)", async () => {
+    // the row linked to stops[0] and there was no other way in, so a driver who
+    // photographed a pickup AND a delivery had eight photos in the system and could
+    // open four -- whichever four the row happened to point at.
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    await w.findAll(".cta").find((b) => b.text() === "Past loads").trigger("click");
+    await flushPromises();
+
+    const rows = w.findAll(".hist__row");
+    expect(rows[2].findAll(".hist__stop")).toHaveLength(0); // closed to begin with
+    await rows[2].find(".hist__main").trigger("click");
+    await flushPromises();
+
+    const stops = w.findAll(".hist__row")[2].findAll(".hist__stop");
+    expect(stops).toHaveLength(3); // two stops + export the whole load
+    expect(stops[0].text()).toContain("1 · Pickup · Harvest Foods DC");
+    expect(stops[0].text()).toContain("4 photos");
+    expect(stops[1].text()).toContain("2 · Delivery · Metro Market Warehouse");
+    expect(stops[1].text()).toContain("no detention");
+
+    // and the delivery's own evidence is now reachable, which it was not
+    await stops[1].trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/load/s-3b/evidence");
+  });
+
+  it("sends a one-stop load straight to its evidence rather than opening nothing", async () => {
+    const router = testRouter();
+    const w = mount(LoadSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    await w.findAll(".cta").find((b) => b.text() === "Past loads").trigger("click");
+    await flushPromises();
+
+    await w.findAll(".hist__row")[0].find(".hist__main").trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/load/s-1/evidence");
   });
 
   it("labels a company driver's claim state rather than printing its key", async () => {
@@ -2588,12 +2636,29 @@ describe("EvidenceSurface — export (§23 entries 71, 72)", () => {
 describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
   const WALLET = {
     documents: [
-      { id: "d-1", doc_type: "cdl", expires_on: "2027-03-01", status: "ok" },
-      { id: "d-2", doc_type: "permit", expires_on: "2026-09-01", status: "ok" },
-      { id: "d-3", doc_type: "permit", expires_on: "2026-12-01", status: "ok" },
+      { id: "d-1", doc_type: "cdl", expires_on: "2027-03-01", status: "ok",
+        content_type: "image/jpeg" },
+      { id: "d-2", doc_type: "permit", expires_on: "2026-09-01", status: "ok",
+        content_type: "image/jpeg" },
+      { id: "d-3", doc_type: "permit", expires_on: "2026-12-01", status: "ok",
+        content_type: "image/jpeg" },
     ],
     expiring: [],
     archived_count: 2,
+    load_paperwork: [
+      {
+        load_id: "l-9", stop_id: "s-9", reference_number: "BRL-78426",
+        created_at: "2026-07-28T04:00:00+00:00",
+        facility_name: "Harvest Foods DC", destination_name: "Metro Market Warehouse",
+        doc_types: ["bol", "rate_con"], document_count: 3,
+      },
+    ],
+    unattached: [
+      { id: "o-1", doc_type: "rate_con", uploaded_at: "2026-07-28T12:41:00+00:00",
+        content_type: "application/pdf" },
+      { id: "o-2", doc_type: "rate_con", uploaded_at: "2026-07-28T12:05:00+00:00",
+        content_type: "application/pdf" },
+    ],
   };
   const ARCHIVE = {
     documents: [
@@ -2620,6 +2685,13 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
     ],
   };
 
+  // §23 entry 80: the sections start collapsed, so a test that wants a document has
+  // to open its section — which is the same tap a driver makes.
+  async function openSection(w, nth = 0) {
+    await w.findAll(".group__head")[nth].trigger("click");
+    await flushPromises();
+  }
+
   function stubWallet({ onPost } = {}) {
     const posts = [];
     const stub = vi.fn().mockImplementation((url, opts) => {
@@ -2631,6 +2703,9 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
       }
       if (u.includes("/protection/documents/archive")) return jsonOk(ARCHIVE);
       if (u.includes("/protection/wallet")) return jsonOk(WALLET);
+      if (/\/protection\/documents\/[0-9a-z-]+$/.test(u)) {
+        return Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob(["%PDF"])) });
+      }
       return jsonOk({});
     });
     vi.stubGlobal("fetch", stub);
@@ -2706,9 +2781,13 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
     const w = mount(DocsSurface);
     await flushPromises();
     expect(w.find(".inspect").text()).toContain("Inspection mode");
+    // §23 entry 80: sections start collapsed, so the strip and the headings are what
+    // a driver sees first -- the expiring pills still need no tap at all
+    expect(w.findAll(".doc")).toHaveLength(0);
+    expect(w.findAll(".pill").length).toBeGreaterThan(0); // expiring-soon strip
+    await openSection(w);
     expect(w.findAll(".doc")).toHaveLength(4);
     expect(w.text()).toContain("CDL"); // acronym stays English (§12.3)
-    expect(w.findAll(".pill").length).toBeGreaterThan(0); // expiring-soon strip
   });
 
   it("groups the grid by type (§10.4 'document grid by type')", async () => {
@@ -2717,10 +2796,76 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
     const w = mount(DocsSurface);
     await flushPromises();
 
-    const labels = w.findAll(".group__label").map((n) => n.text());
+    await openSection(w);
+    const labels = w.findAll(".group__sub").map((n) => n.text());
     expect(labels).toEqual(["CDL", "Permit"]); // two permits collapse under one heading
-    expect(w.findAll(".group")).toHaveLength(2);
+    expect(w.findAll(".subgroup")).toHaveLength(2);
     expect(w.findAll(".doc")).toHaveLength(3);
+    // and the wallet says whose documents these are, because it no longer holds
+    // anyone else's paperwork (§23 entry 79)
+    expect(w.find(".group__label").text()).toBe("Your documents");
+  });
+
+  it("keeps load paperwork out of the credentials wallet (\u00a723 entry 79)", async () => {
+    // measured on a real account: 40 documents in this tab, 5 of them the driver's.
+    // `documents_for_account` filters by account and ignores subject_kind, while its
+    // own docstring says the wallet's job is "the credential a driver holds now".
+    setToken("tok-docs");
+    stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+
+    const headings = w.findAll(".group__label").map((n) => n.text());
+    expect(headings).toEqual(["Your documents", "Load paperwork", "Not attached to a load"]);
+    // and each says how much is inside, so nothing has to be opened to find out
+    expect(w.findAll(".group__count").map((n) => n.text())).toEqual(["3", "1", "2"]);
+
+    // paperwork is named by its LOAD, not by its type: a BOL matters for the load it
+    // belongs to, not for being a BOL
+    await openSection(w, 1);
+    const paper = w.findAll(".paper__row");
+    expect(paper[0].text()).toContain("Harvest Foods DC → Metro Market Warehouse");
+    expect(paper[0].text()).toContain("BRL-78426");
+    expect(paper[0].text()).toContain("BOL · Rate con");
+  });
+
+  it("says plainly which rate cons never became a load, and removes them", async () => {
+    setToken("tok-docs");
+    const posts = stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+
+    await openSection(w, 2);
+    const orphans = w.findAll(".orphan");
+    expect(orphans).toHaveLength(2);
+    expect(orphans[0].text()).toContain("Photographed, no load made");
+
+    await orphans[0].find(".orphan__rm").trigger("click");
+    await flushPromises();
+    // removal is the archive, never a hard delete (§17 Q16)
+    expect(posts.some((u) => u.includes("/archive"))).toBe(true);
+  });
+
+  it("opens a PDF as a PDF, not a broken image (\u00a723 entry 80)", async () => {
+    // the viewer has always carried a PDF branch -- its own header says "some
+    // credentials are filed as PDFs, which an <img> cannot render" -- and keyed it off
+    // a `content_type` the wallet never sent. So the branch could not execute and
+    // every PDF opened as a broken image with its label as alt text.
+    setToken("tok-docs");
+    stubWallet();
+    // the viewer fetches the bytes itself; the wallet row only says how to render them
+    const realCreateURL = URL.createObjectURL;
+    URL.createObjectURL = () => "blob:doc";
+    const w = mount(DocsSurface);
+    await flushPromises();
+
+    await openSection(w, 2); // the unattached rate cons, which are PDFs
+    await w.findAll(".paper__row")[0].trigger("click");
+    await flushPromises();
+
+    expect(w.find("object.viewer__frame").exists()).toBe(true);
+    expect(w.find("img.viewer__frame").exists()).toBe(false);
+    URL.createObjectURL = realCreateURL;
   });
 
   it("offers the archive with a count, and only when something is in it", async () => {
@@ -2757,6 +2902,7 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
     const w = mount(DocsSurface);
     await flushPromises();
 
+    await openSection(w);
     await w.findAll(".doc")[0].trigger("click"); // open the document
     await flushPromises();
     await w.find(".viewer__remove").trigger("click"); // ask
@@ -2779,6 +2925,7 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
     const posts = stubWallet();
     const w = mount(DocsSurface);
     await flushPromises();
+    await openSection(w);
     await w.findAll(".doc")[0].trigger("click");
     await flushPromises();
     await w.find(".viewer__remove").trigger("click");
@@ -2796,6 +2943,7 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
     stubWallet();
     const w = mount(DocsSurface);
     await flushPromises();
+    await openSection(w);
     await w.findAll(".doc")[0].trigger("click");
     await flushPromises();
     expect(w.find(".viewer__remove").exists()).toBe(true);

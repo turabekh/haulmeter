@@ -36,3 +36,8 @@ class PackTemplate(enum.Enum):
     # it 404'd outright unless condition photos existed — so the pack that argues a
     # detention claim had no way out of the phone at all.
     stop_record = "stop_record"
+    # AI-CONTEXT: the whole ROUTE in one document (§23 entry 78). Entry 71 found a
+    # per-log export could only show a fragment of a stop; a per-stop export can only
+    # show a fragment of a load. A driver who photographed a pickup and a delivery had
+    # eight photos in the system and no document holding more than four.
+    load_record = "load_record"

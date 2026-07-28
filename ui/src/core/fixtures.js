@@ -285,20 +285,33 @@ export const SAMPLE_OWED = [
 // AI-CONTEXT: fixture document wallet (M5), pending live /protection/wallet.
 export const SAMPLE_WALLET = {
   documents: [
-    { id: "d-1", doc_type: "cdl", expires_on: "2027-03-01", status: "ok" },
-    { id: "d-2", doc_type: "med_card", expires_on: "2026-08-01", status: "expiring" },
-    { id: "d-3", doc_type: "insurance", expires_on: "2026-01-01", status: "expired" },
-    { id: "d-4", doc_type: "permit", expires_on: null, status: "ok" },
+    { id: "d-1", doc_type: "cdl", expires_on: "2027-03-01", status: "ok",
+      content_type: "image/jpeg" },
+    { id: "d-2", doc_type: "med_card", expires_on: "2026-08-01", status: "expiring",
+      content_type: "image/jpeg" },
+    { id: "d-3", doc_type: "insurance", expires_on: "2026-01-01", status: "expired",
+      content_type: "application/pdf" },
+    { id: "d-4", doc_type: "permit", expires_on: null, status: "ok",
+      content_type: "image/jpeg" },
   ],
   expiring: [
     { id: "d-2", doc_type: "med_card", expires_on: "2026-08-01", status: "expiring" },
     { id: "d-3", doc_type: "insurance", expires_on: "2026-01-01", status: "expired" },
   ],
   archived_count: 0,
+  // shape-matched to the endpoint (§23 entry 79). A sample wallet has no loads behind
+  // it, so these are empty rather than absent — a fixture whose shape does not match
+  // its endpoint hides the endpoint, which is how the old sample load hid an ISO
+  // timestamp rendering where a "07:00" was expected.
+  load_paperwork: [],
+  unattached: [],
 };
 
-export const SAMPLE_CORRIDOR = [
-  { facility_id: "f-2", name: "Pilot #77", facility_type: "truck_stop", distance_m: 5400, status: "full" },
-  { facility_id: "f-3", name: "Yardline Secured Parking", facility_type: "parking_property", distance_m: 9200, status: "empty" },
-  { facility_id: "f-4", name: "Rest Area — I-35 NB", facility_type: "rest_area", distance_m: 14800, status: null },
-];
+// AI-CONTEXT: SAMPLE_CORRIDOR is deliberately GONE (§23 entry 81).
+//
+// It supplied Corridor mode's entire content — "Pilot #77 · full · 3.4 mi" and two
+// more — while `GET /map/corridor` sat unreached, so DRIVING showed invented parking
+// statuses in the one state where a driver cannot look anything up. It also carried a
+// `status` field the endpoint did not return, which is why swapping the prop was
+// never the whole fix: a fixture whose shape does not match its endpoint hides the
+// endpoint. Same shape as the sample load's "07:00" against a live ISO timestamp.

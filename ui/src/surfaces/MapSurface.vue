@@ -4,9 +4,9 @@
      DRIVING (§5/§11.4): Corridor mode replaces free-pan; taps deferred-safe.
      Data is fixture-backed pending the M1 HTTP API (see core/fixtures.js). -->
 <script setup>
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
-import { CircleDot, Mic, SlidersHorizontal } from "lucide-vue-next";
+import { CircleDot, Mic, SlidersHorizontal, Bookmark } from "lucide-vue-next";
 import MapCanvas from "../core/components/MapCanvas.vue";
 import PresetChips from "../core/components/PresetChips.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
@@ -21,9 +21,12 @@ import HandoffSheet from "../core/components/HandoffSheet.vue";
 import VendorSheet from "../core/components/VendorSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
-import { SAMPLE_PINS, SAMPLE_CORRIDOR, sampleHandoffs } from "../core/fixtures.js";
+import { SAMPLE_PINS, sampleHandoffs } from "../core/fixtures.js";
+import { lastFix, metersBetween } from "../core/location.js";
+import { presetFor, rememberPreset } from "../core/map-presets.js";
+import { saved, saveForStop, unsave } from "../core/saved.js";
 import { withFoodBadges, foodBadgeFacilityIds } from "../core/vendors.js";
-import { statusReportFor } from "../core/presentation.js";
+import { statusReportFor, ageLabel } from "../core/presentation.js";
 import {
   fetchOverlay,
   fetchNearbyHandoffs,
@@ -39,6 +42,9 @@ import {
   muteVendor,
   unfollowVendor,
   suggestACook,
+  activeStopFacilityId,
+  fetchActiveLoad,
+  fetchCorridor,
   fetchCorridorVendors,
   fetchScalesAhead,
   fetchFacilityPromotions,
@@ -46,11 +52,29 @@ import {
   reportVendor,
 } from "../core/api.js";
 
-const { isDriving } = useDriverState();
+const { isDriving, state: driverState } = useDriverState();
 const { t } = useI18n();
 const router = useRouter();
 
-const preset = ref("drive");
+// AI-CONTEXT: §11.3 — "Preset choice persists per state (RESTING→Tonight)" (§23
+// entry 82). The preset was a bare `ref("drive")`, so every visit to the map reset to
+// Drive: a driver who parked for the night and opened the map to find a shower was
+// handed the fuel-and-scales view, every time. The Food FILTERS beside it have been
+// persisted since they shipped, which is what makes the omission a miss rather than a
+// decision — the pattern was already in this file.
+//
+// Per STATE, not one global value, because the spec's own example is a rule about
+// which preset belongs to which situation: Tonight is the right answer while resting
+// and the wrong one while rolling.
+const preset = ref(presetFor(driverState.value));
+// the driver's choice is remembered against the state they made it in...
+watch(preset, (chosen) => rememberPreset(driverState.value, chosen));
+// ...and coming back into a state restores what was last used there
+watch(driverState, (next) => {
+  const remembered = presetFor(next);
+  if (remembered !== preset.value) preset.value = remembered;
+});
+
 const PRESET_TYPES = {
   // E3.1: scales ride the Drive preset, which is the preset for moving forward —
   // exactly when a weigh station is a decision. They are absent from Tonight and
@@ -123,6 +147,17 @@ function onBounds(bbox) {
 onMounted(() => {
   loadOverlay(); // continental clusters until the map reports bounds
   loadVendors();
+  // which dock is the driver's own, so the Work preset can mark it and its card can
+  // lead with §10.1's "Arm stop" rung. Never persisted — see api.js.
+  fetchActiveLoad().catch(() => {
+    /* no session / offline / no load: every pin is just a pin, which is correct */
+  });
+  // AI-CONTEXT: a driver who opens the map ALREADY driving. The `isDriving` watcher
+  // only fires on a transition, so arriving in that state loaded nothing and the
+  // corridor sat blank until the next GPS fix moved the driver far enough to trip the
+  // refresh throttle. That is the commonest way this screen is reached — the tab is
+  // opened mid-journey, not at the moment the truck starts rolling.
+  if (isDriving.value) loadAhead();
 });
 watch(preset, () => loadOverlay()); // preset flip refetches the current viewport
 
@@ -209,6 +244,44 @@ async function loadVendors(bbox = lastBbox) {
   }
 }
 
+// AI-CONTEXT: which way the truck is pointing (§23 entry 81).
+//
+// Every "ahead" query in this file used to send heading 0 — due north — because the
+// location sensor never captured one. `null` here is the honest third state: a
+// stationary truck has no heading, and the corridor says so rather than aiming itself
+// at the north pole.
+const headingDeg = computed(() => lastFix.value?.headingDeg ?? null);
+
+// §11.4's stack, from the server. Held null until the first answer so an empty
+// corridor and an unfetched one are different things on screen.
+const corridor = ref(null);
+// how far, and how long, before the stack is worth re-asking for. At 55 mph 1.5 km is
+// about a minute — often enough that the next decision is always on screen, rarely
+// enough that a corridor fetch is not riding on the driver's data plan every second.
+const CORRIDOR_REFRESH_METERS = 1500;
+const CORRIDOR_REFRESH_MS = 90_000;
+let corridorAt = 0;
+let corridorFrom = null;
+
+async function loadCorridor() {
+  if (headingDeg.value === null) return; // no direction -> no "ahead" to compute
+  corridorAt = Date.now();
+  corridorFrom = { ...geo.value };
+  try {
+    const ahead = await fetchCorridor({
+      lat: geo.value.lat,
+      lon: geo.value.lon,
+      headingDeg: headingDeg.value,
+      preset: preset.value,
+    });
+    corridor.value = Array.isArray(ahead) ? ahead : [];
+  } catch {
+    // offline / no session. The last stack stays rather than blanking: the facilities
+    // a driver was told about a minute ago are still on this road.
+    if (corridor.value === null) corridor.value = [];
+  }
+}
+
 // DRIVING: food ahead on the current heading, capped at three (Q-6)
 const corridorFood = ref([]);
 async function loadCorridorFood() {
@@ -216,6 +289,7 @@ async function loadCorridorFood() {
     const ahead = await fetchCorridorVendors({
       lat: geo.value.lat,
       lon: geo.value.lon,
+      headingDeg: headingDeg.value ?? 0,
       filters: filters.value, // set while stopped, honoured while moving
     });
     corridorFood.value = Array.isArray(ahead) ? ahead : [];
@@ -227,17 +301,39 @@ async function loadCorridorFood() {
 const corridorScales = ref([]);
 async function loadScalesAhead() {
   try {
-    const ahead = await fetchScalesAhead({ lat: geo.value.lat, lon: geo.value.lon });
+    const ahead = await fetchScalesAhead({
+      lat: geo.value.lat,
+      lon: geo.value.lon,
+      headingDeg: headingDeg.value ?? 0,
+    });
     corridorScales.value = Array.isArray(ahead) ? ahead : [];
   } catch {
     corridorScales.value = [];
   }
 }
+
+function loadAhead() {
+  loadCorridor();
+  loadCorridorFood();
+  loadScalesAhead();
+}
 watch(isDriving, (driving) => {
-  if (driving) {
-    loadCorridorFood();
-    loadScalesAhead();
-  }
+  if (driving) loadAhead();
+});
+
+// AI-CONTEXT: the stack has to MOVE with the truck, which is the half a one-shot
+// fetch on the DRIVING transition would miss — a driver who set off an hour ago would
+// still be reading the three facilities that were ahead of them then. The sensor
+// fires far more often than this needs, so the refresh is throttled on distance and
+// time rather than on every fix.
+watch(lastFix, (fix) => {
+  if (!fix || !isDriving.value || headingDeg.value === null) return;
+  geo.value = { lat: fix.lat, lon: fix.lon };
+  located.value = true;
+  const far =
+    !corridorFrom ||
+    metersBetween(corridorFrom.lat, corridorFrom.lon, fix.lat, fix.lon) >= CORRIDOR_REFRESH_METERS;
+  if (far || Date.now() - corridorAt >= CORRIDOR_REFRESH_MS) loadAhead();
 });
 
 async function loadFacilityVendors(facilityId) {
@@ -330,6 +426,20 @@ async function muteThisVendor() {
   if (entry) await muteVendor(entry.vendor_id).catch(() => {});
 }
 
+// §10.1's third CTA. A comparison, not a request: the facility id is already in hand.
+function isActiveStopPin(pin) {
+  return (
+    !!activeStopFacilityId.value && String(pin?.facility_id) === String(activeStopFacilityId.value)
+  );
+}
+// NAV-5 cross-link, the same shape as Book and Fuel. The Load tab owns the Meter, the
+// arrive CTA and the evidence checklist; duplicating any of that onto a map sheet
+// would be two screens telling a driver about one stop.
+function openStop() {
+  selected.value = null;
+  router.push("/load");
+}
+
 const selected = ref(null);
 function onPinTap(pin) {
   selected.value = pin;
@@ -349,6 +459,45 @@ const pricingReport = ref(false); // the diesel-price report sheet (M7-FR5)
 const listening = ref(false);
 const solving = ref(false);
 const relaying = ref(false);
+// §11.4's saved queue. `now` ticks only while the sheet is closed-or-open on a stopped
+// truck; the age it renders is coarse (minutes), so a slow clock is plenty.
+const showingSaved = ref(false);
+const now = ref(Date.now());
+let ageTimer = null;
+onMounted(() => {
+  ageTimer = setInterval(() => (now.value = Date.now()), 30_000);
+});
+onUnmounted(() => ageTimer && clearInterval(ageTimer));
+
+const savedIds = computed(() => saved.value.map((item) => item.id));
+
+// the deferred-safe tap. It saves and nothing else — no navigation, no sheet, no
+// confirm, because every one of those is a flow and §11.4 exists to prevent flows at
+// speed. The corridor card marks itself from `savedIds` and that is the whole feedback.
+function saveAhead(entry) {
+  saveForStop({
+    id: entry.facility_id,
+    kind: "facility",
+    label: entry.name,
+    payload: { facility_type: entry.facility_type, lat: entry.lat, lon: entry.lon },
+  });
+}
+
+function navigateSaved(row) {
+  // the corridor payload has no coordinates today, so this routes through the
+  // facility page rather than guessing a destination — a Navigate that might open a
+  // map of nowhere is the dead-control pattern with a worse consequence.
+  if (row.payload?.lat != null && row.payload?.lon != null) {
+    navigate({ lat: row.payload.lat, lon: row.payload.lon });
+    showingSaved.value = false;
+    return;
+  }
+  openSavedFacility(row);
+}
+function openSavedFacility(row) {
+  showingSaved.value = false;
+  router.push(`/facility/${row.id}`);
+}
 const handoffs = ref([]);
 
 async function loadHandoffs() {
@@ -467,13 +616,42 @@ async function submitPrice(cents) {
 <template>
   <div class="map">
     <template v-if="isDriving">
-      <CorridorStack :entries="SAMPLE_CORRIDOR" :vendors="corridorFood" :scales="corridorScales" />
+      <!-- §11.7, and the two states a fixture never had to have. "We don't know which
+           way you are pointing" and "this stretch is empty" are different facts and
+           lead to different behaviour: the first is worth waiting out, the second is
+           worth acting on. Neither is a spinner — a driver at speed reads a sentence
+           or nothing. -->
+      <p v-if="headingDeg === null" class="corridor-note">{{ t("corridor.no_heading") }}</p>
+      <p
+        v-else-if="corridor && !corridor.length && !corridorScales.length && !corridorFood.length"
+        class="corridor-note"
+      >
+        {{ t("corridor.empty") }}
+      </p>
+      <CorridorStack
+        :entries="corridor || []"
+        :vendors="corridorFood"
+        :scales="corridorScales"
+        :saved-ids="savedIds"
+        @save="saveAhead"
+      />
     </template>
     <template v-else>
       <PresetChips v-model="preset" />
       <!-- M8-FR3: the "where do I sleep tonight" solver, surfaced in Tonight -->
       <button v-if="preset === 'tonight'" class="sleep-cta" type="button" @click="solving = true">
         {{ t("sleep.title") }}
+      </button>
+      <!-- AI-CONTEXT: §11.4's saved queue, arriving where it is useful (§23 entry 83).
+           It renders only when STOPPED and only when there is something in it — a
+           driver at a dock is the audience, and "Saved · 0" is a control that teaches
+           nothing. Composed from the relay banner's own shape one line below, so this
+           adds no component pattern; the owner's decision was the DESTINATION, which
+           §22 makes a never-improvise category. -->
+      <button v-if="savedIds.length" class="saved-chip" type="button" @click="showingSaved = true">
+        <Bookmark :size="16" :stroke-width="2" aria-hidden="true" />
+        {{ t("saved.title") }}
+        <span class="saved-chip__count">{{ savedIds.length }}</span>
       </button>
       <!-- M10-FR2: spots opening nearby — the claimable relay feed -->
       <button v-if="handoffs.length" class="relay-banner" type="button" @click="relaying = true">
@@ -549,6 +727,8 @@ async function submitPrice(cents) {
         :pin="selected"
         :vendors="facilityVendors"
         :promotions="facilityPromotions"
+        :is-active-stop="isActiveStopPin(selected)"
+        @open-stop="openStop"
         @vendor="openVendor"
         @navigate="navigate"
         @report="report"
@@ -610,6 +790,37 @@ async function submitPrice(cents) {
     <BottomSheet :open="relaying" :title="t('handoff.title')" @close="relaying = false">
       <HandoffSheet :handoffs="handoffs" />
     </BottomSheet>
+
+    <!-- AI-CONTEXT: what a corridor tap becomes once the truck stops (§23 entry 83).
+         Deliberately carries NO status and NO distance. Both were true when the driver
+         tapped, thirty miles ago, and §11.7 forbids showing a stale reading as a
+         current one — a lot that read `empty` at 60 mph is exactly the lot that fills
+         while you drive to it. The AGE of the tap is shown instead, which is a fact
+         that does not decay, and both actions lead somewhere that re-reads the truth:
+         Navigate hands off to the nav app, and the facility page loads live intel —
+         which is also the honest route to Book, whose nightly price must never be
+         quoted from a badge saved half an hour ago. -->
+    <BottomSheet :open="showingSaved" :title="t('saved.title')" @close="showingSaved = false">
+      <p v-if="!saved.length" class="docs__empty">{{ t("saved.empty") }}</p>
+      <ul v-else class="saved">
+        <li v-for="row in saved" :key="row.id" class="saved__row">
+          <span class="saved__name">{{ row.label }}</span>
+          <span class="saved__meta">{{ t("saved.ago") }} {{ ageLabel(row.at, now) }}</span>
+          <span class="saved__acts">
+            <button class="saved__act" type="button" @click="navigateSaved(row)">
+              {{ t("facility.navigate") }}
+            </button>
+            <button class="saved__act" type="button" @click="openSavedFacility(row)">
+              {{ t("facility.view") }}
+            </button>
+            <button class="saved__act saved__act--rm" type="button" @click="unsave(row.id)">
+              {{ t("saved.remove") }}
+            </button>
+          </span>
+        </li>
+      </ul>
+      <p class="saved__hint">{{ t("saved.hint") }}</p>
+    </BottomSheet>
   </div>
 </template>
 
@@ -636,6 +847,15 @@ async function submitPrice(cents) {
 }
 .food-empty__done {
   color: var(--text-3);
+}
+/* §15.3 at speed: one sentence, body size because it is read in a glance from a
+   metre away, and no card — an empty stretch of road is not an event. */
+.corridor-note {
+  margin: 0;
+  padding: var(--s-4) var(--s-4) 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
 }
 .map {
   display: flex;
@@ -710,6 +930,87 @@ async function submitPrice(cents) {
 .filters-chip--on {
   border-color: var(--shield-500);
   color: var(--shield-500);
+}
+/* the relay banner's shape, one step quieter: the relay is time-critical (a spot is
+   opening now) and takes the accent fill; a saved list is patient, so it takes the
+   hairline card treatment the sleep CTA beside it already uses (§8). */
+.saved-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: var(--s-2) var(--s-4) 0;
+  min-height: 48px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--ink-1);
+  border: 1px solid var(--line-1);
+  color: var(--text-1);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.saved-chip__count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+.saved {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.saved__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
+  background: var(--ink-1);
+}
+.saved__name {
+  font-size: var(--type-body-size);
+  color: var(--text-1);
+}
+.saved__meta {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--type-caption-size);
+  color: var(--text-3);
+}
+/* §8 tertiary, wrapping — a row of text controls, never three stacked full-bleed
+   buttons (the mistake §23 recorded on the Load tab's rung row) */
+.saved__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+  margin-top: var(--s-1);
+}
+/* §6.5 is 48 dp in BOTH axes, and only the height was set — so "Remove" measured
+   44×48 in Punjabi, where the label is two glyphs. Exactly the defect already recorded
+   on `.cap__chip`: a control sized by its content is sized by the SHORTEST locale, so
+   height alone can never carry the glove spec. The harness found it at 360 dp. */
+.saved__act {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 var(--s-2);
+  margin-left: calc(var(--s-2) * -1);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.saved__act--rm {
+  color: var(--flare-500);
+}
+.saved__hint {
+  margin: var(--s-3) 0 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
 }
 .report-chip {
   position: absolute;

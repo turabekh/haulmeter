@@ -113,3 +113,57 @@ export function formatMiles(distanceM, { precise = false } = {}) {
   const miles = distanceM / METRES_PER_MILE;
   return precise ? miles.toFixed(1) : String(Math.round(miles));
 }
+
+// AI-CONTEXT: §11.5's declutter rule, made enforceable.
+//
+// "labels appear only >= zoom threshold; overlapping labels never allowed." Both
+// halves lived nowhere: the map drew no labels at all, so the rule had never had to
+// be true. Now that §11.2's price slot renders one, the rule needs an implementation
+// that can be tested rather than a comment claiming it holds — this is §19's reason
+// for putting logic in `core/` in the first place.
+//
+// Placement is GREEDY in the order given, which is the order the server ranked the
+// pins, so the nearest/most relevant station keeps its label and a further one behind
+// it loses only the figure — never the pin, and never the tap.
+export const PRICE_LABEL_MIN_ZOOM = 9;
+const LABEL_W = 54;
+const LABEL_H = 18;
+const LABEL_DY = 20;
+
+export function placeLabels(
+  items,
+  { zoom = null, width = LABEL_W, height = LABEL_H, dy = LABEL_DY, minZoom = PRICE_LABEL_MIN_ZOOM } = {},
+) {
+  const shown = {};
+  // `zoom: null` means there is no live map to have a zoom — the placeholder canvas,
+  // which never carries enough pins to collide. The threshold is a map rule, so it
+  // does not apply where there is no map.
+  if (zoom !== null && zoom < minZoom) return shown;
+  const placed = [];
+  for (const item of items) {
+    if (!item || !item.label) continue;
+    if (item.x == null || item.y == null) {
+      shown[item.id] = item.label;
+      continue;
+    }
+    const box = { x: item.x - width / 2, y: item.y + dy, w: width, h: height };
+    const hits = placed.some(
+      (p) => box.x < p.x + p.w && box.x + box.w > p.x && box.y < p.y + p.h && box.y + box.h > p.y,
+    );
+    if (hits) continue;
+    placed.push(box);
+    shown[item.id] = item.label;
+  }
+  return shown;
+}
+
+// AI-CONTEXT: the `Nm` / `Nh` age string on its own, extracted rather than re-written.
+// `freshnessLabel` has computed it since §11.7 landed and buried it inside a sentence
+// about crowd samples; the saved-for-stop list needs the age of an ACTION the driver
+// took, which has no sample size and no feed. Two age formats drifting apart is the
+// drift `formatMiles` was consolidated to stop.
+export function ageLabel(atMs, nowMs) {
+  if (atMs == null) return null;
+  const mins = Math.max(0, Math.round((nowMs - atMs) / 60000));
+  return mins < 60 ? `${mins}m` : `${Math.round(mins / 60)}h`;
+}

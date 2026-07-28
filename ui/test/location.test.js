@@ -6,6 +6,7 @@
 // and it never replays a stale position as a current one.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
+  bearingBetween,
   permission,
   lastFix,
   lastEvents,
@@ -227,6 +228,75 @@ describe("F3 location reporting (PRD §7.3)", () => {
       expect(state.value).toBe(DriverState.DRIVING);
       __resetStateForTests();
       vi.useRealTimers();
+    });
+  });
+
+  // AI-CONTEXT: heading, which this sensor never captured (§23 entry 81).
+  //
+  // The only heading in the product was the literal `0` two API calls defaulted to,
+  // so "what is ahead of me" meant "what is north of me" for every driver, and
+  // `GET /map/corridor` — which requires one — was never called at all.
+  describe("§11.4 heading", () => {
+    it("uses the device's own heading when it reports one", () => {
+      startLocationReporting();
+      geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon, accuracy: 10, heading: 271.4 });
+      expect(lastFix.value.headingDeg).toBeCloseTo(271.4, 1);
+    });
+
+    it("keeps a legitimate due-north reading rather than treating 0 as absent", () => {
+      // the bug this replaces WAS a 0. A device that genuinely reports 0 must not be
+      // confused with one reporting nothing, or northbound drivers get the fallback.
+      startLocationReporting();
+      geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon, accuracy: 10, heading: 0 });
+      expect(lastFix.value.headingDeg).toBe(0);
+    });
+
+    it("derives a heading from displacement when the device reports none", () => {
+      // most phones report `heading` as null most of the time; without this the
+      // corridor would simply never have a direction to ask about
+      startLocationReporting();
+      geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon, accuracy: 10, heading: null });
+      expect(lastFix.value.headingDeg).toBeNull();
+
+      // due west: same latitude, decreasing longitude
+      geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon - 0.02, accuracy: 10, heading: null });
+      expect(lastFix.value.headingDeg).toBeCloseTo(270, 0);
+    });
+
+    it("holds the last heading through a stop instead of spinning on GPS jitter", () => {
+      // a parked truck has no heading. Deriving one from metre-scale noise would
+      // point the corridor at a different quadrant every second at a dock.
+      startLocationReporting();
+      geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon, accuracy: 10, heading: null });
+      geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon - 0.02, accuracy: 10, heading: null });
+      const moving = lastFix.value.headingDeg;
+      expect(moving).toBeCloseTo(270, 0);
+
+      // ~2 m of jitter, well under MIN_HEADING_METERS
+      geo.emit({
+        latitude: DALLAS.lat + 0.00002,
+        longitude: DALLAS.lon - 0.02,
+        accuracy: 10,
+        heading: null,
+      });
+      expect(lastFix.value.headingDeg).toBe(moving);
+    });
+
+    it("has no heading at all before the truck has moved", () => {
+      // §11.7: null is the honest third state, and the corridor renders a sentence
+      // for it rather than aiming itself at the north pole
+      startLocationReporting();
+      geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon, accuracy: 10 });
+      expect(lastFix.value.headingDeg).toBeNull();
+    });
+  });
+
+  describe("bearingBetween", () => {
+    it("measures clockwise from true north, like coords.heading and F11's cone", () => {
+      expect(bearingBetween(0, 0, 1, 0)).toBeCloseTo(0, 0); // north
+      expect(bearingBetween(0, 0, 0, 1)).toBeCloseTo(90, 0); // east
+      expect(bearingBetween(0, 0, -1, 0)).toBeCloseTo(180, 0); // south
+      expect(bearingBetween(0, 0, 0, -1)).toBeCloseTo(270, 0); // west
     });
   });
 

@@ -20,7 +20,8 @@
      the archive sheet. -->
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
-import { ShieldCheck, Plus, Archive, RotateCcw } from "lucide-vue-next";
+import { useRouter } from "vue-router";
+import { ShieldCheck, Plus, Archive, RotateCcw, ChevronRight } from "lucide-vue-next";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
 import DocumentViewer from "../core/components/DocumentViewer.vue";
@@ -36,6 +37,7 @@ import { SAMPLE_WALLET } from "../core/fixtures.js";
 
 const { t } = useI18n();
 const { isDriving } = useDriverState();
+const router = useRouter();
 const data = ref(SAMPLE_WALLET);
 const inspecting = ref(false);
 const capturing = ref(false);
@@ -183,6 +185,38 @@ const inspectionDocs = computed(() =>
 );
 // §10.4: "document grid BY TYPE". It has always rendered one flat list in upload
 // order, so a driver with two permits and three BOLs scanned the grid to find them.
+// AI-CONTEXT: collapsed by default (§23 entry 80). Three sections is the right
+// SHAPE and still the wrong screen when one of them holds 23 documents: a driver
+// opening Docs to check a med card scrolled past every BOL they had ever filed. The
+// headings are the index; the count is on the heading, so nothing has to be opened to
+// learn whether it is worth opening. The expiring strip is untouched above this and
+// still surfaces what needs action without any tap at all.
+const open_ = ref(new Set());
+function toggle(key) {
+  const next = new Set(open_.value);
+  next.has(key) ? next.delete(key) : next.add(key);
+  open_.value = next;
+}
+
+const paperwork = computed(() => data.value.load_paperwork ?? []);
+const unattached = computed(() => data.value.unattached ?? []);
+function routeLabel(p) {
+  return p.destination_name ? `${p.facility_name} → ${p.destination_name}` : p.facility_name;
+}
+function openLoad(p) {
+  router.push(`/load/${p.stop_id}/evidence`);
+}
+async function removeOrphan(d) {
+  // removal is the ARCHIVE (§17 Q16 forbids hard delete): it leaves the wallet and
+  // stays recoverable, which is what the rest of this surface already means by remove.
+  try {
+    await archiveDocument(d.id);
+    await refresh();
+  } catch {
+    /* offline: the wallet reloads on next open rather than lying about the removal */
+  }
+}
+
 const groups = computed(() => {
   const byType = new Map();
   for (const doc of data.value.documents) {
@@ -219,15 +253,78 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
          is labelled, never linked) left literally nothing on the screen, which is
          how this surface was found looking broken rather than empty. The action came
          back with `POST /protection/documents`, so §15.3 now has both halves. -->
-    <p v-if="!data.documents.length" class="docs__empty">{{ t("docs.empty") }}</p>
+    <p v-if="!data.documents.length && !paperwork.length && !unattached.length"
+       class="docs__empty">{{ t("docs.empty") }}</p>
     <div v-else class="groups">
-      <section v-for="g in groups" :key="g.type" class="group">
-        <h2 class="group__label">{{ g.label }}</h2>
-        <ul class="grid">
-          <li v-for="d in g.docs" :key="d.id">
-            <button class="doc" type="button" @click="open(d)">
-              <span class="doc__type">{{ g.label }}</span>
-              <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
+      <!-- AI-CONTEXT: the wallet is the driver's OWN documents (§23 entry 79). It
+           returned everything on the account grouped by type, so a CDL sat between
+           rate cons — measured on a real account, 40 documents of which 5 were
+           theirs. Grouping by type is right for a credential and wrong for
+           paperwork: a BOL matters for the load it belongs to, not for being a BOL. -->
+      <section v-if="data.documents.length" class="group">
+        <button class="group__head" type="button" @click="toggle('mine')">
+          <ChevronRight :size="16" :stroke-width="2" class="group__caret"
+                        :class="{ 'group__caret--open': open_.has('mine') }" aria-hidden="true" />
+          <h2 class="group__label">{{ t("docs.mine") }}</h2>
+          <span class="group__count">{{ data.documents.length }}</span>
+        </button>
+        <div v-for="g in groups" v-if="open_.has('mine')" :key="g.type" class="subgroup">
+          <h3 class="group__sub">{{ g.label }}</h3>
+          <ul class="grid">
+            <li v-for="d in g.docs" :key="d.id">
+              <button class="doc" type="button" @click="open(d)">
+                <span class="doc__type">{{ g.label }}</span>
+                <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section v-if="paperwork.length" class="group">
+        <button class="group__head" type="button" @click="toggle('paperwork')">
+          <ChevronRight :size="16" :stroke-width="2" class="group__caret"
+                        :class="{ 'group__caret--open': open_.has('paperwork') }"
+                        aria-hidden="true" />
+          <h2 class="group__label">{{ t("docs.paperwork") }}</h2>
+          <span class="group__count">{{ paperwork.length }}</span>
+        </button>
+        <ul v-if="open_.has('paperwork')" class="paper">
+          <li v-for="p in paperwork" :key="p.load_id">
+            <button class="paper__row" type="button" @click="openLoad(p)">
+              <span class="paper__route">{{ routeLabel(p) }}</span>
+              <span class="paper__meta">
+                <template v-if="p.reference_number">{{ p.reference_number }} · </template
+                >{{ p.created_at.slice(0, 10) }}
+              </span>
+              <span class="paper__types">
+                {{ p.doc_types.map((k) => t(`docs.type.${k}`)).join(" · ") }}
+              </span>
+            </button>
+          </li>
+        </ul>
+      </section>
+
+      <!-- photographed, parsed, and never turned into a load. Said plainly rather
+           than left looking like a filed document, and removal is the archive
+           (§17 Q16 forbids hard delete), so nothing is thrown away. -->
+      <section v-if="unattached.length" class="group">
+        <button class="group__head" type="button" @click="toggle('unattached')">
+          <ChevronRight :size="16" :stroke-width="2" class="group__caret"
+                        :class="{ 'group__caret--open': open_.has('unattached') }"
+                        aria-hidden="true" />
+          <h2 class="group__label">{{ t("docs.unattached") }}</h2>
+          <span class="group__count">{{ unattached.length }}</span>
+        </button>
+        <ul v-if="open_.has('unattached')" class="paper">
+          <li v-for="d in unattached" :key="d.id" class="orphan">
+            <button class="paper__row" type="button" @click="open(d)">
+              <span class="paper__route">{{ t(`docs.type.${d.doc_type}`) }}</span>
+              <span class="paper__meta">{{ d.uploaded_at.slice(0, 16).replace("T", " ") }}</span>
+              <span class="paper__types">{{ t("docs.unattached_hint") }}</span>
+            </button>
+            <button class="orphan__rm" type="button" @click="removeOrphan(d)">
+              {{ t("docs.remove_short") }}
             </button>
           </li>
         </ul>
@@ -420,11 +517,111 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
   flex-direction: column;
   gap: var(--s-4);
 }
+/* §23 entry 80: the heading IS the control. 48 dp target, tokens only, and the caret
+   turns rather than swapping glyphs so the row never reflows as it opens. */
+.group__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.group__caret {
+  flex: none;
+  color: var(--text-3);
+  transition: transform 120ms ease;
+}
+.group__caret--open {
+  transform: rotate(90deg);
+}
+.group__count {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: var(--type-label-size);
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) {
+  .group__caret {
+    transition: none;
+  }
+}
+.group__head .group__label {
+  margin: 0;
+}
 .group__label {
   margin: 0 0 var(--s-2);
   font-size: var(--type-label-size);
   font-weight: 500;
   color: var(--text-2);
+}
+/* §23 entry 79: three sections, one type scale. The per-type heading inside the
+   wallet steps DOWN from the section heading rather than introducing a new size. */
+.subgroup {
+  margin-bottom: var(--s-4);
+}
+.group__sub {
+  margin: 0 0 var(--s-2);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+  color: var(--text-3);
+}
+.paper {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.paper__row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-1);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--s-3);
+  background: var(--ink-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
+  text-align: left;
+  cursor: pointer;
+}
+.paper__route {
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+}
+.paper__meta,
+.paper__types {
+  color: var(--text-3);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+}
+.orphan {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s-2);
+}
+.orphan .paper__row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.orphan__rm {
+  flex: none;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 var(--s-3);
+  background: transparent;
+  border: 0;
+  color: var(--flare-500);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+  cursor: pointer;
 }
 /* tertiary control (§8): text weight, no fill — the archive is a secondary view and
    must not compete with Inspection mode, which is this screen's one Primary */

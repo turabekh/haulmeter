@@ -400,6 +400,29 @@ def load_history(
                     if e.get("event") != loads.EVENT_DEPARTED
                 ),
                 "documents": sorted({d.doc_type.value for d in docs}),
+                # AI-CONTEXT: the route, reachable (§23 entry 78). The row links to
+                # `stops[0]` and there was no other way in, so a driver who
+                # photographed a pickup and a delivery had eight photos in the system
+                # and could open four. The rolled-up totals fixed what the row SAYS;
+                # this fixes what it can REACH, which was the half left undone.
+                "stops": [
+                    {
+                        "stop_id": str(s.id),
+                        "sequence": s.sequence,
+                        "stop_type": s.stop_type.value,
+                        "facility_name": (
+                            f.name if (f := facility.get_facility(db, s.facility_id)) else None
+                        ),
+                        "detention_cents": (
+                            c.amount_cents
+                            if (c := m3.claim_for_stop(db, s.id)) and c.amount_cents
+                            else None
+                        ),
+                        "claim_state": c.state.value if c else None,
+                        "photo_count": m5.condition_photo_count(db, s.id),
+                    }
+                    for s in stops
+                ],
             }
         )
     return {"loads": rows}
@@ -412,8 +435,24 @@ def active_load(
 ) -> dict:
     # resume point: the driver's current armed stop (or null). Lets a fresh device
     # re-open The Meter without relying on client-persisted activeStopId.
+    #
+    # AI-CONTEXT: WHICH DOCK, not just which stop (§23 entry 82).
+    #
+    # §11.3 gives the map's Work preset as "armed stop + its facility intel" and §10.1
+    # gives the facility sheet an "Arm stop" CTA — both of which need to know the
+    # facility the armed stop is AT, and this route returned an opaque stop id. So the
+    # Map tab could not tell the driver's own dock from any other receiver on the
+    # screen, and the two surfaces that are about the same load knew nothing of each
+    # other. The stop already carries `facility_id`; nothing had ever asked for it.
     stop = loads.active_stop_for_account(db, account.id)
-    return {"stop_id": str(stop.id) if stop else None}
+    if stop is None:
+        return {"stop_id": None, "facility_id": None, "facility_name": None}
+    fac = facility.get_facility(db, stop.facility_id)
+    return {
+        "stop_id": str(stop.id),
+        "facility_id": str(stop.facility_id),
+        "facility_name": fac.name if fac else None,
+    }
 
 
 @router.post("/{stop_id}/arrive", status_code=201)

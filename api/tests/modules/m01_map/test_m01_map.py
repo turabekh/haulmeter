@@ -167,6 +167,54 @@ def test_corridor_view_ahead_only(db):
     assert [e.name for e in entries] == ["Ahead"]
 
 
+def test_corridor_ahead_carries_the_status_the_pin_would_show(db):
+    # §23 entry 81: the stack rendered a FIXTURE because `corridor_view` returns
+    # geometry alone. Run against the old implementation this fails on the missing
+    # key, which is the whole point of the new reader existing.
+    account = _account(db)
+    fac = facility.create_facility(db, facility.FacilityType.truck_stop, "Ahead", *NORTH)
+    _belief(db, account, fac, crowd.SignalType.parking_fullness, {"status": "full"})
+    rows = m1.corridor_ahead(db, account.id, *DALLAS, heading_deg=0.0, max_distance_m=40000)
+    assert [r["name"] for r in rows] == ["Ahead"]
+    assert rows[0]["status"] == "full"
+    assert rows[0]["sample_size"] == 1
+    assert rows[0]["reported_at"] is not None
+
+
+def test_corridor_ahead_says_nothing_rather_than_guessing_a_status(db):
+    # §11.7: an unreported facility reports NO status. A default of "empty" here
+    # would send a driver past a full lot on our word.
+    account = _account(db)
+    facility.create_facility(db, facility.FacilityType.truck_stop, "Unreported", *NORTH)
+    rows = m1.corridor_ahead(db, account.id, *DALLAS, heading_deg=0.0, max_distance_m=40000)
+    assert rows[0]["status"] is None
+    assert rows[0]["sample_size"] == 0
+
+
+def test_corridor_ahead_asks_a_scale_whether_it_is_open_not_how_full(db):
+    # the signal follows the facility KIND. Reading parking fullness off a weigh
+    # station would render a status that means nothing about it.
+    account = _account(db)
+    m1.register_module(db)
+    flags.enable(db, m1.WEIGH_STATION_FLAG)
+    scale = facility.create_facility(db, facility.FacilityType.weigh_station, "Scale", *NORTH)
+    _belief(db, account, scale, crowd.SignalType.weigh_station_status, {"status": "closed"})
+    _belief(db, account, scale, crowd.SignalType.parking_fullness, {"status": "full"})
+    rows = m1.corridor_ahead(db, account.id, *DALLAS, heading_deg=0.0, max_distance_m=40000)
+    assert rows[0]["status"] == "closed"  # never "full"
+
+
+def test_corridor_ahead_caps_at_three(db):
+    # §11.4 names the size. A stack a driver has to scroll at speed is a list.
+    account = _account(db)
+    for i in range(6):
+        facility.create_facility(
+            db, facility.FacilityType.truck_stop, f"Stop {i}", NORTH[0] + i * 0.01, NORTH[1]
+        )
+    rows = m1.corridor_ahead(db, account.id, *DALLAS, heading_deg=0.0, max_distance_m=60000)
+    assert len(rows) == m1.MAX_CORRIDOR_ENTRIES == 3
+
+
 def test_prediction_is_heuristic_with_basis(db):
     evening = m1.predict_parking_fill(db, None, hour_of_day=19)
     assert evening.status == "full"

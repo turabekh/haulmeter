@@ -28,6 +28,15 @@ const IDLE_MIN_MS = 5 * 60 * 1000;
 const ARMED_MIN_METERS = 50;
 const ARMED_MIN_MS = 60 * 1000;
 
+// AI-CONTEXT: how far apart two fixes must be before they describe a DIRECTION.
+//
+// A parked truck has no heading, and GPS jitter at a standstill is a few metres in a
+// random direction every second — so deriving a bearing from every pair would spin
+// the corridor through all four quadrants while the driver sits at a dock. Below this
+// the last known heading is kept instead, on the same reasoning `effectiveSpeed`
+// already applies to a missing speed: an unknown reading is not evidence of a change.
+const MIN_HEADING_METERS = 15;
+
 // §15.5: "if background permission is lost, the app shows a single persistent
 // Load-tab card explaining exactly what stops working, with a one-tap fix — never
 // nags beyond that card." This ref is that card's whole state.
@@ -47,15 +56,31 @@ let watchedHighAccuracy = null;
 let lastSentAt = 0;
 let lastSentAt_lat = null;
 let lastSentAt_lon = null;
+// the last heading we were able to establish, held across fixes that cannot supply
+// one (a red light, a dock, a device that never reports `coords.heading`)
+let lastHeading = null;
 
 // equirectangular approximation — a few metres of error over the distances that
 // matter here, and it avoids a trig-heavy haversine on every single fix.
-function metersBetween(lat1, lon1, lat2, lon2) {
+export function metersBetween(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const toRad = Math.PI / 180;
   const x = (lon2 - lon1) * toRad * Math.cos(((lat1 + lat2) / 2) * toRad);
   const y = (lat2 - lat1) * toRad;
   return Math.sqrt(x * x + y * y) * R;
+}
+
+// initial bearing from one point to another, degrees clockwise from true north —
+// the same convention `coords.heading` uses and the same one F11's corridor cone is
+// measured in, so a derived heading and a device-reported one are interchangeable.
+export function bearingBetween(lat1, lon1, lat2, lon2) {
+  const toRad = Math.PI / 180;
+  const phi1 = lat1 * toRad;
+  const phi2 = lat2 * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const y = Math.sin(dLon) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
 function armed() {
@@ -91,6 +116,25 @@ function effectiveSpeed(coords, fix, now) {
   return metersBetween(prev.lat, prev.lon, fix.lat, fix.lon) / seconds;
 }
 
+// AI-CONTEXT: WHICH WAY THE TRUCK IS POINTING, which this sensor never recorded.
+//
+// `coords.heading` was dropped on the floor along with any way to derive one, so the
+// only heading in the product was the literal `0` two API calls defaulted to — due
+// north. A driver westbound on I-40 was served the scales and the food NORTH of them,
+// and `GET /map/corridor`, which requires a heading, was never called at all: there
+// was nothing to pass it. Corridor mode ran on a fixture instead.
+//
+// Devices report `heading` as null or NaN whenever they cannot establish one, which
+// on many phones is most of the time, so displacement between fixes is the fallback —
+// the same shape as `effectiveSpeed` above, for the same reason.
+function effectiveHeading(coords, fix) {
+  if (typeof coords.heading === "number" && !Number.isNaN(coords.heading)) return coords.heading;
+  const prev = lastFix.value;
+  if (!prev) return lastHeading;
+  if (metersBetween(prev.lat, prev.lon, fix.lat, fix.lon) < MIN_HEADING_METERS) return lastHeading;
+  return bearingBetween(prev.lat, prev.lon, fix.lat, fix.lon);
+}
+
 async function onFix(position) {
   permission.value = "granted";
   const now = Date.now();
@@ -100,6 +144,9 @@ async function onFix(position) {
     accuracyM: position.coords.accuracy ?? null,
     speedMps: position.coords.speed ?? null,
   };
+  // both derivations read the PREVIOUS fix, so they run before it is replaced below
+  fix.headingDeg = effectiveHeading(position.coords, fix);
+  lastHeading = fix.headingDeg;
   // SM-4: the state machine owns the decision; this only hands it the reading.
   observeMotion({ speedMps: effectiveSpeed(position.coords, fix, now), now });
   lastFixAt = now;
@@ -185,6 +232,7 @@ export function __resetForTests() {
   lastSentAt = 0;
   lastSentAt_lat = null;
   lastSentAt_lon = null;
+  lastHeading = null;
   permission.value = "unknown";
   lastFix.value = null;
   lastEvents.value = [];

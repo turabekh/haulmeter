@@ -10,8 +10,9 @@
      (and tests) never load the ~200 KB library. -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
-import { Truck, TreePine, SquareParking, Fuel, Warehouse, Circle, UtensilsCrossed } from "lucide-vue-next";
-import { statusPresentation, isStale } from "../presentation.js";
+import { Truck, TreePine, SquareParking, Fuel, Warehouse, Circle, UtensilsCrossed, DollarSign } from "lucide-vue-next";
+import { statusPresentation, isStale, placeLabels } from "../presentation.js";
+import { formatMoney } from "../meter.js";
 import { useI18n } from "../i18n.js";
 
 const { t } = useI18n();
@@ -44,7 +45,56 @@ const mapEl = ref(null);
 const live = ref(false); // true once a GL map is rendering tiles
 const positions = ref({}); // facility_id -> { x, y } pixel coords on the live map
 const clusterPositions = ref({}); // cluster index -> { x, y }
+const zoom = ref(null); // the live map's zoom, for §11.5's label threshold
 let map = null;
+
+// AI-CONTEXT: §11.2's badge slots, which were specified and never drawn.
+//
+// "Badge slots: price (fuel), $ (bookable), clock (dwell risk)". The overlay has been
+// serializing `fuel_net` (net, gross, savings) and `bookable` (nightly price) since
+// the marketplace modules landed, and this canvas rendered exactly one badge — food.
+// So the FUEL PRESET painted a screen of stations each carrying a price and showed
+// none of them: comparing two pumps meant tapping both, which is the opposite of what
+// a price layer is for.
+//
+// The three slots are mutually exclusive in practice — a fuel station is never
+// bookable and a lot never has a pump price — so they do not compete for the shoulder.
+// Food can coexist with either, and keeps the top-right it already had.
+//
+// The CLOCK slot is deliberately still empty: no dwell-risk badge exists in the
+// overlay payload, and rendering a slot with nothing behind it is the fake-confidence
+// §11.7 forbids. Logged as debt rather than invented.
+function priceLabel(pin) {
+  const badge = pin.badges?.find((b) => b.kind === "fuel_net");
+  if (!badge) return null;
+  // the tilde survives onto the map: a regional estimate must not read as a quote
+  return `${badge.indicative ? "~" : ""}${formatMoney(badge.net)}`;
+}
+function isBookable(pin) {
+  return (pin.badges || []).some((b) => b.kind === "bookable");
+}
+
+// the price reaches a screen reader even when §11.5's declutter drops the visible
+// label: hiding a figure to keep the map readable is a LAYOUT decision, and applying
+// it to assistive text would withhold the fact rather than tidy it.
+function pinLabel(pin) {
+  const price = priceLabel(pin);
+  return price ? `${pin.name} · ${price}` : pin.name;
+}
+
+// §11.5's declutter rule lives in `core/presentation.js` (§19) so it can be tested
+// as arithmetic rather than asserted through a mounted map that never has a viewport
+// in a test runner — which is how it would have shipped unexercised.
+const priceLabels = computed(() =>
+  placeLabels(
+    props.pins.map((pin) => ({
+      id: pin.facility_id,
+      label: priceLabel(pin),
+      ...(live.value ? (positions.value[pin.facility_id] ?? {}) : {}),
+    })),
+    { zoom: live.value ? (zoom.value ?? 0) : null },
+  ),
+);
 
 // the map is viewport-driven: it never auto-frames to the returned pins (that would
 // fight the driver's pan). Whatever the map shows, the surface fetches for.
@@ -81,6 +131,7 @@ const US_ZOOM = 3.5;
 
 function syncPins() {
   if (!map) return;
+  zoom.value = map.getZoom();
   const next = {};
   for (const pin of props.pins) {
     const pt = map.project([pin.lon, pin.lat]);
@@ -206,7 +257,7 @@ function stale(pin) {
       class="pin"
       :class="{ 'pin--stale': stale(pin) }"
       :style="pinStyle(pin)"
-      :aria-label="pin.name"
+      :aria-label="pinLabel(pin)"
       @click="emit('pinTap', pin)"
     >
       <span class="pin__puck">
@@ -217,6 +268,30 @@ function stale(pin) {
            exist. Icon + the marker token, never colour alone (C-1). -->
       <span v-if="pin.has_food" class="pin__badge" :aria-label="t('map.preset.food')">
         <UtensilsCrossed :size="10" :stroke-width="3" aria-hidden="true" />
+      </span>
+      <!-- §11.2's "$ (bookable)" slot. The opposite shoulder from food, because a lot
+           with a cook on it legitimately carries both and they must not stack.
+           AI-CONTEXT: an ICON, not the character "$" — and that is the layout harness
+           talking, not a preference. The first cut set `font-size: 10px` on a text
+           glyph, which is both a hardcoded value (§22.3 box 8 is tokens-only) and
+           below §6.2's 13 dp floor, and the harness named it at 360 dp in three
+           locales within minutes of it being written. The food badge never tripped the
+           rule because it was always an icon; a badge disc is 14 dp and no legal type
+           size fits inside one, so the slot can only ever hold a glyph. -->
+      <span
+        v-if="isBookable(pin)"
+        class="pin__badge pin__badge--book"
+        :aria-label="t('facility.book')"
+      >
+        <DollarSign :size="10" :stroke-width="3" aria-hidden="true" />
+      </span>
+      <!-- §11.2's "price (fuel)" slot. A price is a LABEL, not a glyph, so it obeys
+           §11.5's declutter rule — see `priceLabels`. Mono tabular like every other
+           figure (T-2), and aria-hidden because the button's own label already names
+           the facility; a screen reader reading "$3.94" between two pin names would
+           be reading the map, not the place. -->
+      <span v-if="priceLabels[pin.facility_id]" class="pin__price" aria-hidden="true">
+        {{ priceLabels[pin.facility_id] }}
       </span>
     </button>
     <!-- §11.5: at density the server clusters; a count bubble (dominant status color),
@@ -324,6 +399,36 @@ function stale(pin) {
   border: 1px solid var(--ink-0);
   background: var(--marker-500);
   color: var(--ink-0);
+}
+/* §11.2's "$ (bookable)" slot, on the shoulder opposite food so a bookable lot with a
+   cook on it shows both without stacking. Same 14 dp disc, same token vocabulary —
+   `shield` rather than `marker` because a bookable spot is reassurance, not caution. */
+.pin__badge--book {
+  right: auto;
+  left: 4px;
+  background: var(--shield-500);
+  color: var(--on-accent);
+}
+/* §11.2's "price (fuel)" slot. It sits below the puck rather than on it: a price is
+   four to six characters and no shoulder disc can hold that. Ink-1 plate with a
+   hairline so it stays legible over any basemap, and `pointer-events: none` so the
+   label never steals the pin's own 44 dp target (§11.2). */
+.pin__price {
+  position: absolute;
+  top: calc(50% + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-1);
+  background: var(--ink-1);
+  color: var(--text-1);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--type-caption-size);
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .pin--stale .pin__puck {
   background: #fff;

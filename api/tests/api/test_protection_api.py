@@ -1,11 +1,13 @@
 """AI-CONTEXT: HTTP API tests for M5 protection (shared TestClient/get_db pattern)."""
 
+import uuid
 from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_db
+from app.foundation.f02_facility import public as facility
 from app.foundation.f06_documents import public as documents
 from app.main import app
 
@@ -167,3 +169,42 @@ def test_condition_photo_is_idempotent_on_replay(client, db):
     assert replay.status_code == 201
     assert replay.json()["applied"] is False
     assert replay.json()["photo_count"] == 1  # still one — exactly-once
+
+
+def test_the_wallet_holds_the_drivers_documents_not_every_loads(client, db):
+    """`documents_for_account` filters by account and ignores `subject_kind`, while
+    its own docstring says the wallet's job is "to produce the credential a driver
+    holds now". Measured on a real account: 40 documents in the Docs tab, 5 of them
+    the driver's. Grouping by type is right for a credential and wrong for paperwork —
+    a BOL matters for the load it belongs to, not for being a BOL."""
+    from app.foundation.f05_load import public as loads
+    from app.foundation.f06_documents import public as documents
+    from app.modules.m05_protection import public as m5
+
+    reg = client.post(
+        "/auth/register", json={"email": "wallet-split@example.com", "password": "pw-123456"}
+    ).json()
+    account_id = uuid.UUID(reg["account_id"])
+
+    cdl = m5.capture_document(db, account_id, "cdl", b"cdl-bytes", filename="cdl.jpg")
+    orphan = m5.capture_document(db, account_id, "rate_con", b"rc-bytes", filename="rc.pdf")
+    bol = m5.capture_document(db, account_id, "bol", b"bol-bytes", filename="bol.jpg")
+
+    fac = facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, "Harvest Foods DC", 32.7, -96.8
+    )
+    load = loads.create_load(db, account_id, reference_number="BRL-78426")
+    stop = loads.add_stop(db, load, fac.id, loads.StopType.delivery)
+    documents.set_document_subject(db, bol, "stop", stop.id)
+
+    wallet = m5.wallet(db, account_id)
+
+    assert [d["doc_type"] for d in wallet["documents"]] == ["cdl"]
+    assert str(cdl.id) in {d["id"] for d in wallet["documents"]}
+    # photographed, parsed, never turned into a load — said plainly rather than filed
+    assert [d["id"] for d in wallet["unattached"]] == [str(orphan.id)]
+    # and the BOL is named by its LOAD
+    [paperwork] = wallet["load_paperwork"]
+    assert paperwork["reference_number"] == "BRL-78426"
+    assert paperwork["facility_name"] == "Harvest Foods DC"
+    assert paperwork["doc_types"] == ["bol"]

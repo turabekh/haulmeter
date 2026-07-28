@@ -31,6 +31,10 @@ MODULE = "m01"
 WEIGH_STATION_FLAG = "m01_weigh_stations"
 # scales are sparse; a corridor stack is for the next few decisions, not a listing
 MAX_CORRIDOR_SCALES = 2
+# design-prd §11.4 names the size: "a vertical next 3 exits/facilities card stack".
+# The cap is the feature — a stack a driver has to scroll at speed is a list, and a
+# list is the free exploration corridor mode exists to replace.
+MAX_CORRIDOR_ENTRIES = 3
 
 # design-prd §11.3: presets ARE the interface. Each maps to the layers it shows.
 PRESET_TYPES: dict[Preset, list] = {
@@ -212,6 +216,62 @@ def corridor_view(
         max_distance_m,
         facility_types=_preset_types(db, preset),
     )
+
+
+def corridor_ahead(
+    db: Session,
+    account_id,
+    origin_lat: float,
+    origin_lon: float,
+    heading_deg: float,
+    max_distance_m: float = 40000,
+    preset: Preset = Preset.drive,
+    limit: int = MAX_CORRIDOR_ENTRIES,
+) -> list[dict]:
+    """AI-CONTEXT: §11.4's card stack, carrying the status its own pins carry.
+
+    `corridor_view` returns GEOMETRY alone — name, type, distance — and the Map
+    surface rendered a FIXTURE beside it that carried statuses, because the endpoint
+    had none to give. So the one screen a driver cannot check anything on showed
+    invented parking. A stack that names a truck stop and cannot say whether it is
+    full has answered the easy half of the question asked at 65 mph.
+
+    The signal follows the facility KIND, read from f11's own mapping rather than
+    re-derived here, so a scale in the stack is asked whether it is open and a truck
+    stop how full it is — the corridor and the pin can never disagree about what a
+    status means. `corridor_view` is untouched: M7, M8 and M13 consume its entries
+    and none of them wants a crowd read.
+    """
+    entries = mapsvc.corridor(
+        db,
+        origin_lat,
+        origin_lon,
+        heading_deg,
+        max_distance_m,
+        facility_types=_preset_types(db, preset),
+    )
+    out = []
+    for entry in entries[:limit]:
+        belief = crowd.get_belief(
+            db, entry.facility_id, mapsvc.status_signal_for(entry.facility_type)
+        )
+        value = (belief.value or {}) if belief is not None else {}
+        out.append(
+            {
+                "facility_id": entry.facility_id,
+                "name": entry.name,
+                "facility_type": entry.facility_type,
+                "lat": entry.lat,
+                "lon": entry.lon,
+                "distance_m": entry.distance_m,
+                # None when nobody has reported recently. §11.7: the stack says so
+                # rather than letting silence read as a status somebody gave.
+                "status": value.get("status"),
+                "reported_at": belief.freshest_at if belief is not None else None,
+                "sample_size": belief.sample_size if belief is not None else 0,
+            }
+        )
+    return out
 
 
 def scales_ahead(

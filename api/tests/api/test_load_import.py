@@ -102,14 +102,19 @@ def test_the_import_creates_no_load(client, db, monkeypatch):
 
 def test_the_rate_con_is_filed_to_the_wallet(client, db, monkeypatch):
     """It is the contract the claim will be argued from, so it is worth keeping
-    whatever the parse makes of it."""
+    whatever the parse makes of it.
+
+    Kept, but not filed among the driver's credentials: a rate con photographed and
+    not yet turned into a load is attached to nothing, and the wallet's job is the
+    credential a driver holds now (§23 entry 79)."""
     _with_parse(monkeypatch, FULL_TERMS)
     headers = _headers(client, "rc-filed@example.com")
 
     doc_id = _import(client, headers).json()["document_id"]
 
     wallet = client.get("/protection/wallet", headers=headers).json()
-    assert [(d["id"], d["doc_type"]) for d in wallet["documents"]] == [(doc_id, "rate_con")]
+    assert wallet["documents"] == []  # the driver has no credentials on file yet
+    assert [(d["id"], d["doc_type"]) for d in wallet["unattached"]] == [(doc_id, "rate_con")]
 
 
 def test_a_rate_con_silent_on_a_term_is_flagged_before_the_driver_accepts(
@@ -872,3 +877,72 @@ def test_same_named_candidates_say_which_is_which(client, db):
     assert "Dallas, TX" in localities
     # and the thing that made them indistinguishable is still true, which is the point
     assert len({c["name"] for c in candidates}) == 1
+
+
+def test_a_load_pack_holds_every_stops_photos(client, db):
+    """Entry 71 found a per-LOG export could only show a fragment of a stop. This is
+    the same sentence one layer up: a per-STOP export can only show a fragment of a
+    ROUTE. A driver who photographed a pickup and a delivery had eight photos in the
+    system and no document holding more than four."""
+    from app.foundation.f04_evidence import public as evidence
+    from app.foundation.f05_load import public as loads
+    from app.modules.m05_protection import public as m5
+
+    headers = _headers(client, "load-pack@example.com")
+    pickup_id = _run_load(client, headers, "Harvest Foods DC")
+    pickup = loads.get_stop(db, uuid.UUID(pickup_id))
+    load = loads.get_load(db, pickup.load_id)
+    dest = facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, "Metro Market Warehouse", 39.96, -83.09
+    )
+    delivery = loads.add_stop(db, load, dest.id, loads.StopType.delivery)
+    loads.arm_stop(db, delivery)
+
+    # two photos at each dock, in each stop's own log
+    for stop, dock in ((pickup, b"pickup"), (delivery, b"delivery")):
+        log = db.get(evidence.EvidenceLog, stop.evidence_log_id)
+        for prompt in (b"trailer", b"seals"):
+            evidence.append_record(
+                db, log, evidence.RecordType.PHOTO, {"prompt": prompt.decode()}
+            )
+            evidence.attach_artifact(
+                db, log, evidence.ArtifactType.photo, content=dock + prompt
+            )
+    db.flush()
+
+    pack = m5.load_pack(db, load.id)
+
+    assert pack is not None
+    assert len(pack.artifacts) == 4  # both docks, not whichever one a row pointed at
+    groups = []
+    for record in pack.timeline:
+        if record["group"] not in groups:
+            groups.append(record["group"])
+    # `_run_load` files a delivery; what matters is that each section names its own
+    # dock and its place in the route, in route order
+    assert groups == [
+        "1 · Delivery · Harvest Foods DC",
+        "2 · Delivery · Metro Market Warehouse",
+    ]
+    # the document is captioned with the LOAD, not one stop's log label
+    assert pack.label == load.reference_number
+    assert pack.verification["chain_valid"] is True
+
+
+def test_the_pack_says_which_stop_and_who_it_is_against(client, db):
+    """`Parties` carried one row, the facility — and a detention claim is against the
+    BROKER, who was never named on the document making the claim. Nothing said whether
+    a stop was a pickup or a delivery either, so two packs from one load could not be
+    ordered by a clerk holding both."""
+    from app.api.m05_protection import _context_for
+    from app.foundation.f05_load import public as loads
+
+    headers = _headers(client, "pack-context@example.com")
+    stop_id = _run_load(client, headers, "Harvest Foods DC")
+    stop = loads.get_stop(db, uuid.UUID(stop_id))
+
+    context = _context_for(db, "stop", stop.id)
+
+    assert ("Broker", "Acme Brokerage") in context.parties
+    assert ("Stop", "Delivery · 1 of 1") in context.references
+    assert ("Facility", "Harvest Foods DC") in context.references

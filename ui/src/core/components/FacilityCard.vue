@@ -12,7 +12,7 @@
      (M7-FR5), so real per-station prices displace the regional baseline over time. -->
 <script setup>
 import { computed } from "vue";
-import { Navigation, SquareParking, Fuel, UtensilsCrossed } from "lucide-vue-next";
+import { Navigation, SquareParking, Fuel, UtensilsCrossed, Warehouse } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import StatusPill from "./StatusPill.vue";
 import { formatMiles, freshnessLabel, isStale, SCALE_TYPES } from "../presentation.js";
@@ -35,6 +35,12 @@ const props = defineProps({
   // FR6 / Q-3: promoted content arrives as a SEPARATE prop and renders in its own
   // labelled container below the ranked list. It is never spliced into `vendors`.
   promotions: { type: Array, default: () => [] },
+  // AI-CONTEXT: §10.1's third CTA — "Book / Navigate / ARM STOP" — which never
+  // existed (§23 entry 82). A `shipper_receiver` pin offered Navigate and nothing
+  // else, so the driver's OWN dock was indistinguishable on the map from every other
+  // warehouse in the county, and the two tabs that are about the same load could not
+  // reach each other. True when this pin is the facility the armed stop is at.
+  isActiveStop: { type: Boolean, default: false },
 });
 const emit = defineEmits([
   "navigate",
@@ -44,6 +50,7 @@ const emit = defineEmits([
   "fuel",
   "handoff",
   "vendor",
+  "open-stop",
 ]);
 const { t } = useI18n();
 const router = useRouter();
@@ -225,8 +232,20 @@ function vendorLine(entry) {
       </div>
     </section>
 
+    <!-- AI-CONTEXT: §10.1's ladder is "Book / Navigate / Arm stop", and the third rung
+         outranks the other two when it applies: a driver who taps the dock they are
+         actually working is asking about THAT, not about directions to a warehouse
+         they are standing in. The arming itself belongs to the load — F5 opens the
+         evidence log and the geofence when the route reaches this stop — so this is a
+         NAV-5 cross-link into the Meter, exactly like Book and Fuel are cross-links
+         into their own flows. It invents no way to create a load from a pin, because
+         that would be a navigation structure and §22 makes those never-improvise. -->
+    <button v-if="isActiveStop" class="cta" type="button" @click="emit('open-stop', pin)">
+      <Warehouse :size="20" :stroke-width="2" aria-hidden="true" />
+      {{ t("facility.your_stop") }}
+    </button>
     <!-- contextual lead action -->
-    <button v-if="bookable" class="cta" type="button" @click="emit('book', pin)">
+    <button v-else-if="bookable" class="cta" type="button" @click="emit('book', pin)">
       <SquareParking :size="20" :stroke-width="2" aria-hidden="true" />
       {{ bookLabel }}
     </button>
@@ -251,7 +270,7 @@ function vendorLine(entry) {
     <!-- secondary: Navigate whenever it isn't the lead; Report only where parking
          is a thing (never a fuel station or a receiver dock) -->
     <button
-      v-if="bookable || fuelable || fuelEstimateOnly"
+      v-if="isActiveStop || bookable || fuelable || fuelEstimateOnly"
       class="cta cta--secondary"
       type="button"
       @click="emit('navigate', pin)"

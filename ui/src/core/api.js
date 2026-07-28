@@ -220,8 +220,15 @@ function loadActiveStop() {
   }
 }
 export const activeStopId = ref(loadActiveStop());
+// AI-CONTEXT: the DOCK the armed stop is at (§23 entry 82). Deliberately not
+// persisted: a stale facility id would mark the wrong pin as "your stop" on a map,
+// and `fetchActiveLoad` re-establishes it on every mount that needs it. The stop id
+// is persisted because the Meter must survive a cold start; this is only ever a
+// decoration on a screen that has just fetched.
+export const activeStopFacilityId = ref(null);
 export function setActiveStop(id) {
   activeStopId.value = id;
+  if (!id) activeStopFacilityId.value = null;
   try {
     if (id) localStorage.setItem(ACTIVE_STOP_KEY, id);
     else localStorage.removeItem(ACTIVE_STOP_KEY);
@@ -374,6 +381,9 @@ export async function fetchActiveLoad() {
   if (!resp.ok) throw new Error(`active load ${resp.status}`);
   const data = await resp.json();
   if (data.stop_id) setActiveStop(data.stop_id);
+  // the FACILITY too, so the Map tab can tell the driver's own dock from every other
+  // receiver on the screen (§11.3's Work preset, §10.1's contextual CTA)
+  activeStopFacilityId.value = data.facility_id ?? null;
   return data.stop_id;
 }
 
@@ -766,6 +776,21 @@ export async function fetchQuestions(facilityId) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const resp = await fetch(`${API_BASE}/community/questions/${facilityId}`, { headers: headers() });
   if (!resp.ok) throw new Error(`questions failed: ${resp.status}`);
+  return resp.json();
+}
+
+// AI-CONTEXT: §11.4's corridor stack, finally asked for.
+//
+// This endpoint has existed since M1 shipped and no client function reached it — the
+// Map surface handed CorridorStack a hardcoded `SAMPLE_CORRIDOR` instead, so DRIVING
+// showed three invented facilities with invented parking statuses. Not queued and not
+// cached: a corridor is a statement about where the driver is RIGHT NOW, and a
+// replayed one describes a stretch of road they have already passed.
+export async function fetchCorridor({ lat, lon, headingDeg, preset = "drive" } = {}) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const q = new URLSearchParams({ lat, lon, heading_deg: headingDeg, preset });
+  const resp = await fetch(`${API_BASE}/map/corridor?${q}`, { headers: headers() });
+  if (!resp.ok) throw new Error(`corridor failed: ${resp.status}`);
   return resp.json();
 }
 

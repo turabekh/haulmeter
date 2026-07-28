@@ -14,7 +14,9 @@ from datetime import UTC, date, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.foundation.f02_facility import public as facility
 from app.foundation.f04_evidence import public as evidence
+from app.foundation.f05_load import public as loads
 from app.foundation.f06_documents import public as documents
 from app.foundation.f08_notifications import public as notify
 
@@ -169,10 +171,89 @@ def add_condition_photo(
 
 
 # --- Document wallet + expiry (M5-FR3) ---
+# AI-CONTEXT: paperwork a LOAD produces, as opposed to a credential the DRIVER holds
+# (§23 entry 79). The wallet returned every document on the account and grouped them by
+# type, so a driver's CDL sat between rate cons: measured on a real account, 40
+# documents of which 5 were theirs. `documents_for_account` filters by account and
+# ignores `subject_kind` entirely, while its own docstring says the wallet's job is "to
+# produce the credential a driver holds now".
+#
+# Grouping by TYPE is right for a credential and wrong for paperwork: a BOL matters
+# because of which load it belongs to, not because it is a BOL.
+LOAD_DOC_TYPES = {
+    documents.DocType.rate_con,
+    documents.DocType.bol,
+    documents.DocType.pod,
+    documents.DocType.lumper_receipt,
+}
+
+
+def _paperwork_row(doc) -> dict:
+    return {
+        "id": str(doc.id),
+        "doc_type": doc.doc_type.value,
+        "uploaded_at": doc.uploaded_at.isoformat(),
+        "content_type": doc.content_type,
+    }
+
+
+def _load_paperwork(db: Session, stop_docs: list) -> list[dict]:
+    """Load paperwork, grouped by the load it belongs to and named by its route."""
+    by_load: dict = {}
+    for doc in stop_docs:
+        stop = loads.get_stop(db, doc.subject_ref)
+        if stop is None:
+            continue
+        load = loads.get_load(db, stop.load_id)
+        if load is None:
+            continue
+        group = by_load.setdefault(
+            load.id,
+            {"load": load, "stop_id": str(stop.id), "docs": []},
+        )
+        group["docs"].append(doc)
+    rows = []
+    for group in by_load.values():
+        load = group["load"]
+        stops = loads.list_stops(db, load)
+        origin = facility.get_facility(db, stops[0].facility_id) if stops else None
+        destination = (
+            facility.get_facility(db, stops[-1].facility_id) if len(stops) > 1 else None
+        )
+        rows.append(
+            {
+                "load_id": str(load.id),
+                "stop_id": group["stop_id"],
+                "reference_number": load.reference_number,
+                "created_at": load.created_at.isoformat(),
+                "facility_name": origin.name if origin else None,
+                "destination_name": destination.name if destination else None,
+                # DISTINCT types: a two-stop load has a BOL at each dock, and a row
+                # reading "BOL · BOL" says less than "BOL" does. The documents
+                # themselves are listed per stop on the load's evidence screen, which
+                # is where they mean something.
+                "doc_types": sorted({d.doc_type.value for d in group["docs"]}),
+                "document_count": len(group["docs"]),
+            }
+        )
+    rows.sort(key=lambda r: r["created_at"], reverse=True)
+    return rows
+
+
 def wallet(db: Session, account_id, as_of: date | None = None) -> dict:
     as_of = as_of or datetime.now(UTC).date()
     docs, expiring = [], []
+    stop_docs, unattached = [], []
     for doc in documents.documents_for_account(db, account_id):
+        if doc.subject_kind == "stop" and doc.subject_ref is not None:
+            stop_docs.append(doc)
+            continue
+        if doc.doc_type in LOAD_DOC_TYPES:
+            # photographed, parsed, and never turned into a load. Indistinguishable
+            # from a real document until it is said plainly, and 10 of them on the
+            # account that reported this.
+            unattached.append(doc)
+            continue
         status = "ok"
         if doc.expires_on is not None:
             if doc.expires_on < as_of:
@@ -184,6 +265,13 @@ def wallet(db: Session, account_id, as_of: date | None = None) -> dict:
             "doc_type": doc.doc_type.value,
             "expires_on": doc.expires_on.isoformat() if doc.expires_on else None,
             "status": status,
+            # AI-CONTEXT: how to RENDER it (§23 entry 80). The viewer has always
+            # carried a PDF branch — its own header comment says "some credentials are
+            # filed as PDFs, which an <img> cannot render" — and keyed it off a
+            # `content_type` the wallet has never sent. So the branch could not
+            # execute, and every PDF opened as a broken image with its label as alt
+            # text. A capability with nothing reaching it.
+            "content_type": doc.content_type,
         }
         docs.append(row)
         if status in ("expiring", "expired"):
@@ -195,6 +283,12 @@ def wallet(db: Session, account_id, as_of: date | None = None) -> dict:
         "documents": docs,
         "expiring": expiring,
         "archived_count": archived_count(db, account_id),
+        "load_paperwork": _load_paperwork(db, stop_docs),
+        "unattached": sorted(
+            (_paperwork_row(d) for d in unattached),
+            key=lambda r: r["uploaded_at"],
+            reverse=True,
+        ),
     }
 
 
@@ -367,6 +461,33 @@ def stop_pack(db: Session, stop_ref):
     without photos. So the pack that argues a detention claim, the product's whole
     reason for existing, had no way out of the phone."""
     return evidence.compose_stop_pack(db, stop_ref, evidence.PackTemplate.stop_record)
+
+
+def load_pack(db: Session, load_ref):
+    """Everything recorded across a LOAD, as one document (§23 entry 78).
+
+    AI-CONTEXT: the reachability half of the same defect. A driver who ran a pickup
+    and a delivery and photographed both ends had eight photos in the system, four in
+    each stop's log, and every export produced one stop's four — whichever stop the
+    row they tapped happened to point at. The other four were hash-verified, intact,
+    and unreachable from any screen.
+
+    Each section is labelled with the stop's place in the route and its facility,
+    because a broker looking at eight photos needs to know which dock each came from.
+    """
+    load = loads.get_load(db, load_ref)
+    if load is None:
+        return None
+    groups = []
+    for stop in loads.list_stops(db, load):
+        fac = facility.get_facility(db, stop.facility_id)
+        name = fac.name if fac is not None else "Unknown facility"
+        groups.append((f"{stop.sequence + 1} · {stop.stop_type.value.title()} · {name}", stop.id))
+    if not groups:
+        return None
+    return evidence.compose_grouped_pack(
+        db, groups, evidence.PackTemplate.load_record, label=load.reference_number
+    )
 
 
 def condition_pack(db: Session, stop_ref, phase: CapturePhase | None = None):
@@ -644,6 +765,8 @@ def archived_documents(db: Session, account_id) -> list[dict]:
                 "doc_type": doc.doc_type.value,
                 "expires_on": doc.expires_on.isoformat() if doc.expires_on else None,
                 "archived_at": doc.archived_at.isoformat(),
+                # the archive opens the same viewer, so it needs the same field
+                "content_type": doc.content_type,
                 "reason": doc.archive_reason or documents.ARCHIVE_SUPERSEDED,
                 "replaced_by": None
                 if replacement is None

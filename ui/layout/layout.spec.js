@@ -237,6 +237,26 @@ const WALLET_MOCKS = {
       { id: "00000000-0000-0000-0000-00000000000b", doc_type: "med_card", expires_on: "2026-08-10", status: "expiring" },
     ],
     archived_count: 2,
+    load_paperwork: [
+      {
+        load_id: "00000000-0000-0000-0000-0000000000f1",
+        stop_id: "00000000-0000-0000-0000-0000000000f2",
+        reference_number: "BRL-78426",
+        created_at: "2026-07-28T04:00:00+00:00",
+        facility_name: "Harvest Foods DC",
+        destination_name: "Metro Market Warehouse",
+        doc_types: ["bol", "rate_con"],
+        document_count: 3,
+      },
+    ],
+    unattached: [
+      {
+        id: "00000000-0000-0000-0000-0000000000f3",
+        doc_type: "rate_con",
+        uploaded_at: "2026-07-28T12:41:00+00:00",
+        content_type: "application/pdf",
+      },
+    ],
   },
   "/protection/documents/types": {
     types: ["cdl", "med_card", "insurance", "permit", "rate_con", "bol", "pod", "other"],
@@ -279,7 +299,16 @@ const SURFACES = [
   // failure as the run that measured Vite's error page six times.
   ["load-live", "/load", { stop: LIVE_STOP, mocks: LIVE_MOCKS, ready: ".rungs__item" }],
   ["money", "/money"],
-  ["docs", "/docs", { mocks: WALLET_MOCKS, ready: ".doc" }],
+  // §23 entry 80: the sections collapse and start collapsed, so the grid is behind a
+  // disclosure. Every state that reaches a document opens its section first —
+  // otherwise the harness would measure three headings and report the surface covered.
+  ["docs", "/docs", { mocks: WALLET_MOCKS, open: [".group__head"], ready: ".doc" }],
+  // the two sections the wallet grew, measured in their own right
+  ["docs-paperwork", "/docs", {
+    mocks: WALLET_MOCKS,
+    open: [{ click: ".group__head", nth: 1 }, { click: ".group__head", nth: 2 }],
+    ready: ".paper__row",
+  }],
   ["more", "/more"],
   ["login", "/login"],
   ["evidence", "/load/00000000-0000-0000-0000-0000000000aa/evidence"],
@@ -309,7 +338,7 @@ const SURFACES = [
     mocks: WALLET_MOCKS, open: [".archive"], ready: ".arch__row",
   }],
   ["sheet-viewer", "/docs", {
-    mocks: WALLET_MOCKS, open: [".doc"], ready: ".viewer__frame",
+    mocks: WALLET_MOCKS, open: [".group__head", ".doc"], ready: ".viewer__frame",
   }],
   // the rate-con CONFIRM step — the densest screen in the app and the one M4-FR4
   // exists for. Reaching it needs a file on the input before the read, so the step
@@ -331,12 +360,12 @@ const SURFACES = [
     ready: ".rc__unread",
   }],
   ["sheet-viewer-edit", "/docs", {
-    mocks: WALLET_MOCKS, open: [".doc", ".viewer__edit"], ready: ".viewer__form",
+    mocks: WALLET_MOCKS, open: [".group__head", ".doc", ".viewer__edit"], ready: ".viewer__form",
   }],
   // removing a document is destructive-adjacent (§17 Q16 makes it reversible), and
   // §8 gives destructive actions their own confirm sheet — this is that sheet
   ["sheet-remove", "/docs", {
-    mocks: WALLET_MOCKS, open: [".doc", ".viewer__remove"], ready: ".rm__go",
+    mocks: WALLET_MOCKS, open: [".group__head", ".doc", ".viewer__remove"], ready: ".rm__go",
   }],
   ["sheet-incident", "/load", {
     stop: LIVE_STOP, mocks: LIVE_MOCKS,
@@ -364,6 +393,26 @@ const SURFACES = [
     mocks: {}, open: [{ click: ".chip", nth: 1 }, ".sleep-cta"], ready: ".sheet__body",
   }],
   ["sheet-map-relay", "/", { mocks: {}, open: [".relay-banner"], ready: ".sheet__body" }],
+  // §11.4's saved-for-stop queue (§23 entry 83) — a new sheet, so it gets measured at
+  // 360 dp with the rest rather than shipping unseen. Its state is client-side by
+  // design (the tap that fills it happens where there may be no signal), so it is
+  // seeded through `storage` rather than a mocked endpoint.
+  ["sheet-map-saved", "/", {
+    mocks: {},
+    storage: {
+      "longhaul.saved_for_stop": JSON.stringify([
+        {
+          id: "11111111-1111-1111-1111-111111111111",
+          kind: "facility",
+          label: "Yardline Secured Parking",
+          payload: { facility_type: "parking_property", lat: 32.9, lon: -96.8 },
+          at: 1753700000000,
+        },
+      ]),
+    },
+    open: [".saved-chip"],
+    ready: ".saved__row",
+  }],
   // M5-FR1's correction (§23 entry 62) — a new sheet, so it gets measured with the
   // rest rather than shipping unseen at 360 dp
   ["sheet-appointment", "/load", {
@@ -421,12 +470,18 @@ async function prepare(page, { theme, pseudo, live }) {
     });
   }
   await page.addInitScript(
-    ([t, p, stop]) => {
+    ([t, p, stop, storage]) => {
       try {
         localStorage.setItem("longhaul.theme", t);
         if (stop) localStorage.setItem("longhaul.active_stop", stop);
         if (p === "xx-XL") localStorage.setItem("longhaul.locale", "xx-XL");
         else if (p) localStorage.setItem("longhaul.locale", p);
+        // AI-CONTEXT: some states live in storage rather than behind an endpoint —
+        // §11.4's saved-for-stop queue is client-side by design, because the tap that
+        // fills it happens where there may be no signal. Without this the sheet could
+        // not be OPENED by the harness, and a sheet the harness cannot open is a sheet
+        // that ships unmeasured at 360 dp.
+        for (const [k, v] of Object.entries(storage || {})) localStorage.setItem(k, v);
         localStorage.setItem(
           "longhaul.session",
           JSON.stringify({
@@ -439,7 +494,7 @@ async function prepare(page, { theme, pseudo, live }) {
         /* storage unavailable */
       }
     },
-    [theme, pseudo, live ? live.stop : null],
+    [theme, pseudo, live ? live.stop : null, live ? live.storage : null],
   );
 }
 

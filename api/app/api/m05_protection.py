@@ -20,6 +20,7 @@ from app.foundation.f05_load import public as loads
 from app.foundation.f06_documents import public as documents
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f12_offline import public as offline
+from app.modules.m03_detention import public as m3
 from app.modules.m05_protection import public as m5
 
 router = APIRouter(prefix="/protection", tags=["protection"])
@@ -218,10 +219,80 @@ class ShareIn(BaseModel):
     recipient: str | None = None
 
 
+def _appointment(stop) -> str | None:
+    """The window, not just its start. A pack that prints one edge of an appointment
+    invites the argument it exists to settle."""
+    if stop.appointment_start is None:
+        return None
+    start = stop.appointment_start.strftime("%Y-%m-%d %H:%M UTC")
+    if stop.appointment_end is None:
+        return start
+    return f"{start} – {stop.appointment_end.strftime('%H:%M UTC')}"
+
+
+def _route(db: Session, load) -> list[tuple[str, str]]:
+    """Every dock on the load, in order, each named by its role."""
+    rows = []
+    for stop in loads.list_stops(db, load):
+        fac = facility.get_facility(db, stop.facility_id)
+        label = f"{stop.sequence + 1} · {stop.stop_type.value.title()}"
+        where = fac.name if fac else "—"
+        when = _appointment(stop) or "no appointment"
+        rows.append((label, f"{where} · {when}"))
+    return rows
+
+
+def _money(db: Session, stops) -> list[tuple[str, str]]:
+    """§17 puts the detention total on the face of the pack. It was empty, so the
+    document proved a chain and never stated the number it exists to justify."""
+    claims = [c for c in (m3.claim_for_stop(db, s.id) for s in stops) if c and c.amount_cents]
+    if not claims:
+        return []
+    seconds = sum(c.detention_seconds for c in claims)
+    cents = sum(c.amount_cents for c in claims)
+    hours, rest = divmod(seconds, 3600)
+    return [
+        ("Detention", f"{hours}:{rest // 60:02d}:{rest % 60:02d}"),
+        ("Amount", f"${cents / 100:,.2f}"),
+    ]
+
+
+def _parties(db: Session, load) -> list[tuple[str, str]]:
+    """AI-CONTEXT: who this is between (§23 entry 78). `Parties` carried ONE row, the
+    facility — and a detention claim is against the BROKER, who was never named on
+    the document making the claim. A clerk reading it could not tell whose load it
+    was, only which dock it happened at."""
+    rows = []
+    counterparty = (
+        loads.get_counterparty(db, load.counterparty_id) if load.counterparty_id else None
+    )
+    if counterparty is not None:
+        rows.append((counterparty.kind.value.title(), counterparty.name))
+        if counterparty.mc_number:
+            rows.append(("MC", counterparty.mc_number))
+    return rows
+
+
 def _context_for(db: Session, kind: str, ref: uuid.UUID):
     """A condition report with no parties on it is a photo album. The clerk reading
     this did not take the pictures and needs to know whose load, whose dock and which
     reference before the images mean anything (§17)."""
+    if kind == "load":
+        load = loads.get_load(db, ref)
+        if load is None:
+            return evidence.PackContext()
+        stops = loads.list_stops(db, load)
+        references = []
+        if getattr(load, "reference_number", None):
+            references.append(("Load", load.reference_number))
+        references.extend(_route(db, load))
+        first = facility.get_facility(db, stops[0].facility_id) if stops else None
+        return evidence.PackContext(
+            parties=_parties(db, load),
+            references=references,
+            meter=_money(db, stops),
+            facility_name=first.name if first is not None else None,
+        )
     if kind not in ("condition", "stop"):
         return evidence.PackContext()
     stop = loads.get_stop(db, ref)
@@ -229,14 +300,25 @@ def _context_for(db: Session, kind: str, ref: uuid.UUID):
         return evidence.PackContext()
     fac = facility.get_facility(db, stop.facility_id)
     load = loads.get_load(db, stop.load_id)
-    references = [("Stop", str(stop.id)[:8])]
+    siblings = loads.list_stops(db, load)
+    references = []
     if getattr(load, "reference_number", None):
-        references.insert(0, ("Load", load.reference_number))
-    if stop.appointment_start:
-        references.append(("Appointment", stop.appointment_start.strftime("%Y-%m-%d %H:%M UTC")))
+        references.append(("Load", load.reference_number))
+    # AI-CONTEXT: WHICH stop (§23 entry 78). The pack named a facility and never said
+    # whether the driver was loading or unloading there, nor which leg of the route it
+    # was — so a broker holding two packs from one load could not order them, and a
+    # detention argument about the pickup could be answered with the delivery's times.
+    references.append(
+        ("Stop", f"{stop.stop_type.value.title()} · {stop.sequence + 1} of {len(siblings)}")
+    )
+    if fac is not None:
+        references.append(("Facility", fac.name))
+    if _appointment(stop):
+        references.append(("Appointment", _appointment(stop)))
     return evidence.PackContext(
-        parties=[("Facility", fac.name)] if fac is not None else [],
+        parties=_parties(db, load) + ([("Facility", fac.name)] if fac is not None else []),
         references=references,
+        meter=_money(db, [stop]),
         facility_name=fac.name if fac is not None else None,
     )
 
@@ -244,6 +326,12 @@ def _context_for(db: Session, kind: str, ref: uuid.UUID):
 def _pack_for(db: Session, account, kind: str, ref: uuid.UUID):
     """One resolver so export and share can never disagree about what a given id
     means — the two endpoints must produce the SAME document for the same input."""
+    if kind == "load":
+        # the whole route in one document — every stop, every photo (§23 entry 78)
+        pack = m5.load_pack(db, ref)
+        if pack is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "nothing recorded for that load")
+        return pack
     if kind == "stop":
         # the whole record of one stop — what the Evidence surface shows
         pack = m5.stop_pack(db, ref)
@@ -271,7 +359,7 @@ def export_pack(
     """The driver's own copy. Regenerated on demand because rendering is
     deterministic — this is a VIEW of the chain and always current, which is exactly
     what a share must not be."""
-    if kind not in ("stop", "condition", "incident"):
+    if kind not in ("load", "stop", "condition", "incident"):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown pack kind")
     pack = _pack_for(db, account, kind, ref)
     content = m5.render_pack(db, pack, _context_for(db, kind, ref))
@@ -293,7 +381,7 @@ def share(
     """Pins what is being sent. From here the bytes are frozen: the chain may grow,
     and the link will keep serving the document the counterparty was actually
     given."""
-    if kind not in ("stop", "condition", "incident"):
+    if kind not in ("load", "stop", "condition", "incident"):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown pack kind")
     pack = _pack_for(db, account, kind, ref)
     shared = m5.share_pack(
