@@ -270,3 +270,94 @@ def test_corridor_quotes_a_station_the_same_price_the_pin_does(client, db):
     # catching: a test that asserts agreement between two absences
     assert pin_badge is not None
     assert corridor_badge == pin_badge
+
+
+# --- §11.2's clock slot, finally fed (M2-FR3 / §23 entry 87) ---
+def _detained_dock(db, account_id, name, visits, free_time_minutes=120):
+    """`visits` is a list of (arrival, departure). Each becomes its own claim."""
+
+    from app.foundation.f03_location import public as location
+    from app.foundation.f05_load import public as loads
+    from app.modules.m03_detention import public as m3
+
+    far = (32.9000, -96.8000)
+    dock = facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, name, *DALLAS
+    )
+    load = loads.create_load(db, account_id, free_time_minutes=free_time_minutes)
+    for arrival, departure in visits:
+        stop = loads.add_stop(
+            db, load, dock.id, loads.StopType.delivery,
+            free_time_minutes=free_time_minutes,
+        )
+        m3.start_claim(db, stop, started_at=arrival)
+        location.evaluate_ping(db, account_id, *DALLAS, occurred_at=arrival)
+        location.evaluate_ping(db, account_id, *far, occurred_at=departure)
+    return dock
+
+
+def _account_id(db, headers):
+    from app.foundation.f01_identity import public as identity
+
+    return identity.resolve_session(db, headers["Authorization"].split(" ", 1)[1]).id
+
+
+def test_overlay_marks_a_dock_that_runs_long(client, db):
+    """§11.2 names a "clock (dwell risk)" badge slot and it had no signal behind it —
+    `m02.detention_risk` was a stub. Three visits, all over the contracted free time."""
+    from datetime import UTC, datetime, timedelta
+
+    headers = _auth(client)
+    account_id = _account_id(db, headers)
+    t0 = datetime(2026, 7, 20, 8, 0, tzinfo=UTC)
+    _detained_dock(db, account_id, "Slow Dock", [
+        (t0 + timedelta(days=i), t0 + timedelta(days=i, hours=5)) for i in range(3)
+    ])
+    pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "work"},
+        headers=headers,
+    ).json()["pins"]
+    pin = next(p for p in pins if p["name"] == "Slow Dock")
+    badge = next(b for b in pin["badges"] if b["kind"] == "dwell_risk")
+    assert badge["value"] == 1.0
+    # §11.7: the sample travels with the rate, so the card never shows one without it
+    assert badge["sample_size"] == 3
+
+
+def test_overlay_does_not_mark_a_dock_that_keeps_its_terms(client, db):
+    from datetime import UTC, datetime, timedelta
+
+    headers = _auth(client)
+    account_id = _account_id(db, headers)
+    t0 = datetime(2026, 7, 20, 8, 0, tzinfo=UTC)
+    _detained_dock(db, account_id, "Quick Dock", [
+        (t0 + timedelta(days=i), t0 + timedelta(days=i, minutes=45)) for i in range(3)
+    ])
+    pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "work"},
+        headers=headers,
+    ).json()["pins"]
+    pin = next(p for p in pins if p["name"] == "Quick Dock")
+    assert [b for b in pin["badges"] if b["kind"] == "dwell_risk"] == []
+
+
+def test_overlay_stays_quiet_below_the_sample_floor(client, db):
+    """§11.7 / §11.1. Two bad visits is a rumour, not a record — and a badge on every
+    receiver we happen to have data for would be a coverage indicator, not a risk one."""
+    from datetime import UTC, datetime, timedelta
+
+    headers = _auth(client)
+    account_id = _account_id(db, headers)
+    t0 = datetime(2026, 7, 20, 8, 0, tzinfo=UTC)
+    _detained_dock(db, account_id, "Barely Seen", [
+        (t0 + timedelta(days=i), t0 + timedelta(days=i, hours=6)) for i in range(2)
+    ])
+    pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "work"},
+        headers=headers,
+    ).json()["pins"]
+    pin = next(p for p in pins if p["name"] == "Barely Seen")
+    assert [b for b in pin["badges"] if b["kind"] == "dwell_risk"] == []

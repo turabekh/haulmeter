@@ -119,9 +119,16 @@ def test_dwell_stats_with_sample_sizes(db):
     assert stats.by_hour[6]["sample_size"] == 2
 
 
-def test_detention_risk_is_m3_seam(db):
-    fac = _receiver(db)
-    assert m2.detention_risk(db, fac.id)["basis"] == "m3_pending"
+def test_m2_does_not_pretend_to_compute_detention_risk(db):
+    """§23 entry 87. M2-FR3's indicator is "derived from M3 claim events", and
+    import-linter orders M2 BEFORE M3 — so this module can never read a claim. It
+    carried a stub returning `basis: "m3_pending"` for sessions after M3 existed, and
+    the old version of this test asserted that stub as correct.
+
+    The indicator lives in `m03.facility_detention_stats` and is composed at the
+    router. This holds the boundary: a stub reappearing here would be unimplementable
+    all over again."""
+    assert not hasattr(m2, "detention_risk")
 
 
 def test_semantic_review_search(db):

@@ -10,7 +10,7 @@
      (and tests) never load the ~200 KB library. -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
-import { Truck, TreePine, SquareParking, Fuel, Warehouse, Circle, UtensilsCrossed, DollarSign } from "lucide-vue-next";
+import { Truck, TreePine, SquareParking, Fuel, Warehouse, Circle, UtensilsCrossed, DollarSign, Clock } from "lucide-vue-next";
 import { statusPresentation, isStale, placeLabels, basemapPreset } from "../presentation.js";
 import { useTheme } from "../theme.js";
 import { formatMoney } from "../meter.js";
@@ -73,6 +73,12 @@ function priceLabel(pin) {
 }
 function isBookable(pin) {
   return (pin.badges || []).some((b) => b.kind === "bookable");
+}
+// §11.2's third slot, "clock (dwell risk)" — empty until M2-FR3 gave it a signal
+// (§23 entry 87). The server decides whether the mark is warranted (sample floor and
+// threshold live with the data); this only draws what it is handed.
+function dwellRisk(pin) {
+  return (pin.badges || []).find((b) => b.kind === "dwell_risk") ?? null;
 }
 
 // the price reaches a screen reader even when §11.5's declutter drops the visible
@@ -308,6 +314,17 @@ function stale(pin) {
       >
         <DollarSign :size="10" :stroke-width="3" aria-hidden="true" />
       </span>
+      <!-- §11.2's "clock (dwell risk)" slot. Bottom shoulder, so it can never collide
+           with food or the bookable $ even though no facility type carries both today.
+           `marker` is the caution token — this is a warning, not an error: the dock is
+           not broken, it is slow. Icon AND token, never colour alone (C-1). -->
+      <span
+        v-if="dwellRisk(pin)"
+        class="pin__badge pin__badge--dwell"
+        :aria-label="t('facility.dwell_risk')"
+      >
+        <Clock :size="10" :stroke-width="3" aria-hidden="true" />
+      </span>
       <!-- §11.2's "price (fuel)" slot. A price is a LABEL, not a glyph, so it obeys
            §11.5's declutter rule — see `priceLabels`. Mono tabular like every other
            figure (T-2), and aria-hidden because the button's own label already names
@@ -436,6 +453,15 @@ function stale(pin) {
    four to six characters and no shoulder disc can hold that. Ink-1 plate with a
    hairline so it stays legible over any basemap, and `pointer-events: none` so the
    label never steals the pin's own 44 dp target (§11.2). */
+/* the bottom-right shoulder. Same 14 dp disc and the same token vocabulary as the
+   other two slots — a third badge, not a third pattern. */
+.pin__badge--dwell {
+  top: auto;
+  bottom: 4px;
+  right: 4px;
+  background: var(--marker-500);
+  color: var(--ink-0);
+}
 .pin__price {
   position: absolute;
   top: calc(50% + 14px);

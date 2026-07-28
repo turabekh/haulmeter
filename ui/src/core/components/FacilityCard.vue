@@ -12,7 +12,7 @@
      (M7-FR5), so real per-station prices displace the regional baseline over time. -->
 <script setup>
 import { computed } from "vue";
-import { Navigation, SquareParking, Fuel, UtensilsCrossed, Warehouse } from "lucide-vue-next";
+import { Navigation, SquareParking, Fuel, UtensilsCrossed, Warehouse, Clock } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import StatusPill from "./StatusPill.vue";
 import { formatMiles, freshnessLabel, isStale, SCALE_TYPES } from "../presentation.js";
@@ -124,6 +124,16 @@ const reportable = computed(() =>
   ["truck_stop", "rest_area", "parking_property"].includes(props.pin.facility_type) ||
   SCALE_TYPES.has(props.pin.facility_type),
 );
+// AI-CONTEXT: M2-FR3's indicator, on the card behind the §11.2 clock badge (§23
+// entry 87). The badge is a MARK — it says a dock is slow and nothing else; the rate
+// and the sample it was measured over belong here, because §11.7 does not let a
+// figure travel without what produced it. Percent rather than a decimal: this is read
+// in ten seconds by someone deciding whether to take a load.
+const dwellRisk = computed(() => props.pin.badges?.find((b) => b.kind === "dwell_risk") ?? null);
+const dwellRiskPct = computed(() =>
+  dwellRisk.value ? Math.round(dwellRisk.value.value * 100) : null,
+);
+
 const unknownScale = computed(
   () => SCALE_TYPES.has(props.pin.facility_type) && !props.pin.status,
 );
@@ -171,6 +181,16 @@ function vendorLine(entry) {
       <span class="fac__fuel-figure">${{ grossFuel.toFixed(2) }}</span>
       <span class="fac__fuel-label">{{ t("facility.fuel") }}</span>
     </div>
+
+    <!-- M2-FR3: how often this dock runs past the free time it contracted for, with
+         the sample. Absent entirely below the server's floor — an absent line is the
+         honest rendering of "not enough stops to say". -->
+    <p v-if="dwellRisk" class="fac__dwell">
+      <Clock :size="16" :stroke-width="2" aria-hidden="true" />
+      <span>{{ t("facility.dwell_risk") }}</span>
+      <span class="fac__dwell-figure">{{ dwellRiskPct }}%</span>
+      <span class="fac__dwell-basis">{{ dwellRisk.sample_size }} {{ t("profile.stops_basis") }}</span>
+    </p>
 
     <!-- M6: a fully-booked lot says so (no silent missing button) -->
     <div v-if="parkingFull" class="fac__full">
@@ -337,6 +357,26 @@ function vendorLine(entry) {
   color: var(--text-2);
   font-size: var(--type-caption-size);
   font-variant-numeric: tabular-nums;
+}
+/* marker, not flare: a slow dock is a caution a driver plans around, not a failure.
+   The figure is Mono/tabular like every other figure (T-2). */
+.fac__dwell {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
+  color: var(--marker-500);
+  font-size: var(--type-body-size);
+}
+.fac__dwell-figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.fac__dwell-basis {
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
 }
 .fac__fuel {
   display: flex;

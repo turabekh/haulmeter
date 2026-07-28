@@ -36,7 +36,12 @@ def test_profile_endpoint_returns_dwell_and_ratings(client, db):
     body = resp.json()
     assert body["dwell"]["overall"]["sample_size"] == 0  # honest empty
     assert body["ratings"]["review_count"] == 0
-    assert body["detention_risk"]["basis"] == "m3_pending"
+    # §23 entry 87: this asserted `basis == "m3_pending"` — a test holding a STUB in
+    # place. M2-FR3 is computed in M3 now and composed here; the response key is
+    # unchanged, and an empty facility still says so rather than reporting 0% risk.
+    assert body["detention_risk"]["basis"] == "tracked_stops"
+    assert body["detention_risk"]["exceed_rate"] is None  # nobody has finished a stop
+    assert body["detention_risk"]["sample_size"] == 0
 
 
 def test_submit_review_endpoint(client, db):

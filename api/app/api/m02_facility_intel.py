@@ -15,6 +15,7 @@ from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f09_ai_gateway import public as ai
 from app.modules.m02_facility_intel import public as m2
+from app.modules.m03_detention import public as m3
 
 router = APIRouter(prefix="/facility", tags=["facility"])
 
@@ -50,7 +51,12 @@ def profile(
         "hazards": prof.hazards,
         "dwell": {"overall": dwell.overall, "by_hour": dwell.by_hour},
         "ratings": m2.aggregate_ratings(db, facility_id),
-        "detention_risk": m2.detention_risk(db, facility_id),
+        # AI-CONTEXT: M2-FR3, composed rather than imported (§23 entry 87). The
+        # indicator is "derived from M3 claim events" and import-linter puts M2 BEFORE
+        # M3, so M2 could never compute it — which is why it shipped as a stub
+        # returning `basis: "m3_pending"` and stayed one. The composition layer is
+        # allowed to see both, exactly as it is for M1's marketplace badges.
+        "detention_risk": m3.facility_detention_stats(db, facility_id),
         "reviews": [_serialize_review(r) for r in m2.list_reviews(db, facility_id)],
     }
 

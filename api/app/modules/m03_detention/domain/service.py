@@ -185,6 +185,63 @@ def _arrival_departure(db: Session, claim: DetentionClaim):
     return location.visit_window(db, claim.account_id, claim.facility_ref, claim.clock_since)
 
 
+# AI-CONTEXT: M2-FR3's source, living where the data does (§23 entry 87).
+#
+# "Detention-risk indicator per facility derived from M3 CLAIM EVENTS (rate of stops
+# exceeding free time)." M2 shipped it as a stub — `{"rate": None, "basis":
+# "m3_pending"}` — and the reason it stayed one is structural, not neglect:
+# import-linter orders M2 before M3, so **M2 can never read a claim**. The indicator
+# was specified into a module that cannot compute it.
+#
+# So it is computed here and composed at the router, exactly as M1's marketplace
+# badges are (`_fuel_badge`) — the codebase's existing answer to "a module needs a
+# later module's data".
+#
+# WHY EACH STOP'S OWN FREE TIME. M8 already has a `detention_risk_flag` that measures
+# F3 dwell against a free time the CALLER supplies, which answers a different and also
+# useful question: "given MY terms, how often does this dock blow them?" M2-FR3 is the
+# facility's objective record, so it is measured against the free time each stop was
+# actually contracted for. Two questions, two functions, neither redundant.
+#
+# ONLY FINISHED VISITS COUNT. A stop with no departure is still running, and counting
+# it would score a dock on a driver who is standing in it. Claims whose visit F3 cannot
+# resolve are skipped rather than assumed compliant.
+FACILITY_STATS_SAMPLE_CAP = 50
+
+
+def facility_detention_stats(db: Session, facility_id, limit: int = FACILITY_STATS_SAMPLE_CAP):
+    """The rate of finished stops at this facility that ran past their free time.
+
+    Bounded to the most recent `limit` claims: this feeds a map badge drawn per pin,
+    and an unbounded per-facility scan would put a full claim history behind every
+    overlay request.
+    """
+    claims = db.scalars(
+        select(DetentionClaim)
+        .where(DetentionClaim.facility_ref == facility_id)
+        .order_by(DetentionClaim.created_at.desc())
+        .limit(limit)
+    ).all()
+    finished = 0
+    exceeded = 0
+    for claim in claims:
+        arrival, departure = _arrival_departure(db, claim)
+        if arrival is None or departure is None:
+            continue  # still on the dock, or F3 cannot place the visit
+        finished += 1
+        free_seconds = (claim.free_time_minutes or 0) * 60
+        if (departure - arrival).total_seconds() > free_seconds:
+            exceeded += 1
+    return {
+        # None, not 0.0 — "nobody has finished a tracked stop here" and "nobody has
+        # ever been detained here" are different facts, and §11.7 forbids rendering
+        # the first as the second
+        "exceed_rate": (exceeded / finished) if finished else None,
+        "sample_size": finished,
+        "basis": "tracked_stops",
+    }
+
+
 def clock(db: Session, claim: DetentionClaim, now: datetime) -> DetentionState:
     stop = loads.get_stop(db, claim.stop_ref)
     arrival, departure = _arrival_departure(db, claim)

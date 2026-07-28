@@ -15,6 +15,7 @@ from app.api.deps import current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f10_crowd import public as crowd
 from app.modules.m01_map import public as m1
+from app.modules.m03_detention import public as m3
 from app.modules.m06_parking import public as m6
 from app.modules.m07_fuel import public as m7
 
@@ -130,6 +131,41 @@ def _fuel_badge(db: Session, facility_id, lat: float, lon: float) -> dict | None
     }
 
 
+# AI-CONTEXT: §11.2's third badge slot — "clock (dwell risk)" — which had no signal
+# behind it until M2-FR3 was implemented (§23 entry 87). Two numbers decide whether it
+# is drawn, and both are §11.7 rather than taste:
+#
+# · MIN_SAMPLES = 3 is M8's own `MEDIUM_MIN`, reused rather than invented. Below it a
+#   rate is one or two visits and a badge would be a rumour with a clock on it.
+# · RISK_THRESHOLD = 0.5 is the owner-logged line: a dock that runs past the free time
+#   it CONTRACTED for on half or more of its tracked stops is a detention risk by any
+#   reading. It is deliberately a blunt number — this badge is a mark on a 28 dp puck,
+#   not a figure, and the card behind it carries the rate and the sample size.
+#
+# A badge on every receiver we happen to have data for would be a data-coverage
+# indicator, not a risk one; §11.1 keeps the map quiet, so the mark only appears where
+# it changes a decision.
+DWELL_RISK_MIN_SAMPLES = 3
+DWELL_RISK_THRESHOLD = 0.5
+
+
+def _dwell_risk_badge(db: Session, facility_id) -> dict | None:
+    stats = m3.facility_detention_stats(db, facility_id)
+    rate = stats["exceed_rate"]
+    if rate is None or stats["sample_size"] < DWELL_RISK_MIN_SAMPLES:
+        return None
+    if rate < DWELL_RISK_THRESHOLD:
+        return None
+    return {
+        "kind": "dwell_risk",
+        "value": round(rate, 2),
+        # the sample travels with the badge so the card can state it without a second
+        # request — §11.7 never shows a rate without what it was measured over
+        "sample_size": stats["sample_size"],
+        "basis": stats["basis"],
+    }
+
+
 def _enrich(db: Session, pin) -> dict:
     # M1 can't import later modules, so the marketplace badges (M6 bookable spot,
     # M7 net fuel price) that drive the map's Book / Fuel actions are attached here
@@ -147,6 +183,10 @@ def _enrich(db: Session, pin) -> dict:
             )
     elif pin.facility_type == "fuel_station":
         badge = _fuel_badge(db, pin.facility_id, pin.lat, pin.lon)
+        if badge is not None:
+            data["badges"].append(badge)
+    elif pin.facility_type == "shipper_receiver":
+        badge = _dwell_risk_badge(db, pin.facility_id)
         if badge is not None:
             data["badges"].append(badge)
     return data

@@ -117,3 +117,30 @@ describe("§11.3 — the preset survives the drive", () => {
     expect(readPresets()).toEqual(DEFAULT_PRESET_BY_STATE);
   });
 });
+
+// M2-FR3 on the card behind the badge (§23 entry 87). The badge is a MARK; §11.7 does
+// not let the rate travel without the sample it was measured over.
+describe("§11.7 — the dwell rate never travels without its sample", () => {
+  const withRisk = (over = {}) =>
+    card({
+      pin: dock({
+        badges: [{ kind: "dwell_risk", value: 0.72, sample_size: 11, basis: "tracked_stops" }],
+        ...over,
+      }),
+    });
+
+  it("states the rate as a percentage and the stops behind it", () => {
+    const w = withRisk();
+    expect(w.text()).toContain("72%");
+    expect(w.text()).toContain("11");
+    expect(w.text()).toContain(en["facility.dwell_risk"]);
+  });
+
+  it("says nothing at all when the server sent no rate", () => {
+    // an absent line is the honest rendering of "not enough stops to say" — §15.3
+    // would make an empty section filler on a card read in ten seconds
+    const w = card({ pin: dock() });
+    expect(w.find(".fac__dwell").exists()).toBe(false);
+    expect(w.text()).not.toContain(en["facility.dwell_risk"]);
+  });
+});

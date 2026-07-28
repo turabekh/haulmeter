@@ -19,8 +19,8 @@ never captured a heading.
 | Thing | Value |
 |---|---|
 | Migrations | head **0052_m03_claim_clock_since** (untouched — this session added no schema) |
-| Tests | **pytest 1059 · vitest 492 · layout 681 · ruff clean · import-linter 30/30** |
-| §23 decision log | **86 entries** (81–86 added) |
+| Tests | **pytest 1066 · vitest 496 · layout 681 · ruff clean · import-linter 30/30** |
+| §23 decision log | **87 entries** (81–87 added) |
 | Handoffs | 000 → 098 |
 | Git | `main` local only, never pushed · `3ca1f3d` (Map tab) + the rate/terms commit |
 | Services | **running** |
@@ -137,6 +137,11 @@ Four headings, four answers. **Before this session every one of those calls retu
   `ready` keys on — **had the two cards shared a lead rung it would have gone green
   having measured the wrong screen.** Steps now target `.pin[data-facility="…"]`, so the
   click waits for the mocked overlay and a mock that stops matching fails at the step.
+- **Two tests were holding a stub in place**, which is why nothing pushed on M2-FR3 for
+  sessions: one asserted `basis == "m3_pending"` over HTTP, one in the module. This is
+  097 §5's own species — "a test asserted the defect as correct" — and it is worth
+  noticing that a *placeholder plus a test of the placeholder* is indistinguishable from
+  a finished feature at the level of a green suite.
 - `make test` and `make ui-layout` were never run concurrently (097 §5).
 
 ## 6. Exact next task — Session 19
@@ -177,13 +182,10 @@ alone. Left for the owner rather than swept into one commit.
   / tolls 30`, fixed `mpg 6.0`) when there is no active load. Money on a screen that
   nobody entered — the shape §23 entry 52 removed from the Load tab — but what an EMPTY
   calculator should show is a product decision, not a passing one.
-- **§11.2's clock / dwell-risk badge slot** has no signal behind it, and the reason is
-  now known rather than assumed: **`m02.detention_risk` is a stub** returning
-  `{rate: None, sample_size: 0, basis: "m3_pending"}`. M2-FR3 was left as a seam until
-  M3 existed, and M3 exists now. `dwell_stats` IS real (median/p90 from F3 samples), but
-  turning a dwell median into a "risk" badge means choosing a threshold, which is a
-  product decision and not one to make in passing. The slot stays empty on purpose;
-  **implementing M2-FR3 is the unblocking task.**
+- **M2-FR3 is implemented and §11.2's clock slot is fed** (§23 entry 87). Remaining
+  question for the owner, not a defect: the badge threshold is **0.5 over a minimum of
+  3 finished stops**. Both are defensible and both are guesses until a driver looks at
+  a real map and says whether the marks land where they expect.
 - **§11.6 is still half-honoured, and the remaining half is named.** The basemap now
   pairs with the THEME (§23 entry 86), but it is still Mapbox Standard's own
   `lightPreset` — **the custom day/night styles built from §6.1 tokens are not built.**
@@ -224,7 +226,7 @@ DOCS design-prd.md §23 entries 81–83
 
 ```
 make up          # preflight, then the full stack
-make test        # 1059 pytest + 492 vitest
+make test        # 1066 pytest + 496 vitest
 make ui-layout   # 681 mobile-first checks at 360 dp (~10 min) — RUN IT ALONE
 make ui-layout-only STATE=load-calc   # one state (~17 s) while iterating
 ```

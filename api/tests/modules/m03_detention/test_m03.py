@@ -257,3 +257,68 @@ def test_only_this_visits_events_reach_the_stops_chain(db):
     geofenced = [r for r in log.records if (r.payload or {}).get("event") in ("ENTER", "EXIT")]
     assert len(geofenced) == 2
     assert all(r.occurred_at >= T0 for r in geofenced)
+
+
+# --- M2-FR3: the facility's detention record (§23 entry 87) ---
+def _visit(db, account, load, receiver, arrival, departure, free_time_minutes=120):
+    """One finished stop at `receiver`: arm, arrive, leave. Each stop gets its OWN
+    claim, because the rate is measured per visit."""
+    stop = loads.add_stop(
+        db,
+        load,
+        receiver.id,
+        loads.StopType.delivery,
+        appointment_start=arrival,
+        free_time_minutes=free_time_minutes,
+    )
+    claim = m3.start_claim(db, stop, started_at=arrival)
+    location.evaluate_ping(db, account.id, *DALLAS, occurred_at=arrival)
+    location.evaluate_ping(db, account.id, *FAR, occurred_at=departure)
+    return claim
+
+
+def test_facility_stats_report_no_rate_before_anyone_has_finished_a_stop(db):
+    # §11.7: "nobody has finished a tracked stop here" and "nobody is ever detained
+    # here" are different facts, and a 0.0 would render the first as the second
+    account, broker, load, stop = _setup(db)
+    stats = m3.facility_detention_stats(db, stop.facility_id)
+    assert stats["exceed_rate"] is None
+    assert stats["sample_size"] == 0
+
+
+def test_facility_stats_measure_each_stop_against_its_own_free_time(db):
+    """M2-FR3 is the facility's OBJECTIVE record, so a stop that contracted 30 minutes
+    and a stop that contracted 4 hours are each judged on what they agreed to — which
+    is what separates this from M8's flag, where the caller supplies one free time."""
+    account, broker, load, stop = _setup(db)
+    receiver = facility.get_facility(db, stop.facility_id)
+    # 3h dwell against 4h free time — well inside its own terms
+    _visit(db, account, load, receiver, T0, T0 + timedelta(hours=3), free_time_minutes=240)
+    # the SAME 3h dwell against 30 minutes — comfortably over
+    _visit(
+        db, account, load, receiver,
+        T0 + timedelta(days=1), T0 + timedelta(days=1, hours=3), free_time_minutes=30,
+    )
+    stats = m3.facility_detention_stats(db, receiver.id)
+    assert stats["sample_size"] == 2
+    assert stats["exceed_rate"] == 0.5  # identical dwells, different verdicts
+
+
+def test_facility_stats_ignore_a_driver_still_on_the_dock(db):
+    # counting an unfinished visit would score a facility on someone standing in it
+    account, broker, load, stop = _setup(db)
+    receiver = facility.get_facility(db, stop.facility_id)
+    _visit(db, account, load, receiver, T0, T0 + timedelta(hours=5))  # over, finished
+    arrived = loads.add_stop(db, load, receiver.id, loads.StopType.delivery)
+    m3.start_claim(db, arrived, started_at=T0 + timedelta(days=2))
+    location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0 + timedelta(days=2))
+
+    stats = m3.facility_detention_stats(db, receiver.id)
+    assert stats["sample_size"] == 1  # the open visit is not a sample
+    assert stats["exceed_rate"] == 1.0
+
+
+def test_facility_stats_are_bounded(db):
+    # this feeds a badge drawn per pin; an unbounded scan would put a full claim
+    # history behind every overlay request
+    assert m3.facility_detention_stats.__defaults__[0] == 50

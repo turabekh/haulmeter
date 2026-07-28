@@ -113,14 +113,45 @@ describe("§11.2 $ slot — a bookable lot says so on the map", () => {
   });
 });
 
-describe("§11.7 — the clock slot stays empty until something feeds it", () => {
-  it("invents no dwell-risk badge, because the overlay carries no such signal", () => {
+// AI-CONTEXT: this slot was empty ON PURPOSE until M2-FR3 existed (§23 entry 87) —
+// `m02.detention_risk` was a stub returning `basis: "m3_pending"`, so there was nothing
+// to draw and drawing anything would have been the fake confidence §11.7 forbids. It
+// has a signal now, and the SERVER decides whether the mark is warranted: the sample
+// floor and the threshold live with the data, so the canvas draws what it is handed.
+describe("§11.2 clock slot — a dock that runs long", () => {
+  const riskBadge = { kind: "dwell_risk", value: 0.72, sample_size: 11, basis: "tracked_stops" };
+
+  it("marks a receiver the server flagged", () => {
+    const w = mount(MapCanvas, {
+      props: {
+        pins: [pin({ facility_type: "shipper_receiver", name: "Harvest Foods DC",
+                     badges: [riskBadge] })],
+      },
+    });
+    expect(w.find(".pin__badge--dwell").exists()).toBe(true);
+    expect(w.find(".pin__badge--dwell").attributes("aria-label")).toBe(en["facility.dwell_risk"]);
+  });
+
+  it("draws nothing for a receiver the server did not flag", () => {
+    // below the sample floor or under the threshold, the badge simply is not sent —
+    // the client never re-derives the decision
     const w = mount(MapCanvas, {
       props: { pins: [pin({ facility_type: "shipper_receiver", name: "Harvest Foods DC" })] },
     });
-    // a slot rendered with nothing behind it is the fake confidence §11.7 forbids
     expect(w.findAll(".pin__badge")).toHaveLength(0);
     expect(w.find(".pin__price").exists()).toBe(false);
+  });
+
+  it("keeps the clock clear of the other two slots", () => {
+    // no facility type carries all three today, but the shoulders must not collide
+    // if one ever does
+    const w = mount(MapCanvas, {
+      props: {
+        pins: [pin({ facility_type: "shipper_receiver", has_food: true,
+                     badges: [riskBadge, { kind: "bookable", value: 2400 }] })],
+      },
+    });
+    expect(w.findAll(".pin__badge")).toHaveLength(3);
   });
 });
 

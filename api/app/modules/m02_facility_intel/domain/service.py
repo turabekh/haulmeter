@@ -216,9 +216,20 @@ def dwell_stats(db: Session, facility_id) -> ParsedDwell:
     )
 
 
-# --- Detention-risk indicator (M2-FR3) — seam until M3 ---
-def detention_risk(db: Session, facility_id) -> dict:
-    return {"rate": None, "sample_size": 0, "basis": "m3_pending"}
+# AI-CONTEXT: M2-FR3's indicator is NOT here, and that is the finding (§23 entry 87).
+#
+# It lived here as `detention_risk`, returning `{"rate": None, "sample_size": 0,
+# "basis": "m3_pending"}` — a stub waiting for M3. M3 has existed for sessions, and the
+# stub stayed, because the wait was never the problem: the FR says the indicator is
+# "derived from M3 claim events" and import-linter orders M2 before M3, so **this
+# module can never read a claim**. It was specified into a module that cannot compute
+# it, and the placeholder made that look like a scheduling matter rather than a
+# structural one.
+#
+# It now lives in `m03.facility_detention_stats` and is composed at the router, which
+# is this codebase's existing answer for a module needing a later module's data (see
+# `_fuel_badge` in the M1 router). The response key at `GET /facility/{id}` is
+# unchanged — only the thing computing it moved.
 
 
 # --- Semantic review search (M2-FR6) ---
