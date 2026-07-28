@@ -52,18 +52,40 @@ class CreateLoadIn(BaseModel):
     # where `appointment` came from: "rate_con_parse" when the driver confirmed the
     # parsed time unchanged, "manual" when they typed it. Ignored without an appointment.
     appointment_source: str | None = None
+    # AI-CONTEXT: the driver answered "none of these" on the match screen (§23 entry 66).
+    # Distinct from simply not choosing: a null `facility_id` means "no opinion", this
+    # means "I looked at your candidates and this dock is not one of them."
+    create_new_facility: bool = False
 
 
 def _resolve_facility(db: Session, body: CreateLoadIn):
     """Reuse before create. `facility_id` is the confirmed match from the import
     screen; without one, fall back to the same name+geohash rule ingest already
     trusts to merge two records unattended — a dock at the same coordinates with
-    a matching name is the same dock, however the driver got here."""
+    a matching name is the same dock, however the driver got here.
+
+    AI-CONTEXT: "none of these" is an ANSWER, and this route used to ignore it
+    (§23 entry 66). The import screen asks "is this the same place?", and a driver who
+    rejects every candidate sent exactly what a driver who never answered sent — no
+    facility id — so the fallback below ran anyway and could attach the load to a dock
+    they had just looked at and refused. Every load created in the sheet also shares
+    one pair of coordinates, which makes the geohash half of that rule match far more
+    than it should. A screen that asks a question and then overrides the answer is
+    worse than one that never asked.
+
+    The three cases are now distinct: a chosen id wins; an explicit rejection creates;
+    silence still falls back to matching, which is right when nothing was ever asked —
+    an unreadable rate con offers no candidates at all.
+    """
     if body.facility_id is not None:
         existing = facility.get_facility(db, body.facility_id)
         if existing is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "facility not found")
         return existing
+    if body.create_new_facility:
+        return facility.create_facility(
+            db, facility.FacilityType.shipper_receiver, body.facility_name, body.lat, body.lon
+        )
     matches = facility.find_duplicate_candidates(db, body.facility_name, body.lat, body.lon)
     if matches:
         return matches[0]

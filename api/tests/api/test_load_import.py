@@ -212,6 +212,73 @@ def test_a_load_built_from_a_rate_con_records_that_it_was_read(client, db, monke
     assert meter["facility_name"] == "ACME Distribution Center"
 
 
+def test_rejecting_every_candidate_creates_rather_than_matching(client, db):
+    """"None of these" is an ANSWER, and this route used to ignore it (§23 entry 66).
+
+    A driver who rejected every candidate sent exactly what a driver who never answered
+    sent — no facility id — so the name+geohash fallback ran anyway and could attach the
+    load to a dock they had just looked at and refused. Every load created in the import
+    sheet also shares one pair of coordinates, so the geohash half of that rule matches
+    far more often than it should.
+    """
+    headers = _headers(client, "reject@example.com")
+    body = {
+        "facility_name": "Metro Market Warehouse",
+        "lat": DALLAS[0],
+        "lon": DALLAS[1],
+        "counterparty": "Acme",
+    }
+
+    first = client.post("/load", json=body, headers=headers).json()["stop_id"]
+    first_facility = client.get(f"/load/{first}/meter", headers=headers).json()["facility_name"]
+
+    # silence still matches — right when nothing was ever asked (an unreadable rate con
+    # offers no candidates at all)
+    second = client.post("/load", json=body, headers=headers).json()["stop_id"]
+    assert client.get(f"/load/{second}/meter", headers=headers).json()["facility_name"] == (
+        first_facility
+    )
+
+    # ...but an explicit rejection creates a distinct dock rather than reusing that one
+    third = client.post(
+        "/load", json={**body, "create_new_facility": True}, headers=headers
+    ).json()["stop_id"]
+    assert client.get(f"/load/{third}/meter", headers=headers).status_code == 200
+
+    from app.foundation.f02_facility import public as facility
+
+    rows = facility.find_duplicate_candidates(db, "Metro Market Warehouse", *DALLAS)
+    assert len(rows) >= 2  # the rejection produced its own record
+
+
+def test_a_chosen_match_still_wins_over_the_rejection_flag(client, db):
+    """The three cases are ordered: a chosen id is the strongest statement there is."""
+    headers = _headers(client, "chosen@example.com")
+    from app.foundation.f02_facility import public as facility
+
+    fac = facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, "Chosen Dock", *DALLAS
+    )
+
+    stop_id = client.post(
+        "/load",
+        json={
+            "facility_name": "Something Else Entirely",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Acme",
+            "facility_id": str(fac.id),
+            "create_new_facility": True,  # contradictory; the explicit id wins
+        },
+        headers=headers,
+    ).json()["stop_id"]
+
+    assert (
+        client.get(f"/load/{stop_id}/meter", headers=headers).json()["facility_name"]
+        == "Chosen Dock"
+    )
+
+
 def test_a_facility_id_that_is_not_ours_to_use_404s(client, db):
     headers = _headers(client, "badfac@example.com")
 

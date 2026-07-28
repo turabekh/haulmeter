@@ -150,6 +150,9 @@ async function create() {
       free_time_minutes: Number(form.freeMin) || null,
       rate_cents_per_hour: form.rateHr ? Math.round(Number(form.rateHr) * 100) : null,
       facility_id: chosenFacility.value === NO_MATCH ? null : chosenFacility.value,
+      // rejecting every candidate is an ANSWER, and the API used to receive it as
+      // silence — see §23 entry 66. Only this sheet knows the difference.
+      create_new_facility: chosenFacility.value === NO_MATCH,
       rate_con_document_id: documentId.value,
     });
     emit("created");

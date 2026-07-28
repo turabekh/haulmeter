@@ -1876,6 +1876,9 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
 
     const created = posts.find((p) => p.url.endsWith("/load") && p.body);
     expect(created.body.facility_id).toBe(null); // the sentinel never leaves the client
+    // ...and the rejection travels as a statement rather than as silence, so the API
+    // stops running its own name+geohash match over the answer (§23 entry 66)
+    expect(created.body.create_new_facility).toBe(true);
   });
 
   it("reads the rate con and creates nothing until the driver confirms", async () => {
@@ -1932,6 +1935,7 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
 
     const create = posts.find((p) => p.url.endsWith("/load"));
     expect(create.body.facility_id).toBe("fac-1");
+    expect(create.body.create_new_facility).toBe(false); // a pick is not a rejection
     expect(create.body.rate_con_document_id).toBe("doc-rc");
   });
 
