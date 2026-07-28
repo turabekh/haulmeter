@@ -6,6 +6,7 @@ canonical record forever. Consumed by every module.
 """
 
 from .domain.enums import FacilityStatus, FacilityType, SourceKind
+from .domain.geocode import GeocodedPlace, geocode
 from .domain.ingest import adapters as _adapters
 from .domain.ingest.adapters import (
     LOW,
@@ -63,6 +64,8 @@ from .domain.service import (
 ingest = _adapters
 
 __all__ = [
+    "GeocodedPlace",
+    "geocode",
     "SERVICE_MOBILE_REPAIR",
     "SERVICE_PARTS",
     "SERVICE_REPAIR",

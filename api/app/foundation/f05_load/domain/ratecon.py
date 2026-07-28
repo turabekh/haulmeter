@@ -256,9 +256,22 @@ def draft_from_rate_con(
         media_type=media_type,
     )
     readable = has_terms(parsed)
+    # AI-CONTEXT: the parsed ADDRESS becomes a proposed location (§23 entry 67).
+    #
+    # `receiver_address` was extracted and dropped, and the import sheet filed every
+    # dock at a hardcoded Dallas coordinate — so a Columbus receiver armed its geofence
+    # 1,500 km away and ENTER could never fire for a real delivery. The geocoder
+    # proposes; the driver disposes. Its own wording for the place travels with it so
+    # the confirm screen can show what was matched rather than asserting it (§11.7).
+    place = None
+    if readable:
+        found = facility_registry.geocode(parsed.get("receiver_address") or "", limit=1)
+        if found:
+            place = {"lat": found[0].lat, "lon": found[0].lon, "label": found[0].label}
     return {
         "parsed": parsed if readable else None,
         "readable": readable,
         "silent_on": silent_terms(parsed) if readable else [],
         "facility_candidates": facility_candidates(db, parsed) if readable else [],
+        "location": place,
     }

@@ -61,6 +61,29 @@ def _warn_of_unrecoverable_gaps(db, account, facility_id, now) -> None:
     )
 
 
+class GeocodeIn(BaseModel):
+    address: str
+
+
+@router.post("/geocode")
+def geocode(
+    body: GeocodeIn,
+    _account: identity.Account = Depends(current_account),
+) -> dict:
+    """Turn an address into candidate coordinates, so the driver can confirm where a
+    dock actually is (§23 entry 67).
+
+    The import screen proposes a location from the parsed address; a driver who edits
+    that address needs to re-ask, which is what this is for. An address we cannot place
+    returns an empty list rather than an error — "we could not find this" is a fact to
+    show, and losing a confirmed rate con to a 4xx would cost the driver the photograph.
+    """
+    places = facility.geocode(body.address)
+    return {
+        "places": [{"lat": p.lat, "lon": p.lon, "label": p.label} for p in places],
+    }
+
+
 class PingIn(BaseModel):
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)

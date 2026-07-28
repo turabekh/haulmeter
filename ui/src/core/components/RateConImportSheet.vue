@@ -26,7 +26,8 @@
 import { ref, reactive, computed } from "vue";
 import { Camera, TriangleAlert, Check } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
-import { importRateCon, createActiveLoad } from "../api.js";
+import { importRateCon, createActiveLoad, geocodeAddress } from "../api.js";
+import { lastFix } from "../location.js";
 
 const emit = defineEmits(["created"]);
 const { t } = useI18n();
@@ -46,9 +47,24 @@ const form = reactive({
   broker: "",
   reference: "",
   appointment: "",
+  address: "",
   freeMin: "",
   rateHr: "",
 });
+// AI-CONTEXT: WHERE the dock is, which this sheet used to invent (§23 entry 67).
+//
+// `receiver_address` was parsed and dropped, and every load was created at a
+// hardcoded Dallas lat/lon — so a Columbus receiver armed its geofence 1,500 km from
+// the dock and ENTER could never fire. No arrival, no on-time proof, no detention
+// clock, no ON_SITE, for every load made the way PRD §108 calls primary.
+//
+// The geocoder proposes and the driver confirms: `placeLabel` is the geocoder's OWN
+// wording for what it matched, shown rather than assumed (§11.7). With no coordinate
+// from either the address or the driver's own position, the load cannot be filed —
+// saying so is honest, and a fabricated coordinate is what this replaces.
+const place = ref(null); // { lat, lon, label } once confirmed
+const placing = ref(false);
+const placeMissed = ref(false);
 // AI-CONTEXT: the parse EXTRACTS an appointment and this sheet used to throw it away.
 //
 // `ratecon.py` has asked the model for it since the parser was written, the draft
@@ -117,6 +133,9 @@ async function read() {
     // <input type="datetime-local"> wants "YYYY-MM-DDTHH:mm" with no zone
     parsedAppointment.value = p.appointment ?? null;
     form.appointment = p.appointment ? String(p.appointment).slice(0, 16) : "";
+    form.address = p.receiver_address ?? "";
+    place.value = res.location ?? null;
+    placeMissed.value = !!(form.address && !res.location);
     form.freeMin = p.free_time_minutes ?? "";
     form.rateHr = p.detention_rate_cents_per_hour
       ? Math.round(p.detention_rate_cents_per_hour / 100)
@@ -136,13 +155,36 @@ async function read() {
   }
 }
 
+async function findPlace() {
+  if (!form.address.trim() || placing.value) return;
+  placing.value = true;
+  placeMissed.value = false;
+  try {
+    const res = await geocodeAddress(form.address);
+    place.value = res.places?.[0] ?? null;
+    placeMissed.value = !place.value;
+  } catch {
+    placeMissed.value = true; // offline or the geocoder is down — say so, guess nothing
+  } finally {
+    placing.value = false;
+  }
+}
+
+// the driver is standing at the dock and the geocoder cannot place it: their own
+// position is a true statement about somewhere, which a Dallas constant never was
+function usePosition() {
+  if (!lastFix.value) return;
+  place.value = { lat: lastFix.value.lat, lon: lastFix.value.lon, label: t("load.rc_here") };
+  placeMissed.value = false;
+}
+
 async function create() {
   busy.value = true;
   try {
     await createActiveLoad({
       facility_name: form.facility || "Receiver",
-      lat: 32.7767,
-      lon: -96.797,
+      lat: place.value.lat,
+      lon: place.value.lon,
       counterparty: form.broker || "Broker",
       reference_number: form.reference || null,
       appointment: form.appointment ? new Date(form.appointment).toISOString() : null,
@@ -229,6 +271,30 @@ async function create() {
         <span class="rc__label">{{ t("load.appointment") }}</span>
         <input v-model="form.appointment" class="rc__input" type="datetime-local" />
       </label>
+
+      <!-- AI-CONTEXT: where the dock IS. The geofence is armed on this coordinate, so
+           getting it wrong costs the driver every arrival-based protection they have —
+           which is exactly what a hardcoded Dallas constant was doing to them. -->
+      <label class="rc__field">
+        <span class="rc__label">{{ t("load.rc_address") }}</span>
+        <input v-model="form.address" class="rc__input" type="text" @change="findPlace" />
+      </label>
+      <div class="rc__place">
+        <p v-if="place" class="rc__placed">
+          <Check :size="16" :stroke-width="2.5" aria-hidden="true" />
+          <span>{{ t("load.rc_placed") }} <span class="rc__placelabel">{{ place.label }}</span></span>
+        </p>
+        <p v-else-if="placeMissed" class="rc__unplaced">{{ t("load.rc_unplaced") }}</p>
+        <p v-else class="rc__unplaced">{{ t("load.rc_place_needed") }}</p>
+        <div class="rc__placeacts">
+          <button class="rc__mini" type="button" :disabled="!form.address || placing" @click="findPlace">
+            {{ placing ? t("load.rc_placing") : t("load.rc_find") }}
+          </button>
+          <button v-if="lastFix" class="rc__mini" type="button" @click="usePosition">
+            {{ t("load.rc_use_here") }}
+          </button>
+        </div>
+      </div>
       <label class="rc__field">
         <span class="rc__label">{{ t("calc.free_min") }}</span>
         <input v-model="form.freeMin" class="rc__input" type="number" inputmode="numeric" />
@@ -238,7 +304,7 @@ async function create() {
         <input v-model="form.rateHr" class="rc__input" type="number" inputmode="decimal" />
       </label>
 
-      <button class="rc__cta" type="button" :disabled="busy" @click="create">
+      <button class="rc__cta" type="button" :disabled="busy || !place" @click="create">
         {{ t("load.create") }}
       </button>
       <p class="rc__hint">{{ t("load.rc_confirm_hint") }}</p>
@@ -332,6 +398,35 @@ async function create() {
   flex-direction: column;
   gap: var(--s-2);
 }
+.rc__place {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-bottom: var(--s-4);
+}
+.rc__placed,
+.rc__unplaced {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+  color: var(--text-3);
+}
+.rc__placed { color: var(--ledger-500); }
+.rc__placelabel { color: var(--text-2); }
+.rc__unplaced { color: var(--marker-500); }
+.rc__placeacts { display: flex; flex-wrap: wrap; gap: var(--s-3); }
+.rc__mini {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.rc__mini:disabled { color: var(--text-3); }
 .rc__opt {
   display: flex;
   align-items: center;

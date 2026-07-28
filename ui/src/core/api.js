@@ -324,6 +324,20 @@ export async function correctAppointment(stopId, appointment, appointmentEnd = n
   return resp.json();
 }
 
+// AI-CONTEXT: address -> coordinates, so a dock is filed where it actually is.
+// Never queued: the driver is confirming a place before creating a load, and a
+// coordinate that arrives an hour later has nothing left to attach to.
+export async function geocodeAddress(address) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/location/geocode`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ address }),
+  });
+  if (!resp.ok) throw new Error(`geocode failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchMeter(stopId) {
   return apiGet(`/load/${stopId}/meter`, `meter:${stopId}`);
 }

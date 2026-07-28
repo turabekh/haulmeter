@@ -1791,6 +1791,9 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
       { facility_id: "fac-1", name: "ACME Distribution Center", address: null, score: 0.68 },
       { facility_id: "fac-2", name: "Dallas Distribution Center", address: null, score: 0.65 },
     ],
+    // the server geocodes the parsed receiver address into a proposed location; the
+    // load cannot be filed without one, because the geofence is armed on it
+    location: { lat: 39.9612, lon: -83.0907, label: "8450 Lakeside Ave, Columbus, OH" },
   };
 
   function stub(draft) {
@@ -1833,6 +1836,42 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
   // "None of these" ticked (§23 entry 65). `chosenFacility` starts at null to mean
   // "not answered" and that option carried `:value="null"`, so v-model matched it.
   // A comment is not a test, and this is the test.
+  // AI-CONTEXT: the dock's coordinate is what the geofence is armed on, and this sheet
+  // used to send a hardcoded Dallas lat/lon for every load — so a Columbus receiver
+  // could never fire an ENTER. Refusing to file a load we cannot place is the honest
+  // replacement for inventing a coordinate (§23 entry 67).
+  it("will not file a load it cannot place", async () => {
+    const posts = stub({ ...DRAFT, location: null, parsed: { ...DRAFT.parsed, receiver_address: "" } });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(w.find(".rc__cta").attributes("disabled")).toBeDefined();
+    expect(w.text()).toContain("so arrivals at this dock are detected");
+
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+    expect(posts.some((p) => p.url.endsWith("/load") && p.body)).toBe(false);
+  });
+
+  it("files the dock where the geocoder placed it, not where the sheet used to guess", async () => {
+    const posts = stub(DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    // the geocoder's own wording is shown rather than the driver's typing echoed back
+    expect(w.text()).toContain("8450 Lakeside Ave, Columbus, OH");
+
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+    const created = posts.find((p) => p.url.endsWith("/load") && p.body);
+    expect(created.body.lat).toBeCloseTo(39.9612);
+    expect(created.body.lon).toBeCloseTo(-83.0907);
+  });
+
   it("pre-selects no facility answer at all, including none-of-these", async () => {
     stub(DRAFT);
     const w = mount(RateConImportSheet);

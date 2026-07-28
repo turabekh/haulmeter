@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     minio_secret_key: str = Field(default="longhaul")
     minio_bucket: str = Field(default="longhaul")
 
+    # AI-CONTEXT: the same public pk.* token the map already uses. F2 geocodes a
+    # parsed receiver address with it; empty means "we cannot place addresses", which
+    # the import screen states plainly rather than guessing a coordinate.
+    mapbox_token: str = Field(default="")
+
     smtp_host: str = Field(default="mailpit")
     smtp_port: int = Field(default=1038)
 

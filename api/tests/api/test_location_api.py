@@ -39,10 +39,18 @@ NOON = datetime(2026, 7, 27, 15, 0, tzinfo=UTC)
 
 
 def _awake(db, account):
-    """Put the account's quiet hours somewhere this test is not. The ROUTE takes server
-    time and cannot be injected, so the account is moved instead of the clock."""
+    """Disable quiet hours for this account outright.
+
+    AI-CONTEXT: this used to move the window to 02:00-03:00 and call that "somewhere
+    this test is not" — which was true when it was written and false at 02:03 UTC the
+    next morning, when two EXIT tests failed for an hour. That is the SAME defect the
+    fixed `NOON` constant was meant to end, one layer down: a window chosen against a
+    clock the test does not control is still at that clock's mercy.
+
+    `in_quiet_hours` compares `start <= local < end`, so an empty window can never
+    contain anything. No hour of the day can walk into it."""
     prefs = notify.get_or_create_prefs(db, account.id)
-    prefs.quiet_start = dt_time(2, 0)
+    prefs.quiet_start = dt_time(3, 0)
     prefs.quiet_end = dt_time(3, 0)
     db.flush()
     return prefs
@@ -359,3 +367,97 @@ def test_high_accuracy_mode_is_carried_onto_the_trace(client, db):
     ).first()
     assert ping.mode == location.LocationMode.high_accuracy
     assert ping.accuracy_m == 4.5
+
+
+class TestGeocode:
+    """F2 grew a geocoder because a parsed address had nowhere to go (§23 entry 67).
+
+    The transport is monkeypatched at the module seam — the same one F9 uses — so this
+    never reaches the network. A geocoder test that calls Mapbox is a test that fails
+    on a train.
+    """
+
+    def test_an_address_becomes_coordinates_with_the_geocoder_s_own_wording(
+        self, client, db, monkeypatch
+    ):
+        from app.foundation.f02_facility.domain import geocode as geo
+
+        monkeypatch.setattr(geo.get_settings(), "mapbox_token", "pk.test", raising=False)
+        monkeypatch.setattr(
+            geo,
+            "_mapbox_forward",
+            lambda q, token, limit: {
+                "features": [
+                    {
+                        "properties": {
+                            "full_address": "8450 Lakeside Ave, Columbus, OH 43228",
+                            "coordinates": {"latitude": 39.9612, "longitude": -83.0907},
+                        }
+                    }
+                ]
+            },
+        )
+        _account, headers = _driver(client, db, "geo@example.com")
+
+        resp = client.post(
+            "/location/geocode",
+            json={"address": "8450 Lakeside Ave, Columbus OH"},
+            headers=headers,
+        )
+
+        assert resp.status_code == 200
+        place = resp.json()["places"][0]
+        assert place["lat"] == 39.9612
+        assert place["lon"] == -83.0907
+        # the geocoder's wording, not the driver's — so the screen can show what it
+        # matched instead of asserting the driver's typing was understood (§11.7)
+        assert place["label"] == "8450 Lakeside Ave, Columbus, OH 43228"
+
+    def test_an_address_it_cannot_place_is_a_fact_not_an_error(self, client, db, monkeypatch):
+        from app.foundation.f02_facility.domain import geocode as geo
+
+        monkeypatch.setattr(geo.get_settings(), "mapbox_token", "pk.test", raising=False)
+        monkeypatch.setattr(geo, "_mapbox_forward", lambda q, token, limit: {"features": []})
+        _account, headers = _driver(client, db, "geo-none@example.com")
+
+        resp = client.post("/location/geocode", json={"address": "nowhere at all"}, headers=headers)
+
+        assert resp.status_code == 200
+        assert resp.json()["places"] == []
+
+    def test_a_dead_geocoder_never_costs_the_driver_their_rate_con(
+        self, client, db, monkeypatch
+    ):
+        from app.foundation.f02_facility.domain import geocode as geo
+
+        def boom(*_a, **_k):
+            raise RuntimeError("mapbox is down")
+
+        monkeypatch.setattr(geo.get_settings(), "mapbox_token", "pk.test", raising=False)
+        monkeypatch.setattr(geo, "_mapbox_forward", boom)
+        _account, headers = _driver(client, db, "geo-dead@example.com")
+
+        resp = client.post("/location/geocode", json={"address": "anywhere"}, headers=headers)
+
+        assert resp.status_code == 200
+        assert resp.json()["places"] == []
+
+    def test_no_token_means_we_cannot_place_addresses_rather_than_guessing(
+        self, client, db, monkeypatch
+    ):
+        """Dev and CI run without a token. Returning nothing is honest; the coordinate
+        this whole entry exists to stop was a fabricated one."""
+        from app.foundation.f02_facility.domain import geocode as geo
+
+        monkeypatch.setattr(geo.get_settings(), "mapbox_token", "", raising=False)
+        called = []
+        monkeypatch.setattr(geo, "_mapbox_forward", lambda *a, **k: called.append(1) or {})
+        _account, headers = _driver(client, db, "geo-notoken@example.com")
+
+        resp = client.post("/location/geocode", json={"address": "somewhere"}, headers=headers)
+
+        assert resp.json()["places"] == []
+        assert called == []  # and it never called out at all
+
+    def test_geocode_requires_a_session(self, client):
+        assert client.post("/location/geocode", json={"address": "x"}).status_code in (401, 403)
