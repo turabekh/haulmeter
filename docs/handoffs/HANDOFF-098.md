@@ -19,7 +19,7 @@ never captured a heading.
 | Thing | Value |
 |---|---|
 | Migrations | head **0052_m03_claim_clock_since** (untouched — this session added no schema) |
-| Tests | **pytest 1059 · vitest 485 · layout 613 · ruff clean · import-linter 30/30** |
+| Tests | **pytest 1059 · vitest 485 · layout 681 · ruff clean · import-linter 30/30** |
 | §23 decision log | **85 entries** (81–85 added) |
 | Handoffs | 000 → 098 |
 | Git | `main` local only, never pushed · `3ca1f3d` (Map tab) + the rate/terms commit |
@@ -129,6 +129,14 @@ Four headings, four answers. **Before this session every one of those calls retu
   initialised far enough to render them**. It passed four consecutive runs and failed
   the fifth with nothing about it changed. A check that fails on a coin flip teaches
   everyone to re-run rather than look.
+- **The facility card is measured now, and getting there found a trap.** `open: [".pin"]`
+  passed a 68-check subset run and failed the full sweep: the surface falls back to
+  `SAMPLE_PINS` while `/map/overlay` is in flight, so under load the step clicked a
+  **fixture** pin and opened the wrong card. It failed loudly only because each card
+  variant now carries a modifier (`cta--book`, `cta--fuel`, `cta--stop`, `cta--nav`) that
+  `ready` keys on — **had the two cards shared a lead rung it would have gone green
+  having measured the wrong screen.** Steps now target `.pin[data-facility="…"]`, so the
+  click waits for the mocked overlay and a mock that stops matching fails at the step.
 - `make test` and `make ui-layout` were never run concurrently (097 §5).
 
 ## 6. Exact next task — Session 19
@@ -169,10 +177,6 @@ alone. Left for the owner rather than swept into one commit.
   / tolls 30`, fixed `mpg 6.0`) when there is no active load. Money on a screen that
   nobody entered — the shape §23 entry 52 removed from the Load tab — but what an EMPTY
   calculator should show is a product decision, not a passing one.
-- **`FacilityCard` has no layout-harness state**, so §10.1's whole contextual CTA ladder
-  — Book, Fuel here, Navigate and the new "This is your stop" — has never been measured
-  at 360 dp. It needs a map state that opens a pin whose facility matches the mocked
-  armed stop.
 - **§11.2's clock / dwell-risk badge slot** has no signal behind it. M2 computes dwell
   statistics; nothing puts them on the overlay payload. The slot stays empty on purpose.
 - **§11.6 is only half-honoured.** `MapCanvas` uses Mapbox Standard's `lightPreset` keyed
@@ -218,7 +222,7 @@ DOCS design-prd.md §23 entries 81–83
 ```
 make up          # preflight, then the full stack
 make test        # 1059 pytest + 485 vitest
-make ui-layout   # 613 mobile-first checks at 360 dp (~8 min) — RUN IT ALONE
+make ui-layout   # 681 mobile-first checks at 360 dp (~10 min) — RUN IT ALONE
 make ui-layout-only STATE=load-calc   # one state (~17 s) while iterating
 ```
 

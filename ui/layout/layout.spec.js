@@ -135,6 +135,98 @@ const LIVE_MOCKS = {
   },
 };
 
+// AI-CONTEXT: the FACILITY CARD, which this harness had never opened (§10.1).
+//
+// It is the map's whole payload — tap a pin, get the card — and it carries §10.1's
+// contextual CTA ladder: Book / Fuel here / Report price / Navigate / "This is your
+// stop". Five different screens behind one component, none of them ever measured at
+// 360 dp, and the one with the LONGEST label ("Book spot — $24.00") interpolates a
+// price, which is exactly where +40% under xx-XL bites.
+//
+// One pin per state, so `open: [".pin"]` is unambiguous, and each `ready` is the
+// ladder modifier that only that state produces — without those, a mock that drifted
+// would fall back to SAMPLE_PINS, open a fixture's card and go green having measured
+// the wrong screen.
+// AI-CONTEXT: click the MOCKED pin, not whichever pin happens to exist.
+//
+// `open: [".pin"]` looked fine and failed under load: the surface falls back to
+// SAMPLE_PINS while `/map/overlay` is still in flight, so the step clicked a FIXTURE
+// pin, opened the wrong card, and the `ready` selector timed out. Worse, had the two
+// cards shared a lead rung it would have gone green having measured the wrong screen.
+// Targeting the facility id makes the step wait for the mocked overlay to land, and a
+// mock that ever stops matching fails here rather than silently.
+//
+// A data attribute rather than the aria-label, because the label is composed text and
+// this file's steps are CSS-only for a reason: every surface is measured under en,
+// xx-XL and pa.
+const pinOf = (pin) => `.pin[data-facility="${pin.facility_id}"]`;
+
+const PIN_FRESHNESS = {
+  reported_at: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+  sample_size: 3,
+  source: null,
+};
+function mapMocks(pin, extra = {}) {
+  return {
+    ...NO_LOAD_MOCKS,
+    "/map/overlay": { clustered: false, total: 1, clusters: [], pins: [pin] },
+    "/community/handoff/nearby": [],
+    ...extra,
+  };
+}
+const TRUCK_STOP_PIN = {
+  facility_id: "00000000-0000-0000-0000-0000000000a1",
+  name: "Love's Travel Stop #212",
+  facility_type: "truck_stop",
+  shape: "circle",
+  lat: 32.78,
+  lon: -96.8,
+  status: "some",
+  availability: "Low",
+  capacity: 62,
+  badges: [],
+  freshness: PIN_FRESHNESS,
+};
+const BOOKABLE_PIN = {
+  ...TRUCK_STOP_PIN,
+  facility_id: "00000000-0000-0000-0000-0000000000a2",
+  name: "Yardline Secured Parking",
+  facility_type: "parking_property",
+  shape: "square",
+  availability: null,
+  capacity: null,
+  badges: [{ kind: "bookable", value: 2400, spot_id: "00000000-0000-0000-0000-0000000000a9" }],
+};
+const FUEL_PIN = {
+  ...TRUCK_STOP_PIN,
+  facility_id: "00000000-0000-0000-0000-0000000000a3",
+  name: "QuikFuel Dallas",
+  facility_type: "fuel_station",
+  status: null,
+  availability: null,
+  capacity: null,
+  freshness: null,
+  badges: [{
+    kind: "fuel_net", value: 394, net: 394, gross: 419, savings: 25,
+    is_network: true, source: "feed", indicative: false,
+    as_of: PIN_FRESHNESS.reported_at, sample_size: null,
+    station_ref: "00000000-0000-0000-0000-0000000000a3",
+  }],
+};
+// the driver's OWN dock: its facility_id is the one `/load/active` names, which is
+// what makes §23 entry 82's rung render
+const ARMED_DOCK_PIN = {
+  ...TRUCK_STOP_PIN,
+  facility_id: "00000000-0000-0000-0000-0000000000b3",
+  name: "Dallas Cold Storage",
+  facility_type: "shipper_receiver",
+  shape: "diamond",
+  status: null,
+  availability: null,
+  capacity: null,
+  freshness: null,
+};
+
 // the same tab with NO load. `/load/active` has to answer null here: the surface asks
 // it on mount for fresh-device resume, so a mock that always names a stop puts every
 // Load-tab surface into the live state and the empty-state sheets never open.
@@ -425,6 +517,22 @@ const SURFACES = [
     mocks: {}, open: [{ click: ".chip", nth: 1 }, ".sleep-cta"], ready: ".sheet__body",
   }],
   ["sheet-map-relay", "/", { mocks: {}, open: [".relay-banner"], ready: ".sheet__body" }],
+  // §10.1's contextual CTA ladder, one state per rung it can land on
+  ["sheet-facility", "/", {
+    mocks: mapMocks(TRUCK_STOP_PIN), open: [pinOf(TRUCK_STOP_PIN)], ready: ".cta--nav",
+  }],
+  ["sheet-facility-book", "/", {
+    mocks: mapMocks(BOOKABLE_PIN), open: [pinOf(BOOKABLE_PIN)], ready: ".cta--book",
+  }],
+  ["sheet-facility-fuel", "/", {
+    mocks: mapMocks(FUEL_PIN), open: [pinOf(FUEL_PIN)], ready: ".cta--fuel",
+  }],
+  // the rung §23 entry 82 added: this pin IS the armed stop, so the card leads with it
+  ["sheet-facility-stop", "/", {
+    mocks: mapMocks(ARMED_DOCK_PIN, { "/load/active": LIVE_MOCKS["/load/active"] }),
+    open: [pinOf(ARMED_DOCK_PIN)],
+    ready: ".cta--stop",
+  }],
   // §11.4's saved-for-stop queue (§23 entry 83) — a new sheet, so it gets measured at
   // 360 dp with the rest rather than shipping unseen. Its state is client-side by
   // design (the tap that fills it happens where there may be no signal), so it is

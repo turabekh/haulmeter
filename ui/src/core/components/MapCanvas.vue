@@ -257,6 +257,7 @@ function stale(pin) {
       class="pin"
       :class="{ 'pin--stale': stale(pin) }"
       :style="pinStyle(pin)"
+      :data-facility="pin.facility_id"
       :aria-label="pinLabel(pin)"
       @click="emit('pinTap', pin)"
     >

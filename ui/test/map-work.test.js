@@ -50,6 +50,10 @@ describe("§10.1 — the third CTA, which never existed", () => {
   it("leads with the stop when the pin is the dock the driver is working", () => {
     const w = card({ pin: dock(), isActiveStop: true });
     expect(w.find(".cta").text()).toContain(en["facility.your_stop"]);
+    // the modifier names which rung won. It is what the layout harness keys its
+    // `ready` selector on, so a card that stopped rendering this rung would fail
+    // there rather than silently measuring a different card.
+    expect(w.find(".cta--stop").exists()).toBe(true);
   });
 
   it("emits open-stop rather than opening a flow on the map", () => {
@@ -70,6 +74,8 @@ describe("§10.1 — the third CTA, which never existed", () => {
     const w = card({ pin: dock(), isActiveStop: false });
     expect(w.find(".cta").text()).toContain(en["facility.navigate"]);
     expect(w.text()).not.toContain(en["facility.your_stop"]);
+    expect(w.find(".cta--nav").exists()).toBe(true);
+    expect(w.find(".cta--stop").exists()).toBe(false);
   });
 
   it("does not claim a truck stop is a dock just because a load is running", () => {

@@ -240,29 +240,37 @@ function vendorLine(entry) {
          NAV-5 cross-link into the Meter, exactly like Book and Fuel are cross-links
          into their own flows. It invents no way to create a load from a pin, because
          that would be a navigation structure and §22 makes those never-improvise. -->
-    <button v-if="isActiveStop" class="cta" type="button" @click="emit('open-stop', pin)">
+    <button v-if="isActiveStop" class="cta cta--stop" type="button" @click="emit('open-stop', pin)">
       <Warehouse :size="20" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.your_stop") }}
     </button>
-    <!-- contextual lead action -->
-    <button v-else-if="bookable" class="cta" type="button" @click="emit('book', pin)">
+    <!-- AI-CONTEXT: each lead CTA carries a modifier naming the rung that WON.
+         §10.1's ladder is "Book / Navigate / Arm stop" and which one renders is the
+         whole behaviour of this card — but the DOM said `cta` for all five, so nothing
+         could tell them apart. That is why this component had no layout-harness state:
+         a `ready` selector could not prove which card had opened, and a mock that
+         drifted would have measured a fixture pin's card and gone green. The modifiers
+         are the existing idiom in this file (`cta--secondary`, `cta--tertiary`) and
+         carry no styles of their own — they name a state that was already there.
+         contextual lead action -->
+    <button v-else-if="bookable" class="cta cta--book" type="button" @click="emit('book', pin)">
       <SquareParking :size="20" :stroke-width="2" aria-hidden="true" />
       {{ bookLabel }}
     </button>
-    <button v-else-if="fuelable" class="cta" type="button" @click="emit('fuel', pin)">
+    <button v-else-if="fuelable" class="cta cta--fuel" type="button" @click="emit('fuel', pin)">
       <Fuel :size="20" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.fuel_here") }}
     </button>
     <button
       v-else-if="fuelEstimateOnly"
-      class="cta"
+      class="cta cta--price"
       type="button"
       @click="emit('report-price', pin)"
     >
       <Fuel :size="20" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.report_price") }}
     </button>
-    <button v-else class="cta" type="button" @click="emit('navigate', pin)">
+    <button v-else class="cta cta--nav" type="button" @click="emit('navigate', pin)">
       <Navigation :size="20" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.navigate") }}
     </button>
