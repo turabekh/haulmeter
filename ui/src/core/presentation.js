@@ -167,3 +167,25 @@ export function ageLabel(atMs, nowMs) {
   const mins = Math.max(0, Math.round((nowMs - atMs) / 60000));
   return mins < 60 ? `${mins}m` : `${Math.round(mins / 60)}h`;
 }
+
+// AI-CONTEXT: §11.6 — "night style is the DEFAULT PAIRING WITH DARK THEME".
+//
+// MapCanvas chose its basemap from `new Date().getHours()`, so the rule was not
+// implemented at all: a driver on the dark theme at noon got a light basemap under
+// dark chrome, and one on light at 8pm got the reverse. Both are the app disagreeing
+// with itself down the middle of the screen — and the map is the daily-open surface,
+// so it is the disagreement a driver sees most.
+//
+// The clock is not a bad proxy, it is the wrong question. §6.1 C-3 makes the theme
+// "system setting + manual override", which already encodes time-of-day for the
+// drivers who want it and encodes an explicit preference for the drivers who do not.
+// Asking the hour a second time overrides the answer they gave.
+//
+// Pure, so the pairing is testable without a WebGL context — which is the only way it
+// would ever have been checked (the harness cannot assert a Mapbox config property).
+export function basemapPreset(themeMode, systemPrefersDark) {
+  if (themeMode === "dark") return "night";
+  if (themeMode === "light") return "day";
+  // "system", and dark is primary (§6.1 C-3) — so an unknown preference is night
+  return systemPrefersDark === false ? "day" : "night";
+}

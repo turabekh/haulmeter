@@ -11,7 +11,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { Truck, TreePine, SquareParking, Fuel, Warehouse, Circle, UtensilsCrossed, DollarSign } from "lucide-vue-next";
-import { statusPresentation, isStale, placeLabels } from "../presentation.js";
+import { statusPresentation, isStale, placeLabels, basemapPreset } from "../presentation.js";
+import { useTheme } from "../theme.js";
 import { formatMoney } from "../meter.js";
 import { useI18n } from "../i18n.js";
 
@@ -119,10 +120,29 @@ const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 // via lightPreset so it reads well in a dark cab; the saturated semantic pins ride
 // on top as DOM overlays regardless of basemap (§11.2).
 const STYLE = "mapbox://styles/mapbox/standard";
-function lightPreset() {
-  const hour = new Date().getHours();
-  return hour < 7 || hour >= 19 ? "night" : "day";
+// AI-CONTEXT: §11.6 pairs the night basemap with the DARK THEME, not with the clock —
+// see `basemapPreset`. The rule lives in core/ so it can be tested; this reads it and
+// re-applies it whenever the driver's theme changes, because a basemap that only
+// picked a side at map-load would drift the moment they used the toggle.
+const { mode } = useTheme();
+const systemDark =
+  typeof window !== "undefined" && window.matchMedia
+    ? window.matchMedia("(prefers-color-scheme: dark)")
+    : null;
+const prefersDark = ref(systemDark ? systemDark.matches : true);
+function applyPreset() {
+  if (!map || !live.value) return;
+  try {
+    map.setConfigProperty("basemap", "lightPreset", basemapPreset(mode.value, prefersDark.value));
+  } catch {
+    /* style not ready yet — `load` applies it, and the watcher re-applies after */
+  }
 }
+function onSystemTheme(e) {
+  prefersDark.value = e.matches;
+}
+// the manual override AND the system setting, because §6.1 C-3 is both
+watch([mode, prefersDark], applyPreset);
 
 // the map opens on the continental US (never a hardcoded city) — the server returns
 // cluster bubbles at this span (§11.5); GPS then recenters if the driver allows it.
@@ -152,6 +172,7 @@ function zoomToCluster(cluster) {
 }
 
 onMounted(async () => {
+  systemDark?.addEventListener?.("change", onSystemTheme);
   if (!TOKEN) return; // no token -> the placeholder canvas below (activation seam)
   try {
     const mapboxgl = (await import("mapbox-gl")).default;
@@ -179,9 +200,9 @@ onMounted(async () => {
     });
 
     map.on("load", () => {
-      map.setConfigProperty("basemap", "lightPreset", lightPreset());
       syncPins();
       live.value = true;
+      applyPreset();
       emitBounds(); // fetch the initial (continental) viewport
       try {
         geolocate.trigger();
@@ -197,6 +218,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  if (systemDark) systemDark.removeEventListener?.("change", onSystemTheme);
   if (map) map.remove();
 });
 

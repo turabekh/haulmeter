@@ -229,6 +229,9 @@ def test_corridor_carries_what_the_stack_renders(client, db):
     }
     assert entry["status"] is None  # nobody has reported: said, not guessed
     assert entry["badges"] == []
+    # §23 entry 86: WHERE it is. §11.4's saved queue offers a Navigate, and without
+    # coordinates that button can only route through a page to look them up.
+    assert entry["lat"] is not None and entry["lon"] is not None
 
 
 def test_corridor_quotes_a_station_the_same_price_the_pin_does(client, db):

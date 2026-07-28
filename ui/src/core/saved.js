@@ -40,6 +40,27 @@ function write(items) {
 // tap at all — the driver would believe they had kept the lot.
 export const saved = ref(read());
 
+// AI-CONTEXT: what a corridor entry becomes when it is kept, in one place (§19).
+//
+// The payload holds only what STAYS TRUE. A status and a distance were facts about a
+// moment thirty miles back, and §11.7 forbids showing a stale reading as a current
+// one — the sheet shows the age of the tap instead. Coordinates and the kind of place
+// do not decay, and the coordinates are what let Navigate hand a real destination to
+// the nav app rather than routing through a page to look one up (§23 entry 86).
+export function facilityItem(entry, at) {
+  return {
+    id: entry.facility_id,
+    kind: "facility",
+    label: entry.name,
+    payload: {
+      facility_type: entry.facility_type,
+      lat: entry.lat ?? null,
+      lon: entry.lon ?? null,
+    },
+    ...(at === undefined ? {} : { at }),
+  };
+}
+
 export function isSaved(id) {
   return saved.value.some((item) => String(item.id) === String(id));
 }

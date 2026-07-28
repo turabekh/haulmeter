@@ -19,8 +19,8 @@ never captured a heading.
 | Thing | Value |
 |---|---|
 | Migrations | head **0052_m03_claim_clock_since** (untouched — this session added no schema) |
-| Tests | **pytest 1059 · vitest 485 · layout 681 · ruff clean · import-linter 30/30** |
-| §23 decision log | **85 entries** (81–85 added) |
+| Tests | **pytest 1059 · vitest 492 · layout 681 · ruff clean · import-linter 30/30** |
+| §23 decision log | **86 entries** (81–86 added) |
 | Handoffs | 000 → 098 |
 | Git | `main` local only, never pushed · `3ca1f3d` (Map tab) + the rate/terms commit |
 | Services | **running** |
@@ -177,16 +177,19 @@ alone. Left for the owner rather than swept into one commit.
   / tolls 30`, fixed `mpg 6.0`) when there is no active load. Money on a screen that
   nobody entered — the shape §23 entry 52 removed from the Load tab — but what an EMPTY
   calculator should show is a product decision, not a passing one.
-- **§11.2's clock / dwell-risk badge slot** has no signal behind it. M2 computes dwell
-  statistics; nothing puts them on the overlay payload. The slot stays empty on purpose.
-- **§11.6 is only half-honoured.** `MapCanvas` uses Mapbox Standard's `lightPreset` keyed
-  to the wall clock, not custom day/night styles built from §6.1 tokens, and it does not
-  follow the app's own theme toggle. A driver in dark theme at noon gets a light basemap.
+- **§11.2's clock / dwell-risk badge slot** has no signal behind it, and the reason is
+  now known rather than assumed: **`m02.detention_risk` is a stub** returning
+  `{rate: None, sample_size: 0, basis: "m3_pending"}`. M2-FR3 was left as a seam until
+  M3 existed, and M3 exists now. `dwell_stats` IS real (median/p90 from F3 samples), but
+  turning a dwell median into a "risk" badge means choosing a threshold, which is a
+  product decision and not one to make in passing. The slot stays empty on purpose;
+  **implementing M2-FR3 is the unblocking task.**
+- **§11.6 is still half-honoured, and the remaining half is named.** The basemap now
+  pairs with the THEME (§23 entry 86), but it is still Mapbox Standard's own
+  `lightPreset` — **the custom day/night styles built from §6.1 tokens are not built.**
+  Not quietly declared done.
 - **§11.4's "map locks to heading-up follow" is not implemented** — corridor mode replaces
   the map entirely rather than following it. Heading now exists, so this is buildable.
-- **Corridor entries carry no coordinates**, so a saved row's Navigate routes via the
-  facility page rather than handing coordinates to the nav app. Honest, but one field on
-  the corridor response would fix it.
 - **`pin.shape`** is serialized by the overlay and unused by the canvas (icon encodes type
   per an owner-directed §11.2 refine). Harmless, but it is a payload field nothing reads.
 - Per-stop detention terms exist in the schema and are not expressible in the UI (097)
@@ -221,7 +224,7 @@ DOCS design-prd.md §23 entries 81–83
 
 ```
 make up          # preflight, then the full stack
-make test        # 1059 pytest + 485 vitest
+make test        # 1059 pytest + 492 vitest
 make ui-layout   # 681 mobile-first checks at 360 dp (~10 min) — RUN IT ALONE
 make ui-layout-only STATE=load-calc   # one state (~17 s) while iterating
 ```

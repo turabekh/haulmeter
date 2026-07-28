@@ -188,6 +188,13 @@ def corridor(
                 "facility_id": str(entry["facility_id"]),
                 "name": entry["name"],
                 "facility_type": entry["facility_type"],
+                # AI-CONTEXT: WHERE it is (§23 entry 86). §11.4's saved-for-stop queue
+                # hands a driver a Navigate button, and without coordinates that button
+                # could only route through the facility page — a control that half
+                # works. The corridor already computes these to measure the bearing
+                # cone; it was throwing them away on the way out.
+                "lat": entry["lat"],
+                "lon": entry["lon"],
                 "distance_m": entry["distance_m"],
                 "status": entry["status"],
                 "reported_at": (

@@ -24,7 +24,7 @@ import { useI18n } from "../core/i18n.js";
 import { SAMPLE_PINS, sampleHandoffs } from "../core/fixtures.js";
 import { lastFix, metersBetween } from "../core/location.js";
 import { presetFor, rememberPreset } from "../core/map-presets.js";
-import { saved, saveForStop, unsave } from "../core/saved.js";
+import { saved, saveForStop, unsave, facilityItem } from "../core/saved.js";
 import { withFoodBadges, foodBadgeFacilityIds } from "../core/vendors.js";
 import { statusReportFor, ageLabel } from "../core/presentation.js";
 import {
@@ -475,18 +475,15 @@ const savedIds = computed(() => saved.value.map((item) => item.id));
 // confirm, because every one of those is a flow and §11.4 exists to prevent flows at
 // speed. The corridor card marks itself from `savedIds` and that is the whole feedback.
 function saveAhead(entry) {
-  saveForStop({
-    id: entry.facility_id,
-    kind: "facility",
-    label: entry.name,
-    payload: { facility_type: entry.facility_type, lat: entry.lat, lon: entry.lon },
-  });
+  saveForStop(facilityItem(entry));
 }
 
 function navigateSaved(row) {
-  // the corridor payload has no coordinates today, so this routes through the
-  // facility page rather than guessing a destination — a Navigate that might open a
-  // map of nowhere is the dead-control pattern with a worse consequence.
+  // §23 entry 86: the corridor carries coordinates now, so this hands the nav app a
+  // real destination. The fallback stays for rows saved BEFORE that shipped — a
+  // Navigate that might open a map of nowhere is the dead-control pattern with a
+  // worse consequence, so an old row without coordinates goes via the facility page
+  // rather than guessing.
   if (row.payload?.lat != null && row.payload?.lon != null) {
     navigate({ lat: row.payload.lat, lon: row.payload.lon });
     showingSaved.value = false;

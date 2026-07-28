@@ -21,6 +21,8 @@ import { resolve } from "node:path";
 import { mount } from "@vue/test-utils";
 import CorridorStack from "../src/core/components/CorridorStack.vue";
 import * as fixtures from "../src/core/fixtures.js";
+import { basemapPreset } from "../src/core/presentation.js";
+import { facilityItem } from "../src/core/saved.js";
 import en from "../src/core/i18n/en.json";
 import { messages, LAUNCH_LOCALES } from "../src/core/i18n/index.js";
 
@@ -136,5 +138,57 @@ describe("the corridor's two honest empty states carry all six locales", () => {
         expect(messages[locale][key], `${locale} is missing ${key}`).toBeTruthy();
       }
     }
+  });
+});
+
+// AI-CONTEXT: §11.6 — "night style is the default pairing with dark theme". MapCanvas
+// chose its basemap from `new Date().getHours()`, so a driver on the dark theme at
+// noon got a light basemap under dark chrome. The clock is not a bad proxy, it is the
+// wrong question: §6.1 C-3 already encodes time-of-day for the drivers who want it and
+// an explicit preference for the ones who do not.
+describe("§11.6 — the basemap follows the theme, not the clock", () => {
+  it("pairs night with the dark theme", () => {
+    expect(basemapPreset("dark", false)).toBe("night");
+    expect(basemapPreset("dark", true)).toBe("night");
+  });
+
+  it("pairs day with the light theme, whatever the OS says", () => {
+    expect(basemapPreset("light", true)).toBe("day");
+    expect(basemapPreset("light", false)).toBe("day");
+  });
+
+  it("follows the system setting when the driver has expressed no preference", () => {
+    expect(basemapPreset("system", true)).toBe("night");
+    expect(basemapPreset("system", false)).toBe("day");
+  });
+
+  it("defaults to night when the preference is unknowable — dark is primary (§6.1)", () => {
+    expect(basemapPreset("system", undefined)).toBe("night");
+    expect(basemapPreset("system", null)).toBe("night");
+  });
+});
+
+// §23 entry 86: the corridor carries coordinates, so a saved row's Navigate hands the
+// nav app a destination instead of routing through a page to look one up.
+describe("what a corridor entry becomes when it is kept", () => {
+  it("keeps the coordinates, so Navigate has somewhere to go", () => {
+    const item = facilityItem(entry({ lat: 32.9, lon: -96.8 }));
+    expect(item.payload.lat).toBe(32.9);
+    expect(item.payload.lon).toBe(-96.8);
+    expect(item.id).toBe("f-1");
+    expect(item.label).toBe("Pilot #77");
+  });
+
+  it("keeps nothing that has gone stale", () => {
+    // status and distance were true thirty miles back (§11.7)
+    const item = facilityItem(entry({ status: "full", lat: 1, lon: 2 }));
+    expect(item.payload).not.toHaveProperty("status");
+    expect(item.payload).not.toHaveProperty("distance_m");
+  });
+
+  it("survives an entry with no coordinates rather than inventing a destination", () => {
+    const item = facilityItem(entry());
+    expect(item.payload.lat).toBeNull();
+    expect(item.payload.lon).toBeNull();
   });
 });
