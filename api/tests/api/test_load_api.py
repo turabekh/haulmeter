@@ -4,6 +4,7 @@ create -> arrive -> meter: before arrival the Meter is pre-arrival; after a
 geofence ENTER the detention clock is live.
 """
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -84,6 +85,76 @@ def test_active_load_names_the_dock_not_just_the_stop(client, db):
     active = client.get("/load/active", headers=headers).json()
     assert active["facility_id"] is not None
     assert active["facility_name"] == "Dallas Receiver"
+
+
+def test_create_load_keeps_the_rate_and_the_contract_terms(client, db):
+    """§23 entry 84 — the sixth and seventh parsed values to reach no field.
+
+    `Load.rate_cents` and `Load.accessorial_terms` are columns F5 has had since it was
+    written, and `create_load_from_parsed_terms` has mapped both from a parsed dict
+    since the same day — but the only route that creates a load in production never
+    accepted them, so every load ever filed carried a null rate and an empty terms map.
+    """
+    from app.foundation.f05_load import public as loads
+
+    headers = _auth(client)
+    body = client.post(
+        "/load",
+        json={
+            "facility_name": "Dallas Receiver",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Acme Brokerage",
+            "rate_cents": 285000,
+            "accessorial_terms": {"tonu": "50% of linehaul", "layover": "$150 per night"},
+        },
+        headers=headers,
+    ).json()
+    stop = loads.get_stop(db, uuid.UUID(body["stop_id"]))
+    load = loads.get_load(db, stop.load_id)
+    assert load.rate_cents == 285000
+    assert load.accessorial_terms["tonu"] == "50% of linehaul"
+    assert load.accessorial_terms["layover"] == "$150 per night"
+
+
+def test_m04_finally_judges_a_load_against_terms_it_actually_has(client, db):
+    """M4-FR4's pre-acceptance check reads `load.accessorial_terms`, and nothing had
+    ever filled it — so it reported EVERY load in production as silent on TONU and
+    layover, whatever the contract said. The reader was right; its input was empty."""
+    from app.foundation.f05_load import public as loads
+    from app.modules.m04_accessorial import public as m4
+
+    headers = _auth(client)
+    body = client.post(
+        "/load",
+        json={
+            "facility_name": "Dallas Receiver",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Acme Brokerage",
+            "rate_cents_per_hour": 7500,
+            "accessorial_terms": {"tonu": "50% of linehaul", "layover": "$150 per night"},
+        },
+        headers=headers,
+    ).json()
+    stop = loads.get_stop(db, uuid.UUID(body["stop_id"]))
+    check = m4.check_accessorial_terms(loads.get_load(db, stop.load_id))
+    assert check["missing"] == [] and check["silent"] is False
+
+    # and a contract that really is silent still says so — the warning is not defanged
+    quiet = client.post(
+        "/load",
+        json={
+            "facility_name": "R2",
+            "lat": DALLAS[0],
+            "lon": DALLAS[1],
+            "counterparty": "Acme",
+        },
+        headers=headers,
+    ).json()
+    quiet_stop = loads.get_stop(db, uuid.UUID(quiet["stop_id"]))
+    quiet_check = m4.check_accessorial_terms(loads.get_load(db, quiet_stop.load_id))
+    assert set(quiet_check["missing"]) == {"tonu", "layover"}
 
 
 def test_end_load_departs_the_stop_and_clears_active(client, db):

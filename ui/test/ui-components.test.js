@@ -1852,6 +1852,81 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
   // used to send a hardcoded Dallas lat/lon for every load — so a Columbus receiver
   // could never fire an ENTER. Refusing to file a load we cannot place is the honest
   // replacement for inventing a coordinate (§23 entry 67).
+  // AI-CONTEXT: the sixth and seventh parsed values to reach no field (§23 entry 84).
+  //
+  // `rate_cents` and `accessorial_terms` have been in the parse schema, in the prompt
+  // and in `Load`'s own columns since F5 was written, and reached no pixel and no
+  // field: the confirm screen showed the DETENTION rate and never the linehaul, and
+  // warned about what the contract was SILENT on while never showing what it SAID. So
+  // a driver signed off a contract having read every term except the money.
+  it("shows the money the load pays, and files it", async () => {
+    const posts = stub({
+      ...DRAFT,
+      parsed: { ...DRAFT.parsed, rate_cents: 285000 },
+    });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    // the parse is a PROPOSAL, so it lands in an editable field like every other value
+    const rate = w.findAll("input").find((i) => i.element.value === "2850.00");
+    expect(rate).toBeTruthy();
+
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+    const created = posts.find((p) => p.url.endsWith("/load") && p.body);
+    expect(created.body.rate_cents).toBe(285000);
+  });
+
+  // M4-FR4 is "accessorial terms extraction ... WITH A DRIVER-CONFIRM STEP", and the
+  // confirm step was the half that did not exist.
+  it("quotes what the rate con actually states, beside what it is silent on", async () => {
+    stub({
+      ...DRAFT,
+      parsed: {
+        ...DRAFT.parsed,
+        accessorial_terms: { tonu: "50% of linehaul", layover: "$150 per night" },
+      },
+    });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    const text = w.text();
+    expect(text).toContain("50% of linehaul");
+    expect(text).toContain("$150 per night");
+    // the contract's own words are quoted, never retyped: a claim is argued from them
+    expect(w.find(".rc__terms-block input").exists()).toBe(false);
+  });
+
+  it("files the terms it quoted, so M4 judges the load against its real contract", async () => {
+    const posts = stub({
+      ...DRAFT,
+      parsed: { ...DRAFT.parsed, accessorial_terms: { tonu: "50% of linehaul" } },
+    });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    const created = posts.find((p) => p.url.endsWith("/load") && p.body);
+    expect(created.body.accessorial_terms).toEqual({ tonu: "50% of linehaul" });
+  });
+
+  it("says nothing about terms when the rate con stated none", async () => {
+    // §15.3 / Q-7: an empty section is filler on a screen read in ten seconds
+    stub(DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+    expect(w.find(".rc__terms-block").exists()).toBe(false);
+  });
+
   it("will not file a load it cannot place", async () => {
     const posts = stub({ ...DRAFT, stops: [{ ...DRAFT.stops[0], address: "", location: null }] });
     const w = mount(RateConImportSheet);

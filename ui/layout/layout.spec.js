@@ -155,9 +155,20 @@ const RATE_CON_DRAFT = {
   parsed: {
     broker_name: "Coyote Logistics",
     reference_number: "L-9001",
-    linehaul_cents: 250000,
+    // AI-CONTEXT: this said `linehaul_cents` and the API has always returned
+    // `rate_cents` — a key that existed nowhere but in this fixture, so the harness
+    // measured the rate-con sheet with the money field permanently blank. Entry 52's
+    // rule inside the harness itself: a fixture whose shape does not match its
+    // endpoint hides the endpoint. Found while wiring §23 entry 84.
+    rate_cents: 250000,
     free_time_minutes: 120,
     detention_rate_cents_per_hour: 7500,
+    // the terms M4-FR4's confirm step quotes. Long wording on purpose: this block is
+    // the widest thing on the sheet, and 360 dp is where it has to survive.
+    accessorial_terms: {
+      layover: "$150 per night after 24 hours, pre-approval required in writing",
+      lumper: "Reimbursed at cost with receipt attached to the POD",
+    },
   },
   silent_on: ["tonu"],
   // AI-CONTEXT: a ROUTE (§23 entry 68) — two stops, so the confirm screen is measured

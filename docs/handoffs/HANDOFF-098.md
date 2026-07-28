@@ -19,10 +19,10 @@ never captured a heading.
 | Thing | Value |
 |---|---|
 | Migrations | head **0052_m03_claim_clock_since** (untouched — this session added no schema) |
-| Tests | **pytest 1055 · vitest 477 · layout 579 · ruff clean · import-linter 30/30** |
-| §23 decision log | **83 entries** (81, 82, 83 added) |
+| Tests | **pytest 1057 · vitest 481 · layout 579 · ruff clean · import-linter 30/30** |
+| §23 decision log | **84 entries** (81–84 added) |
 | Handoffs | 000 → 098 |
-| Git | `main` local only, never pushed · **nothing committed this session** — see §7 |
+| Git | `main` local only, never pushed · `3ca1f3d` (Map tab) + the rate/terms commit |
 | Services | **running** |
 
 ## 2. What was wrong, in the order it mattered
@@ -111,13 +111,24 @@ Four headings, four answers. **Before this session every one of those calls retu
 - **Three component assertions were re-run against the pre-change render** and all three
   failed, per 097 §5. The heading tests were written against a sensor that had no heading
   field at all.
+- **A phantom key had been sitting in the layout harness.** `RATE_CON_DRAFT` carried
+  `linehaul_cents`, a name that exists nowhere in the product — the API returns
+  `rate_cents` — so the harness measured the rate-con sheet with its money field
+  permanently blank, and would have kept doing so after entry 84 added one. Entry 52's
+  rule *inside the harness itself*. Fixed, plus real `accessorial_terms`, so the new
+  block is measured at 360 dp rather than skipped; re-run green at 579.
 - `make test` and `make ui-layout` were never run concurrently (097 §5).
 
 ## 6. Exact next task — Session 19
 
-1. **`rate_cents` and `accessorial_terms` still reach no load field.** Carried unchanged
-   from 097 §6 — this session was the Map tab instead. Sixth and seventh dropped parsed
-   values; fix together and check every neighbour in `parsed`.
+1. ~~`rate_cents` and `accessorial_terms`~~ — **DONE** (§23 entry 84). Both now stored,
+   both shown on the confirm screen. **Every neighbour in `parsed` was checked and the
+   list is empty**: the dropped-field family, seven instances over six sessions, is
+   closed. Found on the way: `m04_accessorial.check_accessorial_terms` had judged every
+   load in production as silent on TONU and layover because nothing ever wrote the
+   column it reads — and it is still reachable by **no HTTP route**, which is logged in
+   §8 rather than wired, because the pre-acceptance warning already exists via
+   `silent_on` and deleting-vs-exposing M4's copy is an owner call.
 2. **Run the Map tab the way 097's owner ran the Load tab.** Every defect above was found
    by reading code against the constitution. That method found seven; *using* the Load tab
    found ten in one session, three of them invisible to a passing test by construction.
@@ -138,7 +149,13 @@ alone. Left for the owner rather than swept into one commit.
 
 ## 8. Debt
 
-- **`rate_cents`, `accessorial_terms`** — parsed, stored on no load field (from 097)
+- **`check_accessorial_terms` (M4-FR4) is reachable by no HTTP route.** Its input is
+  finally real, but nothing calls it. Either wire it or delete it — the pre-acceptance
+  warning a driver actually sees comes from `silent_on` in the draft, so a second path
+  would duplicate it. Owner call.
+- **`Load.rate_cents` is stored and read by nothing yet.** The obvious consumer is M8's
+  profit calculator (`/load/calc`), which currently asks the driver to type a rate the
+  load already knows. One prefill away.
 - **§11.2's clock / dwell-risk badge slot** has no signal behind it. M2 computes dwell
   statistics; nothing puts them on the overlay payload. The slot stays empty on purpose.
 - **§11.6 is only half-honoured.** `MapCanvas` uses Mapbox Standard's `lightPreset` keyed
@@ -183,7 +200,7 @@ DOCS design-prd.md §23 entries 81–83
 
 ```
 make up          # preflight, then the full stack
-make test        # 1055 pytest + 477 vitest
+make test        # 1057 pytest + 481 vitest
 make ui-layout   # 579 mobile-first checks at 360 dp (~12 min) — RUN IT ALONE
 ```
 

@@ -47,7 +47,21 @@ const form = reactive({
   reference: "",
   freeMin: "",
   rateHr: "",
+  // AI-CONTEXT: what the load PAYS (§23 entry 84). `rate_cents` has been in the parse
+  // schema and the prompt since this module was written, in `Load.rate_cents` since F5
+  // was written, and it reached no field and no pixel: the confirm screen showed the
+  // detention rate and never the linehaul. A driver signing off a contract read every
+  // term except the money. Held in DOLLARS here because that is what the paper says.
+  rate: "",
 });
+// AI-CONTEXT: M4-FR4 is "accessorial terms extraction from rate cons (F5/F9) WITH A
+// DRIVER-CONFIRM STEP", and the confirm step was the half that did not exist. The terms
+// were extracted, normalised to a map, returned in the draft and rendered nowhere — so
+// the screen warned about what the contract was SILENT on while never showing what it
+// actually said. These are read-only: unlike a rate, a driver cannot correct contract
+// wording by typing over it, and a screen that let them would be inviting a claim to be
+// argued from language the contract does not contain.
+const terms = ref({});
 // AI-CONTEXT: WHERE the dock is, which this sheet used to invent (§23 entry 67).
 //
 // `receiver_address` was parsed and dropped, and every load was created at a
@@ -146,6 +160,8 @@ async function read() {
     form.rateHr = p.detention_rate_cents_per_hour
       ? Math.round(p.detention_rate_cents_per_hour / 100)
       : "";
+    form.rate = p.rate_cents ? (p.rate_cents / 100).toFixed(2) : "";
+    terms.value = p.accessorial_terms ?? {};
     // NOTHING is pre-selected, and that is measured rather than cautious: pg_trgm
     // scores an unrelated "Dallas Distribution Center" at 0.645 against "ACME
     // Distribution Center" and the correct "ACME Distribution Ctr" at 0.679, so no
@@ -207,6 +223,9 @@ async function create() {
       reference_number: form.reference || null,
       free_time_minutes: Number(form.freeMin) || null,
       rate_cents_per_hour: form.rateHr ? Math.round(Number(form.rateHr) * 100) : null,
+      // the two that were parsed and dropped (§23 entry 84)
+      rate_cents: form.rate ? Math.round(Number(form.rate) * 100) : null,
+      accessorial_terms: terms.value,
       rate_con_document_id: documentId.value,
       // the whole route, in the order the driver runs it
       stops: stops.value.map((stop) => ({
@@ -336,6 +355,12 @@ async function create() {
         <span class="rc__label">{{ t("load.broker") }}</span>
         <input v-model="form.broker" class="rc__input" type="text" />
       </label>
+      <!-- the money the load pays. Editable like every other parsed value, because a
+           parse is a proposal and the driver is the one holding the paper. -->
+      <label class="rc__field">
+        <span class="rc__label">{{ t("load.rc_rate") }}</span>
+        <input v-model="form.rate" class="rc__input" type="number" inputmode="decimal" />
+      </label>
       <label class="rc__field">
         <span class="rc__label">{{ t("calc.free_min") }}</span>
         <input v-model="form.freeMin" class="rc__input" type="number" inputmode="numeric" />
@@ -344,6 +369,23 @@ async function create() {
         <span class="rc__label">{{ t("calc.rate_hr") }}</span>
         <input v-model="form.rateHr" class="rc__input" type="number" inputmode="decimal" />
       </label>
+
+      <!-- AI-CONTEXT: M4-FR4's driver-confirm step for the accessorial terms, which had
+           never existed. The screen has warned about what the contract is SILENT on
+           since the sheet shipped and never showed what it SAYS — so a driver was asked
+           to accept a load on the strength of terms they could not read. Quoted
+           verbatim and not editable: contract wording is the thing a claim is argued
+           from, and a field that let a driver retype it would invite an argument from
+           language the paper does not contain. -->
+      <section v-if="Object.keys(terms).length" class="rc__terms-block">
+        <h3 class="rc__label">{{ t("load.rc_states") }}</h3>
+        <dl class="rc__termlist">
+          <div v-for="(wording, term) in terms" :key="term" class="rc__term">
+            <dt class="rc__termname">{{ t(`load.rc_term.${term}`) === `load.rc_term.${term}` ? term : t(`load.rc_term.${term}`) }}</dt>
+            <dd class="rc__termtext">{{ wording }}</dd>
+          </div>
+        </dl>
+      </section>
 
       <button class="rc__cta" type="button" :disabled="busy || !routeReady" @click="create">
         {{ t("load.create") }}
@@ -433,6 +475,38 @@ async function create() {
 }
 .rc__terms {
   font-weight: 500;
+}
+/* the contract's own words, quoted. Hairline card like the stop blocks above it — no
+   new pattern, and deliberately not `marker`: this is what the paper DOES say, which is
+   reassurance, while the silence warning above it is the caution. */
+.rc__terms-block {
+  padding: var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
+  background: var(--ink-1);
+}
+.rc__termlist {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.rc__term {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rc__termname {
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: 500;
+}
+.rc__termtext {
+  margin: 0;
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
 }
 .rc__match {
   display: flex;

@@ -70,6 +70,20 @@ class CreateLoadIn(BaseModel):
     # omit to use the live F13-config detention terms (default 2h free / $75/h)
     free_time_minutes: int | None = None
     rate_cents_per_hour: int | None = None
+    # AI-CONTEXT: the sixth and seventh parsed values to reach no field (§23 entry 84).
+    #
+    # `Load.rate_cents` and `Load.accessorial_terms` are columns that have existed since
+    # F5 was written, and `create_load_from_parsed_terms` has mapped both from a parsed
+    # dict from the same day — but the only route that creates a load in production is
+    # this one, and it never accepted them. So the linehaul rate and every contract term
+    # the parse extracted were read off the paper, returned in the draft, rendered
+    # nowhere and dropped.
+    #
+    # `accessorial_terms` arrives as the term->wording MAP the parse normalises to, not
+    # the list the structured-output schema is forced to use — the schema's constraint
+    # is F5's business and stops at its boundary.
+    rate_cents: int | None = None
+    accessorial_terms: dict | None = None
     # AI-CONTEXT: set when the driver confirmed a MATCHED facility on the rate-con
     # import screen. Without it this route called create_facility unconditionally, so
     # every load a driver filed added another row for a dock that was already in the
@@ -179,6 +193,11 @@ def create_load(
         account.id,
         counterparty_id=cp.id,
         reference_number=body.reference_number,
+        # what the load PAYS, and the contract language a claim is argued from. M4's
+        # `check_accessorial_terms` has read `load.accessorial_terms` since M4 shipped
+        # and has therefore judged every load in production against an empty dict.
+        rate_cents=body.rate_cents,
+        accessorial_terms=body.accessorial_terms,
         detention_rate_cents_per_hour=rate,
         free_time_minutes=free_time,
         source=(
