@@ -1799,8 +1799,10 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
         appointment_end: null,
         location: { lat: 39.9612, lon: -83.0907, label: "8450 Lakeside Ave, Columbus, OH" },
         facility_candidates: [
-          { facility_id: "fac-1", name: "ACME Distribution Center", address: null, score: 0.68 },
-          { facility_id: "fac-2", name: "Dallas Distribution Center", address: null, score: 0.65 },
+          { facility_id: "fac-1", name: "ACME Distribution Center", address: null,
+            locality: "Columbus, OH", score: 0.68 },
+          { facility_id: "fac-2", name: "ACME Distribution Center", address: null,
+            locality: "Dallas, TX", score: 0.65 },
         ],
       },
     ],
@@ -1933,6 +1935,24 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     const radios = w.findAll(".rc__opt input");
     expect(radios.length).toBe(3); // two candidates + none-of-these
     expect(radios.filter((r) => r.element.checked)).toHaveLength(0);
+  });
+
+  it("says which is which when two candidates share a name (\u00a723 entry 76)", async () => {
+    // a real driver was offered "Metro Market Warehouse" twice, rendered identically,
+    // on the screen that asks whether it is the same place. Both were real -- one in
+    // Columbus, one in Dallas -- and a question whose answers cannot be told apart
+    // cannot be answered.
+    stub(DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    const opts = w.findAll(".rc__opt");
+    expect(opts[0].text()).toContain("ACME Distribution Center");
+    expect(opts[1].text()).toContain("ACME Distribution Center"); // same name, still
+    expect(opts[0].find(".rc__where").text()).toBe("Columbus, OH");
+    expect(opts[1].find(".rc__where").text()).toBe("Dallas, TX");
   });
 
   it("keeps the broker name the parse read", async () => {
@@ -2425,6 +2445,8 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
     expect(route).toContain("Metro Market Warehouse");
     expect(route).toContain("2 stops");
     expect(route).toContain("$271.43");
+    // five loads down the same lane in one week are otherwise identical rows
+    expect(route).toContain("BRL-78426");
   });
 
   it("labels a company driver's claim state rather than printing its key", async () => {
@@ -2625,6 +2647,43 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
   // opened it while stopped and then pulled away kept a live camera-capture UI on
   // screen at speed — the control that opens a flow and the flow itself are two
   // different things to guard, and only one of them was.
+  it("names a PDF instead of rendering a broken image (\u00a723 entry 77)", async () => {
+    // this input accepts application/pdf and the preview was always an <img> on a blob
+    // URL, which cannot decode one -- so choosing a rate con showed the browser's
+    // broken-image glyph where the review of the file was supposed to be.
+    stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+    await w.find(".capture").trigger("click");
+    await flushPromises();
+
+    const sheet = w.findComponent({ name: "DocumentCaptureSheet" });
+    const pdf = new File(["%PDF-1.4"], "rate-con.pdf", { type: "application/pdf" });
+    Object.defineProperty(sheet.find(".cap__input").element, "files", { value: [pdf] });
+    await sheet.find(".cap__input").trigger("change");
+    await flushPromises();
+
+    expect(sheet.find("img.cap__preview").exists()).toBe(false);
+    expect(sheet.find(".cap__file").text()).toBe("rate-con.pdf");
+  });
+
+  it("still previews an actual image", async () => {
+    stubWallet();
+    const w = mount(DocsSurface);
+    await flushPromises();
+    await w.find(".capture").trigger("click");
+    await flushPromises();
+
+    const sheet = w.findComponent({ name: "DocumentCaptureSheet" });
+    const jpg = new File(["\u00ff\u00d8"], "bol.jpg", { type: "image/jpeg" });
+    Object.defineProperty(sheet.find(".cap__input").element, "files", { value: [jpg] });
+    await sheet.find(".cap__input").trigger("change");
+    await flushPromises();
+
+    expect(sheet.find("img.cap__preview").exists()).toBe(true);
+    expect(sheet.find(".cap__file").exists()).toBe(false);
+  });
+
   it("closes an open capture sheet when the truck starts moving (SM-3)", async () => {
     stubWallet();
     const w = mount(DocsSurface);

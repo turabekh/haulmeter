@@ -3,6 +3,7 @@ from geoalchemy2.elements import WKTElement
 from sqlalchemy import cast, func, select
 from sqlalchemy.orm import Session
 
+from . import geocode as geocode_module
 from . import geohash as geohash_util
 from .enums import FacilityStatus, FacilityType, SourceKind
 from .models import Facility, FacilitySource
@@ -340,3 +341,37 @@ def coordinates(db: Session, facility: Facility) -> tuple[float, float]:
         select(func.ST_X(Facility.geom), func.ST_Y(Facility.geom)).where(Facility.id == facility.id)
     ).one()
     return lat, lon
+
+
+def facility_locality(db: Session, facility: Facility) -> str | None:
+    """Where this facility is, in the words a driver uses (§23 entry 76).
+
+    AI-CONTEXT: the registry legitimately holds facilities that share a name — a chain
+    with a warehouse in two cities, or a duplicate left behind by an earlier defect —
+    and any screen that offers them as choices must say which is which. Resolved once
+    and cached on the row, because a reverse geocode per render of a picker is a
+    network call the driver waits for on every open.
+
+    `address` first: a stated address is the driver's own answer and beats the
+    geocoder's guess about a coordinate.
+    """
+    attributes = dict(facility.attributes or {})
+    if attributes.get("locality"):
+        return attributes["locality"]
+    if facility.address:
+        parts = [p.strip() for p in facility.address.split(",") if p.strip()]
+        if len(parts) >= 2:
+            # "8450 Lakeside Ave, Columbus, OH 43228" -> "Columbus, OH"
+            region = parts[-1].split()[0] if parts[-1] else ""
+            resolved = f"{parts[-2]}, {region}".strip(", ")
+        else:
+            resolved = facility.address
+    else:
+        lat, lon = coordinates(db, facility)
+        resolved = geocode_module.locality(lat, lon)
+    if not resolved:
+        return None
+    attributes["locality"] = resolved
+    facility.attributes = attributes
+    db.flush()
+    return resolved

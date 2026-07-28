@@ -81,11 +81,14 @@ onMounted(async () => {
 const wantsExpiry = computed(() => expiringTypes.value.includes(docType.value));
 const ready = computed(() => !!docType.value && !!file.value && !busy.value);
 
+const isImage = computed(() => (file.value?.type || "").startsWith("image/"));
+
 function onFile(event) {
   const f = event.target.files?.[0];
   if (!f) return;
   file.value = f;
-  // §8: review before confirm — the driver sees what they are about to file
+  // §8: review before confirm — the driver sees what they are about to file, and for
+  // anything that is not an image that means its NAME, not a preview that cannot render
   preview.value = URL.createObjectURL(f);
 }
 
@@ -161,7 +164,19 @@ async function submit() {
         <input class="cap__input" type="file" accept="image/*,application/pdf" @change="onFile" />
       </label>
 
-      <img v-if="preview" :src="preview" class="cap__preview" :alt="t('docs.cap_photo')" />
+      <!-- AI-CONTEXT: a PDF is not an image (§23 entry 77). This input accepts
+           application/pdf and the preview was always an <img> on a blob URL, which
+           cannot decode one — so choosing a rate con showed the browser's BROKEN
+           IMAGE glyph. The comment on `onFile` says the driver "sees what they are
+           about to file"; what they saw read as "your file is corrupt". Naming the
+           file is a smaller promise than showing it, and a true one. -->
+      <img
+        v-if="preview && isImage"
+        :src="preview"
+        class="cap__preview"
+        :alt="t('docs.cap_photo')"
+      />
+      <p v-else-if="file" class="cap__file">{{ file.name }}</p>
 
       <label v-if="wantsExpiry" class="cap__field">
         <span class="cap__label">{{ t("docs.cap_expiry") }}</span>
@@ -224,6 +239,13 @@ async function submit() {
   background: var(--ink-0);
   color: var(--text-1);
   font-size: var(--type-body-size);
+}
+.cap__file {
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  margin-bottom: var(--s-4);
+  overflow-wrap: anywhere;
 }
 .cap__preview {
   display: block;

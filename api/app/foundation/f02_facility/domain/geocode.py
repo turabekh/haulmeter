@@ -54,6 +54,53 @@ def _mapbox_forward(query: str, token: str, limit: int) -> dict:
     return resp.json()
 
 
+_MAPBOX_REVERSE_URL = "https://api.mapbox.com/search/geocode/v6/reverse"
+
+
+def _mapbox_reverse(lat: float, lon: float, token: str) -> dict:
+    import httpx
+
+    resp = httpx.get(
+        _MAPBOX_REVERSE_URL,
+        params={"latitude": lat, "longitude": lon, "access_token": token, "limit": 1},
+        timeout=15.0,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def locality(lat: float, lon: float) -> str | None:
+    """Where a coordinate is, in the words a driver uses — "Columbus, OH" (§23 entry 76).
+
+    AI-CONTEXT: the registry can hold two facilities with the SAME NAME, legitimately —
+    a chain with a warehouse in two cities, or a duplicate left by an earlier defect.
+    The confirm sheet asks "is this the same place?" and rendered candidates by name
+    alone, so a real driver was offered "Metro Market Warehouse" twice with nothing to
+    choose between. A question with two indistinguishable answers cannot be answered.
+
+    Best-effort like `geocode`: no token, no network, or nothing recognisable returns
+    None and the row simply shows what it always did.
+    """
+    token = get_settings().mapbox_token
+    if not token:
+        return None
+    try:
+        payload = _mapbox_reverse(lat, lon, token)
+    except Exception:
+        return None
+    for feature in (payload or {}).get("features", []) or []:
+        context = (feature.get("properties") or {}).get("context") or {}
+        place = (context.get("place") or {}).get("name")
+        region = (context.get("region") or {}).get("region_code") or (
+            context.get("region") or {}
+        ).get("name")
+        if place and region:
+            return f"{place}, {region}"
+        if place:
+            return str(place)
+    return None
+
+
 def geocode(address: str, limit: int = 3) -> list[GeocodedPlace]:
     """Best-effort. Returns [] rather than raising — an address we cannot place is a
     fact to show the driver, not an error that loses their rate con."""

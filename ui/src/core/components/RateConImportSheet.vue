@@ -201,6 +201,8 @@ async function create() {
       facility_name: stops.value[0].name || "Receiver",
       lat: stops.value[0].place.lat,
       lon: stops.value[0].place.lon,
+      // the address the driver confirmed, kept rather than discarded once geocoded
+      address: stops.value[0].address || null,
       counterparty: form.broker || "Broker",
       reference_number: form.reference || null,
       free_time_minutes: Number(form.freeMin) || null,
@@ -211,6 +213,7 @@ async function create() {
         facility_name: stop.name || "Receiver",
         lat: stop.place.lat,
         lon: stop.place.lon,
+        address: stop.address || null,
         stop_type: stop.stopType,
         appointment: stop.apptStart ? new Date(stop.apptStart).toISOString() : null,
         appointment_end: stop.apptEnd ? new Date(stop.apptEnd).toISOString() : null,
@@ -283,7 +286,12 @@ async function create() {
           <span class="rc__label">{{ t("load.rc_matched") }}</span>
           <label v-for="c in stop.candidates" :key="c.facility_id" class="rc__opt">
             <input v-model="stop.chosen" type="radio" :value="c.facility_id" />
-            <span>{{ c.name }}</span>
+            <span class="rc__optname">
+              {{ c.name }}
+              <!-- two facilities may legitimately carry the same name, and this list
+                   rendered them identically — an unanswerable question (§23 entry 76) -->
+              <small v-if="c.locality" class="rc__where">{{ c.locality }}</small>
+            </span>
           </label>
           <label class="rc__opt">
             <input v-model="stop.chosen" type="radio" :value="NO_MATCH" />
@@ -493,6 +501,15 @@ async function create() {
   min-height: 48px;
   color: var(--text-1);
   font-size: var(--type-body-size);
+}
+.rc__optname {
+  display: flex;
+  flex-direction: column;
+}
+.rc__where {
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
 }
 .rc__hint {
   margin: 0;

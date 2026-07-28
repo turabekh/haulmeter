@@ -669,7 +669,10 @@ async function endLoad() {
             <button class="hist__main" type="button" @click="go(`/load/${h.stop_id}/evidence`)">
               <span class="hist__name">{{ routeLabel(h) }}</span>
               <span class="hist__date">
-                {{ h.created_at.slice(0, 10)
+                <!-- the load's own number, because a driver who runs the same lane
+                     twice in a week gets rows identical in every other respect -->
+                <template v-if="h.reference_number">{{ h.reference_number }} · </template
+                >{{ h.created_at.slice(0, 10)
                 }}<template v-if="h.stop_count > 1">
                   · {{ t("load.history_stops", { n: h.stop_count }) }}</template>
               </span>

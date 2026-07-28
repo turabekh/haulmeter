@@ -816,3 +816,59 @@ def test_history_names_no_destination_for_a_single_stop_load(client, db):
 
     assert row["stop_count"] == 1
     assert row["destination_name"] is None
+
+
+def test_the_confirmed_address_is_kept_on_a_new_facility(client, db):
+    """The sheet collected an address, geocoded it, and threw the string away — so
+    every facility this route created had `address` NULL. Seventh parsed value found
+    reaching no field, and the reason two same-named docks could not be told apart on
+    the screen that asks "is this the same place?"."""
+    headers = _headers(client, "kept-address@example.com")
+    stop_id = _run_load(
+        client,
+        headers,
+        "Metro Market Warehouse",
+        lat=39.96,
+        lon=-83.09,
+        address="8450 Lakeside Ave, Columbus, OH 43228",
+    )
+
+    from app.foundation.f05_load import public as loads
+
+    stop = loads.get_stop(db, uuid.UUID(stop_id))
+    fac = facility.get_facility(db, stop.facility_id)
+    assert fac.address == "8450 Lakeside Ave, Columbus, OH 43228"
+
+
+def test_same_named_candidates_say_which_is_which(client, db):
+    """A real driver was offered "Metro Market Warehouse" twice, identical, on the
+    screen that asks whether it is the same place. Both were real — one in Columbus,
+    one in Dallas — and a question whose answers cannot be told apart cannot be
+    answered."""
+    from app.foundation.f05_load.domain import ratecon
+
+    facility.create_facility(
+        db,
+        facility.FacilityType.shipper_receiver,
+        "Metro Market Warehouse",
+        39.96,
+        -83.09,
+        address="8450 Lakeside Ave, Columbus, OH 43228",
+    )
+    facility.create_facility(
+        db,
+        facility.FacilityType.shipper_receiver,
+        "Metro Market Warehouse",
+        32.7767,
+        -96.797,
+        address="1200 Commerce St, Dallas, TX 75208",
+    )
+
+    candidates = ratecon.facility_candidates_for(db, "Metro Market Warehouse")
+
+    assert len(candidates) >= 2
+    localities = {c["locality"] for c in candidates}
+    assert "Columbus, OH" in localities
+    assert "Dallas, TX" in localities
+    # and the thing that made them indistinguishable is still true, which is the point
+    assert len({c["name"] for c in candidates}) == 1

@@ -46,6 +46,12 @@ class StopIn(BaseModel):
     facility_name: str
     lat: float
     lon: float
+    # AI-CONTEXT: the address the driver CONFIRMED, kept (§23 entry 76). The sheet
+    # collected it and geocoded it and then threw the string away, so every facility
+    # this route created had `address` NULL — the seventh parsed value found reaching
+    # no field. It is also why two same-named docks could not be told apart on the
+    # very screen that asks "is this the same place?".
+    address: str | None = None
     stop_type: str = "delivery"
     appointment: datetime | None = None
     appointment_end: datetime | None = None
@@ -58,6 +64,7 @@ class CreateLoadIn(BaseModel):
     facility_name: str
     lat: float
     lon: float
+    address: str | None = None
     counterparty: str
     appointment: datetime | None = None
     # omit to use the live F13-config detention terms (default 2h free / $75/h)
@@ -110,15 +117,26 @@ def _resolve_facility(db: Session, body):
         if existing is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "facility not found")
         return existing
+    address = getattr(body, "address", None)
     if body.create_new_facility:
         return facility.create_facility(
-            db, facility.FacilityType.shipper_receiver, body.facility_name, body.lat, body.lon
+            db,
+            facility.FacilityType.shipper_receiver,
+            body.facility_name,
+            body.lat,
+            body.lon,
+            address=address,
         )
     matches = facility.find_duplicate_candidates(db, body.facility_name, body.lat, body.lon)
     if matches:
         return matches[0]
     return facility.create_facility(
-        db, facility.FacilityType.shipper_receiver, body.facility_name, body.lat, body.lon
+        db,
+        facility.FacilityType.shipper_receiver,
+        body.facility_name,
+        body.lat,
+        body.lon,
+        address=address,
     )
 
 

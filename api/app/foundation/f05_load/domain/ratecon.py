@@ -276,6 +276,12 @@ def facility_candidates_for(db: Session, name: str, limit: int = 3) -> list[dict
             "facility_id": str(fac.id),
             "name": fac.name,
             "address": fac.address,
+            # AI-CONTEXT: which one this is (§23 entry 76). Two facilities may share a
+            # name — a chain with a warehouse in two cities, or a duplicate left by an
+            # earlier defect — and a real driver was offered "Metro Market Warehouse"
+            # twice with nothing to tell them apart. A question whose answers are
+            # indistinguishable cannot be answered.
+            "locality": facility_registry.facility_locality(db, fac),
             "score": round(score, 2),
         }
         for fac, score in rows

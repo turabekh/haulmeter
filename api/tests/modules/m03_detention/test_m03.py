@@ -229,3 +229,31 @@ def test_a_driver_already_at_the_dock_keeps_their_real_arrival(db):
     # billed from T0, the real arrival, not from the claim's own start
     assert state.detention_seconds == 3600
     assert state.amount_cents == 7500
+
+
+def test_only_this_visits_events_reach_the_stops_chain(db):
+    """The pack a broker reads must describe THIS stop.
+
+    `accrue_events` made the same unscoped read as the clock did, three lines above
+    it, and was missed while that one was fixed — so every geofence event ever
+    recorded at the dock was filed into this stop's hash-chained log. Seen in a real
+    pack: four ENTER records for a stop the driver arrived at once."""
+    from app.foundation.f04_evidence import public as evidence
+
+    account, broker, load, stop = _setup(db)
+
+    # a previous load to the same dock
+    yesterday = T0 - timedelta(days=1)
+    location.arm_geofence(db, account.id, stop.facility_id)
+    _arrive_and_leave(db, account, yesterday, yesterday + timedelta(hours=4))
+    location.disarm_geofence(db, account.id, stop.facility_id, yesterday + timedelta(hours=4))
+
+    claim = m3.start_claim(db, stop, started_at=T0)
+    _arrive_and_leave(db, account, T0 + timedelta(minutes=5), T0 + timedelta(hours=3))
+
+    assert m3.accrue_events(db, claim) == 2  # this visit's ENTER + EXIT, and no others
+
+    log = db.get(evidence.EvidenceLog, claim.evidence_log_ref)
+    geofenced = [r for r in log.records if (r.payload or {}).get("event") in ("ENTER", "EXIT")]
+    assert len(geofenced) == 2
+    assert all(r.occurred_at >= T0 for r in geofenced)

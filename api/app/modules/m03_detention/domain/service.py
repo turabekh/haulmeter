@@ -132,11 +132,31 @@ def start_claim(
 
 # --- Evidence accrual (fills the F5->F4 seam; F3 events -> hash-chained log) ---
 def accrue_events(db: Session, claim: DetentionClaim) -> int:
+    """This visit's geofence events, into this stop's chain (§23 entry 75).
+
+    AI-CONTEXT: the same unscoped read as the clock defect (entry 73), three lines
+    above the function that had it, and missed while fixing that one. It pulled EVERY
+    geofence event ever recorded for the account at this facility into the stop's
+    hash-chained log, so a driver's second load to the same dock filed the first
+    load's arrivals as evidence of this one. Seen in a real pack: four ENTER records
+    for a stop the driver arrived at once, three of them from earlier that afternoon.
+
+    The chain is append-only, so a log this has already polluted stays polluted —
+    which is the argument for scoping the write rather than filtering the read.
+    """
     log = db.get(evidence.EvidenceLog, claim.evidence_log_ref)
     accrued = {r.payload.get("event_id") for r in log.records if r.payload}
     added = 0
+    arrival, departure = _arrival_departure(db, claim)
+    # before the truck arrives there is no visit yet, so the claim's own start is the
+    # earliest anything can belong to it
+    floor = arrival or claim.clock_since
     for event in location.list_events(db, claim.account_id, claim.facility_ref):
         if str(event.id) in accrued:
+            continue
+        if floor is not None and event.occurred_at < floor:
+            continue
+        if departure is not None and event.occurred_at > departure:
             continue
         evidence.append_record(
             db,
