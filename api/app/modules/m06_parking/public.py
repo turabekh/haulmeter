@@ -10,6 +10,7 @@ from .domain.enums import BookingState
 from .domain.models import Booking, ParkingProperty, ParkingSpot
 from .domain.service import (
     BOOKING_CANCELED_CATEGORY,
+    BOOKINGS_DEEP_LINK,
     CONFIG_TAKE_RATE_KEY,
     DEFAULT_TAKE_RATE_BPS,
     FLAG_KEY,
@@ -26,6 +27,7 @@ from .domain.service import (
     check_out,
     closing_loop,
     create_property,
+    driver_bookings,
     get_property,
     get_spot,
     is_overstay,
@@ -39,6 +41,7 @@ from .domain.service import (
 
 __all__ = [
     "BOOKING_CANCELED_CATEGORY",
+    "BOOKINGS_DEEP_LINK",
     "BookingState",
     "Booking",
     "ParkingProperty",
@@ -54,6 +57,7 @@ __all__ = [
     "book",
     "bookable_near",
     "cancel",
+    "driver_bookings",
     "check_in",
     "check_out",
     "closing_loop",

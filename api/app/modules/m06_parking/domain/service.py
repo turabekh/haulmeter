@@ -263,6 +263,9 @@ def is_overstay(booking: Booking, now: datetime) -> bool:
 # moved WITHOUT you. A driver who cancels their own booking is told nothing, because
 # they already know; the property owner cancelling theirs is exactly what a P0 is for.
 BOOKING_CANCELED_CATEGORY = "booking_canceled"
+# §13.5: the screen that describes a canceled booking. It pointed at /book/<spot> — the
+# CHECKOUT flow — until entry 110 gave the driver somewhere to see their bookings at all.
+BOOKINGS_DEEP_LINK = "/bookings"
 
 
 def cancel(
@@ -324,7 +327,7 @@ def _notify_driver_of_cancellation(db, booking, refund_cents, actor_account_id, 
         BOOKING_CANCELED_CATEGORY,
         title,
         f"{prop.name} canceled your spot. Book another nearby.",
-        f"/book/{booking.spot_id}",
+        BOOKINGS_DEEP_LINK,
         gateway,
         now=now,
         subject_ref=str(booking.id),
@@ -332,6 +335,60 @@ def _notify_driver_of_cancellation(db, booking, refund_cents, actor_account_id, 
 
 
 # --- Property-owner views (M6-FR5, the supply side) ---
+def driver_bookings(db: Session, driver_account_id) -> list[dict]:
+    """A driver's own bookings, newest first (§23 entry 110).
+
+    AI-CONTEXT: `owner_bookings` has existed since M6 shipped and this had not, so the
+    supply side could see every booking and the driver could see none of their own.
+    A booking was write-only from the person who paid for it.
+
+    Returns the property NAME and spot label, not just ids: a list of reservations that
+    cannot say WHERE is not a list a driver can act on, and resolving it per row in the
+    client would be one request per booking against an endpoint built to avoid exactly
+    that (§23 entry 98).
+    """
+    rows = db.scalars(
+        select(Booking)
+        .where(Booking.driver_account_id == driver_account_id)
+        .order_by(Booking.start_at.desc())
+    ).all()
+    if not rows:
+        return []
+    spots = {
+        s.id: s
+        for s in db.scalars(
+            select(ParkingSpot).where(ParkingSpot.id.in_({b.spot_id for b in rows}))
+        )
+    }
+    props = {
+        p.id: p
+        for p in db.scalars(
+            select(ParkingProperty).where(
+                ParkingProperty.id.in_({s.property_id for s in spots.values()})
+            )
+        )
+    }
+    out = []
+    for b in rows:
+        spot = spots.get(b.spot_id)
+        prop = props.get(spot.property_id) if spot is not None else None
+        out.append(
+            {
+                "id": str(b.id),
+                "property_name": prop.name if prop is not None else "",
+                "spot_label": spot.label if spot is not None else "",
+                "spot_id": str(b.spot_id),
+                "nights": b.nights,
+                "start_at": b.start_at.isoformat(),
+                "end_at": b.end_at.isoformat(),
+                "price_cents": b.price_cents,
+                "state": b.state.value,
+                "refunded": b.refund_entry_ref is not None,
+            }
+        )
+    return out
+
+
 def owner_properties(db: Session, owner_account_id) -> list[ParkingProperty]:
     return list(
         db.scalars(

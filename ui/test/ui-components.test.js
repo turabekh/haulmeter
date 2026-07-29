@@ -23,6 +23,7 @@ import FuelSurface from "../src/surfaces/FuelSurface.vue";
 import LoadCalcSurface from "../src/surfaces/LoadCalcSurface.vue";
 import AuthSurface from "../src/surfaces/AuthSurface.vue";
 import MoreSurface from "../src/surfaces/MoreSurface.vue";
+import BookingsSurface from "../src/surfaces/BookingsSurface.vue";
 import VoiceSheet from "../src/core/components/VoiceSheet.vue";
 import FleetWorkspaceSurface from "../src/surfaces/FleetWorkspaceSurface.vue";
 import AuditSurface from "../src/surfaces/AuditSurface.vue";
@@ -3619,5 +3620,101 @@ describe("OwnerPortalSurface — cancelling a booking (M6-FR7, §23 entry 108)",
     const labels = w.findAll("tbody .pause").map((b) => b.text());
 
     expect(labels).toEqual([en["owner.cancel_confirm"], en["owner.cancel"]]);
+  });
+});
+
+// AI-CONTEXT: the screen that had never existed (§23 entry 110). `owner_bookings` shipped
+// with M6 and this did not, so a booking was write-only from the person who paid for it —
+// and the cancellation P0 had to deep-link at the checkout flow for want of anywhere honest.
+describe("BookingsSurface — the driver's own bookings (§23 entry 110)", () => {
+  function mountBookings() {
+    const router = createRouter({ history: createMemoryHistory(), routes });
+    router.push("/bookings");
+    return router.isReady().then(() => mount(BookingsSurface, { global: { plugins: [router] } }));
+  }
+  const ROWS = [
+    { id: "bk-1", property_name: "Riverside Lot", spot_label: "A1", spot_id: "s-1", nights: 1,
+      start_at: "2026-08-02T00:00:00+00:00", end_at: "2026-08-03T00:00:00+00:00",
+      price_cents: 2400, state: "booked", refunded: false },
+    { id: "bk-2", property_name: "Depot Overnight", spot_label: "B2", spot_id: "s-2", nights: 2,
+      start_at: "2026-07-10T00:00:00+00:00", end_at: "2026-07-12T00:00:00+00:00",
+      price_cents: 4800, state: "refunded", refunded: true },
+  ];
+
+  beforeEach(() => {
+    useDriverState().setState(DriverState.IDLE);
+    setToken("tok-bk");
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    logout();
+    useDriverState().setState(DriverState.IDLE);
+  });
+
+  it("shows where, when and what each booking cost", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => jsonOk({ bookings: ROWS })));
+    const w = await mountBookings();
+    await flushPromises();
+
+    expect(w.findAll(".row")).toHaveLength(2);
+    const text = w.text();
+    expect(text).toContain("Riverside Lot");
+    expect(text).toContain("$24.00");
+    // §11.7: "canceled" and "canceled, money back" are different facts
+    expect(text).toContain(en["bookings.st_refunded"]);
+    w.unmount();
+  });
+
+  it("offers cancel only on live bookings", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => jsonOk({ bookings: ROWS })));
+    const w = await mountBookings();
+    await flushPromises();
+
+    expect(w.findAll(".row__cancel")).toHaveLength(1);
+    w.unmount();
+  });
+
+  it("arms before it cancels, because F7 has no un-refund", async () => {
+    const hits = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url) => {
+      const u = String(url);
+      if (u.includes("/cancel")) {
+        hits.push(u);
+        return jsonOk({ state: "refunded" });
+      }
+      return jsonOk({ bookings: ROWS });
+    }));
+    const w = await mountBookings();
+    await flushPromises();
+
+    await w.find(".row__cancel").trigger("click");
+    expect(hits).toHaveLength(0);
+    expect(w.find(".row__cancel").text()).toBe(en["bookings.cancel_confirm"]);
+
+    await w.find(".row__cancel").trigger("click");
+    await flushPromises();
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toContain("/parking/booking/bk-1/cancel");
+    w.unmount();
+  });
+
+  it("withdraws the action at speed (§22.3)", async () => {
+    useDriverState().setState(DriverState.DRIVING);
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => jsonOk({ bookings: ROWS })));
+    const w = await mountBookings();
+    await flushPromises();
+
+    expect(w.find(".row__cancel").exists()).toBe(false);
+    expect(w.text()).toContain("Riverside Lot"); // reading is still fine
+    w.unmount();
+  });
+
+  it("invites the map when there is nothing booked", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => jsonOk({ bookings: [] })));
+    const w = await mountBookings();
+    await flushPromises();
+
+    expect(w.text()).toContain(en["bookings.empty"]);
+    w.unmount();
   });
 });

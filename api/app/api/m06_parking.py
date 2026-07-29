@@ -98,6 +98,15 @@ def book(
     }
 
 
+@router.get("/bookings")
+def my_bookings(
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """The driver's own bookings — the read that had never existed (§23 entry 110)."""
+    return {"bookings": m6.driver_bookings(db, account.id)}
+
+
 @router.post("/booking/{booking_id}/cancel")
 def cancel_booking(
     booking_id: uuid.UUID,

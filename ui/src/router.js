@@ -17,6 +17,7 @@ import ClaimSurface from "./surfaces/ClaimSurface.vue";
 import EvidenceSurface from "./surfaces/EvidenceSurface.vue";
 import AuthSurface from "./surfaces/AuthSurface.vue";
 import MoreSurface from "./surfaces/MoreSurface.vue";
+import BookingsSurface from "./surfaces/BookingsSurface.vue";
 import FleetWorkspaceSurface from "./surfaces/FleetWorkspaceSurface.vue";
 import AdminShell from "./surfaces/admin/AdminShell.vue";
 import AdminOverview from "./surfaces/admin/AdminOverview.vue";
@@ -72,6 +73,7 @@ export const routes = [
   { path: "/claim/:stopId", name: "claim", component: ClaimSurface, meta: { driving: "safe" } },
   { path: "/load/:stopId/evidence", name: "evidence", component: EvidenceSurface, meta: { driving: "withdraws" } },
   { path: "/docs", name: "docs", component: DocsSurface, meta: { driving: "withdraws" } },
+  { path: "/bookings", name: "bookings", component: BookingsSurface, meta: { driving: "withdraws" } },
   { path: "/more", name: "more", component: MoreSurface, meta: { driving: "safe" } },
   // §18 web-first portal — no tab chrome, wider frame; auth required (fleet owner)
   { path: "/fleet", name: "fleet", component: FleetWorkspaceSurface, meta: { chrome: false, portal: true } },

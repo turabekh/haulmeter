@@ -36,6 +36,7 @@ const SOURCE = {
   claim: "ClaimSurface",
   evidence: "EvidenceSurface",
   docs: "DocsSurface",
+  bookings: "BookingsSurface",
   more: "MoreSurface",
 };
 

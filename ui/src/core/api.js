@@ -561,6 +561,14 @@ export async function cancelBooking(bookingId) {
   return resp.json();
 }
 
+// AI-CONTEXT: the driver's own bookings (§23 entry 110). `owner_bookings` had existed
+// since M6 shipped and this had not, so a booking was write-only from the person who
+// paid for it — and the cancellation P0 had nowhere honest to land.
+export async function fetchMyBookings() {
+  const data = await apiGet(`/parking/bookings`, `my-bookings`);
+  return data.bookings ?? [];
+}
+
 export async function fetchBookable({ lat, lon, radiusM = 8000 }) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const q = new URLSearchParams({ lat, lon, radius_m: radiusM });

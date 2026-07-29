@@ -76,13 +76,14 @@ def test_the_owner_canceling_reaches_the_driver_as_a_p0(db):
     assert sent.body == "Riverside Lot canceled your spot. Book another nearby."
 
 
-def test_the_p0_deep_links_to_the_spot_not_a_tab_root(db):
+def test_the_p0_deep_links_somewhere_that_is_not_a_tab_root(db):
     owner, driver, spot, booking, now = _booking(db)
     gw = notify.RecordingNotificationGateway()
 
     m6.cancel(db, booking, now, actor_account_id=owner.id, gateway=gw)
 
-    assert notify.inbox(db, driver.id)[0].deep_link == f"/book/{spot.id}"
+    link = notify.inbox(db, driver.id)[0].deep_link
+    assert link and link != "/map" and link != "/more"
 
 
 def test_the_owner_is_not_told_about_their_own_action(db):
@@ -106,3 +107,44 @@ def test_cancelling_without_a_gateway_still_cancels(db):
     m6.cancel(db, booking, now, actor_account_id=owner.id, gateway=None)
 
     assert booking.state == m6.BookingState.refunded
+
+
+# --- the read that had never existed (§23 entry 110) ---
+def test_a_driver_can_finally_see_their_own_bookings(db):
+    owner, driver, spot, booking, now = _booking(db)
+
+    rows = m6.driver_bookings(db, driver.id)
+
+    assert len(rows) == 1
+    assert rows[0]["property_name"] == "Riverside Lot"  # where, not just an id
+    assert rows[0]["spot_label"] == "A1"
+    assert rows[0]["price_cents"] == 2400
+    assert rows[0]["state"] == "booked"
+
+
+def test_the_list_is_scoped_to_the_driver_who_asked(db):
+    owner, driver, spot, booking, now = _booking(db)
+    stranger = identity.register_account(db, "stranger@example.com", "pw-123456")
+
+    assert m6.driver_bookings(db, stranger.id) == []
+
+
+def test_a_refunded_booking_says_so(db):
+    """§11.7: "canceled" and "canceled, money back" are different facts."""
+    owner, driver, spot, booking, now = _booking(db)
+    m6.cancel(db, booking, now, actor_account_id=owner.id)
+
+    row = m6.driver_bookings(db, driver.id)[0]
+
+    assert row["state"] == "refunded"
+    assert row["refunded"] is True
+
+
+def test_the_p0_now_lands_on_a_screen_that_describes_it(db):
+    """It pointed at /book/<spot> — the CHECKOUT flow — until this screen existed."""
+    owner, driver, spot, booking, now = _booking(db)
+    gw = notify.RecordingNotificationGateway()
+
+    m6.cancel(db, booking, now, actor_account_id=owner.id, gateway=gw)
+
+    assert notify.inbox(db, driver.id)[0].deep_link == "/bookings"

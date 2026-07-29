@@ -163,6 +163,15 @@ function signOut() {
   <div class="more">
     <h1 class="more__title">{{ t("nav.more") }}</h1>
 
+    <!-- AI-CONTEXT: §23 entry 110 — a driver could not see a booking they had paid
+         for. More is where a records screen belongs under NAV-1's five fixed tabs. -->
+    <section class="card">
+      <h2 class="card__title">{{ t("bookings.title") }}</h2>
+      <button class="cta" type="button" @click="router.push('/bookings')">
+        {{ t("bookings.view") }}
+      </button>
+    </section>
+
     <!-- M10 points + contributor level -->
     <section class="card">
       <h2 class="card__title">{{ t("points.title") }}</h2>

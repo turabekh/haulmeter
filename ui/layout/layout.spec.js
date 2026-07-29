@@ -532,6 +532,19 @@ const SURFACES = [
   // only when something is payable — both mocked receivables above are, so nth:2 is
   // stable. Measured here because a list of money figures at 200% is exactly the
   // T-5/T-6 reflow case, and 360 dp is where a two-column row runs out of width.
+  ["bookings", "/bookings", {
+    mocks: {
+      "/parking/bookings": { bookings: [
+        { id: "bk-1", property_name: "Riverside Secured Parking", spot_label: "A1", spot_id: "s-1",
+          nights: 1, start_at: "2026-08-02T00:00:00+00:00", end_at: "2026-08-03T00:00:00+00:00",
+          price_cents: 2400, state: "booked", refunded: false },
+        { id: "bk-2", property_name: "Depot Overnight Lot", spot_label: "B2", spot_id: "s-2",
+          nights: 2, start_at: "2026-07-10T00:00:00+00:00", end_at: "2026-07-12T00:00:00+00:00",
+          price_cents: 4800, state: "refunded", refunded: true },
+      ] },
+    },
+    ready: ".row",
+  }],
   ["sheet-mark-paid", "/money", {
     mocks: MONEY_MOCKS, open: [{ click: ".audit-cta", nth: 2 }], ready: ".paid__submit",
   }],
