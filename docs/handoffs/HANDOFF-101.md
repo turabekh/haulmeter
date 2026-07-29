@@ -20,7 +20,7 @@ between it and a driver were both invisible to a green suite.
 | Layout harness | **NOT run this session** (169 as of 100; no UI changed here) |
 | §23 decision log | **107 entries** (106–107 this session) |
 | Handoffs | 000 → 101 |
-| Git | **3 commits ahead of `origin/main`, unpushed** — `8fc0557`, `2c4f066`, `3e7fba2` |
+| Git | **pushed** — in sync with `origin/main` (`github.com/turabekh/haulmeter`, public) |
 | Deployed | **current with this session's work**; `0054` at head on the box |
 | Working tree | clean except untracked `collect_files.py` (not mine) |
 
