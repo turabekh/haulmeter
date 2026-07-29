@@ -175,8 +175,12 @@ before §23 95 · the flaky `login · pa` layout state · `/admin/facilities/*` 
 resolve merged ids · M2-FR4 does not exist · per-stop detention terms not expressible in
 the UI · the profit calculator opens on invented defaults · dwell-risk thresholds
 unvalidated · `pin.shape` read by nothing · all live API keys on an internet-facing VM ·
-**no backups** · **no monitoring** · CLAUDE.md rule 3 still says "NEVER push" while the
-repo is public and pushed (099 §11).
+**no backups** · **no monitoring**.
+
+**Closed this session:** CLAUDE.md rule 3 no longer says "NEVER push" — it now
+describes the actual working agreement (commit locally without asking; push and deploy
+on the owner's say-so, checking the diff for secrets because the repo is public). It had
+been carried as debt since 099 §11.
 
 ## 9. Restarting
 

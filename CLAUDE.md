@@ -41,7 +41,11 @@ of Done (mobile-first, tokens-only, six locales, offline, DRIVING-state, a11y) b
 
 1. **Plan first.** Written plan → owner approval → code. No speculative building.
 2. **Docker-only.** Nothing runs outside containers; dev = CI parity.
-3. **Local commits only. NEVER push.** Small, frequent, well-messaged commits.
+3. **Commit locally without asking; push and deploy only when the owner asks.** Small,
+   frequent, well-messaged commits are the default and need no permission. `git push`
+   (`github.com/turabekh/haulmeter`, **public**) and `./scripts/deploy.sh` are the
+   owner's call each time — never a step you add to the end of a task on your own.
+   The repo being public is part of the rule: check a diff for secrets before it leaves.
 4. **Tests with every change.** No FR without a test; red CI/tests block everything.
 5. **No code comments** except `AI-CONTEXT:` markers for future-session orientation.
 6. **Maximum modularity.** Respect the import-linter contracts from the first file.
