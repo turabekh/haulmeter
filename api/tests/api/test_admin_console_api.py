@@ -23,7 +23,17 @@ from app.foundation.f14_admin import public as admin
 from app.main import app
 from app.modules.m13_vendor import public as m13
 
-T0 = datetime(2026, 7, 26, 8, 0, tzinfo=UTC)
+# AI-CONTEXT: RELATIVE, and it has to be. This was a fixed calendar instant
+# (2026-07-26 08:00 UTC), and `test_overview_carries_the_overdue_count_separately`
+# seeds a report at it, then asserts the LIVE endpoint reports zero overdue — "just
+# reported". `MODERATION_SLA_HOURS` is 72, so the test was true until
+# 2026-07-29 08:00 UTC and false forever after. It expired mid-session, three days
+# after it was written, having passed every run in between.
+#
+# A test that hard-codes an instant and compares it against `datetime.now()` has an
+# expiry date nobody wrote down. Anchoring to now keeps "recent" recent, and the
+# relative arithmetic below (`T0 + timedelta(...)`) is unaffected.
+T0 = datetime.now(UTC) - timedelta(hours=1)
 
 
 @pytest.fixture
