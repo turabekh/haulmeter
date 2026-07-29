@@ -152,11 +152,15 @@ def find_duplicate_candidates(db: Session, name: str, lat: float, lon: float) ->
 # scales in the first four-state pull while a truck-stop lot is itself ~200 m across,
 # so the radius stays inside "the same site" rather than reaching the next exit.
 COLOCATED_RADIUS_M = 150.0
+# E3.3: `fuel_station` is deliberately NOT a host. It became a co-located amenity in
+# its own right, and the second rule above only holds while amenities cannot host each
+# other — left in, one fuel island could absorb the one across the forecourt. A pump
+# beside a STANDALONE fuel station therefore no longer merges; measured cost today is
+# zero, since every scale that had a host has already been merged by `repair-scales`.
 COLOCATED_HOST_TYPES = frozenset(
     {
         FacilityType.truck_stop,
         FacilityType.rest_area,
-        FacilityType.fuel_station,
         FacilityType.parking_property,
         FacilityType.repair,
         FacilityType.shipper_receiver,
@@ -180,6 +184,27 @@ def colocated_host(
         .limit(1)
     )
     return db.scalars(stmt).first()
+
+
+def merge_would_lose_the_only_name(host: Facility, incoming_name: str) -> bool:
+    """AI-CONTEXT: E3.3. A co-located amenity contributes only what it knows about the
+    SITE, which deliberately excludes its name — that rule is what stops a Flying J
+    being renamed after the Pilot-branded island inside it.
+
+    It has one bad case. When the HOST is an unnamed OSM feature its name is a
+    placeholder this code wrote ("Parking Property", "Rest Area"), and merging a
+    branded pump into it takes the only real name on the site off the map: 35 of the
+    474 merges in the first pull were "Flying J #695" and "TA" disappearing into
+    "Parking Property". Refusing the merge leaves two pins, which is the status quo
+    and visibly wrong — but a nameless pin is wrong AND unsearchable, and adopting the
+    tenant's name is the mistake this rule exists to prevent. So the honest answer is
+    to leave it for a human, and `repair-fuel` reports the count rather than hiding it.
+    """
+    from .ingest.adapters import placeholder_name
+
+    if host.name != placeholder_name(host.facility_type):
+        return False
+    return bool(incoming_name) and incoming_name != placeholder_name(FacilityType.fuel_station)
 
 
 def merge_facilities(db: Session, canonical: Facility, duplicate: Facility) -> Facility:

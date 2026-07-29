@@ -19,6 +19,7 @@ from ..service import (
     colocated_host,
     create_facility,
     find_duplicate_candidates,
+    merge_would_lose_the_only_name,
     resolve_canonical,
 )
 from .adapters import StagedRecord
@@ -158,6 +159,8 @@ def upsert_record(
         # 2. cross-source dedupe: same geohash block + fuzzy name -> same physical site
         candidates = find_duplicate_candidates(db, rec.name, rec.lat, rec.lon)
         host = colocated_host(db, rec.lat, rec.lon) if rec.colocated_amenity else None
+        if host is not None and merge_would_lose_the_only_name(host, rec.name):
+            host = None
         if candidates:
             facility = candidates[0]
             add_source(db, facility, rec.source_kind, rec.external_ref, rec.attributes)

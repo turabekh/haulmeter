@@ -181,7 +181,7 @@ def _enrich(db: Session, pin) -> dict:
                     "spot_id": summary["spot_id"],
                 }
             )
-    elif pin.facility_type == "fuel_station":
+    elif m1.sells_fuel(pin.facility_type, pin.services):
         badge = _fuel_badge(db, pin.facility_id, pin.lat, pin.lon)
         if badge is not None:
             data["badges"].append(badge)
@@ -219,7 +219,7 @@ def corridor(
         db, account.id, lat, lon, heading_deg, max_distance_m, preset=m1.Preset(preset)
     ):
         badges = []
-        if entry["facility_type"] == "fuel_station":
+        if m1.sells_fuel(entry["facility_type"], entry.get("services")):
             badge = _fuel_badge(db, entry["facility_id"], entry["lat"], entry["lon"])
             if badge is not None:
                 badges.append(badge)

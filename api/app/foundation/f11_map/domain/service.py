@@ -61,6 +61,10 @@ class Pin:
     # "Low · N spots" honestly. None for crowd-only / no-reading facilities.
     availability: object = None
     capacity: int | None = None
+    # E3.3: what the SITE offers, independent of the kind it is filed under. A badge
+    # keyed on facility_type can only be drawn on the pin a co-location merge is about
+    # to remove; keyed on this, it follows the fact onto the surviving pin.
+    services: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -80,6 +84,7 @@ class CorridorEntry:
     lon: float
     distance_m: float
     bearing_deg: float
+    services: list[str] = field(default_factory=list)
 
 
 # --- geo helpers ---
@@ -163,6 +168,7 @@ def _pin_for(db: Session, facility, badge_providers) -> Pin:
         freshness=freshness,
         availability=availability,
         capacity=capacity,
+        services=list((facility.attributes or {}).get("services") or []),
     )
 
 
@@ -264,6 +270,7 @@ def corridor(
                 lon=lon,
                 distance_m=_haversine_m(origin_lat, origin_lon, lat, lon),
                 bearing_deg=bearing,
+                services=list((fac.attributes or {}).get("services") or []),
             )
         )
     entries.sort(key=lambda e: e.distance_m)

@@ -276,6 +276,13 @@ SERVICE_PARTS = "parts"
 # mapped inside an existing truck stop enriches that facility (E3.2's union rule)
 # instead of planting a second pin on top of it.
 SERVICE_SCALE = "scale"
+# E3.3: diesel. Carried as a SERVICE as well as a kind for exactly the reason a scale
+# is — a fuel island mapped inside a truck stop is a FACT ABOUT that site, and 474 of
+# the 546 fuel stations in the first pull stood within 150 m of a destination that
+# already had a pin. It is also what gates the M7 price badge: a badge drawn from the
+# facility KIND can only appear on a pin the merge is about to remove, while one drawn
+# from this list follows the fuel onto whichever pin survives.
+SERVICE_FUEL = "fuel"
 
 # the whole vocabulary, in one place, so a consumer offering these as choices cannot
 # drift from what ingestion writes. WHO may set which of them is not decided here.
@@ -287,6 +294,7 @@ SERVICE_KINDS = (
     SERVICE_TOWING,
     SERVICE_PARTS,
     SERVICE_SCALE,
+    SERVICE_FUEL,
 )
 
 _OSM_SERVICE_RULES = [
@@ -311,6 +319,10 @@ _OSM_SERVICE_RULES = [
     # existing truck stop enrich that facility (E3.2's union rule) instead of
     # planting a second pin on top of it.
     (lambda t: _osm_is_weighbridge(t), SERVICE_SCALE),
+    # E3.3: the same treatment for diesel. Read from the site's OWN tags as well as
+    # from a co-located pump, so a Flying J tagged `fuel:diesel=yes` carries the fact
+    # whether or not OSM also mapped the island as a separate node.
+    (lambda t: _osm_sells_diesel(t), SERVICE_FUEL),
 ]
 # SERVICE_TOWING has no dependable OSM tag — it arrives from an admin edit or a
 # claiming service-center vendor (M13-FR7), never from the extract.
@@ -344,6 +356,42 @@ def _osm_is_commercial_scale(tags: dict) -> bool:
     return any(brand in operator for brand in _COMMERCIAL_SCALE_OPERATORS)
 
 
+def placeholder_name(ftype: FacilityType) -> str:
+    """The name an UNNAMED feature gets — "Parking Property", "Rest Area". Exposed
+    because a merge has to be able to tell a placeholder from a name somebody chose:
+    collapsing a branded pump into an unnamed host would take the only real name on
+    the site off the map."""
+    return ftype.value.replace("_", " ").title()
+
+
+def _osm_sells_diesel(tags: dict) -> bool:
+    if tags.get("fuel:diesel") == "yes" or tags.get("fuel:hgv_diesel") == "yes":
+        return True
+    return tags.get("amenity") == "fuel" and _osm_hgv(tags)
+
+
+# AI-CONTEXT: E3.3. A branded highway service area is a TRUCK STOP, not a rest area.
+# `highway=services` is how every US chain is tagged and it sat above the truck-stop
+# rule, so 309 Pilots, Flying Js, Love's and TAs filed themselves as rest areas and
+# NOT ONE facility in the first pull was typed truck_stop from this tag. That put them
+# outside the Fuel preset entirely — a Flying J carrying `fuel:diesel=yes` in its own
+# tags was absent from the one preset built to find it.
+#
+# The discriminator is the BRAND, and it was measured rather than chosen. `hgv` alone
+# fails: 135 of the matching rows are public rest areas ("Rest Area", "I-80 EB (trucks
+# Only)") that admit trucks and are not truck stops. Requiring a brand as well leaves
+# 347 rows whose brands are Love's (124), Pilot (102), Flying J (37), TA (37), Petro
+# (17), ONE9, Road Ranger, Mr. Fuel, Sapp Bros. and Waspy's — every one a chain.
+# Reordering alone would have fixed nothing: `amenity=truck_stop` appears on ZERO of
+# them, which is why this tests the brand instead of the rule order.
+def _osm_is_branded_service_area(tags: dict) -> bool:
+    return (
+        tags.get("highway") in ("rest_area", "services")
+        and bool(str(tags.get("brand", "")).strip())
+        and _osm_hgv(tags)
+    )
+
+
 # AI-CONTEXT: measured, not assumed. The first Wisconsin/Indiana/Iowa/Minnesota pull
 # produced 253 commercial scales, of which 239 stood within 150 m of a facility that
 # already had a pin (169 within 50 m) — every one of them a second pin on top of a
@@ -360,14 +408,29 @@ def _osm_is_commercial_scale(tags: dict) -> bool:
 # while typed something else entirely — which made `_contribution` compare two kinds
 # that happened to be equal and let the tenant's identity through. Deriving one from
 # the other means they cannot disagree again.
-_COLOCATED_AMENITY_TYPES = frozenset({FacilityType.scale})
+#
+# E3.3 adds fuel on the same evidence and the same reasoning: 474 of 546 fuel stations
+# stood within 150 m of a destination pin, so the map drew a truck stop and its own
+# fuel island as two places 30 m apart — and the PRICE landed on the island, which
+# carries the pump's name ("Pilot") rather than the site's ("Flying J Travel Center").
+# Unlike a scale, a fuel station IS a destination when it stands alone, which needs no
+# special case: `colocated_host` returns None when nothing hosts it and it keeps its
+# own pin. What it does need is `fuel_station` OUT of COLOCATED_HOST_TYPES, so the two
+# rules below still hold and one pump cannot host another.
+_COLOCATED_AMENITY_TYPES = frozenset({FacilityType.scale, FacilityType.fuel_station})
 
 
 def _osm_is_colocated_amenity(tags: dict, ftype: FacilityType) -> bool:
-    return ftype in _COLOCATED_AMENITY_TYPES and _osm_is_commercial_scale(tags)
+    if ftype is FacilityType.scale:
+        return _osm_is_commercial_scale(tags)
+    return ftype in _COLOCATED_AMENITY_TYPES
 
 
 _OSM_TYPE_RULES = [
+    # E3.3: a BRANDED service area outranks the bare `highway=services` catch-all,
+    # for the same reason the weighbridge rules outrank the generic repair one below:
+    # a specific, unambiguous tag must beat a catch-all.
+    (lambda t: _osm_is_branded_service_area(t), FacilityType.truck_stop),
     (lambda t: t.get("highway") in ("rest_area", "services"), FacilityType.rest_area),
     (lambda t: t.get("amenity") == "truck_stop", FacilityType.truck_stop),
     (lambda t: t.get("amenity") == "fuel" and _osm_hgv(t), FacilityType.fuel_station),
@@ -425,7 +488,7 @@ def parse_osm(geojson: dict) -> list[StagedRecord]:
             continue
         lat, lon = center
         osm_id = str(tags.get("@id") or tags.get("id") or feature.get("id") or f"{lat},{lon}")
-        name = normalize_name(tags.get("name") or "") or f"{ftype.value.replace('_', ' ').title()}"
+        name = normalize_name(tags.get("name") or "") or placeholder_name(ftype)
         amenities = []
         if tags.get("shower") == "yes" or tags.get("amenity") == "shower":
             amenities.append("showers")

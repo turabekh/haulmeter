@@ -53,8 +53,22 @@ PRESET_TYPES: dict[Preset, list] = {
         facility.FacilityType.parking_property,
     ],
     Preset.work: [facility.FacilityType.shipper_receiver],
-    Preset.fuel: [facility.FacilityType.fuel_station],
+    # E3.3: fuel is a SERVICE, not only a kind. Filed by kind alone this preset asked
+    # "which pins are typed fuel_station", and once a fuel island merges into the
+    # truck stop it stands in there is no such pin left — the Lebanon Flying J
+    # disappeared from the one preset built to find it. The kinds below are the
+    # candidate set; `sells_fuel` is what decides, so a truck stop with no pump is
+    # still not on the fuel map.
+    Preset.fuel: [facility.FacilityType.truck_stop, facility.FacilityType.fuel_station],
 }
+
+
+def sells_fuel(facility_type: str, services) -> bool:
+    """ONE definition, because the preset that SHOWS a pin and the badge that prices
+    it must not be able to disagree about whether a site has diesel."""
+    return facility_type == facility.FacilityType.fuel_station.value or facility.SERVICE_FUEL in (
+        services or ()
+    )
 
 # parking availability ordering for the Tonight preset (best first)
 _PARKING_RANK = {"empty": 0, "some": 1, None: 2, "full": 3}
@@ -103,6 +117,8 @@ def map_overlay(
     )
     if required_amenities:
         pins = [p for p in pins if _has_amenities(db, p, required_amenities)]
+    if preset == Preset.fuel:
+        pins = [p for p in pins if sells_fuel(p.facility_type, p.services)]
     if preset == Preset.tonight:
         pins = sorted(pins, key=lambda p: _PARKING_RANK.get(p.status, 2))
     return pins
@@ -164,6 +180,8 @@ def map_overlay_bbox(
     )
     if required_amenities:
         pins = [p for p in pins if _has_amenities(db, p, required_amenities)]
+    if preset == Preset.fuel:
+        pins = [p for p in pins if sells_fuel(p.facility_type, p.services)]
     if preset == Preset.tonight:
         pins = sorted(pins, key=lambda p: _PARKING_RANK.get(p.status, 2))
     return pins
@@ -250,6 +268,8 @@ def corridor_ahead(
         max_distance_m,
         facility_types=_preset_types(db, preset),
     )
+    if preset == Preset.fuel:
+        entries = [e for e in entries if sells_fuel(e.facility_type, e.services)]
     out = []
     for entry in entries[:limit]:
         belief = crowd.get_belief(
@@ -269,6 +289,7 @@ def corridor_ahead(
                 "status": value.get("status"),
                 "reported_at": belief.freshest_at if belief is not None else None,
                 "sample_size": belief.sample_size if belief is not None else 0,
+                "services": entry.services,
             }
         )
     return out

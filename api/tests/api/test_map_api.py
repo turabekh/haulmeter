@@ -139,6 +139,78 @@ def test_overlay_fuel_badge_carries_regional_baseline(client, db):
     assert net["net"] == 362 and net["source"] == "regional" and net["indicative"] is True
 
 
+def test_a_truck_stop_that_sells_diesel_carries_the_price(client, db):
+    """E3.3. The regression this whole change turns on: once a fuel island merges into
+    its host, the surviving pin is a TRUCK STOP. A badge gated on facility_type would
+    have deleted the price rather than moved it, leaving the driver worse off than
+    before the duplicate pin was removed."""
+    from datetime import date
+
+    headers = _auth(client)
+    m7.upsert_regional_price(db, "PADD3", 362, date(2026, 7, 14))
+    facility.create_facility(
+        db,
+        facility.FacilityType.truck_stop,
+        "Flying J Travel Center",
+        *DALLAS,
+        attributes={"services": [facility.SERVICE_FUEL]},
+    )
+    pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "drive"},
+        headers=headers,
+    ).json()["pins"]
+    stop = next(p for p in pins if p["name"] == "Flying J Travel Center")
+    net = next(b for b in stop["badges"] if b["kind"] == "fuel_net")
+    assert net["net"] == 362 and net["indicative"] is True
+
+
+def test_the_fuel_preset_finds_a_truck_stop_that_sells_diesel(client, db):
+    """E3.3, and a regression caught only by re-running the original repro through the
+    API. Fixing the duplicate pin re-typed the Flying J to truck_stop, and because the
+    Fuel preset was `[fuel_station]` the site then vanished from the fuel map
+    altogether — strictly worse than the duplicate it replaced. The preset asks what a
+    site SELLS, not what kind it is filed under."""
+    headers = _auth(client)
+    facility.create_facility(
+        db,
+        facility.FacilityType.truck_stop,
+        "Flying J Travel Center",
+        *DALLAS,
+        attributes={"services": [facility.SERVICE_FUEL]},
+    )
+    facility.create_facility(db, facility.FacilityType.truck_stop, "Dry Lot", *DALLAS)
+    pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "fuel"},
+        headers=headers,
+    ).json()["pins"]
+
+    names = {p["name"] for p in pins}
+    assert "Flying J Travel Center" in names
+    assert "Dry Lot" not in names  # a truck stop with no pump is not on the fuel map
+
+
+def test_a_truck_stop_without_fuel_carries_no_price(client, db):
+    """The other half, and the reason the gate is the SERVICE and not the kind. The
+    regional baseline answers for any coordinate on earth, so widening the badge to
+    `truck_stop` would paint an indicative figure on every truck stop in the country
+    whether or not it has a pump — a data-COVERAGE badge, which is exactly what
+    §11.1 keeps off the map."""
+    from datetime import date
+
+    headers = _auth(client)
+    m7.upsert_regional_price(db, "PADD3", 362, date(2026, 7, 14))
+    facility.create_facility(db, facility.FacilityType.truck_stop, "Dry Lot", *DALLAS)
+    pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "drive"},
+        headers=headers,
+    ).json()["pins"]
+    lot = next(p for p in pins if p["name"] == "Dry Lot")
+    assert [b for b in lot["badges"] if b["kind"] == "fuel_net"] == []
+
+
 def test_overlay_freshness_carries_feed_source_for_tpims(client, db):
     # a TPIMS (authoritative) reading tags the pin's freshness with its source, so the
     # card attributes it to the feed — not "N drivers" (§11.7 honesty)

@@ -10,6 +10,7 @@ from .domain.geocode import GeocodedPlace, geocode
 from .domain.ingest import adapters as _adapters
 from .domain.ingest.adapters import (
     LOW,
+    SERVICE_FUEL,
     SERVICE_KINDS,
     SERVICE_MOBILE_REPAIR,
     SERVICE_PARTS,
@@ -67,6 +68,7 @@ ingest = _adapters
 __all__ = [
     "GeocodedPlace",
     "geocode",
+    "SERVICE_FUEL",
     "SERVICE_MOBILE_REPAIR",
     "SERVICE_PARTS",
     "SERVICE_REPAIR",

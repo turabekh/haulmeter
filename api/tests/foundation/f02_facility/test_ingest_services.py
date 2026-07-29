@@ -62,9 +62,18 @@ def test_non_truck_service_poi_is_not_ingested():
 
 
 def test_facilities_without_services_carry_no_services_key():
-    # no empty-list noise on the 4000+ facilities that aren't service centers
-    plain = {r.external_ref: r for r in facility.parse_osm(_load("osm_filtered.geojson"))}
-    assert all("services" not in r.attributes for r in plain.values())
+    # no empty-list noise on the 4000+ facilities that aren't service centers.
+    #
+    # E3.3 narrowed what this can assert. It once read "no record in this fixture has
+    # a services key", which was true until a fuel island began carrying SERVICE_FUEL
+    # — a deliberate change, not a regression, since that is what lets the price badge
+    # survive the merge into its host. The INVARIANT it was written to protect is that
+    # the key is absent rather than empty, so it now says that instead of restating a
+    # fixture's contents.
+    plain = facility.parse_osm(_load("osm_filtered.geojson"))
+    assert plain
+    assert all(r.attributes.get("services", ["x"]) != [] for r in plain)
+    assert any("services" not in r.attributes for r in plain)
 
 
 def test_services_merge_by_union_across_sources(db):

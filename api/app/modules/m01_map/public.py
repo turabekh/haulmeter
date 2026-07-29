@@ -26,6 +26,7 @@ from .domain.service import (
     record_map_open,
     register_module,
     scales_ahead,
+    sells_fuel,
     submit_status,
 )
 
@@ -46,6 +47,7 @@ __all__ = [
     "map_overlay_bbox",
     "map_overlay_view",
     "map_overlay_view_bbox",
+    "sells_fuel",
     "nav_deeplink",
     "predict_parking_fill",
     "queue_status_offline",

@@ -2,7 +2,8 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci \
-        seed seed-wallet purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales ui-layout ui-layout-only
+        seed seed-wallet purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
+        repair-fuel ui-layout ui-layout-only
 
 STATE ?= wisconsin
 # osmium-tool is packaged in Debian/Ubuntu; install it in a slim base at run time
@@ -132,6 +133,11 @@ ingest-osm:
 # Prints what it would do; DRY_RUN=0 applies. Idempotent.
 repair-scales:
 	$(COMPOSE) exec api python -m scripts.repair_colocated_scales
+
+# E3.3: the same for branded service areas mis-typed as rest areas and for fuel
+# islands that drew a second pin on their own truck stop. DRY_RUN=0 applies.
+repair-fuel:
+	$(COMPOSE) exec api python -m scripts.repair_colocated_fuel
 
 # OSM extract: download a Geofabrik state pbf (host curl), then osmium-filter +
 # export truck-relevant features in a container. Output -> api/data/osm/ (gitignored).
