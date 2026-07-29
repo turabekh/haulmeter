@@ -25,6 +25,7 @@ import { useI18n } from "../core/i18n.js";
 import { SAMPLE_PINS, sampleHandoffs } from "../core/fixtures.js";
 import { lastFix, metersBetween } from "../core/location.js";
 import { presetFor, rememberPreset } from "../core/map-presets.js";
+import { openStream } from "../core/live.js";
 import { saved, saveForStop, unsave, facilityItem } from "../core/saved.js";
 import { withFoodBadges, foodBadgeFacilityIds } from "../core/vendors.js";
 import { statusReportFor, ageLabel } from "../core/presentation.js";
@@ -149,6 +150,34 @@ const HANDOFF_REFRESH_MS = 60_000;
 let handoffAt = 0;
 let handoffFrom = null;
 
+// AI-CONTEXT: §23 entry 103 — relays arrive live instead of up to a minute late.
+//
+// `loadHandoffs` is throttled to 250 m / 60 s (§23 entry 93, and that throttle stays:
+// it is what keeps a GPS stream off the database). A parking space opening is worth
+// seconds, so the STREAM carries the news and the throttled fetch remains the floor
+// underneath it. Belt and braces on purpose — the stream is an accelerator, never a
+// source of truth, and a driver whose socket died is exactly as well served as before.
+let closeStream = null;
+
+function restartStream(lat, lon) {
+  closeStream?.();
+  closeStream = openStream({
+    kind: "handoff",
+    lat,
+    lon,
+    // refetch rather than splice the payload in: the event says SOMETHING CHANGED
+    // here, and the list endpoint is the one place that decides what is nearby,
+    // still open, and not the driver's own broadcast
+    onEvent: () => loadHandoffs(),
+  });
+}
+
+onUnmounted(() => closeStream?.());
+onDeactivated(() => {
+  closeStream?.();
+  closeStream = null;
+});
+
 function onLocated({ lat, lon }) {
   geo.value = { lat, lon };
   located.value = true;
@@ -157,6 +186,7 @@ function onLocated({ lat, lon }) {
   if (!moved && Date.now() - handoffAt < HANDOFF_REFRESH_MS) return;
   handoffAt = Date.now();
   handoffFrom = { lat, lon };
+  restartStream(lat, lon); // the fan-out cell follows the driver
   loadHandoffs(); // the map's recenter fires @bounds -> overlay refetch on its own
 }
 
@@ -211,6 +241,7 @@ function onBounds(bbox) {
 // something nudges it.
 onActivated(() => {
   canvas.value?.remeasure?.();
+  if (located.value) restartStream(geo.value.lat, geo.value.lon);
   loadHandoffs();
   fetchActiveLoad().catch(() => {});
   // the canvas re-emits `bounds` for its restored viewport, which refetches the

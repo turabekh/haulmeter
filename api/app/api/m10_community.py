@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import canonical_facility_id, current_account, get_db
+from app.api.events import publish_handoff
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.modules.m10_community import public as m10
@@ -79,6 +80,13 @@ def broadcast(
         raise HTTPException(status.HTTP_409_CONFLICT, "handoffs are free-lot only") from exc
     except m10.NotPresent as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "must be on-site to relay") from exc
+    # §23 entry 103: tell whoever is listening nearby, right now. This is the ONLY
+    # thing the live channel adds — the row is already written and already returned by
+    # /handoff/nearby, so a failed publish costs a driver freshness and nothing else.
+    fac = facility.get_facility(db, handoff.facility_ref)
+    if fac is not None:
+        lat, lon = facility.coordinates(db, fac)
+        publish_handoff(handoff, lat, lon)
     return {"handoff_id": str(handoff.id), "state": handoff.state.value}
 
 

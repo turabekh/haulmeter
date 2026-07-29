@@ -28,7 +28,9 @@ function loadSession() {
   }
 }
 const _stored = loadSession();
-const token = ref(_stored.token || null);
+// exported for the live stream only: EventSource cannot set headers, so the
+// session has to travel another way (§23 entry 103)
+export const token = ref(_stored.token || null);
 export const account = ref(_stored.account_id || null);
 export const email = ref(_stored.email || null);
 export const isAuthenticated = computed(() => !!token.value);

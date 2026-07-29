@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import (
     admin,
     auth,
+    events,
     load,
     location,
     m01_map,
@@ -110,6 +111,7 @@ app.include_router(owner.router)
 app.include_router(load.router)
 app.include_router(location.router)
 app.include_router(notifications.router)
+app.include_router(events.router)
 app.include_router(m01_map.router)
 app.include_router(m02_facility_intel.router)
 app.include_router(m03_detention.router)
