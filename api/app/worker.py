@@ -17,6 +17,7 @@ from app.foundation.f13_flags import public as flags
 from app.foundation.f14_admin import public as admin
 from app.ingest import flags as ingest_flags
 from app.ingest import runners, sources
+from app.modules.m03_detention import public as m3
 from app.modules.m05_protection import public as m5
 
 TICK_SECONDS = 5
@@ -49,6 +50,12 @@ def _jobs() -> list[Job]:
         # measured in days and a driver does not need to hear about a renewal twice
         # before lunch. F8's caps decide what actually leaves.
         Job("document_expiry", m5.FLAG_KEY, 86400, runners.run_document_expiry),
+        # M3's P0 (§23 entry 106). Every OTHER job here refreshes a feed; this one
+        # watches a clock that decides money, so the interval is the alert's accuracy:
+        # a driver is told free time expired up to a minute after it did. Sixty seconds
+        # against a two-hour free window is honest, and cheaper than the alternative of
+        # scheduling a wake-up per claim. F8's own budget decides what actually leaves.
+        Job("detention_clock", m3.FLAG_KEY, 60, runners.run_detention_clock),
     ]
 
 

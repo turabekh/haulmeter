@@ -44,6 +44,18 @@ class DetentionClaim(Base):
     start_notice_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # AI-CONTEXT: the DRIVER's two alerts, deliberately separate from
+    # `start_notice_sent_at` above — which records the BROKER's notice (§23 entry 106).
+    # Two audiences, two records: one column would have made "the driver has been told"
+    # mean "the counterparty was emailed", and those come from different code paths at
+    # different times. Each is set when the alert is DISPATCHED, not delivered, so a
+    # notification F8 suppresses is not re-offered every minute until one gets through.
+    driver_start_alert_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    driver_warning_alert_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # AI-CONTEXT: when this claim began watching the stop (§23 entry 73). The clock may
     # not start before it, which is what keeps a previous visit to the same dock out of
     # this load's money. Explicit rather than read off `created_at`: the anchor the

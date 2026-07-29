@@ -112,6 +112,25 @@ def run_document_expiry(db: Session, commit: bool = True) -> dict:
     return {"considered": len(sent), "delivered": len(gateway.sent)}
 
 
+def run_detention_clock(db: Session, commit: bool = True) -> dict:
+    """M3's P0, which nothing had ever fired (§23 entries 106, 107).
+
+    AI-CONTEXT: the detention clock is computed on READ, so the instant free time
+    expires passes unobserved unless a driver happens to have the screen open. This is
+    the caller that watches it. The gateway is the same recording seam every other
+    dispatch site uses: the notification row is real and reaches the driver's inbox
+    today, and a real push adapter plugs in here when Web Push is wired.
+    """
+    from app.foundation.f08_notifications import public as notify
+    from app.modules.m03_detention import public as m3
+
+    gateway = notify.RecordingNotificationGateway()
+    summary = m3.dispatch_clock_alerts(db, gateway)
+    if commit:
+        db.commit()
+    return {**summary, "delivered": len(gateway.sent)}
+
+
 def run_eia(db: Session, commit: bool = True) -> dict:
     # weekly EIA regional diesel refresh (M1-FR5). Idempotent upsert per PADD region,
     # so re-running before EIA publishes just rewrites the same week — cadence is

@@ -76,3 +76,17 @@ def test_a_dict_summary_passes_through_unchanged():
     import app.worker as worker
 
     assert worker._summary_dict({"regions": 6}) == {"regions": 6}
+
+
+def test_the_detention_clock_is_a_scheduled_job_behind_m03s_flag():
+    """AI-CONTEXT: §23 entry 106's caveat (a) — the instant free time expires passes
+    unobserved unless something wakes up to look. Before this job the P0 could not fire
+    however correct its copy was, so the schedule is part of the feature, not plumbing.
+    """
+    import app.worker as worker
+    from app.modules.m03_detention import public as m3
+
+    job = next(j for j in worker._jobs() if j.name == "detention_clock")
+
+    assert job.flag_key == m3.FLAG_KEY  # a kill switch that also stops the alerts
+    assert job.interval_seconds <= 60  # the alert's accuracy, not a refresh cadence

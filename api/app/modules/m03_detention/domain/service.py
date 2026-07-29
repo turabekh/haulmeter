@@ -12,7 +12,7 @@ validation gates.
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.foundation.f01_identity import public as identity
@@ -307,6 +307,240 @@ def _send_counterparty(db, claim, gateway, now, subject, body):
         db, claim.account_id, subject=subject, counterparty_ref=claim.counterparty_ref
     )
     return notify.send_counterparty_message(db, thread, body, gateway, to_ref, now=now)
+
+
+# --- Driver alerts: the P0 §13.2 names first (§23 entries 106, 107) ---
+#
+# AI-CONTEXT: everything above this line tells the BROKER. Until now nothing told the
+# DRIVER: §13.2's three P0 examples — detention started, booking failed, claim paid —
+# had zero dispatch sites in the product, and M3 never called `notify.dispatch` at all.
+#
+# WHICH INSTANT. Owner decision, §23 entry 106: free-time expiry — the
+# `within_free_time -> accruing` boundary `compute_detention` already computes as
+# `trigger_time + free_time_minutes`. Not geofence ENTER, where §12.6's own copy
+# ("Detention started · $75/h — Notice ready to send") is false in both halves: the
+# amount owed is $0.00 and `send_detention_start_notice` refuses to send. Not the first
+# billable minute either, which is not a distinct instant here — the clock accrues from
+# second zero and M3 has no minimum billing increment to round to.
+#
+# NO NOTIFICATION CLASS. Also the owner's, and the reason is the point: a class is an
+# OPT-IN bundle, and an opt-in switch on the one money-critical fact this product
+# exists to tell a driver would let them be silently un-told. With no class registered,
+# `dispatch` skips the class laws and applies the tier — P0 is "allowed always" (§13.2)
+# and the warning below stays subject to quiet hours, RESTING and the 2/day budget.
+DETENTION_START_CATEGORY = "detention_start"
+FREE_TIME_WARNING_CATEGORY = "free_time_warning"
+# AI-CONTEXT: how late a P0 may still be called news — and this was NOT theoretical.
+# The first run of this job against the real dev database dispatched ELEVEN "Detention
+# started" alerts at once, for claims whose free time had expired days earlier and
+# whose drivers F3 still places on the dock. Every test was green: the suite knew the
+# boundary, and only real data knew there was a backlog sitting behind it. On the
+# deployed box that first tick would have been a burst of stale P0s to real accounts,
+# each announcing a moment that had long passed.
+#
+# §13.2 defines P0 as time-sensitive, so lateness is not a delivery detail — past some
+# point the event is simply not news, and there is no alert to send rather than a late
+# one. The job runs every 60s, so this forgives half an hour of worker downtime and
+# stays silent beyond it; the money is never lost, it is on the Claim screen and in the
+# pack. It is also what makes deploying this safe: every claim that predates the
+# feature is far outside the window and alerts nobody.
+ALERT_FRESHNESS = timedelta(minutes=30)
+
+
+def _rate_label(cents_per_hour: int | None) -> str | None:
+    # §12.2 leads with the figure — but only when there is one. A claim with no
+    # contracted rate says "Detention started" and nothing it cannot support.
+    if not cents_per_hour:
+        return None
+    dollars = cents_per_hour / 100
+    if cents_per_hour % 100 == 0:
+        return f"${dollars:,.0f}/h"
+    return f"${dollars:,.2f}/h"
+
+
+def _alert_anchor(db: Session, claim: DetentionClaim) -> datetime | None:
+    """The instant this claim's clock is anchored to, or None if nothing anchors it.
+
+    AI-CONTEXT: found in the real data, not in the suite (§23 entry 107). `clock()`
+    falls back to `trigger_time = arrival or now`, so a claim F3 cannot place has a
+    trigger that slides forward on every call. With free time remaining that is
+    harmless — the phase never reaches accruing. With free time of 0 or None it is
+    not: `detention_start` equals `now` on every tick, so the claim reports
+    "accruing, 0 seconds, $0.00" FOREVER and reads to an alerting job as a boundary
+    crossed one second ago. FIVE live claims were in exactly that state, and each
+    would have pushed a P0 announcing detention at a stop the driver never reached,
+    for no money — the precise failure entry 106 rejected geofence ENTER to avoid.
+
+    So an alert requires a REAL anchor: a resolved F3 arrival, or the appointment the
+    claim was triggered on. A sliding `now` is the absence of one.
+
+    The underlying fallback is left alone deliberately. It is the money core's, four
+    callers depend on it, and narrowing it is a separate change on its own evidence —
+    recorded as debt rather than smuggled into a notification feature.
+    """
+    stop = loads.get_stop(db, claim.stop_ref)
+    if claim.trigger == DetentionTrigger.appointment and stop.appointment_start is not None:
+        return stop.appointment_start
+    arrival, _ = _arrival_departure(db, claim)
+    return arrival
+
+
+def _claim_deep_link(claim: DetentionClaim) -> str:
+    # §13.5: the exact screen, never a tab root. ClaimSurface is keyed by the STOP and
+    # is where the figure, the evidence and "Send notice" already live, so the driver
+    # lands on the thing the notification is about.
+    return f"/claim/{claim.stop_ref}"
+
+
+def dispatch_detention_start(
+    db: Session, claim: DetentionClaim, gateway, now: datetime
+) -> object | None:
+    """The P0. Fires once, at the instant money starts being owed.
+
+    AI-CONTEXT: only while ACCRUING, never for a visit that has already ended. §13.2
+    defines P0 as time-sensitive, and a P0 delivered after the driver has pulled off
+    the dock is an interruption whose urgency expired — the money is not lost, it is on
+    the Claim screen and in the pack, which is where a finished visit belongs. The same
+    reasoning bounds lateness on the other side (`ALERT_FRESHNESS`). The consequence,
+    stated rather than discovered: if the worker is down for more than half an hour
+    across the boundary, that driver is never pushed about it.
+
+    `driver_state` is left at F8's default. No server-side driver state exists to read
+    (nothing in the tree computes one), and a driver accruing detention is by
+    definition stationary at a dock — the DRIVING channel would be the wrong guess.
+    """
+    if claim.driver_start_alert_at is not None:
+        return None
+    if _alert_anchor(db, claim) is None:
+        return None
+    state = clock(db, claim, now)
+    if state.phase != DetentionPhase.accruing:
+        return None
+    # `detention_seconds` is already exactly "how long ago the boundary was crossed",
+    # so the freshness rule needs no second clock and cannot disagree with the first.
+    # Nothing is marked on this path: a stale claim did not have its alert suppressed,
+    # it never had an alert to send, and recording one would say otherwise.
+    if state.detention_seconds > ALERT_FRESHNESS.total_seconds():
+        return None
+    rate = _rate_label(claim.detention_rate_cents_per_hour)
+    title = f"Detention started · {rate}" if rate else "Detention started"
+    # §12.6 verbatim for the invoicing driver. A company driver cannot bill anyone, so
+    # promising them a notice would name an action their mode does not have (M3-FR9).
+    action = (
+        "Notice ready to send."
+        if claim.mode == ClaimMode.invoice
+        else "Your evidence pack is recording."
+    )
+    notification = notify.dispatch(
+        db,
+        claim.account_id,
+        notify.NotificationTier.P0,
+        DETENTION_START_CATEGORY,
+        title,
+        f"Free time is used up at this stop. {action}",
+        _claim_deep_link(claim),
+        gateway,
+        now=now,
+        subject_ref=str(claim.id),
+    )
+    claim.driver_start_alert_at = now
+    db.flush()
+    return notification
+
+
+def dispatch_free_time_warning(
+    db: Session, claim: DetentionClaim, gateway, now: datetime
+) -> object | None:
+    """The P1 §13.2 names beside it — measured from the SAME boundary.
+
+    AI-CONTEXT: "free time 30-min warning" is defined relative to the instant entry 106
+    settled, so the two notifications cannot be computed from different starts. It
+    reports the minutes actually remaining rather than the constant 30: a worker that
+    was down for twenty minutes must not tell a driver they have thirty left.
+    """
+    if claim.driver_warning_alert_at is not None:
+        return None
+    if _alert_anchor(db, claim) is None:
+        return None
+    state = clock(db, claim, now)
+    if state.phase != DetentionPhase.within_free_time:
+        return None
+    remaining = state.free_time_remaining_seconds
+    if remaining > PRE_DETENTION_THRESHOLD.total_seconds():
+        return None
+    minutes = max(1, int(remaining // 60))
+    rate = _rate_label(claim.detention_rate_cents_per_hour)
+    body = f"Detention starts after that at {rate}." if rate else "Detention starts after that."
+    notification = notify.dispatch(
+        db,
+        claim.account_id,
+        notify.NotificationTier.P1,
+        FREE_TIME_WARNING_CATEGORY,
+        f"{minutes} min free time left",
+        body,
+        _claim_deep_link(claim),
+        gateway,
+        now=now,
+        subject_ref=str(claim.id),
+    )
+    claim.driver_warning_alert_at = now
+    db.flush()
+    return notification
+
+
+def claims_awaiting_alerts(db: Session) -> list[DetentionClaim]:
+    """The undecided set: open claims still owed at least one of the two alerts.
+
+    AI-CONTEXT: NOT capped. A silent top-N here would mean some driver's P0 is dropped
+    on a busy afternoon and the summary still reads as though everything was covered.
+    The set bounds itself instead — a claim leaves it as soon as both alerts have been
+    dispatched, and the partial index in migration 0054 is built on exactly this
+    predicate. The residue is claims that can no longer produce either alert — ended
+    inside free time, or accruing from before `ALERT_FRESHNESS` — and never packed.
+    They are re-evaluated cheaply and never fire; `scanned` in the job summary is what
+    shows it if that residue ever stops being small.
+    """
+    return list(
+        db.scalars(
+            select(DetentionClaim).where(
+                DetentionClaim.state == ClaimState.open,
+                DetentionClaim.clock_since.is_not(None),
+                or_(
+                    DetentionClaim.driver_start_alert_at.is_(None),
+                    DetentionClaim.driver_warning_alert_at.is_(None),
+                ),
+            )
+        )
+    )
+
+
+def dispatch_clock_alerts(db: Session, gateway, now: datetime | None = None) -> dict:
+    """Walk the undecided claims and fire whichever alert has come due.
+
+    AI-CONTEXT: this is the thing that was missing, not the copy. `clock()` is computed
+    on READ, so before this job the instant free time expired passed unobserved unless
+    a driver happened to open the screen. Each claim costs its own `clock()` — a stop
+    read and an F3 visit window — which is a per-claim query pattern this codebase has
+    been bitten by (§23 entry 98). It is deliberate here and bounded: the set is open
+    claims only, it runs on the worker rather than in a request, and the alternative is
+    a bulk read across F5 and F3 for a set that is normally a handful of rows. If
+    `scanned` ever stops being small, batch it then and not before.
+
+    A claim whose F3 arrival cannot be resolved computes `trigger_time` from `now` on
+    every call and therefore never reaches `accruing` — no alert fires for it, ever
+    (§23 entry 106, caveat b). That is pre-existing behaviour, recorded here because
+    this job is where its consequence becomes visible.
+    """
+    now = now or datetime.now(UTC)
+    claims = claims_awaiting_alerts(db)
+    started = 0
+    warned = 0
+    for claim in claims:
+        if dispatch_detention_start(db, claim, gateway, now) is not None:
+            started += 1
+        elif dispatch_free_time_warning(db, claim, gateway, now) is not None:
+            warned += 1
+    return {"scanned": len(claims), "started": started, "warned": warned}
 
 
 # --- Shared invoice rail (reused by M4 accessorial claims) ---
