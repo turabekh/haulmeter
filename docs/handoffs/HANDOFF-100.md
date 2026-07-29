@@ -20,11 +20,11 @@ deciding notifications nobody could read.
 | Thing | Value |
 |---|---|
 | Migrations | head **0053_f08_notification_read_at** |
-| Tests | **pytest 1104 · vitest 547 · layout 169 · ruff + import-linter 30/30** |
-| §23 decision log | **104 entries** (94–104 this session) |
+| Tests | **pytest 1111 · vitest 547 · layout 169 · ruff + import-linter 30/30** |
+| §23 decision log | **105 entries** (94–105 this session) |
 | Handoffs | 000 → 100 |
 | Git | **PUSHED** to `github.com/turabekh/haulmeter` (PUBLIC — see 099 §11) |
-| Deployed | current; migration at head on the box; zero errors in the log |
+| Deployed | current with `6b681c2`; migration at head; zero errors; **all 13 module flags registered + enabled** |
 | Working tree | clean except untracked `collect_files.py` (not mine) |
 
 ## 2. What shipped after 099
@@ -43,6 +43,9 @@ deciding notifications nobody could read.
 | `874003b` | The driver can read what F8 decided (§23 102) |
 | `8d974c6` | A live channel that cannot take the database down (§23 103) |
 | `66ef855` | Crowd status goes live, without summoning a herd (§23 104) |
+| `79e19cd` | docs: HANDOFF-100 |
+| `8d4737a` | An admin-console test had an expiry date |
+| `6b681c2` | Every module gets the kill switch PRD §6 already required (§23 105) |
 
 ## 3. The map, measured
 
@@ -123,6 +126,72 @@ stream answers a Redis outage with a polite `bye`, the client degrades with no
 EventSource/session/network. **Every event is also a row REST returns**, so a dead
 stream leaves a driver exactly one refetch behind — where they already were.
 
+## 6b. Twelve modules had no kill switch (§23 105)
+
+**PRD §6 is the governing rule — each module "built end-to-end behind its own feature
+flag… for operational safety and controlled activation" — and it was true of ONE.**
+
+| | before | after |
+|---|---|---|
+| Modules declaring `FLAG_KEY` | 13 | 13 |
+| Flags registered in the database | **3** | **13** |
+| Routers checking their flag | **1** (m13) | **13** |
+| Calling `register_module` at startup | **nobody** | app lifespan |
+
+M2–M10 and M12 were reachable with no gate. If M3's claim logic started producing wrong
+money on the deployed box, the only remedy was a redeploy — and §23 entries 92 and 93
+both happened without one. Verified live: `/money/earnings` **200 → 404 → 200** across
+the flag, and `kill_switch` closes it independently.
+
+**Two decisions worth knowing before touching this:**
+
+- **The gate's predicate is `is_switched_off`, NOT `is_enabled`.** It fails OPEN on an
+  unregistered flag and CLOSED on an explicit one. Registration runs at boot, so
+  `is_enabled` semantics would turn a registry hiccup into twelve modules answering 404
+  at once. The switch a driver-facing product needs is "turn M3 off NOW" — a row that
+  exists and says off — and that still works.
+- **A flag registered for the FIRST time comes up enabled; an existing one is never
+  touched.** Owner decision: preserve today's behaviour. A flag somebody already set is
+  an owner decision and a restart must not overrule it.
+
+**`add_gate` was not idempotent** and now is — registration runs every start, so the
+second boot hit `uq_validation_gate_flag_name` and rolled the whole registry back. An
+existing gate is returned unchanged, because `satisfied` is an owner decision and a
+legal sign-off must not be revoked by a deploy.
+
+**I built this the wrong way first.** Registering flags in the test conftest polluted
+global state and broke 84 tests, then 13. Reverting that and changing the GATE PREDICATE
+instead took it to zero. **The failures were the signal that the design was wrong, not
+that the tests were** — worth remembering before editing a test to accommodate a change.
+
+## 6c. Nothing in this product has ever dispatched a P0
+
+**Found while scoping push, and it changes what to build next.** `notify.dispatch` is
+called from **five sites in two modules**:
+
+- M5 protection — "Missing: BOL, photos" (you left without capturing), P1
+- M5 protection — "CDL expires in 30 days", P1
+- M13 vendor — vendor alerts, P1
+
+Now compare against §13.2's own definition of the tiers:
+
+| §13.2's named example | tier | dispatch sites |
+|---|---|---|
+| **detention started** | **P0** | **0** |
+| booking failed | P0 | 0 |
+| claim paid | P0 | 0 |
+| free time 30-min warning | P1 | 0 |
+
+**M3 does not call `dispatch` at all.** §12.6 quotes "Detention started · $75/h — Notice
+ready to send" verbatim as the model notification, and nobody sends it.
+
+**And the push blocker I reported was wrong.** Web Push with VAPID needs no Firebase or
+Apple account — the keypair is self-generated, and Chrome/Edge/Firefox on Android
+support it natively, which is exactly LAW 0's target device. iOS needs 16.4+ and an
+installed PWA. So push is NOT blocked on the owner; it is simply the wrong thing to
+build first, because it would carry two P1 classes reliably while the money event a
+driver actually needs stays silent.
+
 ## 7. Method notes — read before trusting anything above
 
 - **I took the local API down for several minutes.** `app.core.config` exports
@@ -145,40 +214,55 @@ stream leaves a driver exactly one refetch behind — where they already were.
 - **522 green UI tests could say nothing about the marker change**, because a test
   runner has no WebGL: `live` is false and every mounted-canvas test exercises the
   FALLBACK path. The arithmetic moved to `core/` so it could be asserted at all.
+- **A test had an expiry date, and it expired mid-session.**
+  `test_overview_carries_the_overdue_count_separately` seeded a moderation report at a
+  hard-coded `2026-07-26 08:00 UTC` and asserted the LIVE endpoint saw zero overdue.
+  `MODERATION_SLA_HOURS` is 72, so it was true until **2026-07-29 08:00 UTC** and false
+  after — it passed at 07:00 today and failed at 08:07. Confirmed pre-existing by
+  stashing the working tree (1 failed / 1103 passed both ways). **A test that pins an
+  instant and compares it to `datetime.now()` has an expiry nobody wrote down** —
+  anchor to `now` instead.
 - **Tests were proved RED before being trusted** for the resolver, the marker centring
   and the query budget — each by temporarily restoring the old behaviour.
 
-## 8. Exact next task — the flag gap
+## 8. Exact next task — wire the P0s, then push
 
-**PRD §6 says every module is "built end-to-end behind its own feature flag… for
-operational safety and controlled activation." Audited this session:**
+**§6b is DONE — do not redo it.** The flag gap that §8 previously named is closed.
 
-| | |
-|---|---|
-| Modules declaring `FLAG_KEY` | **13 of 13** |
-| Flags actually **registered in the database** | **3** (m01_map, m11_voice, m13_vendor) |
-| Module routers that **check** their flag | **1** (m13_vendor) |
-| Module services checking their own `FLAG_KEY` | **1** (m13_vendor) |
-| Who calls `register_module` at startup | **nobody** (m11 does it lazily, inside a request) |
+**1. Dispatch the notifications §13.2 already specifies.** See §6c: the tier/budget/
+quiet-hours machinery is built and tested, the inbox now renders it, and **nothing has
+ever dispatched a P0**. This is where the value is, and it is the smallest step to a
+product that tells a driver the one thing they most need to know.
 
-**M2–M10 and M12 are reachable with no gate at all, and there is no kill switch.** If
-M3's claim logic produces wrong money on the deployed box — the failure class this
-session kept finding — the only remedy is a redeploy. `is_enabled` returns **False** for
-an unregistered flag, so adding gates without registering first would switch the
-product off.
+> **This needs an owner decision before any code.** Which moment IS "detention started"?
+> Geofence ENTER, free-time expiry, or the first billable minute are three different
+> instants and three different numbers on the driver's screen. **The recommendation is
+> free-time expiry — the first instant money is owed** — but it is a product decision,
+> so log a §23 proposal and ASK. §12.6 already fixes the copy: "Detention started ·
+> $75/h — Notice ready to send."
 
-**The owner decision this forces: what the default should be.** Registering
-`enabled=True` preserves today's behaviour exactly; `False` follows M13's precedent
-(`default OFF`) and switches the product off until turned on. **Ask before writing.**
+**2. Then Web Push (VAPID).** Not blocked on credentials — see §6c. Needs: a VAPID
+keypair in `infra/.env` (rule 9 — `.env.example` documents the names only), a service
+worker + web manifest (the app becomes a PWA), a `push_subscription` table, a
+`WebPushNotificationGateway` implementing the existing `gateway.py` Protocol, and a
+permission-request flow whose TIMING is a §22 design question — asking on first launch
+is the dark pattern §21.8 forbids in spirit.
 
-Then, in order: **2.** wire push (needs FCM/APNs credentials + a service worker — the
-only thing that makes §13 reach a backgrounded driver). **3.** ingest more states —
-coverage is 9 (WI IN IA MN KS KY MI OH TX) and anywhere else the map is honestly empty.
+**3. Coverage.** 9 states (WI IN IA MN KS KY MI OH TX). Anywhere else the map is
+honestly empty of truck stops and a demo will look broken. `make osm-extract STATE=x`
+then `make ingest-osm STATE=x`, then **BOTH repair passes** (see 099 §4d).
 
 ## 9. Debt
 
 **New this session:**
-- **Push is unwired.** F8 decides correctly and reaches nobody who is not looking.
+- **Nothing dispatches a P0** (§6c). §13.2's own examples — detention started, booking
+  failed, claim paid, free-time warning — have zero dispatch sites, and M3 never calls
+  `dispatch` at all. This is bigger than the transport.
+- **Push is unwired** — but NOT blocked on credentials (§6c). Web Push/VAPID is
+  self-signed and covers LAW 0's target device.
+- **`/events/stream` is NOT flag-gated.** It streams `handoff` (M10) and `status` (M1),
+  so a module switched off can still have its events carried. Small, real, and left
+  deliberately rather than bolted on at the end of a long session.
 - **The SSE session travels in the QUERY string** — EventSource cannot set headers.
   Same TLS, same origin, same token, but query strings reach access logs. **A
   single-use stream ticket is the upgrade before real drivers.**
