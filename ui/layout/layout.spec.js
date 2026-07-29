@@ -553,6 +553,14 @@ const SURFACES = [
     open: [".saved-chip"],
     ready: ".saved__row",
   }],
+  // §23 entry 99's "somewhere else" sheet — a new sheet, so it gets measured at
+  // 360 dp with the rest rather than shipping unseen. The chip that opens it renders
+  // only when NOT driving (Forbidden #11), which is the default state here.
+  ["sheet-map-place", "/", {
+    mocks: {},
+    open: [".place-chip"],
+    ready: ".place__input",
+  }],
   // M5-FR1's correction (§23 entry 62) — a new sheet, so it gets measured with the
   // rest rather than shipping unseen at 360 dp
   ["sheet-appointment", "/load", {

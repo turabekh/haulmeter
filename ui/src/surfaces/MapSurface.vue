@@ -6,7 +6,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
-import { CircleDot, Mic, SlidersHorizontal, Bookmark } from "lucide-vue-next";
+import { CircleDot, Mic, SlidersHorizontal, Bookmark, MapPin, Crosshair } from "lucide-vue-next";
 import MapCanvas from "../core/components/MapCanvas.vue";
 import PresetChips from "../core/components/PresetChips.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
@@ -14,6 +14,7 @@ import FacilityCard from "../core/components/FacilityCard.vue";
 import CorridorStack from "../core/components/CorridorStack.vue";
 import ReportSheet from "../core/components/ReportSheet.vue";
 import MoreFiltersSheet from "../core/components/MoreFiltersSheet.vue";
+import PlaceSheet from "../core/components/PlaceSheet.vue";
 import PriceReportSheet from "../core/components/PriceReportSheet.vue";
 import VoiceSheet from "../core/components/VoiceSheet.vue";
 import SleepSheet from "../core/components/SleepSheet.vue";
@@ -97,6 +98,33 @@ const geo = ref({ lat: 32.78, lon: -96.8 });
 // the driver, so until this is true no origin is sent and no distance is shown —
 // a figure measured from a default would be confidently wrong (§11.7).
 const located = ref(false);
+
+// AI-CONTEXT: §23 entry 99 — "show me somewhere else".
+//
+// ONE-SHOT by owner decision: the place holds until the driver goes back to
+// themselves or the map re-locates them. Nothing is persisted, so a driver cannot
+// leave it on and later misread the map as showing where they are.
+//
+// `viewingPlace` is the label the GEOCODER returned, not one this code composed —
+// the same rule the rate-con import follows. While it is set the map says so on
+// screen, because a map showing Dallas to a driver in Perth with no marker of that
+// fact is the §11.7 lie in a different costume.
+//
+// It never touches `lastFix`: the position pings behind F3 arrival, the geofence and
+// the detention clock keep reporting where the truck actually is.
+const placing = ref(false);
+const viewingPlace = ref(null);
+const canvas = ref(null);
+
+function showPlace(place) {
+  viewingPlace.value = place.label;
+  canvas.value?.showPlace?.(place.lat, place.lon);
+}
+
+function backToMe() {
+  viewingPlace.value = null;
+  if (located.value) canvas.value?.showPlace?.(geo.value.lat, geo.value.lon, 11);
+}
 // AI-CONTEXT: THROTTLED, and the lack of it took the API down (§23 entry 93).
 //
 // Mapbox's geolocate control runs with `trackUserLocation: true`, so this fires on
@@ -677,6 +705,28 @@ async function submitPrice(cents) {
         {{ t("saved.title") }}
         <span class="saved-chip__count">{{ savedIds.length }}</span>
       </button>
+      <!-- §23 entry 99: the one control for looking somewhere else. Composed from the
+           saved-chip's shape — no new component pattern — and absent while DRIVING,
+           because opening it means typing (Forbidden #11). -->
+      <button class="place-chip" type="button" @click="placing = true">
+        <MapPin :size="16" :stroke-width="2" aria-hidden="true" />
+        {{ t("place.button") }}
+      </button>
+      <!-- The map must never quietly show somewhere that is not you (§11.7). The
+           STATE and the ACTION are separate controls on purpose — §23 settled that a
+           state pill and an action button are different jobs and must not be one
+           control, and one string reading "Viewing Dallas · Back to me" would also be
+           a sentence built from two translation fragments (Forbidden #7). -->
+      <div v-if="viewingPlace" class="place-banner">
+        <span class="place-banner__state">
+          <MapPin :size="16" :stroke-width="2" aria-hidden="true" />
+          {{ t("place.viewing", { place: viewingPlace }) }}
+        </span>
+        <button class="place-banner__back" type="button" @click="backToMe">
+          <Crosshair :size="16" :stroke-width="2" aria-hidden="true" />
+          {{ t("place.back") }}
+        </button>
+      </div>
       <!-- M10-FR2: spots opening nearby — the claimable relay feed -->
       <button v-if="handoffs.length" class="relay-banner" type="button" @click="relaying = true">
         {{ handoffs.length }} {{ t("handoff.nearby") }}
@@ -718,6 +768,7 @@ async function submitPrice(cents) {
       </p>
       <div class="map__canvas">
         <MapCanvas
+          ref="canvas"
           :pins="pins"
           :clusters="clusters"
           @pin-tap="onPinTap"
@@ -794,6 +845,7 @@ async function submitPrice(cents) {
     >
       <MoreFiltersSheet v-model="filters" @close="filtering = false" />
     </BottomSheet>
+    <PlaceSheet :open="placing" @close="placing = false" @pick="showPlace" />
 
     <BottomSheet :open="reporting" :title="t('map.report')" @close="reporting = false">
       <ReportSheet :facility-type="reportTarget?.facility_type" @report="submitReport" />
@@ -986,6 +1038,55 @@ async function submitPrice(cents) {
   background: var(--ink-1);
   border: 1px solid var(--line-1);
   color: var(--text-1);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+/* §23 entry 99 — both composed from .saved-chip's shape above, so the map gains a
+   control and not a component pattern. */
+.place-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: var(--s-2) var(--s-4);
+  min-height: 48px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--ink-1);
+  border: 1px solid var(--line-1);
+  color: var(--text-1);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.place-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: var(--s-2) var(--s-4);
+  min-height: 48px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--ink-1);
+  border: 1px solid var(--marker-500);
+}
+.place-banner__state {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  color: var(--text-1);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.place-banner__back {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin-left: auto;
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  border: 0;
+  background: transparent;
+  color: var(--marker-500);
   font-size: var(--type-label-size);
   font-weight: 500;
 }

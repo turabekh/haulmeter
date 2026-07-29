@@ -154,6 +154,11 @@ watch([mode, prefersDark], applyPreset);
 // cluster bubbles at this span (§11.5); GPS then recenters if the driver allows it.
 const US_CENTER = [-98.5, 39.8];
 const US_ZOOM = 3.5;
+// §23 entry 99: metro-wide, not street-level. A driver asking for "Dallas" wants the
+// stops around it, and truck stops ring a city rather than sit downtown — measured at
+// 0 within 8 km of downtown Dallas and 26 within 25 km, so a tight zoom would open on
+// an empty screen and read as broken.
+const PLACE_ZOOM = 9;
 
 function syncPins() {
   if (!map) return;
@@ -176,6 +181,17 @@ function zoomToCluster(cluster) {
   if (!map) return;
   map.easeTo({ center: [cluster.lon, cluster.lat], zoom: map.getZoom() + 2, duration: 300 });
 }
+
+// AI-CONTEXT: §23 entry 99. Moving the VIEW is the only thing this exposes — it
+// reuses `easeTo`, the same call the cluster zoom above makes, so the canvas gains
+// no new behaviour. Nothing here touches the driver's location: `located` still
+// fires from the geolocate control alone, and the surface keeps its own fix.
+// `bounds` fires on the resulting move, so the overlay refetches on its own.
+function showPlace(lat, lon, zoom = PLACE_ZOOM) {
+  if (!map) return;
+  map.easeTo({ center: [lon, lat], zoom, duration: 400 });
+}
+defineExpose({ showPlace });
 
 onMounted(async () => {
   systemDark?.addEventListener?.("change", onSystemTheme);
