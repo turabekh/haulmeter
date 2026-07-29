@@ -77,6 +77,38 @@ Also excluded: `api/data`, which is ingest SOURCE (OSM extracts) read only by th
 
 ## Copying the local database up
 
+> ### ⚠️ THIS REPLACES THE WHOLE DEPLOYED DATABASE — READ BEFORE RUNNING
+>
+> `pg_restore --clean --if-exists` **drops and recreates every table**, so everything
+> that exists only on the box is destroyed: accounts, sessions, crowd reports, claims,
+> evidence. On 29 July 2026 `driver@haulmeter.online` and `admin@haulmeter.online`
+> existed **only on the VM** — zero locally. Their passwords were handed over in chat
+> and written nowhere, and **F1 offers no `set_password` by design**, so restoring over
+> them would have destroyed both logins with no way to recreate them.
+>
+> This procedure was written when the box held nothing but a seed. It is correct for
+> **bootstrapping an empty box** and wrong for **updating one in use.**
+>
+> **To ADD facility data to a box already in use, ingest on the box instead** — it
+> touches nothing but `f02`:
+>
+> ```bash
+> gzip -c api/data/osm/<state>.geojson > /tmp/<state>.geojson.gz
+> gcloud compute scp /tmp/<state>.geojson.gz haulmeter-test:/opt/haulmeter/ \
+>   --project=uzimiz-prod --zone=us-central1-a
+> # on the VM (api/data is NOT mounted there — the code is baked into the image):
+> C="sudo docker compose -f docker-compose.deploy.yml --env-file .env"
+> gunzip -kf /opt/haulmeter/<state>.geojson.gz
+> CID=$($C ps -q api); sudo docker exec $CID mkdir -p /app/data/osm
+> sudo docker cp /opt/haulmeter/<state>.geojson $CID:/app/data/osm/<state>.geojson
+> $C exec -T api python -m scripts.ingest_osm /app/data/osm/<state>.geojson
+> $C exec -T -e DRY_RUN=0 api python -m scripts.repair_colocated_scales
+> $C exec -T -e DRY_RUN=0 api python -m scripts.repair_colocated_fuel
+> ```
+>
+> **Both repair passes are required after every ingest — see the warning below.**
+> Take a `pg_dump` first either way; the box has no backups.
+
 The test box is worth more with the ingested facility data than with the demo seed —
 4,568 facilities against 13. A full dump/restore rather than a table-by-table copy,
 because the dump carries `alembic_version` too, so schema and data cannot drift apart.

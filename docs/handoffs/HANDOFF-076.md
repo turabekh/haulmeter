@@ -199,6 +199,14 @@ it needs exists, and it is still the first real data this platform will hold.
 needs a ~200–300 MB Geofabrik download, then `make osm-extract STATE=<x>` and `make ingest-osm`. The
 co-located rule now applies from the first write, so no repair pass will be needed for them.
 
+> **FALSIFIED 29 Jul 2026 (HANDOFF-099 §4d) — leaving the sentence above so the mistake
+> is legible.** The rule is order-dependent WITHIN a batch: a pump or a scale processed
+> before the site it stands in exists finds no host and earns its own pin. The Texas
+> pull produced **162 unmerged fuel islands and 203 unmerged scales** on exactly this
+> path. **Run `repair-scales` and `repair-fuel` after every ingest**, not only over
+> legacy rows. The branded-service-area type rule IS order-independent and needs no
+> repair (0 re-types on Texas).
+
 **Alternatives:** TPIMS second-state activation; §17 Q9 truck routing, the largest open product decision.
 
 ## 7. Blockers / questions

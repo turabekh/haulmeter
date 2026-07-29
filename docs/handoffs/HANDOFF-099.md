@@ -20,12 +20,12 @@ mechanism had been built two years of sessions ago and applied to one facility k
 | Thing | Value |
 |---|---|
 | Migrations | head **0052_m03_claim_clock_since** (no schema change this session) |
-| Tests | **pytest 1087 · vitest 502 · ruff clean · import-linter 30/30** |
+| Tests | **pytest 1089 · vitest 502 · ruff clean · import-linter 30/30** |
 | Layout harness | **161 tests, 2.4 min — RUN, CLEAN.** 098's estimate of "~200" was wrong |
-| §23 decision log | **96 entries** (94, 95, 96 added this session) |
+| §23 decision log | **97 entries** (94–97 added this session) |
 | Handoffs | 000 → 099 |
-| Git | **PUSHED to `github.com/turabekh/haulmeter` — see §11.** 6 commits this session |
-| Deployed | `haulmeter.online` — redeployed + repaired; pre-migration dump on the VM |
+| Git | **PUSHED to `github.com/turabekh/haulmeter` — see §11.** 8 commits this session |
+| Deployed | `haulmeter.online` — redeployed, repaired, **+Texas (1,379 facilities)**; dumps on the VM |
 | Working tree | clean except untracked `collect_files.py` (not mine, left alone) |
 
 ## 2. What shipped
@@ -37,7 +37,8 @@ mechanism had been built two years of sessions ago and applied to one facility k
 | `a8d28e6` | A merged `facility_id` resolves to the site it belongs to (§23 95) |
 | `9f37b4c` | docs: HANDOFF-099 second half |
 | `d68a111` | An unnamed host adopts the pump's name instead of losing it (§23 96) |
-| (this one) | docs: HANDOFF-099 third half — the push |
+| `71f3a13` | Every kind that can host a pump reaches the Fuel preset (§23 97) |
+| (this one) | docs: HANDOFF-099 — Texas, and two claims falsified |
 
 ## 3. 098's task list, in order
 
@@ -146,6 +147,53 @@ decision.
 
 `fuel_station` is now **72** — the genuinely standalone ones — down from 546.
 
+## 4d. "No facilities except demo ones" — Texas, and two claims falsified
+
+**Owner report from production.** Two separate things were behind that sentence and
+only one was a defect.
+
+**The symptom was COVERAGE.** The view was the Dallas metro, where the seed data lives;
+the nearest real truck stop in the registry was **96.4 km away**. The OSM pull had only
+ever covered WI/IN/IA/MN/KS/KY/MI/OH — never Texas. Everything real within 25 km was
+`shipper_receiver`, which only the Work preset shows (and it did — 15 real pins). **The
+map was telling the truth.**
+
+**The defect found while checking it was mine** — §23 entry 97, the Fuel preset naming
+only two of the five kinds that can host a pump. 168 fuel sites off the fuel map, 68
+also off Drive. Fixed and deployed.
+
+**Texas is now ingested: +1,379 facilities, identical counts on local and prod.**
+
+| radius from downtown Dallas | real pins (Drive) |
+|---|---|
+| 8 km | **0** |
+| 25 km | 26 |
+| 40 km | 37 |
+
+**The 8 km figure is not a bug and is worth understanding: truck stops are on the ring
+roads and interstates, not downtown.** At the default viewport centred on a city a
+driver still sees little; one or two zoom steps out and the layer fills in. Whether the
+default radius should change is a §11 question **nobody has decided** — it was not
+widened quietly.
+
+**Two claims falsified, both corrected at source rather than only here.**
+
+1. **HANDOFF-076: "the co-located rule now applies from the first write, so no repair
+   pass will be needed."** It is order-dependent WITHIN a batch — a pump processed
+   before the site it stands in exists finds no host and earns its own pin. Texas
+   produced **162 unmerged fuel islands and 203 unmerged scales** on exactly that path.
+   **Run both repairs after every ingest.** 076 now carries the correction inline, with
+   the original sentence left visible. The branded-service-area TYPE rule is
+   order-independent and needed no repair (0 re-types).
+2. **`deploy-testing-env.md`'s database copy procedure would have destroyed the two
+   testing accounts.** It is `pg_restore --clean --if-exists` from local, and
+   `driver@haulmeter.online` / `admin@haulmeter.online` exist **only on the VM** — zero
+   locally. Passwords were handed over in chat, written nowhere, and F1 has no
+   `set_password`, so there is no recovery. The procedure is right for bootstrapping an
+   empty box and wrong for updating one in use. It now opens with a warning and an
+   ingest-on-the-box recipe that touches only `f02`. **Accounts verified intact after
+   the load.**
+
 ## 5. Method notes — read before trusting anything above
 
 - **Measuring killed three of my own proposals before they were written.** Reordering
@@ -213,6 +261,9 @@ on that.
 2. **Ask whether CLAUDE.md rule 3 should be amended** now that the repo is public and
    44 commits are pushed (§11). It is stale either way and must not be guessed at.
 3. **Decide what an empty profit calculator shows** (carried from 098, unresolved).
+4. **Decide the demo geography, then ingest for it.** Texas is in; anywhere else a demo
+   might happen is not. Each state is a ~300–700 MB download, ~2 min of extract, and
+   then BOTH repair passes.
 
 ## 8. Debt
 
@@ -243,6 +294,15 @@ missing every major chain; 098's unrun layout sweep.
   server-side. If a future session wants it on the client, that is an API change with a
   §22 question attached, not a free one.
 - **The deployed backup is a file on the box it backs up.** One `pgdata` volume, one VM.
+- **The default 8 km viewport shows a city driver almost nothing**, because truck stops
+  ring a metro rather than sit in it. Real and now measured (Dallas: 0 at 8 km, 26 at
+  25 km). Whether the default radius or the zoom-to-fit behaviour should change is a
+  §11 decision nobody has made — it was deliberately NOT widened quietly.
+- **Every ingest needs both repair passes afterwards** (§4d). The co-location rule is
+  order-dependent within a batch. HANDOFF-076 said otherwise and is corrected inline.
+- **Coverage is 9 states**: WI, IN, IA, MN, KS, KY, MI, OH, TX. Anywhere else, the map
+  is honestly empty of truck stops and a demo will look broken. This is the single
+  biggest gap between "the product works" and "the product looks like it works".
 - **A truck stop with no fuel evidence shows no price**, which is honest and means a
   Love's we have no pump data for looks the same as a dry lot. The fix is data, not code.
 - **Beliefs written against merged ids before §4b are still attached to shadows.** The
