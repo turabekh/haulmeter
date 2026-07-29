@@ -11,9 +11,45 @@ import { useTheme } from "../core/theme.js";
 import { LAUNCH_LOCALES } from "../core/i18n/index.js";
 import { email, logout, fetchPoints, fetchMe, verifyAuthority, saveEquipment, setFoodAlerts } from "../core/api.js";
 import { SAMPLE_POINTS } from "../core/fixtures.js";
+import BottomSheet from "../core/components/BottomSheet.vue";
+import NotificationsSheet from "../core/components/NotificationsSheet.vue";
+import { fetchNotifications, markNotificationRead } from "../core/api.js";
 
 const router = useRouter();
 const { t, locale, setLocale } = useI18n();
+
+// AI-CONTEXT: §23 entry 102 — F8's inbox, reached from the More list.
+//
+// §10.5 says More is "deliberately boring; a plain 64 dp row list. No cards, no
+// promos, NO BADGES", so there is no unread count on this row and none on the tab:
+// a number that follows a driver around is an interruption wearing a different hat,
+// and §13's budget governs interruptions however they are dressed. The unread state
+// lives INSIDE the sheet, where a driver who opened it has already asked.
+const notifications = ref([]);
+const notifOpen = ref(false);
+const nowMs = ref(Date.now());
+
+async function openNotifications() {
+  notifOpen.value = true;
+  try {
+    notifications.value = (await fetchNotifications()).notifications;
+  } catch {
+    // offline: this surface is pure history, so an empty list plus the sheet's own
+    // "nothing yet" is honest — there is no pending action to lose
+    notifications.value = [];
+  }
+  nowMs.value = Date.now();
+}
+
+async function openNotification(n) {
+  notifOpen.value = false;
+  if (!n.read_at) {
+    markNotificationRead(n.id).catch(() => {});
+    n.read_at = new Date().toISOString();
+  }
+  // §13.5: land on the exact screen and state it describes, never a tab root
+  if (n.deep_link) router.push(n.deep_link);
+}
 const { mode, setMode, modes } = useTheme();
 const points = ref(SAMPLE_POINTS);
 
@@ -271,11 +307,24 @@ function signOut() {
       <p class="equip__note">{{ t("vendor.alerts_hint") }}</p>
     </section>
 
+    <!-- §23 entry 102: the inbox row, composed from the row shapes already in this
+         list. §10.5 forbids badges here, so it carries a label and nothing else. -->
+    <section class="card">
+      <h2 class="card__title">{{ t("notifications.title") }}</h2>
+      <button class="alerts alerts--link" type="button" @click="openNotifications">
+        <span class="alerts__name">{{ t("more.notifications") }}</span>
+      </button>
+    </section>
+
     <section class="card">
       <h2 class="card__title">{{ t("more.account") }}</h2>
       <p v-if="email" class="more__email">{{ email }}</p>
       <button class="cta cta--danger" type="button" @click="signOut">{{ t("auth.logout") }}</button>
     </section>
+
+    <BottomSheet :open="notifOpen" :title="t('notifications.title')" @close="notifOpen = false">
+      <NotificationsSheet :notifications="notifications" :now="nowMs" @open="openNotification" />
+    </BottomSheet>
   </div>
 </template>
 

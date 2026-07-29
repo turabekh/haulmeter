@@ -434,6 +434,33 @@ const SURFACES = [
     ready: ".paper__row",
   }],
   ["more", "/more"],
+  // §23 entry 102: F8's inbox, the first surface that renders anything the
+  // notification system decided. New sheet, so it gets measured at 360 dp with the
+  // rest rather than shipping unseen. Mocked empty AND populated is overkill here —
+  // the populated rows are what can overflow, so that is what is measured.
+  ["sheet-notifications", "/more", {
+    mocks: {
+      "/notifications": {
+        notifications: [
+          {
+            id: "n1", tier: "P0", category: "detention_started",
+            title: "Detention started · $75/h", body: "Notice ready to send",
+            deep_link: "/load", status: "sent", suppressed_reason: null,
+            created_at: "2026-07-29T11:40:00Z", read_at: null,
+          },
+          {
+            id: "n2", tier: "P1", category: "free_time_warning",
+            title: "30 minutes of free time left", body: "Arrived 09:12",
+            deep_link: "/load", status: "suppressed", suppressed_reason: "quiet_hours",
+            created_at: "2026-07-29T09:00:00Z", read_at: "2026-07-29T09:05:00Z",
+          },
+        ],
+        unread: 1,
+      },
+    },
+    open: [".alerts--link"],
+    ready: ".notif__row",
+  }],
   ["login", "/login"],
   ["evidence", "/load/00000000-0000-0000-0000-0000000000aa/evidence"],
   ["condition", "/protection/condition"],

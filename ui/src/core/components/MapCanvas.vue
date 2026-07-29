@@ -53,6 +53,13 @@ const mapEl = ref(null);
 const live = ref(false); // true once a GL map is rendering tiles
 const positions = ref({}); // facility_id -> { x, y } pixel coords on the live map
 const clusterPositions = ref({}); // cluster index -> { x, y }
+// AI-CONTEXT: §23 entry 101 fix — a live marker has no position until the map has
+// projected it, and until then it sits at the container origin: half a puck off the
+// LEFT edge of the screen. The layout harness caught it as a horizontal-overflow
+// violation, which is exactly what a driver would have seen as every pin flashing in
+// the top-left corner before snapping into place. Markers are not rendered at all
+// until the first paint has told them where they belong.
+const placed = ref(false);
 const zoom = ref(null); // the live map's zoom, for §11.5's label threshold
 let map = null;
 
@@ -156,6 +163,11 @@ function onSystemTheme(e) {
 }
 // the manual override AND the system setting, because §6.1 C-3 is both
 watch([mode, prefersDark], applyPreset);
+// the moment tiles exist the markers can be projected; without this they wait for the
+// next pin change or pan, which is precisely the window they spent at the origin
+watch(live, (on) => {
+  if (on) nextTick(paintPositions);
+});
 // new pins render at the origin until something places them; paint on the tick their
 // elements exist, or a refetch would flash every marker into the top-left corner
 watch(
@@ -209,6 +221,7 @@ function place(el, x, y) {
 
 function paintPositions() {
   if (!map || !live.value) return;
+  placed.value = true;
   for (const pin of props.pins) {
     const el = pinEls.get(pin.facility_id);
     if (!el) continue;
@@ -379,13 +392,23 @@ function fallbackLatLon(lat, lon) {
 // with a transform, so nothing here re-renders while the map moves. Without a GL map
 // — the fallback the layout harness and every unit test measure — the bounds-
 // normalised percentages are unchanged.
+// `display: none` rather than hidden/transparent: an unplaced marker must have NO BOX
+// at all, or it still overhangs the viewport and is still a layout defect — the check
+// skips zero-sized elements, and so does a driver's eye.
+function unplaced() {
+  return live.value && !placed.value ? { display: "none" } : null;
+}
 function pinStyle(pin) {
   const pos = live.value ? { top: "0", left: "0" } : fallbackLatLon(pin.lat, pin.lon);
-  return { ...pos, "--pin-color": `var(${statusPresentation(pin.status).token})` };
+  return { ...pos, ...unplaced(), "--pin-color": `var(${statusPresentation(pin.status).token})` };
 }
 function clusterStyle(cluster) {
   const pos = live.value ? { top: "0", left: "0" } : fallbackLatLon(cluster.lat, cluster.lon);
-  return { ...pos, "--pin-color": `var(${statusPresentation(cluster.status).token})` };
+  return {
+    ...pos,
+    ...unplaced(),
+    "--pin-color": `var(${statusPresentation(cluster.status).token})`,
+  };
 }
 function stale(pin) {
   return isStale(pin.freshness, now);

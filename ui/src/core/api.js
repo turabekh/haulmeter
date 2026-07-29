@@ -1475,3 +1475,22 @@ export const assistCreatePromotion = (id, body) =>
   adminSend(`/vendors/${id}/promotions`, "POST", body);
 export const assistCancelPromotion = (id, promotionId) =>
   adminSend(`/vendors/${id}/promotions/${promotionId}`, "DELETE");
+
+// AI-CONTEXT: §23 entry 102 — F8's inbox, the first endpoint that lets a driver read
+// anything the notification system decided about them.
+export async function fetchNotifications() {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/notifications`, { headers: headers() });
+  if (!resp.ok) throw new Error(`notifications failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function markNotificationRead(id) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/notifications/${id}/read`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`mark read failed: ${resp.status}`);
+  return resp.json();
+}
