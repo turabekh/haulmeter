@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import canonical_facility_id, current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db, require_module
 from app.api.events import publish_status
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
@@ -21,7 +21,10 @@ from app.modules.m03_detention import public as m3
 from app.modules.m06_parking import public as m6
 from app.modules.m07_fuel import public as m7
 
-router = APIRouter(prefix="/map", tags=["map"])
+router = APIRouter(prefix="/map", tags=["map"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m01_map"))],
+)
 
 
 def _serialize_pin(pin) -> dict:

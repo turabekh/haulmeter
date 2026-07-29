@@ -39,9 +39,51 @@ def register_flag(
     return flag
 
 
+def is_switched_off(db: Session, flag_key: str) -> bool:
+    """AI-CONTEXT: the MODULE GATE's predicate, and deliberately not `is_enabled`
+    (§23 entry 105).
+
+    `is_enabled` answers "may this run?" and treats an unregistered flag as OFF, which
+    is correct for a capability nobody has switched on yet. A module gate asks the
+    opposite question — "has anyone switched this OFF?" — and the difference decides
+    what happens when the registry itself fails.
+
+    Registration runs at startup. If it ever fails, `is_enabled` would take the entire
+    product dark: twelve modules answering 404 because a bootstrap query hiccuped. That
+    is a self-inflicted outage of exactly the kind §23 entries 92, 93 and 100 kept
+    finding. This predicate fails OPEN on absence and CLOSED on an explicit decision:
+    a module is refused only when a flag row exists and says so.
+
+    The kill switch a driver-facing product actually needs is "turn M3 off NOW", and
+    that is a row that exists and says off. Nothing here weakens it.
+    """
+    flag = db.get(FeatureFlag, flag_key)
+    if flag is None:
+        return False  # never governed — behaves exactly as it did before gates existed
+    return flag.kill_switch or not flag.enabled
+
+
 def add_gate(db: Session, flag_key: str, name: str, note: str | None = None) -> ValidationGate:
+    """AI-CONTEXT: idempotent, and it was not (§23 entry 105).
+
+    Every module's `register_module` calls this for each of its activation gates, and
+    registration now runs on EVERY application start — so a second boot hit
+    `uq_validation_gate_flag_name` and the whole registry transaction rolled back,
+    taking the flags with it. A registration routine that cannot be run twice is a
+    landmine under any process that restarts.
+
+    An existing gate is RETURNED UNCHANGED rather than reset. `satisfied` is an owner
+    decision — a legal sign-off that has been granted must not be revoked by a deploy,
+    which is precisely what re-creating the row would have done."""
     if db.get(FeatureFlag, flag_key) is None:
         raise FlagNotFound(flag_key)
+    existing = db.scalar(
+        select(ValidationGate).where(
+            ValidationGate.flag_key == flag_key, ValidationGate.name == name
+        )
+    )
+    if existing is not None:
+        return existing
     gate = ValidationGate(flag_key=flag_key, name=name, note=note)
     db.add(gate)
     db.flush()

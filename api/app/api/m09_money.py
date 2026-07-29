@@ -11,11 +11,14 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
 from app.modules.m09_money import public as m9
 
-router = APIRouter(prefix="/money", tags=["money"])
+router = APIRouter(prefix="/money", tags=["money"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m09_money"))],
+)
 
 
 class SettlementLineIn(BaseModel):

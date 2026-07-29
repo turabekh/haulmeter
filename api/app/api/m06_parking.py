@@ -10,11 +10,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
 from app.modules.m06_parking import public as m6
 
-router = APIRouter(prefix="/parking", tags=["parking"])
+router = APIRouter(prefix="/parking", tags=["parking"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m06_parking"))],
+)
 
 
 class BookIn(BaseModel):

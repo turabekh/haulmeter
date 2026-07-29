@@ -10,11 +10,14 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import canonical_facility_id, current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
 from app.modules.m08_intelligence import public as m8
 
-router = APIRouter(prefix="/intel", tags=["intelligence"])
+router = APIRouter(prefix="/intel", tags=["intelligence"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m08_intelligence"))],
+)
 
 
 class TrueProfitIn(BaseModel):

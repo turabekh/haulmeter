@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f04_evidence import public as evidence
@@ -23,7 +23,10 @@ from app.foundation.f12_offline import public as offline
 from app.modules.m03_detention import public as m3
 from app.modules.m05_protection import public as m5
 
-router = APIRouter(prefix="/protection", tags=["protection"])
+router = APIRouter(prefix="/protection", tags=["protection"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m05_protection"))],
+)
 
 _GATEWAY = notify.RecordingNotificationGateway()  # F8 seam (dev)
 

@@ -10,13 +10,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
 from app.foundation.f05_load import public as loads
 from app.foundation.f08_notifications import public as notify
 from app.modules.m03_detention import public as m3
 
-router = APIRouter(prefix="/detention", tags=["detention"])
+router = APIRouter(prefix="/detention", tags=["detention"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m03_detention"))],
+)
 
 _GATEWAY = notify.RecordingNotificationGateway()  # F8 seam (dev)
 

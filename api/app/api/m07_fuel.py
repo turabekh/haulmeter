@@ -12,11 +12,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import canonical_facility_id, current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
 from app.modules.m07_fuel import public as m7
 
-router = APIRouter(prefix="/fuel", tags=["fuel"])
+router = APIRouter(prefix="/fuel", tags=["fuel"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m07_fuel"))],
+)
 
 
 class PumpCodeIn(BaseModel):

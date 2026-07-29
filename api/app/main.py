@@ -1,3 +1,4 @@
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -72,9 +73,34 @@ def _wire_object_storage() -> None:
         )
 
 
+def _register_module_flags() -> None:
+    """§23 entry 105: PRD §6 requires every module behind its own flag, and twelve had
+    none registered — so `is_enabled` answered False for all of them and there was no
+    kill switch to reach. Idempotent, and it runs before the first request so a gate
+    can never see a flag that has not been registered yet."""
+    from app.core.db import SessionLocal
+    from app.module_registry import register_all
+
+    db = SessionLocal()
+    try:
+        register_all(db)
+        db.commit()
+    except Exception:  # noqa: BLE001 — a registry failure must not stop the API booting
+        db.rollback()
+        print(
+            "WARNING: module flag registration failed — every gated module will "
+            "answer 404 until this is fixed",
+            file=sys.stderr,
+            flush=True,
+        )
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     _wire_object_storage()
+    _register_module_flags()
     yield
 
 

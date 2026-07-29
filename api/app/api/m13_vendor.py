@@ -19,14 +19,17 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import canonical_facility_id, current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f14_admin import public as admin
 from app.modules.m13_vendor import public as m13
 
-router = APIRouter(prefix="/vendors", tags=["vendors"])
+router = APIRouter(prefix="/vendors", tags=["vendors"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m13_vendor"))],
+)
 
 # how many reviews ride on the sheet payload; the rest are a paging concern for a
 # later session. A phone at 360 dp cannot usefully render more in one sheet anyway.

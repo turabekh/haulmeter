@@ -11,13 +11,16 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import canonical_facility_id, current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
 from app.foundation.f09_ai_gateway import public as ai
 from app.modules.m02_facility_intel import public as m2
 from app.modules.m03_detention import public as m3
 
-router = APIRouter(prefix="/facility", tags=["facility"])
+router = APIRouter(prefix="/facility", tags=["facility"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m02_facility_intel"))],
+)
 
 # AI-CONTEXT: F9 provider seam — swap the deterministic fake for the real model
 # adapter (latest Claude models via the claude-api skill) at activation.

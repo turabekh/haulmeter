@@ -11,13 +11,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import canonical_facility_id, current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db, require_module
 from app.api.events import publish_handoff
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.modules.m10_community import public as m10
 
-router = APIRouter(prefix="/community", tags=["community"])
+router = APIRouter(prefix="/community", tags=["community"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m10_community"))],
+)
 
 
 class BroadcastIn(BaseModel):

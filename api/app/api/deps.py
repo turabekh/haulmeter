@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_session
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
+from app.foundation.f13_flags import public as flags
 
 
 def get_db() -> Iterator[Session]:
@@ -100,3 +101,23 @@ def portal_actor(
     if account is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid or expired session")
     return PortalActor(actor=account, subject=account, impersonated=False)
+
+
+def require_module(flag_key: str):
+    """AI-CONTEXT: PRD §6's gate, as a router dependency (§23 entry 105).
+
+    **404, not 403** — following M13, the one module that was already built to the law.
+    A disabled module is not forbidden, it is NOT THERE: a driver whose fleet has not
+    activated M12 should meet the same wall as a driver asking for a route that never
+    existed, and a 403 would confirm the capability exists and is being withheld.
+
+    Attached to the ROUTER rather than each route, so a new endpoint inside a module
+    cannot be added ungated by forgetting a decorator — the failure mode that left
+    twelve modules open in the first place.
+    """
+
+    def _gate(db: Session = Depends(get_db)) -> None:
+        if flags.is_switched_off(db, flag_key):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "not enabled")
+
+    return _gate

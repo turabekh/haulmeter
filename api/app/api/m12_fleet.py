@@ -11,11 +11,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import canonical_facility_id, current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
 from app.modules.m12_fleet import public as m12
 
-router = APIRouter(prefix="/fleet", tags=["fleet"])
+router = APIRouter(prefix="/fleet", tags=["fleet"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m12_fleet"))],
+)
 
 _MANAGEMENT = (m12.FleetRole.owner, m12.FleetRole.dispatcher)
 

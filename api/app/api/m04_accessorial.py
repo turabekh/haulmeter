@@ -10,14 +10,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
 from app.foundation.f05_load import public as loads
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f09_ai_gateway import public as ai
 from app.modules.m04_accessorial import public as m4
 
-router = APIRouter(prefix="/accessorial", tags=["accessorial"])
+router = APIRouter(prefix="/accessorial", tags=["accessorial"],
+    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
+    dependencies=[Depends(require_module("m04_accessorial"))],
+)
 
 _GATEWAY = notify.RecordingNotificationGateway()  # F8 seam (dev)
 _PROVIDER = ai.resolve_provider()  # F9: real Claude when ANTHROPIC_API_KEY set, else Fake
