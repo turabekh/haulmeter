@@ -179,12 +179,16 @@ def test_one_fuel_island_cannot_absorb_another(db):
     assert second.created == 1
 
 
-def test_a_branded_pump_is_not_merged_into_an_unnamed_host(db):
+def test_an_unnamed_host_adopts_the_pump_name_rather_than_losing_it(db):
     """Found by dry-running the repair over the real 4,568-row dataset, not by
-    reasoning: 35 of the 474 merges were "Flying J #695" and "TA" disappearing into
-    "Parking Property" — the placeholder name this code writes for an unnamed OSM
-    feature. One pin is the goal, but not at the price of the only real name on the
-    site, and adopting the tenant's name is the very thing `_contribution` forbids."""
+    reasoning: 35 of the 474 merges were "Flying J #695" and "TA" about to disappear
+    into "Parking Property" — the placeholder this code writes for an unnamed OSM
+    feature.
+
+    This first shipped as a REFUSAL to merge, which kept the name at the cost of
+    leaving two pins. The owner chose the merge (§23 entry 96), so the name comes
+    across with it: one pin AND the only real name on the site. The guard against
+    renaming a REAL place is untouched and is the test below this one."""
     facility.ingest_records(
         db,
         [
@@ -202,9 +206,22 @@ def test_a_branded_pump_is_not_merged_into_an_unnamed_host(db):
     )
     stats = facility.ingest_records(db, _island(name="Flying J #695"), batch_id="pump")
 
-    assert stats.created == 1
-    kept = facility.resolve_canonical(db, next(iter(stats.facility_ids)))
-    assert kept.name == "Flying J #695"
+    assert stats.created == 0  # one site, one pin
+    assert stats.matched == 1
+    site = facility.resolve_canonical(db, next(iter(stats.facility_ids)))
+    assert site.name == "Flying J #695"  # and the name survived the merge
+    assert site.facility_type == facility.FacilityType.parking_property
+
+
+def test_a_named_host_is_never_renamed_by_the_pump_inside_it(db):
+    """The guard the adoption rule must not weaken. A site that HAS a name keeps it —
+    a Flying J is not renamed after the Pilot-branded island on its forecourt, which
+    is the mistake `_contribution` exists to prevent."""
+    _truck_stop(db, name="Flying J Travel Center")
+    stats = facility.ingest_records(db, _island(name="Pilot"), batch_id="pump")
+
+    site = facility.resolve_canonical(db, next(iter(stats.facility_ids)))
+    assert site.name == "Flying J Travel Center"
 
 
 def test_an_unnamed_pump_still_merges_into_an_unnamed_host(db):

@@ -56,8 +56,8 @@ from app.foundation.f02_facility.domain.ingest.pipeline import (  # noqa: E402
 from app.foundation.f02_facility.domain.models import Facility  # noqa: E402
 from app.foundation.f02_facility.domain.service import (  # noqa: E402
     colocated_host,
+    host_should_adopt_name,
     merge_facilities,
-    merge_would_lose_the_only_name,
 )
 
 
@@ -126,7 +126,7 @@ def _backfill_fuel_service(db, dry_run: bool) -> int:
 
 
 def _merge_colocated_fuel(db, dry_run: bool) -> tuple[int, int, int]:
-    merged = standalone = kept_for_name = 0
+    merged = standalone = adopted = 0
     for station in _live(db, FacilityType.fuel_station):
         lat, lon = db.execute(
             select(Facility.geom.ST_Y(), Facility.geom.ST_X()).where(Facility.id == station.id)
@@ -135,10 +135,12 @@ def _merge_colocated_fuel(db, dry_run: bool) -> tuple[int, int, int]:
         if host is None or host.id == station.id:
             standalone += 1
             continue
-        if merge_would_lose_the_only_name(host, station.name):
-            print(f"  KEPT {station.name!r}: host {host.name!r} is unnamed — would lose the name")
-            kept_for_name += 1
-            continue
+        if host_should_adopt_name(host, station.name):
+            print(f"  ADOPT {host.name!r} -> {station.name!r} (host was unnamed)")
+            if not dry_run:
+                host.name = station.name
+                db.flush()
+            adopted += 1
         print(f"  {station.name!r} -> {host.name!r} ({host.facility_type.value})")
         if not dry_run:
             for src in list(station.sources):
@@ -151,7 +153,7 @@ def _merge_colocated_fuel(db, dry_run: bool) -> tuple[int, int, int]:
             merge_facilities(db, host, station)
             _recompute_canonical(db, host)
         merged += 1
-    return merged, standalone, kept_for_name
+    return merged, standalone, adopted
 
 
 def main() -> None:
@@ -160,13 +162,12 @@ def main() -> None:
     try:
         retyped = _retype_branded_service_areas(db, dry_run)
         fuelled = _backfill_fuel_service(db, dry_run)
-        merged, standalone, kept_for_name = _merge_colocated_fuel(db, dry_run)
+        merged, standalone, adopted = _merge_colocated_fuel(db, dry_run)
         print(
             f"\n{'DRY RUN — ' if dry_run else ''}{retyped} branded service area(s) re-typed to "
             f"truck_stop, {fuelled} site(s) gained the fuel service, {merged} fuel station(s) "
             f"merged into their host, {standalone} left standing alone, "
-            f"{kept_for_name} kept as a second pin because the host is UNNAMED and the "
-            f"merge would have taken the only real name off the map"
+            f"{adopted} unnamed host(s) adopted the pump's name so the merge kept it"
         )
         if dry_run:
             print("re-run with DRY_RUN=0 to apply")

@@ -186,19 +186,22 @@ def colocated_host(
     return db.scalars(stmt).first()
 
 
-def merge_would_lose_the_only_name(host: Facility, incoming_name: str) -> bool:
+def host_should_adopt_name(host: Facility, incoming_name: str) -> bool:
     """AI-CONTEXT: E3.3. A co-located amenity contributes only what it knows about the
     SITE, which deliberately excludes its name — that rule is what stops a Flying J
     being renamed after the Pilot-branded island inside it.
 
-    It has one bad case. When the HOST is an unnamed OSM feature its name is a
-    placeholder this code wrote ("Parking Property", "Rest Area"), and merging a
-    branded pump into it takes the only real name on the site off the map: 35 of the
-    474 merges in the first pull were "Flying J #695" and "TA" disappearing into
-    "Parking Property". Refusing the merge leaves two pins, which is the status quo
-    and visibly wrong — but a nameless pin is wrong AND unsearchable, and adopting the
-    tenant's name is the mistake this rule exists to prevent. So the honest answer is
-    to leave it for a human, and `repair-fuel` reports the count rather than hiding it.
+    One case inverts it. When the HOST is an unnamed OSM feature, its name is a
+    placeholder this code wrote ("Parking Property", "Rest Area") and there is no
+    identity to protect — while the incoming pump carries a real one. 35 of the 474
+    merges in the first pull were "Flying J #695" and "TA" about to disappear into
+    "Parking Property".
+
+    This first shipped as a REFUSAL to merge, leaving two pins so the name survived.
+    The owner chose the merge instead (§23 entry 96), and adoption is what makes that
+    safe: one pin AND the only real name on the site, rather than one pin and a
+    nameless pin a driver cannot search for. The guard against renaming a real place
+    is unchanged — a host whose name is not a placeholder never adopts.
     """
     from .ingest.adapters import placeholder_name
 
