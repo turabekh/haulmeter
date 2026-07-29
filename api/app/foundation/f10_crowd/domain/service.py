@@ -378,3 +378,27 @@ def beliefs_for_signal(db: Session, facility_ids, signal_type: SignalType) -> li
             )
         )
     )
+
+
+def has_recent_submission(db: Session, account_id, facility_id, signal_type, since) -> bool:
+    """Has this driver already told us about this facility lately? (§23 entry 112)
+
+    AI-CONTEXT: exists so the prompt does not ask for something the driver volunteered
+    ten minutes ago. Scoped to the ACCOUNT deliberately — another driver having reported
+    is not a reason to skip asking this one, because two independent reports are what
+    consensus is built from.
+    """
+    return (
+        db.scalar(
+            select(Submission.id)
+            .where(
+                Submission.account_id == account_id,
+                Submission.facility_id == facility_id,
+                Submission.signal_type == signal_type,
+                Submission.submitted_at >= since,
+            )
+            .limit(1)
+        )
+        is not None
+    )
+

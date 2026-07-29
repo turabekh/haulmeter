@@ -51,6 +51,7 @@ class NotificationClassSpec:
 
 VENDOR_ALERT_CLASS = "vendor_alert"
 PROTECTION_GAP_CLASS = "protection_gap"
+LOT_STATUS_PROMPT_CLASS = "lot_status_prompt"
 
 NOTIFICATION_CLASSES: dict[str, NotificationClassSpec] = {
     # M13-FR6 anti-spam laws are PART of the class definition: opt-in only, at most
@@ -72,6 +73,30 @@ NOTIFICATION_CLASSES: dict[str, NotificationClassSpec] = {
     # to two softer nudges already spent — but capped at one a day, still muted in
     # quiet hours and while RESTING, and on by default because a driver cannot opt in
     # to a warning they have never seen.
+    # M1-FR7's missing half (§23 entry 112, owner-approved). The product had never
+    # ASKED a driver anything: the report chip is driver-initiated and the live fan-out
+    # only delivers. This class is the ask, and every field of it is a claim.
+    #
+    # P1, not P0: nobody's money or safety turns on a lot's fullness.
+    # ONE a day: a driver who stops three times should be asked once, not three times.
+    # OPT-IN OFF by default, which is the field most worth arguing about — this asks
+    #   the driver for LABOUR, and §21.8 forbids helping ourselves to it. The cost is
+    #   real: most drivers will never see it unless they go looking, and the answer to
+    #   low uptake is a better offer, not a default that takes without asking.
+    # ROUTE-RELEVANCE OFF because they are standing in the lot; relevance is PROVEN by
+    #   the geofence rather than inferred from a route, which is the opposite of the
+    #   vendor case this flag was written for.
+    # NOT BUDGET-EXEMPT, deliberately: `protection_gap` earned its exemption by being a
+    #   DEADLINE — the trailer cannot be photographed at that dock ever again — and a
+    #   survey is the exact opposite. It must LOSE to real news rather than crowd it out.
+    LOT_STATUS_PROMPT_CLASS: NotificationClassSpec(
+        key=LOT_STATUS_PROMPT_CLASS,
+        tier=NotificationTier.P1,
+        max_per_day=1,
+        opt_in_default=False,
+        route_relevant_only=False,
+        budget_exempt=False,
+    ),
     PROTECTION_GAP_CLASS: NotificationClassSpec(
         key=PROTECTION_GAP_CLASS,
         tier=NotificationTier.P1,
@@ -284,6 +309,7 @@ def dispatch(
     driver_state: DriverState = DriverState.idle,
     to_ref: str | None = None,
     subject_ref: str | None = None,
+    actions: list[dict] | None = None,
 ) -> Notification:
     if not deep_link:
         raise MissingDeepLink(
@@ -313,7 +339,7 @@ def dispatch(
     def _send(channel: NotificationChannel) -> Notification:
         # §13.5 travels WITH the push: one definition of "where this is about" serves
         # the tray entry and the inbox row, so the two can never disagree.
-        gateway.send_push(to_ref, title, body, deep_link)
+        gateway.send_push(to_ref, title, body, deep_link, actions)
         notification.status = NotificationStatus.sent
         notification.channel = channel
         notification.dispatched_at = now

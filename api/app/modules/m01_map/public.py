@@ -12,6 +12,7 @@ from .domain.service import (
     MAX_CORRIDOR_SCALES,
     MODULE,
     OVERLAY_PIN_CAP,
+    PROMPTABLE_KINDS,
     WEIGH_STATION_FLAG,
     ParkingPrediction,
     corridor_ahead,
@@ -22,6 +23,7 @@ from .domain.service import (
     map_overlay_view_bbox,
     nav_deeplink,
     predict_parking_fill,
+    prompt_for_lot_status,
     queue_status_offline,
     record_map_open,
     register_module,
@@ -53,5 +55,7 @@ __all__ = [
     "queue_status_offline",
     "record_map_open",
     "register_module",
+    "PROMPTABLE_KINDS",
+    "prompt_for_lot_status",
     "submit_status",
 ]

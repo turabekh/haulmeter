@@ -9,11 +9,12 @@ heuristic until M8. Runs behind the F13 flag `m01_map`.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from app.foundation.f02_facility import public as facility
+from app.foundation.f08_notifications import public as notify
 from app.foundation.f10_crowd import public as crowd
 from app.foundation.f11_map import public as mapsvc
 from app.foundation.f12_offline import public as offline
@@ -447,6 +448,83 @@ def submit_status(
     # (M1 DoD: report -> aggregate -> pin badge under 60s)
     crowd.update_belief(db, facility_id, signal_type, as_of=submitted_at)
     return submission
+
+
+# --- Asking the driver, instead of waiting to be told (§23 entry 112) ---
+#
+# AI-CONTEXT: M1-FR7's chip has always been driver-INITIATED and §23 entry 104 made
+# status arrive live; neither is a prompt. Nothing in this product had ever asked a
+# driver anything. This is the ask.
+#
+# WHY THE FIRST DWELL_TICK AND NOT `ENTER` — owner-approved. ENTER fires on crossing the
+# geofence, which includes a driver who rolled through the lot, turned around, or was
+# routed past the pumps; asking them would be asking someone who never stopped. F3's
+# `DWELL_TICK_INTERVAL` is already 15 minutes and is the product's existing answer to
+# "actually stopped here", so this needs no new threshold to argue about.
+#
+# 15 rather than RESTING's 20 minutes, which was the owner's open question: aligning
+# would mean either inventing a threshold or waiting for the SECOND tick at 30 minutes,
+# and a driver who stops for a 20-minute shower would then be asked after they had
+# already pulled out. The prompt has to land while they can still see the lot.
+#
+# NEVER WHILE DRIVING is structural rather than guarded: a dwell tick cannot fire for a
+# moving truck, so §13.4's ban on interactive prompts at speed is satisfied by the
+# trigger itself and not by a check somebody can forget.
+PROMPTABLE_KINDS = frozenset({"truck_stop", "rest_area", "parking_property"})
+
+
+def _already_reported_today(db: Session, account_id, facility_id, now: datetime) -> bool:
+    """A driver who has already told us about this lot must not be asked about it.
+
+    AI-CONTEXT: the class cap (1/day) stops repeat prompting in general; this stops the
+    specific insult of being asked for something you volunteered ten minutes ago.
+    """
+    return crowd.has_recent_submission(
+        db, account_id, facility_id, crowd.SignalType.parking_fullness, since=now - PROMPT_LOOKBACK
+    )
+
+
+PROMPT_LOOKBACK = timedelta(hours=12)
+
+
+def prompt_for_lot_status(db: Session, account_id, facility_id, gateway, now: datetime):
+    """Ask a driver who has actually stopped how full the lot is.
+
+    Returns the Notification, or None when there is nothing to ask. Every refusal below
+    is a rule rather than an optimisation, so they are separate and readable.
+    """
+    fac = facility.get_facility(db, facility_id)
+    if fac is None:
+        return None
+    # §11.7 in the ASKING direction: "how full is the lot?" at a grocery warehouse is a
+    # question about nothing. A driver dwelling at a shipper_receiver is WORKING, and
+    # that dwell is M3's business, not a survey.
+    if fac.facility_type.value not in PROMPTABLE_KINDS:
+        return None
+    if _already_reported_today(db, account_id, facility_id, now):
+        return None
+    name = fac.name or "this stop"
+    return notify.dispatch(
+        db,
+        account_id,
+        notify.NotificationTier.P1,
+        notify.LOT_STATUS_PROMPT_CLASS,
+        f"How's the lot at {name}?",
+        "One tap helps the next driver find a spot.",
+        # §13.5: the facility's own screen, where the same question is already a chip
+        f"/facility/{facility_id}",
+        gateway,
+        now=now,
+        subject_ref=str(facility_id),
+        # the answer must be one tap from a LOCKED phone or it is a task, not a
+        # confirmation. These are the exact three values PARKING_STATUS already defines
+        # and the map already renders — no new vocabulary anywhere in the system.
+        actions=[
+            {"action": "lot:empty", "title": "Empty"},
+            {"action": "lot:some", "title": "Some"},
+            {"action": "lot:full", "title": "Full"},
+        ],
+    )
 
 
 def queue_status_offline(

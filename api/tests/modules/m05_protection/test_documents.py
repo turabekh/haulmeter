@@ -90,11 +90,23 @@ def test_the_budget_lets_the_two_most_urgent_through(db):
 
     m5.dispatch_expiry_reminders(db, gateway, as_of=TODAY, now=NOON)
 
-    delivered = [
-        n for n in db.query(notify.Notification).all() if n.status == notify.NotificationStatus.sent
-    ]
+    # AI-CONTEXT: asserts WHICH two survived the budget, not what order they came back
+    # in. This read had no ORDER BY and asserted `delivered[0]`, so it depended on the
+    # physical order Postgres happened to return three rows in; it passed until an
+    # unrelated test started writing more notification rows and changed the heap.
+    # Adding `ORDER BY dispatched_at` does not fix it either — both are dispatched at
+    # the same instant, so that is a tie, and their relative order is simply not a fact
+    # the data records. The scarce-slot RULE is asserted deterministically one test up,
+    # against `expiry_reminders_due`, which is where the ordering actually lives.
+    delivered = {
+        n.title
+        for n in db.query(notify.Notification).all()
+        if n.status == notify.NotificationStatus.sent
+    }
     assert len(delivered) == 2, "§13.1 — two unprompted per driver per day"
-    assert "med card" in delivered[0].title
+    assert any("med card" in t for t in delivered)  # the nearest deadline gets a slot
+    assert any("insurance" in t for t in delivered)
+    assert not any("permit" in t for t in delivered)  # ...and the furthest loses it
 
 
 def test_a_reminder_is_not_re_offered_every_morning(db):

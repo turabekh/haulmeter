@@ -19,6 +19,7 @@ class SentMessage:
     subject: str | None
     body: str
     deep_link: str | None = None
+    actions: list[dict] | None = None
 
 
 class NotificationGateway(Protocol):
@@ -27,8 +28,17 @@ class NotificationGateway(Protocol):
     # `dispatch` always passes it, having already refused to create a notification
     # without one. A push that could not say where it was about would land the driver
     # on a tab root, which is the one thing §13.5 names outright.
+    # AI-CONTEXT: `actions` are the tray buttons that make an answer one tap from a
+    # LOCKED phone rather than a task (§23 entry 112). Server-driven rather than
+    # inferred in the service worker, because sw.js is cached on the browser's own
+    # schedule — a vocabulary hardcoded there can be stale on a driver's phone for days.
     def send_push(
-        self, to_ref: str, title: str, body: str, deep_link: str | None = None
+        self,
+        to_ref: str,
+        title: str,
+        body: str,
+        deep_link: str | None = None,
+        actions: list[dict] | None = None,
     ) -> str: ...
 
     def send_sms(self, to_ref: str, body: str) -> str: ...
@@ -41,9 +51,14 @@ class RecordingNotificationGateway:
         self.sent: list[SentMessage] = []
 
     def send_push(
-        self, to_ref: str, title: str, body: str, deep_link: str | None = None
+        self,
+        to_ref: str,
+        title: str,
+        body: str,
+        deep_link: str | None = None,
+        actions: list[dict] | None = None,
     ) -> str:
-        self.sent.append(SentMessage("push", to_ref, title, body, deep_link))
+        self.sent.append(SentMessage("push", to_ref, title, body, deep_link, actions))
         return f"push-{len(self.sent)}"
 
     def send_sms(self, to_ref: str, body: str) -> str:
@@ -57,7 +72,12 @@ class RecordingNotificationGateway:
 
 class StubNotificationGateway:
     def send_push(
-        self, to_ref: str, title: str, body: str, deep_link: str | None = None
+        self,
+        to_ref: str,
+        title: str,
+        body: str,
+        deep_link: str | None = None,
+        actions: list[dict] | None = None,
     ) -> str:
         raise NotImplementedError("FCM/APNs adapter is a seam; wired at activation")
 
@@ -106,7 +126,12 @@ class WebPushNotificationGateway:
         return bool(self._settings.vapid_private_key and self._settings.vapid_public_key)
 
     def send_push(
-        self, to_ref: str, title: str, body: str, deep_link: str | None = None
+        self,
+        to_ref: str,
+        title: str,
+        body: str,
+        deep_link: str | None = None,
+        actions: list[dict] | None = None,
     ) -> str:
         from app.foundation.f08_notifications.domain import service as f08
 
@@ -114,10 +139,12 @@ class WebPushNotificationGateway:
             return "push-unconfigured"
         subs = f08.subscriptions_for(self._db, self._account_id)
         for sub in list(subs):
-            self._send_one(sub, title, body, deep_link)
+            self._send_one(sub, title, body, deep_link, actions)
         return f"push-{self.delivered}"
 
-    def _send_one(self, sub, title: str, body: str, deep_link: str | None) -> None:
+    def _send_one(
+        self, sub, title: str, body: str, deep_link: str | None, actions: list[dict] | None = None
+    ) -> None:
         import json
 
         from app.foundation.f08_notifications.domain import service as f08
@@ -132,7 +159,14 @@ class WebPushNotificationGateway:
                     "endpoint": sub.endpoint,
                     "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
                 },
-                data=json.dumps({"title": title, "body": body, "deep_link": deep_link}),
+                data=json.dumps(
+                    {
+                        "title": title,
+                        "body": body,
+                        "deep_link": deep_link,
+                        "actions": actions or [],
+                    }
+                ),
                 vapid_private_key=self._settings.vapid_private_key,
                 vapid_claims={"sub": self._settings.vapid_contact},
                 timeout=10,

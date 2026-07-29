@@ -50,9 +50,44 @@ function persist() {
   }
 }
 
+/* AI-CONTEXT: the session token is mirrored to IndexedDB for the SERVICE WORKER
+ * (§23 entry 112), which cannot reach localStorage — that API is synchronous and
+ * workers have none. It is what lets a tray answer be sent without opening the app.
+ *
+ * Not a new exposure: the same token is already in localStorage on the same origin.
+ * It is cleared on logout in the same breath as the rest, because a token that
+ * outlived sign-out in a second store is exactly the kind of leftover nobody looks for.
+ * Failures are swallowed — a browser with IDB blocked still signs in fine, it just
+ * answers prompts by opening the app instead. */
+function mirrorTokenToIdb(value) {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    const req = indexedDB.open("haulmeter", 1);
+    req.onupgradeneeded = () => {
+      try {
+        req.result.createObjectStore("kv");
+      } catch {
+        /* already there */
+      }
+    };
+    req.onsuccess = () => {
+      try {
+        const store = req.result.transaction("kv", "readwrite").objectStore("kv");
+        if (value) store.put(value, "token");
+        else store.delete("token");
+      } catch {
+        /* nothing to do — the SW falls back to opening the app */
+      }
+    };
+  } catch {
+    /* same */
+  }
+}
+
 export function setToken(value) {
   token.value = value;
   persist();
+  mirrorTokenToIdb(value);
 }
 
 export function logout() {
@@ -60,6 +95,7 @@ export function logout() {
   account.value = null;
   email.value = null;
   persist();
+  mirrorTokenToIdb(null);
   clearCache(); // a new driver never sees the last one's cached reads
   saveQueue([]); // ...nor inherits their unsynced writes
 }

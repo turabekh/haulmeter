@@ -34,6 +34,7 @@ from .domain.models import (
 )
 from .domain.service import (
     BUDGET_EXEMPT_CLASSES,
+    LOT_STATUS_PROMPT_CLASS,
     MAX_UNPROMPTED_P1_PER_DAY,
     NOTIFICATION_CLASSES,
     PROTECTION_GAP_CLASS,
@@ -78,6 +79,7 @@ from .domain.service import (
 __all__ = [
     "NotificationClassPref",
     "NOTIFICATION_CLASSES",
+    "LOT_STATUS_PROMPT_CLASS",
     "PROTECTION_GAP_CLASS",
     "VENDOR_ALERT_CLASS",
     "NotificationClassSpec",
