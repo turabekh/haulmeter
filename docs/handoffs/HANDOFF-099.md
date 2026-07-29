@@ -1,5 +1,9 @@
 # HANDOFF-099 — the session the map stopped drawing one place twice
 
+> **Continued in [HANDOFF-100.md](HANDOFF-100.md)** — same working session. 100 covers
+> the map performance work, the notification inbox, the live channel, and the
+> feature-flag audit that is the next task.
+
 **Project:** Haulmeter — Consolidated Trucker Platform (mobile-first, driver pays $0).
 **Date:** 29 July 2026 · **Stack:** UP locally (`make down` to stop) · **Deployed:**
 https://haulmeter.online (GCE, project `uzimiz-prod`) — **updated and repaired this session.**
