@@ -3,15 +3,14 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-102.md](HANDOFF-102.md)** — read this first, every session.
+➡️ **[HANDOFF-103.md](HANDOFF-103.md)** — read this first, every session.
 
-> 102 continues **101** (same working session) and CORRECTS its §7.2: all three
-> of §13.2's P0 examples now exist, and two of them needed the EVENT built first.
-> Read 101 for the detention P0, the freshness window and the anchor rule — the
-> same class of defect recurs in 102, so its corrections are load-bearing. Read
-> 100 for the map performance work, the notification inbox and the SSE channel;
-> 099 for the facility-merge story and the merged-id resolver, and its §11 for
-> the repo being public and pushed.
+> 103 continues **102** (same working session): Web Push is live and ENABLED on the
+> box, and §7.1 is the one claim a laptop could not check — no push has reached a real
+> handset yet. Read 102 for "the events were missing, not the notifications" and the
+> rule governing all three P0s; 101 for the detention P0, the freshness window and the
+> anchor rule; 100 for the map performance work, the inbox and the SSE channel; 099
+> for the facility-merge story and its §11 on the repo being public.
 
 Each session ends by writing the next `HANDOFF-<n>.md` in this directory and updating
 this pointer to it. Full history is here in `docs/handoffs/`; the Session-0 bootstrap
