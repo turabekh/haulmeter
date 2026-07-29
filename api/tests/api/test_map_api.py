@@ -211,6 +211,63 @@ def test_a_truck_stop_without_fuel_carries_no_price(client, db):
     assert [b for b in lot["badges"] if b["kind"] == "fuel_net"] == []
 
 
+def test_a_report_against_a_merged_facility_reaches_the_pin_that_renders(client, db):
+    """The sharpest form of the stale-id defect, found by driving the API after the
+    E3.3 merge. A merge does not delete the duplicate — deliberately, so an id a
+    driver already holds keeps working — but nothing resolved it on the way in, so
+    this returned a submission_id and wrote the belief onto a facility that no longer
+    renders. The driver was told their "lot is full" landed; nobody would ever see it.
+    §11.7 forbids an absence dressed as a result."""
+    headers = _auth(client)
+    host = facility.create_facility(
+        db, facility.FacilityType.truck_stop, "Flying J Travel Center", *DALLAS
+    )
+    pump = facility.create_facility(db, facility.FacilityType.fuel_station, "Pilot", *DALLAS)
+    facility.merge_facilities(db, host, pump)
+
+    resp = client.post(
+        "/map/report",
+        json={
+            "facility_id": str(pump.id),
+            "signal_type": "parking_fullness",
+            "value": {"status": "full"},
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 200
+
+    pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "drive"},
+        headers=headers,
+    ).json()["pins"]
+    stop = next(p for p in pins if p["name"] == "Flying J Travel Center")
+    assert stop["status"] == "full"  # the report reached the pin a driver can see
+
+
+def test_a_merged_facility_id_reads_as_the_site_it_belongs_to(client, db):
+    """`GET /public/facility/<merged>` answered 200 with the ABSORBED pump — the right
+    status code carrying the wrong place. A saved lot, a deep link or a notification
+    holding a pre-merge id must land on the site, not on its shadow."""
+    host = facility.create_facility(
+        db, facility.FacilityType.truck_stop, "Flying J Travel Center", *DALLAS
+    )
+    pump = facility.create_facility(db, facility.FacilityType.fuel_station, "Pilot", *DALLAS)
+    facility.merge_facilities(db, host, pump)
+
+    body = client.get(f"/public/facility/{pump.id}").json()
+    assert body["name"] == "Flying J Travel Center"
+    assert body["facility_type"] == "truck_stop"
+
+
+def test_an_unknown_facility_id_still_404s(client, db):
+    """Resolution is not existence. The resolver passes an unknown id straight
+    through so each route keeps answering 404 in its own words."""
+    import uuid as _uuid
+
+    assert client.get(f"/public/facility/{_uuid.uuid4()}").status_code == 404
+
+
 def test_overlay_freshness_carries_feed_source_for_tpims(client, db):
     # a TPIMS (authoritative) reading tags the pin's freshness with its source, so the
     # card attributes it to the feed — not "N drivers" (§11.7 honesty)

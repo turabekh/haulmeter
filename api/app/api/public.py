@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import canonical_facility_id, get_db
 from app.foundation.f02_facility import public as facility
 from app.modules.m02_facility_intel import public as m2
 
@@ -46,7 +46,7 @@ def facilities(
 
 @router.get("/facility/{facility_id}")
 def scorecard(
-    facility_id: uuid.UUID,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     db: Session = Depends(get_db),
 ) -> dict:
     fac = facility.get_facility(db, facility_id)

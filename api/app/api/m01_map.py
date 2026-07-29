@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f10_crowd import public as crowd
 from app.modules.m01_map import public as m1
@@ -260,10 +260,14 @@ def report(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
+    # the facility_id rides in the BODY here, so the path-level resolver cannot reach
+    # it — and this is the write where a stale id hurt most: the report was accepted,
+    # a submission_id returned, and the belief written onto a pin that no longer
+    # renders, so a driver was told their "lot is full" landed and nobody would see it.
     submission = m1.submit_status(
         db,
         account.id,
-        body.facility_id,
+        canonical_facility_id(body.facility_id, db),
         crowd.SignalType(body.signal_type),
         body.value,
         body.submitted_at or datetime.now(UTC),

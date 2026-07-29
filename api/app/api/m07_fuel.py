@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.modules.m07_fuel import public as m7
 
@@ -94,6 +94,10 @@ def confirm_price(
     db: Session = Depends(get_db),
 ) -> dict:
     consensus = m7.confirm_price(
-        db, account.id, body.facility_id, body.price_cents_per_gal, datetime.now(UTC)
+        db,
+        account.id,
+        canonical_facility_id(body.facility_id, db),
+        body.price_cents_per_gal,
+        datetime.now(UTC),
     )
     return {"consensus_cents_per_gal": consensus}

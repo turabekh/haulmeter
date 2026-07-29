@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f08_notifications import public as notify
@@ -202,7 +202,7 @@ def corridor(
 
 @router.get("/at/{facility_id}")
 def at_facility(
-    facility_id: uuid.UUID,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     all_vendors: bool = False,
     _account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
@@ -580,7 +580,7 @@ def report_promotion(
 # --- FR6: the labelled slot's contents for a facility (driver side) ---
 @router.get("/promotions/at/{facility_id}")
 def facility_promotions(
-    facility_id: uuid.UUID,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     _account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> list[dict]:
@@ -603,7 +603,7 @@ def facility_promotions(
 # --- FR7: what a driver sees for a claimed service centre ---
 @router.get("/service-center/{facility_id}")
 def service_center(
-    facility_id: uuid.UUID,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     _account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:

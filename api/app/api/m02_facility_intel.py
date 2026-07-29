@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f09_ai_gateway import public as ai
 from app.modules.m02_facility_intel import public as m2
@@ -35,7 +35,7 @@ def _serialize_review(review) -> dict:
 
 @router.get("/{facility_id}/profile")
 def profile(
-    facility_id: uuid.UUID,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -68,8 +68,8 @@ class ReviewIn(BaseModel):
 
 @router.post("/{facility_id}/review", status_code=201)
 def submit_review(
-    facility_id: uuid.UUID,
     body: ReviewIn,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:

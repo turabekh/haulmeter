@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.modules.m10_community import public as m10
@@ -71,7 +71,7 @@ def broadcast(
         handoff = m10.broadcast_handoff(
             db,
             account.id,
-            body.facility_id,
+            canonical_facility_id(body.facility_id, db),
             now + timedelta(minutes=body.leaving_in_minutes),
             now,
         )
@@ -144,7 +144,7 @@ def confirm(
 
 @router.get("/questions/{facility_id}")
 def questions(
-    facility_id: uuid.UUID,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> list[dict]:
@@ -164,7 +164,9 @@ def ask(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
-    q = m10.ask_question(db, account.id, body.facility_id, body.text, datetime.now(UTC))
+    q = m10.ask_question(
+        db, account.id, canonical_facility_id(body.facility_id, db), body.text, datetime.now(UTC)
+    )
     return {"question_id": str(q.id)}
 
 

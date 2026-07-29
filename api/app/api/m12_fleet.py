@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.modules.m12_fleet import public as m12
 
@@ -106,8 +106,8 @@ def claims_desk(
 
 @router.get("/benchmark/{facility_id}")
 def benchmark(
-    facility_id: uuid.UUID,
     subscriber_ref: str,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:

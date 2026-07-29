@@ -6,6 +6,7 @@ activation); the pluggable auth registry means OAuth/OTP slot in later without
 touching this dependency.
 """
 
+import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
 
@@ -14,10 +15,41 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_session
 from app.foundation.f01_identity import public as identity
+from app.foundation.f02_facility import public as facility
 
 
 def get_db() -> Iterator[Session]:
     yield from get_session()
+
+
+def canonical_facility_id(
+    facility_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> uuid.UUID:
+    """AI-CONTEXT: a merged facility_id resolves to the site it was merged INTO,
+    everywhere, before any module sees it.
+
+    A merge does not delete the duplicate — that is deliberate, so an id a driver
+    already holds keeps working — but nothing on the READ side resolved it, so it
+    "kept working" by answering with the shadow. `GET /public/facility/<merged>`
+    returned the absorbed pump ("Pilot", fuel_station) rather than the site it now
+    belongs to ("Flying J Travel Center", truck_stop), and the write paths were worse:
+    a crowd report against a merged id returned a submission_id and wrote a belief
+    onto a facility that no longer renders, so the driver was told their report landed
+    and no one would ever see it. §11.7 forbids exactly that — an absence dressed as
+    a result.
+
+    Applied at the API layer rather than inside each module because the id is the
+    thing that needs correcting, not the object: most callers pass the UUID on to
+    tables of their own keyed by facility_id. 678 rows are merged today (239 from the
+    scales repair, 439 from the fuel one) and `/admin/facilities/{id}/merge` makes
+    more, so this cannot be a one-off backfill.
+
+    Unknown ids pass through untouched — resolution is not existence, and each route
+    still answers 404 in its own words.
+    """
+    resolved = facility.resolve_canonical(db, facility_id)
+    return resolved.id if resolved is not None else facility_id
 
 
 def bearer_token(authorization: str = Header(default="")) -> str:

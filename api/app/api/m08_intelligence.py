@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.modules.m08_intelligence import public as m8
 
@@ -44,7 +44,7 @@ def true_profit(
         loaded_miles=body.loaded_miles,
         mpg=body.mpg,
         tolls_cents=body.tolls_cents,
-        receiver_facility_id=body.receiver_facility_id,
+        receiver_facility_id=canonical_facility_id(body.receiver_facility_id, db),
         free_time_minutes=body.free_time_minutes,
         rate_cents_per_hour=body.rate_cents_per_hour,
         origin_lat=body.origin_lat,
@@ -66,7 +66,7 @@ def true_profit(
 
 @router.get("/appointment-hours/{facility_id}")
 def appointment_hours(
-    facility_id: uuid.UUID,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> list[dict]:
@@ -83,7 +83,7 @@ def appointment_hours(
 
 @router.get("/detention-risk/{facility_id}")
 def detention_risk(
-    facility_id: uuid.UUID,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     free_time_minutes: int = 120,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
