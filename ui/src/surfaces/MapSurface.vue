@@ -4,7 +4,7 @@
      DRIVING (§5/§11.4): Corridor mode replaces free-pan; taps deferred-safe.
      Data is fixture-backed pending the M1 HTTP API (see core/fixtures.js). -->
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch } from "vue";
 import { useRouter } from "vue-router";
 import { CircleDot, Mic, SlidersHorizontal, Bookmark, MapPin, Crosshair } from "lucide-vue-next";
 import MapCanvas from "../core/components/MapCanvas.vue";
@@ -52,6 +52,8 @@ import {
   reviewVendor,
   reportVendor,
 } from "../core/api.js";
+
+defineOptions({ name: "MapSurface" });
 
 const { isDriving, state: driverState } = useDriverState();
 const { t } = useI18n();
@@ -199,8 +201,27 @@ function onBounds(bbox) {
     loadVendors(bbox);
   }, 300);
 }
+// AI-CONTEXT: §23 entry 100 — the map is KEPT ALIVE, so returning to the tab fires
+// `onActivated` and not `onMounted`. What belongs in each is the whole distinction:
+// one-time wiring mounts once, and anything a driver would expect to be current on
+// arriving back refreshes on activation.
+//
+// `remeasure()` is not optional. A hidden Mapbox canvas keeps the size it last
+// measured, so a container that changed while away draws at the old one until
+// something nudges it.
+onActivated(() => {
+  canvas.value?.remeasure?.();
+  loadHandoffs();
+  fetchActiveLoad().catch(() => {});
+  // the canvas re-emits `bounds` for its restored viewport, which refetches the
+  // overlay for where the driver actually is — so nothing is fetched twice here
+});
+
 onMounted(() => {
-  loadOverlay(); // continental clusters until the map reports bounds
+  // §23 entry 100: with a remembered viewport the canvas opens THERE and its own
+  // `moveend` fetches it. The continental request that used to fire here was a
+  // ~0.8 s round trip for a screen the driver was never going to see.
+  if (!canvas.value?.hasRememberedView?.()) loadOverlay();
   loadVendors();
   // which dock is the driver's own, so the Work preset can mark it and its card can
   // lead with §10.1's "Arm stop" rung. Never persisted — see api.js.
@@ -519,10 +540,24 @@ const relaying = ref(false);
 const showingSaved = ref(false);
 const now = ref(Date.now());
 let ageTimer = null;
-onMounted(() => {
+// §23 entry 100: kept alive means "still mounted", so a bare onMounted/onUnmounted
+// pair would leave this ticking behind another tab forever — and clearing it on
+// deactivate without restarting on activate would freeze every "40m ago" label the
+// moment a driver came back from one facility page. Both halves, or neither works.
+function startAgeTicker() {
+  if (ageTimer) return;
+  now.value = Date.now(); // catch up on what elapsed while away, before the next tick
   ageTimer = setInterval(() => (now.value = Date.now()), 30_000);
-});
-onUnmounted(() => ageTimer && clearInterval(ageTimer));
+}
+function stopAgeTicker() {
+  if (!ageTimer) return;
+  clearInterval(ageTimer);
+  ageTimer = null;
+}
+onMounted(startAgeTicker);
+onActivated(startAgeTicker);
+onDeactivated(stopAgeTicker);
+onUnmounted(stopAgeTicker);
 
 const savedIds = computed(() => saved.value.map((item) => item.id));
 

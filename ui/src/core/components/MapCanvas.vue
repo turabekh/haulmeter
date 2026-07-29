@@ -15,6 +15,7 @@ import { statusPresentation, isStale, placeLabels, basemapPreset } from "../pres
 import { useTheme } from "../theme.js";
 import { formatMoney } from "../meter.js";
 import { useI18n } from "../i18n.js";
+import { readView, rememberView } from "../map-view.js";
 
 const { t } = useI18n();
 
@@ -191,7 +192,14 @@ function showPlace(lat, lon, zoom = PLACE_ZOOM) {
   if (!map) return;
   map.easeTo({ center: [lon, lat], zoom, duration: 400 });
 }
-defineExpose({ showPlace });
+// §23 entry 100: a KEPT-ALIVE canvas is re-shown rather than rebuilt, and Mapbox
+// sizes itself to a container it measured while visible. Coming back to a viewport
+// that changed while hidden leaves it drawing at the old size until something nudges
+// it, so the surface tells it to re-measure on activation.
+function remeasure() {
+  map?.resize();
+}
+defineExpose({ showPlace, remeasure, hasRememberedView: () => readView() !== null });
 
 onMounted(async () => {
   systemDark?.addEventListener?.("change", onSystemTheme);
@@ -200,11 +208,15 @@ onMounted(async () => {
     const mapboxgl = (await import("mapbox-gl")).default;
     await import("mapbox-gl/dist/mapbox-gl.css");
     mapboxgl.accessToken = TOKEN;
+    // §23 entry 100: open where the driver last WAS, not on the country. A remembered
+    // view is only ever their own last viewport, so this cannot teleport anyone —
+    // and with none stored the continental default is unchanged.
+    const remembered = readView();
     map = new mapboxgl.Map({
       container: mapEl.value,
       style: STYLE,
-      center: US_CENTER,
-      zoom: US_ZOOM,
+      center: remembered ? [remembered.lon, remembered.lat] : US_CENTER,
+      zoom: remembered ? remembered.zoom : US_ZOOM,
       // AI-CONTEXT: Mapbox's default attribution sits BOTTOM-RIGHT, which is where
       // §10.1 puts the report chip, so the compact "i" landed on top of it. Moving it
       // bottom-LEFT only traded one collision for another — measured, it then sat
@@ -249,6 +261,10 @@ onMounted(async () => {
     });
     map.on("move", syncPins);
     map.on("moveend", emitBounds); // every pan/zoom refetches what's now in view
+    map.on("moveend", () => {
+      const c = map.getCenter();
+      rememberView(c.lat, c.lng, map.getZoom());
+    });
   } catch {
     live.value = false; // WebGL unavailable / offline -> keep the placeholder
   }

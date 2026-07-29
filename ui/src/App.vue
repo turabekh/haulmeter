@@ -48,7 +48,23 @@ onUnmounted(() => {
   <div class="app-frame" :class="{ 'app-frame--wide': portal }">
     <StatusStrip v-if="chrome" :online="online" :pending="pendingWrites" />
     <main class="app-content">
-      <router-view />
+      <!-- AI-CONTEXT: §23 entry 100. The MAP alone is kept alive, and the narrowness
+           is the decision. Leaving the tab destroyed the Mapbox GL instance; coming
+           back rebuilt it on the continental US, fetched the country, re-acquired GPS
+           and flew home — two round trips and a visible jump to return to a view the
+           driver never left. NAV-1 is untouched: this is a lifecycle rule, not a
+           navigation structure, and the five tabs are the same five tabs.
+
+           Only the map, because caching is not free: a kept surface shows what it
+           last rendered, and the Load, Money and Docs tabs carry money, clocks and
+           evidence state that must never be a cached copy of a minute ago. The map is
+           the one surface whose content is ALREADY refetched from its own viewport on
+           activation, so keeping it costs nothing in staleness. -->
+      <router-view v-slot="{ Component }">
+        <KeepAlive :include="['MapSurface']">
+          <component :is="Component" />
+        </KeepAlive>
+      </router-view>
     </main>
     <TabBar v-if="chrome" />
   </div>
