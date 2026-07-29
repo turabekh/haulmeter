@@ -20,11 +20,11 @@ mechanism had been built two years of sessions ago and applied to one facility k
 | Thing | Value |
 |---|---|
 | Migrations | head **0052_m03_claim_clock_since** (no schema change this session) |
-| Tests | **pytest 1086 · vitest 502 · ruff clean · import-linter 30/30** |
+| Tests | **pytest 1087 · vitest 502 · ruff clean · import-linter 30/30** |
 | Layout harness | **161 tests, 2.4 min — RUN, CLEAN.** 098's estimate of "~200" was wrong |
-| §23 decision log | **95 entries** (94 and 95 added this session) |
+| §23 decision log | **96 entries** (94, 95, 96 added this session) |
 | Handoffs | 000 → 099 |
-| Git | `main`, local only, never pushed. **4 commits** this session |
+| Git | **PUSHED to `github.com/turabekh/haulmeter` — see §11.** 6 commits this session |
 | Deployed | `haulmeter.online` — redeployed + repaired; pre-migration dump on the VM |
 | Working tree | clean except untracked `collect_files.py` (not mine, left alone) |
 
@@ -35,7 +35,9 @@ mechanism had been built two years of sessions ago and applied to one facility k
 | `707d54d` | One truck stop is one pin, and the price rides it (§23 94) |
 | `b1a5eeb` | docs: HANDOFF-099 |
 | `a8d28e6` | A merged `facility_id` resolves to the site it belongs to (§23 95) |
-| (this one) | docs: HANDOFF-099 second half |
+| `9f37b4c` | docs: HANDOFF-099 second half |
+| `d68a111` | An unnamed host adopts the pump's name instead of losing it (§23 96) |
+| (this one) | docs: HANDOFF-099 third half — the push |
 
 ## 3. 098's task list, in order
 
@@ -120,6 +122,30 @@ own). Ten driver-facing path routes plus four body-carried writes. **The three
 `/admin/facilities/*` routes are excluded on purpose:** an operator must be able to
 address a shadow row directly, or a bad merge cannot be undone.
 
+## 4c. The 35 held-back pins — merged, with their names
+
+**Owner decision (§23 entry 96), reversing the conservative half of §4.** Entry 94 held
+35 pumps back from merging because their hosts were unnamed OSM features, and merging
+would have taken "Flying J #695", "TA", "Kwik Trip" and "Speedway" off the map.
+
+**Entry 94 framed it as a binary — lose the name or keep two pins — and it was not
+one.** The merge can carry the name across: the host adopts it, the site ends as ONE
+pin holding the only real name anyone wrote for it. The third answer needed no new
+mechanism, only the willingness to rename a placeholder. What entry 94 was actually
+protecting is narrower than it claimed, and is untouched: **a host with a REAL name is
+never renamed after its tenant.** A test holds each half separately.
+
+**Applied locally and deployed: 35 merged, 34 adopted.** The counts differ by one
+because two pumps shared a single unnamed host — the first renamed it, and the second
+correctly declined to rename a host that by then had a name. That is the rule working.
+
+Adopted sites **keep their original kind**: a lot named "Kwik Trip" stays
+`parking_property`. A pump does not prove the site around it is a truck stop, and the
+fuel SERVICE already gets these onto the Fuel preset without a second unmeasured
+decision.
+
+`fuel_station` is now **72** — the genuinely standalone ones — down from 546.
+
 ## 5. Method notes — read before trusting anything above
 
 - **Measuring killed three of my own proposals before they were written.** Reordering
@@ -184,9 +210,8 @@ on that.
    defect in §4's own shipped work. **Still untouched: the corridor stack, the report
    sheet, the saved-for-stop queue, and the facility card in the UI** (the API behind
    it has now been exercised; the screen has not).
-2. **The 35 held-back pins are a data question waiting for an answer.** A branded pump
-   beside an unnamed "Parking Property" is one site or two, and only a human looking at
-   it can say. They render as two pins until someone does.
+2. **Ask whether CLAUDE.md rule 3 should be amended** now that the repo is public and
+   44 commits are pushed (§11). It is stale either way and must not be guessed at.
 3. **Decide what an empty profit calculator shows** (carried from 098, unresolved).
 
 ## 8. Debt
@@ -207,8 +232,10 @@ missing every major chain; 098's unrun layout sweep.
 - **No monitoring.** The outage in 098 was found by the owner opening the app
 
 **New this session:**
-- **35 branded pumps still draw a second pin** beside an unnamed host, by design and
-  by count. The alternative was taking the only real name off the map.
+- **Adopted sites keep their original KIND** — a lot named "Kwik Trip" is still
+  `parking_property`. Deliberate (§23 96): a pump does not prove the site around it is
+  a truck stop. If the map should reclassify them, that is a measured decision nobody
+  has made.
 - **Three ambiguous brands** — QuikTrip, Speedway, Casey's, 1 row each — are taken by
   the branded-service-area rule. `hgv=yes` on `highway=services` is a fair reading of a
   truck stop; special-casing three rows would be taste rather than evidence.
@@ -251,6 +278,30 @@ TEST f02/test_ingest_fuel.py  NEW — 14 tests incl. the 135-rest-area negative
                               coverage badge; a merged id reads and REPORTS as its site
 DOCS design-prd §23 entries 94, 95 · Makefile repair-fuel
 ```
+
+## 11. The repo is now PUBLIC — and CLAUDE.md still says never push
+
+**Owner instruction, 29 July 2026: 44 commits were pushed to
+`https://github.com/turabekh/haulmeter`, which is a PUBLIC repository.** It was a clean
+fast-forward (`0 44`, no divergence, no force). The whole codebase, the PRD, the design
+constitution and every handoff 000–099 are now readable by anyone.
+
+**This directly contradicts CLAUDE.md working rule 3 — "Local commits only. NEVER
+push."** I raised the conflict and the repo's public visibility before doing it and the
+owner confirmed; that is why it happened. **I have NOT edited CLAUDE.md**, because one
+authorised push is not the same instruction as "pushing is now always allowed", and
+rewriting a governing rule on that inference is exactly the kind of silent
+reinterpretation the constitution forbids. **Rule 3 is therefore stale and known to be
+stale.** The next session must not treat it as settled either way — ask the owner
+whether it should be amended, and log the answer.
+
+Two things that follow from the repo being public and are worth a decision:
+
+- `docs/deploy-testing-env.md` is now public and names the **instance, zone, static IP
+  and firewall rules** of a live internet-facing box. No credential — but it is a map
+  of the machine. I flagged this before pushing.
+- Pre-push scan found **no secrets**: only `infra/.env.example` is tracked, and no key
+  patterns or literal credentials appear in the 44-commit diff. Rule 9 held.
 
 ## 10. Restarting
 
