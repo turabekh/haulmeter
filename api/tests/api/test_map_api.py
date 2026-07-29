@@ -191,6 +191,63 @@ def test_the_fuel_preset_finds_a_truck_stop_that_sells_diesel(client, db):
     assert "Dry Lot" not in names  # a truck stop with no pump is not on the fuel map
 
 
+def test_every_kind_that_can_host_a_pump_reaches_the_fuel_preset(client, db):
+    """Reported from production as "no facilities showing up except demo ones".
+
+    A pump merges into whatever kind hosts it — a rest area or a parking property as
+    readily as a truck stop — and the surviving pin takes the HOST's kind. The Fuel
+    preset's candidate list named only truck_stop and fuel_station, so 168 sites that
+    had been visible fuel_station pins before the merge appeared on no fuel map at all.
+    The candidate set has to cover every host kind and let `sells_fuel` decide."""
+    headers = _auth(client)
+    for kind, name in [
+        (facility.FacilityType.rest_area, "Merged Into Rest Area"),
+        (facility.FacilityType.parking_property, "Merged Into Parking"),
+        (facility.FacilityType.truck_stop, "Merged Into Truck Stop"),
+    ]:
+        facility.create_facility(
+            db, kind, name, *DALLAS, attributes={"services": [facility.SERVICE_FUEL]}
+        )
+    facility.create_facility(db, facility.FacilityType.parking_property, "Dry Parking", *DALLAS)
+
+    names = {
+        p["name"]
+        for p in client.get(
+            "/map/overlay",
+            params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "fuel"},
+            headers=headers,
+        ).json()["pins"]
+    }
+    assert {"Merged Into Rest Area", "Merged Into Parking", "Merged Into Truck Stop"} <= names
+    assert "Dry Parking" not in names
+
+
+def test_drive_gains_a_fuel_parking_property_but_not_a_dry_one(client, db):
+    """Drive is not Tonight. A parking property earns a place there only because a
+    pump merged into it — before that merge it WAS a fuel_station pin Drive showed, so
+    this restores a promise the merge broke rather than widening the preset."""
+    headers = _auth(client)
+    facility.create_facility(
+        db,
+        facility.FacilityType.parking_property,
+        "Flying J #695",
+        *DALLAS,
+        attributes={"services": [facility.SERVICE_FUEL]},
+    )
+    facility.create_facility(db, facility.FacilityType.parking_property, "Dry Parking", *DALLAS)
+
+    names = {
+        p["name"]
+        for p in client.get(
+            "/map/overlay",
+            params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "drive"},
+            headers=headers,
+        ).json()["pins"]
+    }
+    assert "Flying J #695" in names
+    assert "Dry Parking" not in names
+
+
 def test_a_truck_stop_without_fuel_carries_no_price(client, db):
     """The other half, and the reason the gate is the SERVICE and not the kind. The
     regional baseline answers for any coordinate on earth, so widening the badge to

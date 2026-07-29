@@ -59,8 +59,26 @@ PRESET_TYPES: dict[Preset, list] = {
     # disappeared from the one preset built to find it. The kinds below are the
     # candidate set; `sells_fuel` is what decides, so a truck stop with no pump is
     # still not on the fuel map.
-    Preset.fuel: [facility.FacilityType.truck_stop, facility.FacilityType.fuel_station],
+    #
+    # The candidate set must name EVERY kind that can host a pump, which is the whole
+    # of COLOCATED_HOST_TYPES. Listing only truck_stop cost 168 fuel sites: a pump that
+    # merged into a rest area or a parking property surfaced on neither the Fuel nor
+    # (for parking) the Drive preset, having been a visible fuel_station pin before the
+    # merge. Reported from production as "no facilities except demo ones".
+    Preset.fuel: [
+        facility.FacilityType.truck_stop,
+        facility.FacilityType.rest_area,
+        facility.FacilityType.parking_property,
+        facility.FacilityType.repair,
+        facility.FacilityType.shipper_receiver,
+        facility.FacilityType.fuel_station,
+    ],
 }
+
+# E3.3: a parking property is Tonight's layer, not Drive's — EXCEPT when a fuel island
+# merged into it, because before that merge it was a fuel_station pin that Drive showed.
+# Restoring it is keeping a promise the merge broke, not widening the preset.
+_DRIVE_EXTRA_IF_SELLS_FUEL = (facility.FacilityType.parking_property,)
 
 
 def sells_fuel(facility_type: str, services) -> bool:
@@ -94,6 +112,8 @@ def _preset_types(db: Session, preset: Preset) -> list:
     pins rather than being filtered out client-side — a driver never downloads a
     layer they cannot see."""
     types = list(PRESET_TYPES[preset])
+    if preset == Preset.drive:
+        types += [t for t in _DRIVE_EXTRA_IF_SELLS_FUEL if t not in types]
     if not flags.is_enabled(db, WEIGH_STATION_FLAG):
         types = [
             t
@@ -101,6 +121,18 @@ def _preset_types(db: Session, preset: Preset) -> list:
             if t not in (facility.FacilityType.weigh_station, facility.FacilityType.scale)
         ]
     return types
+
+
+def _preset_keeps(preset: Preset, pin) -> bool:
+    """The kind list above is a candidate set; this is the decision. Drive gains the
+    extra kinds ONLY where they sell fuel, so it does not quietly become Tonight."""
+    if preset == Preset.fuel:
+        return sells_fuel(pin.facility_type, pin.services)
+    if preset == Preset.drive and pin.facility_type in {
+        t.value for t in _DRIVE_EXTRA_IF_SELLS_FUEL
+    }:
+        return sells_fuel(pin.facility_type, pin.services)
+    return True
 
 
 def map_overlay(
@@ -117,8 +149,7 @@ def map_overlay(
     )
     if required_amenities:
         pins = [p for p in pins if _has_amenities(db, p, required_amenities)]
-    if preset == Preset.fuel:
-        pins = [p for p in pins if sells_fuel(p.facility_type, p.services)]
+    pins = [p for p in pins if _preset_keeps(preset, p)]
     if preset == Preset.tonight:
         pins = sorted(pins, key=lambda p: _PARKING_RANK.get(p.status, 2))
     return pins
@@ -180,8 +211,7 @@ def map_overlay_bbox(
     )
     if required_amenities:
         pins = [p for p in pins if _has_amenities(db, p, required_amenities)]
-    if preset == Preset.fuel:
-        pins = [p for p in pins if sells_fuel(p.facility_type, p.services)]
+    pins = [p for p in pins if _preset_keeps(preset, p)]
     if preset == Preset.tonight:
         pins = sorted(pins, key=lambda p: _PARKING_RANK.get(p.status, 2))
     return pins
@@ -268,8 +298,7 @@ def corridor_ahead(
         max_distance_m,
         facility_types=_preset_types(db, preset),
     )
-    if preset == Preset.fuel:
-        entries = [e for e in entries if sells_fuel(e.facility_type, e.services)]
+    entries = [e for e in entries if _preset_keeps(preset, e)]
     out = []
     for entry in entries[:limit]:
         belief = crowd.get_belief(
