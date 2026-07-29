@@ -2,8 +2,8 @@
 
 **Project:** Haulmeter — Consolidated Trucker Platform (mobile-first, driver pays $0).
 **Date:** 29 July 2026 · **Stack:** UP locally (`make down` to stop) · **Deployed:**
-https://haulmeter.online (GCE, `uzimiz-prod`) — **still at `6b681c2`; this session's
-work is NOT deployed.**
+https://haulmeter.online (GCE, `uzimiz-prod`) — **current with `3e7fba2`**, migration at
+head, zero errors, and the first `detention_clock` tick alerted nobody (§7.1).
 
 **State in one line:** HANDOFF-100 §8's exact next task, done — the P0 §13.2 has named
 since the design constitution was written now fires, and the two defects that stood
@@ -20,8 +20,8 @@ between it and a driver were both invisible to a green suite.
 | Layout harness | **NOT run this session** (169 as of 100; no UI changed here) |
 | §23 decision log | **107 entries** (106–107 this session) |
 | Handoffs | 000 → 101 |
-| Git | **2 commits ahead of `origin/main`, unpushed** — `8fc0557`, `2c4f066` |
-| Deployed | `6b681c2` — **behind local by this session's work** |
+| Git | **3 commits ahead of `origin/main`, unpushed** — `8fc0557`, `2c4f066`, `3e7fba2` |
+| Deployed | **current with this session's work**; `0054` at head on the box |
 | Working tree | clean except untracked `collect_files.py` (not mine) |
 
 ## 2. What shipped
@@ -124,10 +124,13 @@ like when every assertion agrees with you.
 
 ## 7. Exact next task
 
-**1. Deploy, or decide not to.** `./scripts/deploy.sh` — local is 2 commits ahead and
-the box has never seen this. §5(1) is specifically why the freshness window exists, so
-the backlog on prod should alert nobody; **verify that claim by reading the first
-`detention_clock` summary in the worker log rather than assuming it.**
+**~~1. Deploy.~~ DONE, and the claim §5(1) rests on was verified rather than assumed.**
+The first `detention_clock` tick on the box read
+`{'scanned': 43, 'started': 0, 'warned': 0, 'delivered': 0}` — **43 real open claims,
+not one stale P0 sent.** Zero `detention_start` / `free_time_warning` rows exist on
+prod and no claim carries an alert timestamp, so the backlog that would have produced
+eleven pushes on the laptop produced none here. Migration at `0054`, `/api/health` 200,
+no API errors.
 
 **2. The other two P0s §13.2 names still have zero dispatch sites** — "booking failed"
 (M6) and "claim paid" (F7/M9). Deliberately not widened into this session. Neither
