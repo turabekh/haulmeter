@@ -11,6 +11,7 @@ from .domain.enums import DiscrepancyStatus
 from .domain.models import Discrepancy, ExpenseReceipt, Settlement, SettlementLine
 from .domain.service import (
     AUDITABLE_KINDS,
+    CLAIM_PAID_CATEGORY,
     FLAG_KEY,
     MODULE,
     SETTLEMENT_PROMPT,
@@ -24,6 +25,7 @@ from .domain.service import (
     earnings_dashboard,
     expense_summary,
     ifta_summary,
+    mark_receivable_paid,
     parse_settlement_lines,
     per_diem_days,
     register_module,
@@ -37,6 +39,7 @@ __all__ = [
     "Settlement",
     "SettlementLine",
     "AUDITABLE_KINDS",
+    "CLAIM_PAID_CATEGORY",
     "FLAG_KEY",
     "MODULE",
     "SETTLEMENT_PROMPT",
@@ -50,6 +53,7 @@ __all__ = [
     "earnings_dashboard",
     "expense_summary",
     "ifta_summary",
+    "mark_receivable_paid",
     "parse_settlement_lines",
     "per_diem_days",
     "register_module",

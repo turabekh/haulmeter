@@ -9,6 +9,7 @@ m04_accessorial.
 
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.foundation.f03_location import public as location
@@ -221,3 +222,13 @@ def money_owed(db: Session, account_id, now: datetime | None = None) -> list[dic
             }
         )
     return rows
+
+
+def claim_for_receivable(db: Session, receivable_ref) -> AccessorialClaim | None:
+    # AI-CONTEXT: M3 carries the same lookup for the same reason (§13.5) — an
+    # accessorial receivable must deep-link to the stop it was filed against, and the
+    # two claim tables are the only places that mapping is recorded.
+    return db.scalar(
+        select(AccessorialClaim).where(AccessorialClaim.receivable_ref == receivable_ref)
+    )
+

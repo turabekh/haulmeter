@@ -5,14 +5,17 @@ discrepancies), and expense capture. Auditor output is "review with your
 carrier", never legal advice (PRD §8.9).
 """
 
+import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
+from app.foundation.f07_ledger import public as ledger
+from app.foundation.f08_notifications import public as notify
 from app.modules.m09_money import public as m9
 
 router = APIRouter(prefix="/money", tags=["money"],
@@ -107,3 +110,37 @@ def expenses(
         "receipt_count": s.receipt_count,
         "year": year,
     }
+
+
+_GATEWAY = notify.RecordingNotificationGateway()  # F8 seam (dev)
+
+
+@router.post("/receivable/{receivable_id}/paid")
+def mark_paid(
+    receivable_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """The driver records that a broker actually paid (§23 entry 108).
+
+    AI-CONTEXT: nothing in this product could mark a receivable recovered before this
+    — the state and F7's transition existed with no caller, so `recovered_cents` below
+    was structurally zero. Driver-only by owner decision: the money lands in the
+    driver's bank, so only they can know it arrived.
+    """
+    receivable = db.get(ledger.Receivable, receivable_id)
+    if receivable is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "receivable not found")
+    if receivable.account_id != account.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your receivable")
+    try:
+        receivable, _ = m9.mark_receivable_paid(db, receivable, account.id, gateway=_GATEWAY)
+    except ledger.InvalidTransition as exc:
+        # already recovered, or written off — the ledger owns that rule, not this route
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return {
+        "receivable_id": str(receivable.id),
+        "state": receivable.state.value,
+        "amount_cents": receivable.amount_cents,
+    }
+

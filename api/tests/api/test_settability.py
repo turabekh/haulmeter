@@ -60,11 +60,45 @@ def test_no_route_can_mutate_f4_evidence(forbidden):
         assert forbidden not in path
 
 
+# AI-CONTEXT: the one mutating route allowed to name a receivable, and why the
+# carve-out is narrow rather than a relaxation of the rule (§23 entry 108).
+#
+# The principle above is about POSTINGS: money is append-only, a correction is a new
+# entry. A receivable's STATE is a different object — F7 ships `transition_receivable`
+# with an ALLOWED_TRANSITIONS table precisely because `invoiced -> recovered` is a
+# transition the ledger is designed to make. The blanket ban on the word "receivable"
+# was true only because nothing in the product had ever called it, so the guard was
+# broader than the principle it was written to protect.
+#
+# The allowance is ONE exact path, so a route that edited a receivable's AMOUNT, or any
+# other receivable mutation, still turns this file red and has to argue for itself here.
+LEDGER_STATE_CARVE_OUT = {"/money/receivable/{receivable_id}/paid"}
+
+
 @pytest.mark.parametrize("forbidden", ["ledger", "posting", "journal_entry", "receivable"])
 def test_no_route_can_mutate_f7_ledger_postings(forbidden):
     # money is append-only; a correction is a new entry, not a changed one
-    for path in _mutating_paths():
+    for path in _mutating_paths() - LEDGER_STATE_CARVE_OUT:
         assert forbidden not in path
+
+
+def test_the_ledger_carve_out_is_exactly_one_known_route():
+    """The carve-out must not quietly become a category. If the named path ever stops
+    existing, this fails and the exception is deleted rather than left lying around."""
+    assert LEDGER_STATE_CARVE_OUT <= _mutating_paths()
+    assert len(LEDGER_STATE_CARVE_OUT) == 1
+
+
+def test_no_route_can_change_what_a_receivable_is_worth():
+    """The half of the ban that is NOT carved out: state may transition, amounts may
+    not be edited. This is what the blanket rule was really protecting."""
+    schema = app.openapi()
+    for path in LEDGER_STATE_CARVE_OUT:
+        for method, spec in schema["paths"][path].items():
+            if method.lower() not in MUTATING:
+                continue
+            body = spec.get("requestBody")
+            assert body is None, f"{method} {path} takes a body and could carry an amount"
 
 
 @pytest.mark.parametrize("forbidden", ["belief", "submission", "contributor_trust"])

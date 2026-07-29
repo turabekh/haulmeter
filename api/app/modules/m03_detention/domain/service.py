@@ -631,6 +631,15 @@ def claim_for_stop(db: Session, stop_ref) -> DetentionClaim | None:
     return db.scalar(select(DetentionClaim).where(DetentionClaim.stop_ref == stop_ref))
 
 
+def claim_for_receivable(db: Session, receivable_ref) -> DetentionClaim | None:
+    # AI-CONTEXT: the reverse of `open_receivable` — money back to the stop it came
+    # from. §13.5 needs it: a "claim paid" notification must deep-link to the exact
+    # claim, and a receivable on its own knows only an account and an amount.
+    return db.scalar(
+        select(DetentionClaim).where(DetentionClaim.receivable_ref == receivable_ref)
+    )
+
+
 def claim_evidence(db: Session, claim: DetentionClaim) -> dict:
     # read-only view of the claim's F4 evidence chain — what's IN the pack, so the
     # driver can see the GPS-verified proof behind their claim (M3-FR5)

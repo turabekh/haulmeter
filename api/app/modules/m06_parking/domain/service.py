@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f03_location import public as location
 from app.foundation.f07_ledger import public as ledger
+from app.foundation.f08_notifications import public as notify
 from app.modules.m01_map import public as m1
 
 from .enums import BookingState
@@ -247,7 +248,30 @@ def is_overstay(booking: Booking, now: datetime) -> bool:
 
 
 # --- Cancellation / refund engine (M6-FR7) ---
-def cancel(db: Session, booking: Booking, now: datetime) -> Booking:
+#
+# AI-CONTEXT: §13.2 names "booking failed" as a P0 and there was no such event to
+# report. `book()` has exactly one failure — `SpotUnavailable` on a double-book —
+# raised inside the driver's own request, which §12.4 answers with error copy on the
+# screen they are already looking at. Pushing a P0 about it would tell someone what
+# they are reading. The Stripe seam that could fail asynchronously is deferred.
+#
+# The real money event a driver is NOT looking at is this one, and it had been written
+# and left unreachable: the whole refund engine below had no endpoint calling it.
+# A spot the driver reserved being taken away is money moving without them.
+#
+# THE RULE, shared with M9's "claim paid" (§23 entry 108): a P0 announces money that
+# moved WITHOUT you. A driver who cancels their own booking is told nothing, because
+# they already know; the property owner cancelling theirs is exactly what a P0 is for.
+BOOKING_CANCELED_CATEGORY = "booking_canceled"
+
+
+def cancel(
+    db: Session,
+    booking: Booking,
+    now: datetime,
+    actor_account_id=None,
+    gateway=None,
+) -> Booking:
     fraction = 1.0 if (booking.start_at - now) >= timedelta(hours=FULL_REFUND_HOURS) else 0.5
     refund_total = round(booking.price_cents * fraction)
     if refund_total > 0:
@@ -270,7 +294,41 @@ def cancel(db: Session, booking: Booking, now: datetime) -> Booking:
     else:
         booking.state = BookingState.canceled
     db.flush()
+    _notify_driver_of_cancellation(db, booking, refund_total, actor_account_id, gateway, now)
     return booking
+
+
+def _notify_driver_of_cancellation(db, booking, refund_cents, actor_account_id, gateway, now):
+    if gateway is None or actor_account_id == booking.driver_account_id:
+        return None
+    spot = db.get(ParkingSpot, booking.spot_id)
+    prop = db.get(ParkingProperty, spot.property_id)
+    # §12.2/§12.6: lead with the figure when there is one. A cancellation inside the
+    # free window refunds in full; one after it refunds half; a $0 refund is not a
+    # figure worth leading with and the title says only what happened.
+    #
+    # The $0 branch is unreachable through `book()` today and is deliberately kept:
+    # F7 rejects a posting of zero, so a spot cheap enough to round its half-refund
+    # down to nothing cannot be booked in the first place. It costs one line and
+    # stops a future free or promotional spot printing "· $0 refunded".
+    if refund_cents > 0:
+        amount = refund_cents / 100
+        figure = f"${amount:,.0f}" if refund_cents % 100 == 0 else f"${amount:,.2f}"
+        title = f"Booking canceled · {figure} refunded"
+    else:
+        title = "Booking canceled"
+    return notify.dispatch(
+        db,
+        booking.driver_account_id,
+        notify.NotificationTier.P0,
+        BOOKING_CANCELED_CATEGORY,
+        title,
+        f"{prop.name} canceled your spot. Book another nearby.",
+        f"/book/{booking.spot_id}",
+        gateway,
+        now=now,
+        subject_ref=str(booking.id),
+    )
 
 
 # --- Property-owner views (M6-FR5, the supply side) ---

@@ -28,7 +28,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.foundation.f06_documents import public as documents
+from app.foundation.f07_ledger import public as ledger
+from app.foundation.f08_notifications import public as notify
 from app.foundation.f09_ai_gateway import public as ai
+from app.modules.m03_detention import public as m3
 from app.modules.m04_accessorial import public as m4
 from app.modules.m07_fuel import public as m7
 
@@ -303,3 +306,90 @@ def per_diem_days(db: Session, account_id, year: int, home_base_facility_id=None
     # home base; F3 exposes per-facility dwell, not an account-wide track. A seam
     # with an explicit basis until the trace query lands.
     return PerDiemResult(nights_away=None, basis="needs_account_traces")
+
+
+# --- Recovery: the moment a claim is actually paid (§13.2 / §23 entry 108) ---
+#
+# AI-CONTEXT: `ReceivableState.recovered` and F7's `record_recovery` have existed since
+# the ledger shipped and **no application code has ever called either** — only tests.
+# So a claim could never become paid, `recovered_cents` on this module's own earnings
+# dashboard was structurally $0 forever, and M12's fleet rollup counted a state nothing
+# could reach. §13.2 names "claim paid" as a P0 example; the notification was not
+# missing a dispatch site, the EVENT did not exist.
+#
+# WHO MARKS IT — owner decision. The driver. M3's whole model is that the driver
+# invoices the broker in their own name and the money lands in the driver's bank, not
+# ours: nobody else is in a position to know it arrived. No integration, no operator
+# standing between a driver and their own recovery.
+#
+# WHO IS TOLD — and this is the part that decides whether the P0 fires at all. A
+# notification exists to tell someone something they do not already know. A driver who
+# just tapped "the broker paid this" is the last person who needs a push about it, so
+# the alert fires only when the recovery was recorded by someone ELSE — a fleet manager
+# (M12) or the collection partner M3-FR7 hands escalated claims to. Today that means it
+# is correct and dormant: the endpoint below is driver-only, so nothing reaches the
+# branch yet. It is written this way so the P0 is right by construction the moment a
+# second actor exists, rather than remembered later.
+#
+# WHY NO LEDGER ENTRY IS POSTED, which looks like an omission and is not. F7's
+# `record_recovery` posts cash_clearing -> driver_payable with a contingency split, and
+# it is the right call for the M3-FR7 collection partner, where the money passes
+# through us and we take a fee. A driver who invoices a broker in their own name is
+# paid into their OWN bank: no cash crosses this platform, and posting an entry saying
+# it did would be inventing a movement we never handled. The receivable's state is the
+# honest record of it, which is exactly what F7's transition table is for.
+CLAIM_PAID_CATEGORY = "claim_paid"
+
+
+def _receivable_deep_link(db: Session, receivable) -> str | None:
+    """§13.5: the exact claim, never a tab root.
+
+    A receivable knows an account and an amount; only the claim that opened it knows
+    which stop the money came from. M3 and M4 are the two modules that open them.
+    """
+    claim = m3.claim_for_receivable(db, receivable.id) or m4.claim_for_receivable(
+        db, receivable.id
+    )
+    stop_ref = getattr(claim, "stop_ref", None) if claim is not None else None
+    return f"/claim/{stop_ref}" if stop_ref is not None else None
+
+
+def mark_receivable_paid(
+    db: Session,
+    receivable,
+    actor_account_id,
+    gateway=None,
+    now=None,
+):
+    """Record that a receivable was actually paid, and tell the driver if they are not
+    the one who said so.
+
+    Raises F7's `InvalidTransition` for a receivable that cannot legally reach
+    `recovered` — already recovered, or written off. The state machine is the ledger's
+    and is not restated here.
+    """
+    ledger.transition_receivable(db, receivable, ledger.ReceivableState.recovered)
+    if gateway is None or actor_account_id == receivable.account_id:
+        return receivable, None
+    deep_link = _receivable_deep_link(db, receivable)
+    if deep_link is None:
+        # §13.5 is not negotiable and `dispatch` enforces it. A receivable no claim
+        # owns cannot be deep-linked, so it is recorded and not announced — silence is
+        # better than a P0 that lands on a tab root.
+        return receivable, None
+    amount = receivable.amount_cents / 100
+    figure = f"${amount:,.0f}" if receivable.amount_cents % 100 == 0 else f"${amount:,.2f}"
+    notification = notify.dispatch(
+        db,
+        receivable.account_id,
+        notify.NotificationTier.P0,
+        CLAIM_PAID_CATEGORY,
+        f"Claim paid · {figure}",
+        "The claim was recorded as paid. Open it to see the record.",
+        deep_link,
+        gateway,
+        now=now,
+        subject_ref=str(receivable.id),
+    )
+    return receivable, notification
+

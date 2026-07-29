@@ -9,6 +9,7 @@ behind the F13 flag m06_parking (refund-policy + damage/liability gates).
 from .domain.enums import BookingState
 from .domain.models import Booking, ParkingProperty, ParkingSpot
 from .domain.service import (
+    BOOKING_CANCELED_CATEGORY,
     CONFIG_TAKE_RATE_KEY,
     DEFAULT_TAKE_RATE_BPS,
     FLAG_KEY,
@@ -37,6 +38,7 @@ from .domain.service import (
 )
 
 __all__ = [
+    "BOOKING_CANCELED_CATEGORY",
     "BookingState",
     "Booking",
     "ParkingProperty",
