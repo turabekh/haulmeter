@@ -20,11 +20,11 @@ mechanism had been built two years of sessions ago and applied to one facility k
 | Thing | Value |
 |---|---|
 | Migrations | head **0052_m03_claim_clock_since** (no schema change this session) |
-| Tests | **pytest 1083 · vitest 502 · ruff clean · import-linter 30/30** |
+| Tests | **pytest 1086 · vitest 502 · ruff clean · import-linter 30/30** |
 | Layout harness | **161 tests, 2.4 min — RUN, CLEAN.** 098's estimate of "~200" was wrong |
-| §23 decision log | **94 entries** (94 added this session) |
+| §23 decision log | **95 entries** (94 and 95 added this session) |
 | Handoffs | 000 → 099 |
-| Git | `main`, local only, never pushed. **2 commits** this session |
+| Git | `main`, local only, never pushed. **4 commits** this session |
 | Deployed | `haulmeter.online` — redeployed + repaired; pre-migration dump on the VM |
 | Working tree | clean except untracked `collect_files.py` (not mine, left alone) |
 
@@ -33,7 +33,9 @@ mechanism had been built two years of sessions ago and applied to one facility k
 | Commit | What |
 |---|---|
 | `707d54d` | One truck stop is one pin, and the price rides it (§23 94) |
-| (this one) | docs: HANDOFF-099 |
+| `b1a5eeb` | docs: HANDOFF-099 |
+| `a8d28e6` | A merged `facility_id` resolves to the site it belongs to (§23 95) |
+| (this one) | docs: HANDOFF-099 second half |
 
 ## 3. 098's task list, in order
 
@@ -81,6 +83,43 @@ Nothing new was invented: `SERVICE_FUEL` joins `SERVICE_SCALE`, and `_contributi
 already narrows a co-located amenity to `UNION_KEYS`, so the island gives its host the
 fuel fact **without** giving it the pump's name.
 
+## 4b. The defect the fix created work for — a merged id read as its own shadow
+
+**Continuing to drive the Map tab found a defect in what §4 had just shipped**, which
+is the whole argument for doing it. The repair scripts promise "nothing is deleted, so
+every `facility_id` anyone already holds still resolves" — and **I repeated that
+sentence in the commit message and in this document before testing it.**
+
+It is half true. The row survives, so a lookup answers **200 rather than 404 — with
+the wrong place.**
+
+```
+GET  /public/facility/<merged id>  ->  200  "Pilot" / fuel_station
+                                              (not "Flying J Travel Center" / truck_stop)
+
+POST /map/report {facility_id: <merged id>, status: "full"}
+     ->  200 {"submission_id": "…"}      the driver is told it landed
+     ->  canonical pin still status=None  nobody will ever see it
+```
+
+`resolve_canonical` has existed since F2 and was called by **the ingest pipeline and
+nothing else.** The write paths matter more than the reads: the M7 crowd price confirm,
+M10's leaving-broadcast and questions, and M2's reviews were all silently addressed to
+a pin that is gone. §11.7 exists to stop an absence being rendered as a result; this
+rendered a *discarded write* as a successful one.
+
+**678 rows are merged — 239 from the 076 scales repair, 439 from §4.** So the exposure
+predates this session by many sessions and **this session tripled it.** It is bounded:
+live queries already exclude merged rows, so only a client holding a PRE-merge id can
+hit it — a saved lot (§11.4), a deep link, a notification, a cached pin. That is
+exactly the set §13.5 requires to keep working.
+
+Fixed by one `canonical_facility_id` dependency at the API composition layer (the ID is
+what needs correcting, not the object — most callers pass the UUID to tables of their
+own). Ten driver-facing path routes plus four body-carried writes. **The three
+`/admin/facilities/*` routes are excluded on purpose:** an operator must be able to
+address a shadow row directly, or a bad merge cannot be undone.
+
 ## 5. Method notes — read before trusting anything above
 
 - **Measuring killed three of my own proposals before they were written.** Reordering
@@ -106,6 +145,16 @@ fuel fact **without** giving it the pump's name.
 - **A test asserted the old behaviour and was restated, not deleted** — 098's rule.
   `test_facilities_without_services_carry_no_services_key` was pinned to a fixture's
   contents; it now asserts the invariant it was protecting (absent, not empty).
+- **The §4b tests were proved RED before being trusted.** The resolver was temporarily
+  stubbed to return its input; both failed; it was restored and both passed. A test
+  written against a bug you have just fixed passes for free otherwise — §23 entry 42's
+  shape, and 098 §5 recorded the same species.
+- **I mis-verified my own fix and nearly recorded it as broken.** Checking §4b live, the
+  reported pin still read `status=None` — because I had picked an arbitrary merged row
+  with `limit 1` and then queried the overlay at the *Lebanon* coordinates. It was a
+  different Flying J, 200 km away. Querying at the facility's own coordinates showed
+  `status='full'`. **The verification was wrong, not the code**, and the only reason I
+  found that out was reading the id in the response instead of the name.
 
 ## 6. Deployment
 
@@ -130,9 +179,11 @@ on that.
 
 ## 7. Exact next task — Session 20
 
-1. **Keep running the Map tab by hand.** §4 came from driving ONE bbox through the API.
-   The corridor, the facility card, the report sheet and the saved-for-stop queue have
-   not had the same treatment, and 098's §4 was the longer list for a reason.
+1. **Keep running the Map tab by hand — it is two for two.** §4 came from driving one
+   bbox through the API; §4b came from driving the surfaces around it and found a
+   defect in §4's own shipped work. **Still untouched: the corridor stack, the report
+   sheet, the saved-for-stop queue, and the facility card in the UI** (the API behind
+   it has now been exercised; the screen has not).
 2. **The 35 held-back pins are a data question waiting for an answer.** A branded pump
    beside an unnamed "Parking Property" is one site or two, and only a human looking at
    it can say. They render as two pins until someone does.
@@ -167,6 +218,19 @@ missing every major chain; 098's unrun layout sweep.
 - **The deployed backup is a file on the box it backs up.** One `pgdata` volume, one VM.
 - **A truck stop with no fuel evidence shows no price**, which is honest and means a
   Love's we have no pump data for looks the same as a dry lot. The fix is data, not code.
+- **Beliefs written against merged ids before §4b are still attached to shadows.** The
+  resolver fixes new writes; it does not walk the F10 rows already misfiled. The count
+  is small (only pre-merge clients could produce them) but it is not zero, and no
+  repair pass exists for it.
+- **`/admin/facilities/*` deliberately does NOT resolve.** That is correct — an
+  operator must be able to reach a shadow row — but it means an admin URL and a driver
+  URL for the same id now answer about different facilities. Anyone adding an admin
+  facility route should decide which behaviour they want rather than inherit one.
+- **Unnamed OSM features render as "Parking Property" / "Rest Area" on the map.** Seen
+  live while verifying §4b on the deployed box: a merged id resolved to a host actually
+  named `Parking Property`. Pre-existing and not introduced here — the §4 name guard
+  prevents NEW ones from absorbing a brand — but those placeholder names are on the map
+  today and a driver cannot search for them.
 
 ## 9. Key files touched
 
@@ -180,9 +244,12 @@ API  f02/ingest/adapters.py   SERVICE_FUEL; _osm_sells_diesel; _osm_is_branded_s
      m01_map/domain/service.py sells_fuel — ONE definition; Preset.fuel filters on it
      api/m01_map.py           badge gate keyed on the SERVICE, not the kind
      scripts/repair_colocated_fuel.py  NEW — 3 passes, idempotent, dry-run default
+     api/deps.py              NEW canonical_facility_id — the resolver dependency (§4b)
+     api/{public,m02,m07,m08,m10,m12,m13}.py  10 path routes + 4 body writes resolve
 TEST f02/test_ingest_fuel.py  NEW — 14 tests incl. the 135-rest-area negative
-     api/test_map_api.py      the badge follows the merge; the preset finds it; no coverage badge
-DOCS design-prd §23 entry 94 · Makefile repair-fuel
+     api/test_map_api.py      the badge follows the merge; the preset finds it; no
+                              coverage badge; a merged id reads and REPORTS as its site
+DOCS design-prd §23 entries 94, 95 · Makefile repair-fuel
 ```
 
 ## 10. Restarting
@@ -204,3 +271,11 @@ correction, including a regression I introduced myself, came from **measuring th
 4,568 rows rather than reasoning about them.** Three of my own proposals died that way
 before a line was written. Reading the code against the constitution finds what is
 wrong in principle; running it against real data finds what is wrong in fact.
+
+**And the sharper version, from §4b.** The sentence "nothing is deleted, so every
+`facility_id` anyone already holds still resolves" was inherited from a script that
+had been true for two years, repeated into a commit message, and written into this
+handoff — **before anyone asked the API whether it was so.** It was half true, and the
+half that was false told drivers their reports had landed when they had been thrown
+away. A claim carried forward is not a claim tested. The next session should assume
+the same of anything written here.
