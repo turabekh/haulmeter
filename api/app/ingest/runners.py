@@ -117,18 +117,20 @@ def run_detention_clock(db: Session, commit: bool = True) -> dict:
 
     AI-CONTEXT: the detention clock is computed on READ, so the instant free time
     expires passes unobserved unless a driver happens to have the screen open. This is
-    the caller that watches it. The gateway is the same recording seam every other
-    dispatch site uses: the notification row is real and reaches the driver's inbox
-    today, and a real push adapter plugs in here when Web Push is wired.
+    the caller that watches it. Since §23 entry 111 it delivers over Web Push where a
+    VAPID keypair is configured, and records to the inbox either way.
     """
     from app.foundation.f08_notifications import public as notify
     from app.modules.m03_detention import public as m3
 
-    gateway = notify.RecordingNotificationGateway()
-    summary = m3.dispatch_clock_alerts(db, gateway)
+    # AI-CONTEXT: per-CLAIM gateway, because Web Push is addressed to a driver's own
+    # browsers (§23 entry 111) — one shared instance could only push to one account.
+    # Unconfigured deployments fall back to the recording gateway, so this runs the
+    # same everywhere and a laptop still exercises the tiering.
+    summary = m3.dispatch_clock_alerts(db, notify.gateway_for)
     if commit:
         db.commit()
-    return {**summary, "delivered": len(gateway.sent)}
+    return summary
 
 
 def run_eia(db: Session, commit: bool = True) -> dict:

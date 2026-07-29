@@ -535,12 +535,26 @@ def dispatch_clock_alerts(db: Session, gateway, now: datetime | None = None) -> 
     claims = claims_awaiting_alerts(db)
     started = 0
     warned = 0
+    delivered = 0
     for claim in claims:
-        if dispatch_detention_start(db, claim, gateway, now) is not None:
+        # AI-CONTEXT: `gateway` may be a gateway or a FACTORY taking (db, account_id).
+        # Web Push is addressed to one driver's browsers, so a scan across many claims
+        # cannot share one instance; a plain gateway still works for tests and for the
+        # single-claim callers above.
+        gw = gateway(db, claim.account_id) if callable(gateway) else gateway
+        if dispatch_detention_start(db, claim, gw, now) is not None:
             started += 1
-        elif dispatch_free_time_warning(db, claim, gateway, now) is not None:
+        elif dispatch_free_time_warning(db, claim, gw, now) is not None:
             warned += 1
-    return {"scanned": len(claims), "started": started, "warned": warned}
+        else:
+            continue
+        delivered += getattr(gw, "delivered", len(getattr(gw, "sent", ())))
+    return {
+        "scanned": len(claims),
+        "started": started,
+        "warned": warned,
+        "delivered": delivered,
+    }
 
 
 # --- Shared invoice rail (reused by M4 accessorial claims) ---

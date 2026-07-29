@@ -22,6 +22,13 @@ dependencies = [
     # Chosen over WeasyPrint because F15 makes counterparty artifacts English-only,
     # which removes the complex-script shaping that would justify the heavier stack.
     "reportlab>=4.2",
+    # AI-CONTEXT: Web Push (design-prd §13.1). The payload must be encrypted to the
+    # subscription's own keys (aes128gcm, RFC 8291) and the request signed with a VAPID
+    # JWT (RFC 8292) — neither is something to hand-roll for a channel that carries a
+    # driver's money alerts. Chosen over an FCM/APNs SDK because VAPID needs no vendor
+    # account: the keypair is self-generated, and Chrome/Edge/Firefox on Android — LAW
+    # 0's target device — support it natively.
+    "pywebpush>=2.0",
 ]
 
 [project.optional-dependencies]

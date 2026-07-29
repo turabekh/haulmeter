@@ -20,6 +20,8 @@ from .domain.gateway import (
     RecordingNotificationGateway,
     SentMessage,
     StubNotificationGateway,
+    WebPushNotificationGateway,
+    gateway_for,
 )
 from .domain.models import (
     Notification,
@@ -28,6 +30,7 @@ from .domain.models import (
     NotificationTemplate,
     OutboundMessage,
     OutboundThread,
+    PushSubscription,
 )
 from .domain.service import (
     BUDGET_EXEMPT_CLASSES,
@@ -43,6 +46,8 @@ from .domain.service import (
     create_thread,
     digest,
     dispatch,
+    drop_subscription,
+    drop_subscription_by_endpoint,
     follow_subject,
     followers_of,
     get_active_template,
@@ -62,8 +67,10 @@ from .domain.service import (
     record_inbound_reply,
     register_template,
     render_template,
+    save_subscription,
     send_counterparty_message,
     set_class_opt_in,
+    subscriptions_for,
     unfollow_subject,
     unread_count,
 )
@@ -98,6 +105,13 @@ __all__ = [
     "RecordingNotificationGateway",
     "SentMessage",
     "StubNotificationGateway",
+    "drop_subscription_by_endpoint",
+    "drop_subscription",
+    "subscriptions_for",
+    "save_subscription",
+    "PushSubscription",
+    "gateway_for",
+    "WebPushNotificationGateway",
     "Notification",
     "NotificationPrefs",
     "NotificationTemplate",

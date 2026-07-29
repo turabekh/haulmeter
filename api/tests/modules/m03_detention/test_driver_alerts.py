@@ -318,7 +318,9 @@ def test_the_scan_finds_the_claim_and_reports_what_it_did(db):
 
     summary = m3.dispatch_clock_alerts(db, gw, now=EXPIRY + timedelta(minutes=1))
 
-    assert summary == {"scanned": 1, "started": 1, "warned": 0}
+    assert summary["scanned"] == 1
+    assert summary["started"] == 1
+    assert summary["warned"] == 0
     assert len(gw.sent) == 1
 
 

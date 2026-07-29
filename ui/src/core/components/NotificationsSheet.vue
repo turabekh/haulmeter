@@ -23,10 +23,11 @@
      browsing an inbox at speed, and §13.4 already routes in-motion notifications to
      audio summaries rather than to a list. -->
 <script setup>
-import { computed } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { Bell, Clock } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { ageLabel } from "../presentation.js";
+import { pushSupported, permissionState, isEnabled, enable, disable } from "../push.js";
 
 const props = defineProps({
   notifications: { type: Array, default: () => [] },
@@ -34,6 +35,38 @@ const props = defineProps({
 });
 const emit = defineEmits(["open"]);
 const { t } = useI18n();
+
+// AI-CONTEXT: alerts are enrolled HERE and nowhere else (§23 entry 111). The browser's
+// permission prompt is ONE-SHOT — a "no" is permanent for the origin — so asking on
+// first launch would spend a driver's only chance before they know what we would send.
+// §21.8 forbids exactly that. This sheet is the one place a driver has already come to
+// ask about notifications, so it is the one place the offer is honest.
+const pushState = ref("idle"); // idle | on | denied | unsupported | unconfigured | error
+const busy = ref(false);
+
+async function refreshPushState() {
+  if (!pushSupported()) {
+    pushState.value = "unsupported";
+    return;
+  }
+  if (permissionState() === "denied") {
+    pushState.value = "denied"; // cannot be re-asked from here; the browser owns it now
+    return;
+  }
+  pushState.value = (await isEnabled()) ? "on" : "idle";
+}
+onMounted(refreshPushState);
+
+async function togglePush() {
+  busy.value = true;
+  try {
+    const result = pushState.value === "on" ? await disable() : await enable();
+    if (result.ok) pushState.value = result.reason === "enabled" ? "on" : "idle";
+    else pushState.value = result.reason;
+  } finally {
+    busy.value = false;
+  }
+}
 
 const rows = computed(() =>
   props.notifications.map((n) => ({
@@ -74,10 +107,55 @@ const rows = computed(() =>
         </button>
       </li>
     </ul>
+
+    <!-- The offer says what will be sent BEFORE the browser prompt appears, because
+         the prompt itself cannot say it. Turning it off is one tap, like turning it
+         on (§21.8). -->
+    <section class="push">
+      <p class="push__what">{{ t("push.what") }}</p>
+      <button
+        v-if="['idle', 'on', 'error'].includes(pushState)"
+        class="push__cta"
+        type="button"
+        :disabled="busy"
+        @click="togglePush"
+      >
+        {{ pushState === "on" ? t("push.disable") : t("push.enable") }}
+      </button>
+      <p v-else class="push__why">{{ t(`push.why_${pushState}`) }}</p>
+      <p v-if="pushState === 'error'" class="push__why">{{ t("push.why_error") }}</p>
+    </section>
   </div>
 </template>
 
 <style scoped>
+.push {
+  margin-top: var(--s-4);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line-1);
+}
+.push__what {
+  margin: 0 0 var(--s-3);
+  font-size: var(--type-caption-size);
+  color: var(--text-2);
+}
+.push__cta {
+  width: 100%;
+  min-height: var(--touch-min);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--type-label-size);
+}
+.push__cta:disabled {
+  opacity: 0.5;
+}
+.push__why {
+  margin: 0;
+  font-size: var(--type-caption-size);
+  color: var(--text-2);
+}
 .notif__empty {
   margin: 0;
   color: var(--text-2);

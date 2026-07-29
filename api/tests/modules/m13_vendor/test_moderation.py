@@ -239,12 +239,22 @@ def test_the_sla_is_a_platform_promise_not_an_m13_one(db):
 
 
 def test_overdue_moderation_finds_late_items(db):
-    vendor = _vendor(db)
-    review = m13.submit_review(db, vendor, _account(db, "late@x.com").id, 1, now=T0)
-    _report(db, m13.CONTENT_REVIEW, review.id, vendor, "late2@x.com")
+    """AI-CONTEXT: anchored to `now`, not to T0, and that is the whole point.
 
-    assert admin.overdue_moderation(db, datetime.now(UTC) - timedelta(hours=1)) == []
-    late = admin.overdue_moderation(db, datetime.now(UTC) + timedelta(hours=100))
+    This test seeded a report at the fixed T0 (26 July, 12:00 UTC) and then asked
+    whether it was overdue relative to `datetime.now()`. With MODERATION_SLA_HOURS = 72
+    that was true until **29 July 13:00 UTC** and false after — an expiry nobody wrote
+    down, in a test that reads as timeless. It is the second instance of exactly the
+    defect §23 recorded for the admin console, so the fix is the general one: seed
+    relative to the same clock the assertion reads.
+    """
+    vendor = _vendor(db)
+    now = datetime.now(UTC)
+    review = m13.submit_review(db, vendor, _account(db, "late@x.com").id, 1, now=now)
+    _report(db, m13.CONTENT_REVIEW, review.id, vendor, "late2@x.com", now=now)
+
+    assert admin.overdue_moderation(db, now - timedelta(hours=1)) == []
+    late = admin.overdue_moderation(db, now + timedelta(hours=100))
     assert [i.content_ref for i in late] == [review.id]
 
 

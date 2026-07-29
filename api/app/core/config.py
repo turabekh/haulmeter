@@ -58,6 +58,16 @@ class Settings(BaseSettings):
     voyage_api_key: str = Field(default="")
     embed_model: str = Field(default="voyage-3.5")
 
+    # AI-CONTEXT: Web Push / VAPID (§13.1). Same shape as every provider above — a key
+    # present activates real delivery, absent falls back to the recording gateway, so a
+    # laptop with no keypair still exercises every tiering decision F8 makes. The pair
+    # is SELF-generated (`make vapid-keys`), not issued by anyone, which is the whole
+    # reason push is not blocked on a vendor account. Private key in .env only (rule 9).
+    vapid_public_key: str = Field(default="")
+    vapid_private_key: str = Field(default="")
+    # RFC 8292 requires a contact the push service can reach about a misbehaving sender.
+    vapid_contact: str = Field(default="mailto:ops@haulmeter.online")
+
     @property
     def database_url(self) -> str:
         return (

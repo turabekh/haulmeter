@@ -109,6 +109,45 @@ class Notification(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class PushSubscription(Base):
+    """AI-CONTEXT: a browser's Web Push endpoint, the thing that makes §13 reach a
+    phone in a pocket (§23 entry 111).
+
+    ONE ROW PER BROWSER, not per driver: a driver with a phone and a cab tablet has
+    two, and both should buzz. `endpoint` is the push service's own URL for that
+    browser instance and is therefore the natural key — it is unique across the world,
+    and a re-subscribe from the same browser must UPDATE rather than accumulate, or a
+    driver who clears their site data collects duplicate pushes forever.
+
+    `p256dh` and `auth` are the subscription's public key material. They are not
+    secrets of ours — they are how the payload is encrypted TO that browser (RFC 8291),
+    so the push service relays ciphertext it cannot read.
+
+    A subscription DIES on the far side without telling us: the browser is uninstalled,
+    the user revokes permission, the push service expires it. That shows up as 404/410
+    at send time, which is the only honest moment to learn it, so the gateway prunes
+    on that response rather than pretending a stored row proves reachability.
+    """
+
+    __tablename__ = "push_subscription"
+    __table_args__ = (
+        UniqueConstraint("endpoint", name="uq_push_subscription_endpoint"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="CASCADE"), index=True
+    )
+    endpoint: Mapped[str] = mapped_column(String(500))
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class NotificationTemplate(Base):
     __tablename__ = "notification_template"
     __table_args__ = (

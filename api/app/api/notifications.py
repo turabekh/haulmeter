@@ -23,9 +23,11 @@ considerate; destroying it is lossy, and the two must not be confused.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db
+from app.core.config import get_settings
 from app.foundation.f01_identity import public as identity
 from app.foundation.f08_notifications import public as notify
 
@@ -79,3 +81,54 @@ def mark_read(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "notification not found")
     notify.mark_notification_read(db, notification)
     return _serialize(notification)
+
+
+# --- Web Push registration (§13.1, §23 entry 111) ---
+class PushSubscriptionIn(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str
+
+
+@router.get("/push/key")
+def push_key() -> dict:
+    """The VAPID PUBLIC key, which is public by definition — the browser needs it to
+    build a subscription, and it identifies this sender to the push service.
+
+    AI-CONTEXT: `enabled` is what the client branches on. An unconfigured deployment
+    answers honestly rather than handing back an empty string the browser would fail
+    on in a way no one could read (§12.4).
+    """
+    settings = get_settings()
+    return {
+        "enabled": bool(settings.vapid_public_key),
+        "public_key": settings.vapid_public_key,
+    }
+
+
+@router.post("/push/subscribe", status_code=201)
+def push_subscribe(
+    body: PushSubscriptionIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Register this browser for push. Idempotent by endpoint — see `save_subscription`."""
+    sub = notify.save_subscription(db, account.id, body.endpoint, body.p256dh, body.auth)
+    return {"id": str(sub.id)}
+
+
+@router.post("/push/unsubscribe", status_code=200)
+def push_unsubscribe(
+    body: PushSubscriptionIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Turning alerts off must be as easy as turning them on (§21.8).
+
+    AI-CONTEXT: answers 200 whether or not a row was there. A driver who has already
+    unsubscribed, or whose browser dropped the subscription on its own, asked for a
+    state and is now in it — reporting 404 would make an achieved outcome read as a
+    failure. The boolean says which happened for anyone who cares.
+    """
+    removed = notify.drop_subscription_by_endpoint(db, account.id, body.endpoint)
+    return {"removed": removed}

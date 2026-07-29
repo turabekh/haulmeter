@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Haulmeter</title>
+    <!-- AI-CONTEXT: the app becomes an installable PWA so Web Push can survive the app
+         being closed (§23 entry 111). iOS requires an INSTALLED PWA for push at all;
+         Android/Chrome does not, but the manifest is what makes "add to home screen"
+         behave like an app rather than a bookmark. theme-color is --ink-0's literal
+         value: a manifest cannot read CSS custom properties. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0E1319" />
   </head>
   <body>
     <div id="app"></div>

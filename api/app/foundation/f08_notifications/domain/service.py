@@ -22,6 +22,7 @@ from .models import (
     NotificationTemplate,
     OutboundMessage,
     OutboundThread,
+    PushSubscription,
 )
 
 MAX_UNPROMPTED_P1_PER_DAY = 2
@@ -310,7 +311,9 @@ def dispatch(
         return notification
 
     def _send(channel: NotificationChannel) -> Notification:
-        gateway.send_push(to_ref, title, body)
+        # §13.5 travels WITH the push: one definition of "where this is about" serves
+        # the tray entry and the inbox row, so the two can never disagree.
+        gateway.send_push(to_ref, title, body, deep_link)
         notification.status = NotificationStatus.sent
         notification.channel = channel
         notification.dispatched_at = now
@@ -532,3 +535,65 @@ def record_inbound_reply(db: Session, thread: OutboundThread, body: str) -> Outb
     db.add(message)
     db.flush()
     return message
+
+
+# --- Push subscriptions: where a P0 actually goes (§23 entry 111) ---
+def save_subscription(db: Session, account_id, endpoint: str, p256dh: str, auth: str):
+    """Idempotent by ENDPOINT, which is the natural key.
+
+    AI-CONTEXT: a browser re-subscribes on its own schedule — a service-worker update,
+    a key rotation by the push service, a reinstall — and every one of those returns
+    the same endpoint or a new one for the same device. Keyed on endpoint, a
+    re-subscribe updates; keyed on account it would either clobber a driver's second
+    device or accumulate rows that all buzz the same phone.
+
+    An endpoint that reappears under a DIFFERENT account is reassigned rather than
+    duplicated: one browser has one owner, and the last person to log in on it is that
+    owner. The alternative — two accounts pushing to one device — would send a driver
+    someone else's money alerts.
+    """
+    existing = db.scalar(select(PushSubscription).where(PushSubscription.endpoint == endpoint))
+    now = datetime.now(UTC)
+    if existing is not None:
+        existing.account_id = account_id
+        existing.p256dh = p256dh
+        existing.auth = auth
+        existing.last_seen_at = now
+        db.flush()
+        return existing
+    sub = PushSubscription(
+        account_id=account_id,
+        endpoint=endpoint,
+        p256dh=p256dh,
+        auth=auth,
+        last_seen_at=now,
+    )
+    db.add(sub)
+    db.flush()
+    return sub
+
+
+def subscriptions_for(db: Session, account_id) -> list:
+    return list(
+        db.scalars(select(PushSubscription).where(PushSubscription.account_id == account_id))
+    )
+
+
+def drop_subscription(db: Session, subscription) -> None:
+    db.delete(subscription)
+    db.flush()
+
+
+def drop_subscription_by_endpoint(db: Session, account_id, endpoint: str) -> bool:
+    """Unsubscribe. Scoped to the account so one driver cannot silence another."""
+    sub = db.scalar(
+        select(PushSubscription).where(
+            PushSubscription.endpoint == endpoint,
+            PushSubscription.account_id == account_id,
+        )
+    )
+    if sub is None:
+        return False
+    drop_subscription(db, sub)
+    return True
+

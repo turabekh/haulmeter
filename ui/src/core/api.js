@@ -78,6 +78,13 @@ function headers() {
   return h;
 }
 
+// AI-CONTEXT: the same headers, exported for core/push.js. Push enrolment is a core
+// module rather than an api.js function because its rules — secure context, one-shot
+// permission, never auto-prompt — are logic worth testing on their own (§19).
+export function authHeaders() {
+  return headers();
+}
+
 // AI-CONTEXT: F12 read-cache — the driver app's defining constraint is dead
 // zones (design-prd §15.1: offline is a MODE, not an error). A successful GET is
 // cached to localStorage; when the network drops, the last-known REAL data is

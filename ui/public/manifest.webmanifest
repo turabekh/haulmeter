@@ -1,0 +1,13 @@
+{
+  "name": "Haulmeter",
+  "short_name": "Haulmeter",
+  "start_url": "/map",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E1319",
+  "theme_color": "#0E1319",
+  "lang": "en",
+  "dir": "ltr",
+  "icons": []
+}

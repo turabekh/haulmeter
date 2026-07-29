@@ -1,7 +1,7 @@
 COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
-.PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci \
+.PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci vapid-keys \
         seed seed-wallet purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
         repair-fuel ui-layout ui-layout-only
 
@@ -47,6 +47,14 @@ test-api: env
 
 test-ui:
 	$(COMPOSE) run --rm --no-deps ui npm test --silent
+
+# AI-CONTEXT: the VAPID keypair a deployment needs for Web Push (§23 entry 111). Prints
+# rather than writes: the private key is a secret and infra/.env is never generated over
+# (rule 9), so the operator pastes it in deliberately. Rotating invalidates every stored
+# subscription, which is why this is not run automatically by `make env`.
+# scripts/ is outside the api build context, so it is mounted rather than baked in.
+vapid-keys:
+	@$(COMPOSE) run --rm --no-deps -v $(PWD)/scripts:/scripts api python /scripts/vapid_keys.py
 
 lint: env
 	$(COMPOSE) run --rm --no-deps api sh -c "ruff check . && lint-imports --config importlinter.ini"
