@@ -189,3 +189,20 @@ export function basemapPreset(themeMode, systemPrefersDark) {
   // "system", and dark is primary (§6.1 C-3) — so an unknown preference is night
   return systemPrefersDark === false ? "day" : "night";
 }
+
+// AI-CONTEXT: §23 entry 101 — where a live marker sits, as arithmetic.
+//
+// The map moved markers by writing `top`/`left` into reactive state on every frame of
+// a pan, which asked the browser for LAYOUT and Vue for a re-render up to 300 times
+// per frame. This is the replacement, and it lives here for the same reason
+// `placeLabels` and `basemapPreset` do (§19): a test runner has no WebGL, so a rule
+// asserted only through a mounted Mapbox canvas is a rule that ships unexercised.
+//
+// The centring `translate(-50%, -50%)` is composed here rather than left to the
+// stylesheet's own transform, because an element may only have ONE transform — an
+// imperative write would otherwise silently drop the centring and hang every pin off
+// its own corner, half a puck away from the place it claims to mark.
+export function markerTransform(x, y) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
+}

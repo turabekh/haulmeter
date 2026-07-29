@@ -9,9 +9,15 @@
      normalized layout. Mapbox GL is dynamically imported so the no-token build
      (and tests) never load the ~200 KB library. -->
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { Truck, TreePine, SquareParking, Fuel, Warehouse, Circle, UtensilsCrossed, DollarSign, Clock } from "lucide-vue-next";
-import { statusPresentation, isStale, placeLabels, basemapPreset } from "../presentation.js";
+import {
+  statusPresentation,
+  isStale,
+  placeLabels,
+  basemapPreset,
+  markerTransform,
+} from "../presentation.js";
 import { useTheme } from "../theme.js";
 import { formatMoney } from "../meter.js";
 import { useI18n } from "../i18n.js";
@@ -150,6 +156,13 @@ function onSystemTheme(e) {
 }
 // the manual override AND the system setting, because §6.1 C-3 is both
 watch([mode, prefersDark], applyPreset);
+// new pins render at the origin until something places them; paint on the tick their
+// elements exist, or a refetch would flash every marker into the top-left corner
+watch(
+  () => [props.pins, props.clusters],
+  () => nextTick(paintPositions),
+  { deep: false },
+);
 
 // the map opens on the continental US (never a hardcoded city) — the server returns
 // cluster bubbles at this span (§11.5); GPS then recenters if the driver allows it.
@@ -161,7 +174,57 @@ const US_ZOOM = 3.5;
 // an empty screen and read as broken.
 const PLACE_ZOOM = 9;
 
-function syncPins() {
+// AI-CONTEXT: §23 entry 101 — markers move without Vue.
+//
+// This ran on EVERY frame of a pan and wrote `top`/`left` into reactive state, so a
+// full viewport re-projected up to 300 pins, replaced two reactive objects and asked
+// Vue to re-render every marker — with `top`/`left`, which forces LAYOUT rather than
+// only paint. Markers visibly trailed the tiles they were pinned to.
+//
+// The hot path is now imperative and transform-only: element refs held OUTSIDE
+// reactivity, `translate3d` composed with the centring translate the stylesheet
+// already applies, so the compositor moves them and Vue is not involved at all.
+//
+// `positions` still exists and still feeds §11.5's label declutter — but it settles
+// ONCE per gesture (`moveend`) instead of once per frame. The set of visible price
+// labels therefore holds steady during a drag and re-deckutters when the map stops,
+// which is also better behaviour than labels flickering in and out mid-pan.
+const pinEls = new Map(); // facility_id -> element, deliberately NOT reactive
+const clusterEls = new Map(); // index -> element
+
+function setPinEl(id, el) {
+  if (el) pinEls.set(id, el);
+  else pinEls.delete(id);
+}
+function setClusterEl(i, el) {
+  if (el) clusterEls.set(i, el);
+  else clusterEls.delete(i);
+}
+
+// the composition itself lives in core/ (§19) so it is testable without a GL context
+function place(el, x, y) {
+  const transform = markerTransform(x, y);
+  if (transform) el.style.transform = transform;
+}
+
+function paintPositions() {
+  if (!map || !live.value) return;
+  for (const pin of props.pins) {
+    const el = pinEls.get(pin.facility_id);
+    if (!el) continue;
+    const pt = map.project([pin.lon, pin.lat]);
+    place(el, pt.x, pt.y);
+  }
+  props.clusters.forEach((c, i) => {
+    const el = clusterEls.get(i);
+    if (!el) return;
+    const pt = map.project([c.lon, c.lat]);
+    place(el, pt.x, pt.y);
+  });
+}
+
+// once the gesture settles: the reactive read the declutter rule needs
+function settlePositions() {
   if (!map) return;
   zoom.value = map.getZoom();
   const next = {};
@@ -176,6 +239,11 @@ function syncPins() {
     nextC[i] = { x: pt.x, y: pt.y };
   });
   clusterPositions.value = nextC;
+}
+
+function syncPins() {
+  paintPositions();
+  settlePositions();
 }
 
 function zoomToCluster(cluster) {
@@ -259,7 +327,8 @@ onMounted(async () => {
         /* geolocation blocked/unavailable — stay on the continental view */
       }
     });
-    map.on("move", syncPins);
+    map.on("move", paintPositions);
+    map.on("moveend", settlePositions); // §11.5 declutter, once per gesture
     map.on("moveend", emitBounds); // every pan/zoom refetches what's now in view
     map.on("moveend", () => {
       const c = map.getCenter();
@@ -306,14 +375,16 @@ function fallbackLatLon(lat, lon) {
   return { top: `${top}%`, left: `${left}%` };
 }
 
+// §23 entry 101: LIVE markers are pinned at the origin and moved by `paintPositions`
+// with a transform, so nothing here re-renders while the map moves. Without a GL map
+// — the fallback the layout harness and every unit test measure — the bounds-
+// normalised percentages are unchanged.
 function pinStyle(pin) {
-  const p = live.value ? positions.value[pin.facility_id] : null;
-  const pos = p ? { top: `${p.y}px`, left: `${p.x}px` } : fallbackLatLon(pin.lat, pin.lon);
+  const pos = live.value ? { top: "0", left: "0" } : fallbackLatLon(pin.lat, pin.lon);
   return { ...pos, "--pin-color": `var(${statusPresentation(pin.status).token})` };
 }
-function clusterStyle(cluster, i) {
-  const p = live.value ? clusterPositions.value[i] : null;
-  const pos = p ? { top: `${p.y}px`, left: `${p.x}px` } : fallbackLatLon(cluster.lat, cluster.lon);
+function clusterStyle(cluster) {
+  const pos = live.value ? { top: "0", left: "0" } : fallbackLatLon(cluster.lat, cluster.lon);
   return { ...pos, "--pin-color": `var(${statusPresentation(cluster.status).token})` };
 }
 function stale(pin) {
@@ -330,6 +401,7 @@ function stale(pin) {
       :key="pin.facility_id"
       type="button"
       class="pin"
+      :ref="(el) => setPinEl(pin.facility_id, el)"
       :class="{ 'pin--stale': stale(pin) }"
       :style="pinStyle(pin)"
       :data-facility="pin.facility_id"
@@ -388,7 +460,8 @@ function stale(pin) {
       :key="'cl-' + i"
       type="button"
       class="cluster"
-      :style="clusterStyle(cl, i)"
+      :ref="(el) => setClusterEl(i, el)"
+      :style="clusterStyle(cl)"
       :aria-label="`${cl.count} ${t('map.cluster_label')}`"
       @click="zoomToCluster(cl)"
     >
