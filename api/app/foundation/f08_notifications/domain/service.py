@@ -353,6 +353,63 @@ def dispatch(
     return _send(_push_channel(driver_state))
 
 
+# AI-CONTEXT: the driver's own inbox — the surface §23 entry 429 said had to exist
+# before anything could be filed P2, generalised to everything F8 decides.
+#
+# It returns EVERY notification addressed to the account, including the ones the
+# budget or quiet hours suppressed, and that is deliberate. §13.1's cap of two per day
+# governs UNPROMPTED interruptions — a driver who opens a list is not being
+# interrupted, they are asking. Hiding a suppressed P1 would mean the quiet-hours rule
+# silently destroyed information rather than deferring it, which is the difference
+# between being considerate and being lossy.
+#
+# `pending` is excluded: it has not been decided yet, and showing a driver something
+# the system has not finished thinking about is how a half-written row becomes a fact.
+INBOX_STATUSES = (
+    NotificationStatus.sent,
+    NotificationStatus.digested,
+    NotificationStatus.suppressed,
+)
+# a working inbox, not an archive. The driver's history lives in the records the
+# notifications point AT — the load, the claim, the booking — never in the telling.
+INBOX_LIMIT = 50
+
+
+def inbox(db: Session, account_id, limit: int = INBOX_LIMIT) -> list[Notification]:
+    return list(
+        db.scalars(
+            select(Notification)
+            .where(
+                Notification.account_id == account_id,
+                Notification.status.in_(INBOX_STATUSES),
+            )
+            .order_by(Notification.created_at.desc())
+            .limit(limit)
+        )
+    )
+
+
+def unread_count(db: Session, account_id) -> int:
+    return len(
+        [n for n in inbox(db, account_id) if n.read_at is None]
+    )
+
+
+def mark_notification_read(
+    db: Session, notification: Notification, now: datetime | None = None
+) -> Notification:
+    # idempotent: the FIRST read is the interesting one, and a second tap must not
+    # rewrite when the driver learned something
+    if notification.read_at is None:
+        notification.read_at = now or datetime.now(UTC)
+        db.flush()
+    return notification
+
+
+def get_notification(db: Session, notification_id) -> Notification | None:
+    return db.get(Notification, notification_id)
+
+
 def digest(db: Session, account_id) -> list[Notification]:
     return list(
         db.scalars(

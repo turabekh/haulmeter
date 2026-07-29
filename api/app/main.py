@@ -21,6 +21,7 @@ from app.api import (
     m11_voice,
     m12_fleet,
     m13_vendor,
+    notifications,
     owner,
     public,
     share,
@@ -108,6 +109,7 @@ app.include_router(share.router)
 app.include_router(owner.router)
 app.include_router(load.router)
 app.include_router(location.router)
+app.include_router(notifications.router)
 app.include_router(m01_map.router)
 app.include_router(m02_facility_intel.router)
 app.include_router(m03_detention.router)

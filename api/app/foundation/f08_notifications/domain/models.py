@@ -102,6 +102,11 @@ class Notification(Base):
     dispatched_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
+    # AI-CONTEXT: delivery and attention are different events. `status` records what
+    # the SYSTEM did (sent / suppressed / digested); this records that the DRIVER
+    # opened it. A notification pushed at 3 a.m. and never read is `sent` either way,
+    # so a single column would make "unread" quietly mean "undelivered".
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class NotificationTemplate(Base):
