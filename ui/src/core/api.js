@@ -529,6 +529,38 @@ export async function fetchOwed() {
   return apiGet(`/accessorial/owed`, `owed`);
 }
 
+// AI-CONTEXT: the driver records that a broker actually paid (§23 entry 108). Until
+// this existed nothing in the product could mark a receivable recovered, so the Money
+// tab's own "Recovered" figure was structurally zero. It records a fact; no money moves
+// across this platform, because the broker pays the driver's own invoice directly.
+export async function markReceivablePaid(receivableId) {
+  const resp = await fetch(`${API_BASE}/money/receivable/${receivableId}/paid`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!resp.ok) {
+    const err = new Error(`mark paid failed: ${resp.status}`);
+    err.status = resp.status; // 409 = already recovered, or written off
+    throw err;
+  }
+  return resp.json();
+}
+
+// AI-CONTEXT: M6-FR7. Either side may cancel; the server decides the refund from how
+// close to the start it is, and notifies the DRIVER only when someone else acted.
+export async function cancelBooking(bookingId) {
+  const resp = await fetch(`${API_BASE}/parking/booking/${bookingId}/cancel`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!resp.ok) {
+    const err = new Error(`cancel failed: ${resp.status}`);
+    err.status = resp.status; // 409 = already canceled
+    throw err;
+  }
+  return resp.json();
+}
+
 export async function fetchBookable({ lat, lon, radiusM = 8000 }) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const q = new URLSearchParams({ lat, lon, radius_m: radiusM });

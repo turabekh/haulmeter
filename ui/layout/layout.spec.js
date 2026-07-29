@@ -528,6 +528,13 @@ const SURFACES = [
     // ghostwriter opens the sheet. First-match would have measured /money/audit.
     mocks: MONEY_MOCKS, open: [{ click: ".audit-cta", nth: 1 }], ready: ".tone",
   }],
+  // AI-CONTEXT: the mark-paid sheet is the THIRD `.audit-cta` on /money and renders
+  // only when something is payable — both mocked receivables above are, so nth:2 is
+  // stable. Measured here because a list of money figures at 200% is exactly the
+  // T-5/T-6 reflow case, and 360 dp is where a two-column row runs out of width.
+  ["sheet-mark-paid", "/money", {
+    mocks: MONEY_MOCKS, open: [{ click: ".audit-cta", nth: 2 }], ready: ".paid__submit",
+  }],
   ["sheet-share", `/load/${EVIDENCE_STOP}/evidence`, {
     mocks: EVIDENCE_MOCKS, open: [".cta--secondary"], ready: "input[type='email']",
   }],

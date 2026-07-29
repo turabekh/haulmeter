@@ -5,16 +5,17 @@
      S3 comfortable density (§7.4). Money is ALWAYS Mono + tabular, never
      truncated (T-2/T-6). Fixture-backed until the live APIs answer. -->
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import GhostwriterSheet from "../core/components/GhostwriterSheet.vue";
+import MarkPaidSheet from "../core/components/MarkPaidSheet.vue";
 import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
 import { receivableStatusToken } from "../core/presentation.js";
-import { fetchOwed, fetchEarnings, fetchMe } from "../core/api.js";
+import { fetchOwed, fetchEarnings, fetchMe, markReceivablePaid } from "../core/api.js";
 import { SAMPLE_OWED, SAMPLE_EARNINGS } from "../core/fixtures.js";
 
 const { t } = useI18n();
@@ -23,6 +24,7 @@ const router = useRouter();
 const rows = ref(SAMPLE_OWED);
 const earnings = ref(SAMPLE_EARNINGS);
 const drafting = ref(false);
+const marking = ref(false);
 const me = ref(null); // F1: verified operating authority, shown as a trust pill
 
 onMounted(async () => {
@@ -48,6 +50,27 @@ function kindLabel(kind) {
 }
 function stateLabel(state) {
   return t(`money.state.${state}`);
+}
+
+// AI-CONTEXT: F7's ALLOWED_TRANSITIONS is the authority on what may become
+// `recovered`; this is the same rule at the point of OFFER, so the driver is never
+// shown a control the ledger will refuse. `recovered` and `written_off` are terminal.
+const PAYABLE_STATES = ["invoiced", "acknowledged", "disputed", "escalated"];
+const payable = computed(() => rows.value.filter((r) => PAYABLE_STATES.includes(r.state)));
+
+async function onMarkPaid(receivableId) {
+  marking.value = false;
+  try {
+    await markReceivablePaid(receivableId);
+  } catch {
+    /* offline, or the ledger refused it — the list below is the source of truth */
+  }
+  try {
+    rows.value = await fetchOwed();
+    earnings.value = await fetchEarnings(); // Recovered moves the North Star figure
+  } catch {
+    /* leave what is on screen rather than blanking it */
+  }
 }
 </script>
 
@@ -120,11 +143,32 @@ function stateLabel(state) {
       <button class="audit-cta" type="button" @click="drafting = true">
         {{ t("ghost.title") }}
       </button>
+      <!-- §23 entry 108: the ending a claim never had. Rendered only when something
+           is actually payable, so the Money tab of a driver owed nothing stays quiet. -->
+      <button
+        v-if="payable.length"
+        class="audit-cta"
+        type="button"
+        @click="marking = true"
+      >
+        {{ t("money.paid.cta") }}
+      </button>
     </template>
     <p v-else class="driving-note">{{ t("driving.paused") }}</p>
 
     <BottomSheet :open="drafting && !isDriving" :title="t('ghost.title')" @close="drafting = false">
       <GhostwriterSheet />
+    </BottomSheet>
+
+    <!-- guarded with `!isDriving` like the ghostwriter above: §10.3 defers ACTIONS at
+         speed, and a sheet left open across a state change is how the Docs capture
+         flow stayed live in a moving truck. -->
+    <BottomSheet
+      :open="marking && !isDriving"
+      :title="t('money.paid.cta')"
+      @close="marking = false"
+    >
+      <MarkPaidSheet :rows="payable" @submit="onMarkPaid" />
     </BottomSheet>
   </div>
 </template>

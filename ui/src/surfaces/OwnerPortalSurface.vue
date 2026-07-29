@@ -17,6 +17,7 @@ import {
   createOwnerProperty,
   addOwnerSpot,
   updateOwnerSpot,
+  cancelBooking,
 } from "../core/api.js";
 import { SAMPLE_OWNER } from "../core/fixtures.js";
 
@@ -25,6 +26,14 @@ const board = ref(SAMPLE_OWNER);
 const demo = ref(false);
 const newProp = reactive({ name: "", lat: "", lon: "" });
 const spotDrafts = reactive({}); // property_id -> { label, price }
+// AI-CONTEXT: cancelling ARMS before it acts (§23 entry 108). Pausing a spot next to
+// it is one tap because pausing is reversible; a cancellation refunds money and pushes
+// a P0 to a driver who has planned their night around the spot, and F7 has no un-refund.
+// This is a behaviour on the existing `.pause` button, not a new component pattern —
+// §22 forbids inventing one, and an irreversible action behind a single click on a
+// desktop table row is how an owner destroys a booking with a mis-click.
+const arming = ref(null); // booking id awaiting its confirming second click
+const ACTIVE_BOOKING_STATES = ["booked", "checked_in"];
 
 const STATE_KEY = {
   booked: "owner.st_booked",
@@ -37,6 +46,28 @@ const stateLabel = (s) => t(STATE_KEY[s] ?? "owner.status");
 
 async function reload() {
   board.value = await fetchOwnerDashboard();
+}
+
+function isActive(booking) {
+  return ACTIVE_BOOKING_STATES.includes(booking.state);
+}
+
+async function onCancel(booking) {
+  if (arming.value !== booking.id) {
+    arming.value = booking.id; // first click arms, and only this one
+    return;
+  }
+  arming.value = null;
+  try {
+    await cancelBooking(booking.id);
+  } catch {
+    /* already canceled, or offline — the reload below is the source of truth */
+  }
+  try {
+    await reload();
+  } catch {
+    /* leave the table as it is rather than blanking it */
+  }
 }
 
 async function init() {
@@ -164,6 +195,7 @@ async function togglePause(spot) {
             <th class="num">{{ t("owner.charged") }}</th>
             <th class="num">{{ t("owner.your_cut") }}</th>
             <th>{{ t("owner.status") }}</th>
+            <th v-if="!demo">{{ t("owner.cancel") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -172,6 +204,16 @@ async function togglePause(spot) {
             <td class="num">{{ formatMoney(b.price_cents) }}</td>
             <td class="num ledger">{{ formatMoney(b.owner_payout_cents) }}</td>
             <td>{{ stateLabel(b.state) }}</td>
+            <td v-if="!demo">
+              <button
+                v-if="isActive(b)"
+                class="pause"
+                type="button"
+                @click="onCancel(b)"
+              >
+                {{ arming === b.id ? t("owner.cancel_confirm") : t("owner.cancel") }}
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>

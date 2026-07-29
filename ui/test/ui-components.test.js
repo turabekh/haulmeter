@@ -40,6 +40,7 @@ import { routes, installAuthGuard } from "../src/router.js";
 import { setToken, logout, isAuthenticated, setActiveStop, setActiveFleet } from "../src/core/api.js";
 import en from "../src/core/i18n/en.json";
 import { useDriverState, DriverState } from "../src/core/state.js";
+import { SAMPLE_OWED, SAMPLE_EARNINGS } from "../src/core/fixtures.js";
 
 const routerStub = { global: { stubs: { "router-link": { template: "<a class='rl'><slot/></a>" } } } };
 
@@ -3472,5 +3473,151 @@ describe("MapCanvas — server-side cluster bubbles (§11.5)", () => {
     expect(bubbles[0].find(".cluster__count").text()).toBe("42");
     expect(bubbles[0].attributes("aria-label")).toContain("42");
     w.unmount();
+  });
+});
+
+// AI-CONTEXT: the two controls behind §23 entry 108's P0s. Both exist because the
+// events did not: nothing could mark a claim paid, and M6-FR7's refund engine had no
+// endpoint. What is asserted here is mostly the SHAPE of the offer — which rows are
+// eligible, when the control is withdrawn, and that an irreversible money statement
+// takes two deliberate taps rather than one.
+describe("MoneySurface — marking a claim paid (§23 entry 108)", () => {
+  beforeEach(() => useDriverState().setState(DriverState.IDLE));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    logout();
+    useDriverState().setState(DriverState.IDLE);
+  });
+
+  it("offers the control and lists only what the ledger could accept", async () => {
+    const w = mount(MoneySurface);
+    await flushPromises();
+
+    expect(w.text()).toContain(en["money.paid.cta"]);
+    await w.findAll(".audit-cta").at(-1).trigger("click");
+    await flushPromises();
+
+    // the fixture holds invoiced + disputed + recovered; `recovered` is terminal in
+    // F7's transition table, so offering it would promise something the API refuses
+    const choices = w.findAll(".paid__row");
+    expect(choices).toHaveLength(2);
+    expect(w.find(".paid__list").text()).not.toContain("Lumper");
+  });
+
+  it("will not submit until a claim is chosen", async () => {
+    const w = mount(MoneySurface);
+    await flushPromises();
+    await w.findAll(".audit-cta").at(-1).trigger("click");
+    await flushPromises();
+
+    expect(w.find(".paid__submit").attributes("disabled")).toBeDefined();
+    await w.findAll(".paid__row")[0].trigger("click");
+    expect(w.find(".paid__submit").attributes("disabled")).toBeUndefined();
+  });
+
+  it("posts the chosen receivable and re-reads the money that moved", async () => {
+    setToken("tok-money");
+    const calls = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url, opts) => {
+      const u = String(url);
+      calls.push(`${opts?.method || "GET"} ${u}`);
+      if (u.includes("/accessorial/owed")) return jsonOk(SAMPLE_OWED);
+      if (u.includes("/money/earnings")) return jsonOk(SAMPLE_EARNINGS);
+      if (u.includes("/paid")) return jsonOk({ receivable_id: "r-1", state: "recovered" });
+      return jsonOk({});
+    }));
+    const w = mount(MoneySurface);
+    await flushPromises();
+    await w.findAll(".audit-cta").at(-1).trigger("click");
+    await flushPromises();
+    await w.findAll(".paid__row")[0].trigger("click");
+    await w.find(".paid__submit").trigger("click");
+    await flushPromises();
+
+    expect(calls.some((c) => c.startsWith("POST") && c.includes("/money/receivable/r-1/paid"))).toBe(
+      true,
+    );
+    // the North Star figure is derived from recovered money, so it must be re-read
+    expect(calls.filter((c) => c.includes("/money/earnings")).length).toBeGreaterThan(1);
+    expect(w.find(".paid__list").exists()).toBe(false); // the sheet closes behind it
+  });
+
+  it("withdraws the control at speed (§10.3 — actions deferred)", async () => {
+    useDriverState().setState(DriverState.DRIVING);
+    const w = mount(MoneySurface);
+    await flushPromises();
+
+    expect(w.text()).not.toContain(en["money.paid.cta"]);
+  });
+});
+
+describe("OwnerPortalSurface — cancelling a booking (M6-FR7, §23 entry 108)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    logout();
+  });
+
+  function stub(bookings, onCancel = () => {}) {
+    return vi.fn().mockImplementation((url, opts) => {
+      const u = String(url);
+      if (u.endsWith("/owner/dashboard")) {
+        return jsonOk({ payout_cents: 0, properties: [], bookings });
+      }
+      if (u.includes("/cancel")) {
+        onCancel(u);
+        return jsonOk({ state: "refunded" });
+      }
+      return jsonOk({});
+    });
+  }
+
+  it("offers cancel only on bookings that are still live", async () => {
+    setToken("tok-owner");
+    vi.stubGlobal("fetch", stub([
+      { id: "b1", nights: 1, price_cents: 2400, owner_payout_cents: 1980, state: "booked" },
+      { id: "b2", nights: 2, price_cents: 4800, owner_payout_cents: 3960, state: "checked_out" },
+      { id: "b3", nights: 1, price_cents: 2400, owner_payout_cents: 1980, state: "refunded" },
+    ]));
+    const w = mount(OwnerPortalSurface);
+    await flushPromises();
+
+    expect(w.findAll("tbody .pause")).toHaveLength(1);
+  });
+
+  it("arms on the first click and only cancels on the second", async () => {
+    setToken("tok-owner");
+    const hits = [];
+    vi.stubGlobal("fetch", stub(
+      [{ id: "b1", nights: 1, price_cents: 2400, owner_payout_cents: 1980, state: "booked" }],
+      (u) => hits.push(u),
+    ));
+    const w = mount(OwnerPortalSurface);
+    await flushPromises();
+    const btn = w.find("tbody .pause");
+
+    await btn.trigger("click");
+    await flushPromises();
+    expect(hits).toHaveLength(0); // nothing has been refunded yet
+    expect(w.find("tbody .pause").text()).toBe(en["owner.cancel_confirm"]);
+
+    await w.find("tbody .pause").trigger("click");
+    await flushPromises();
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toContain("/parking/booking/b1/cancel");
+  });
+
+  it("arms one row at a time", async () => {
+    setToken("tok-owner");
+    vi.stubGlobal("fetch", stub([
+      { id: "b1", nights: 1, price_cents: 2400, owner_payout_cents: 1980, state: "booked" },
+      { id: "b2", nights: 1, price_cents: 2400, owner_payout_cents: 1980, state: "booked" },
+    ]));
+    const w = mount(OwnerPortalSurface);
+    await flushPromises();
+
+    await w.findAll("tbody .pause")[0].trigger("click");
+    const labels = w.findAll("tbody .pause").map((b) => b.text());
+
+    expect(labels).toEqual([en["owner.cancel_confirm"], en["owner.cancel"]]);
   });
 });
