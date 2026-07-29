@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.foundation.f02_facility import public as facility
+from app.foundation.f03_location import public as location
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f10_crowd import public as crowd
 from app.foundation.f11_map import public as mapsvc
@@ -525,6 +526,51 @@ def prompt_for_lot_status(db: Session, account_id, facility_id, gateway, now: da
             {"action": "lot:full", "title": "Full"},
         ],
     )
+
+
+# AI-CONTEXT: the trigger, shape (c) — owner-chosen (§23 entry 112).
+#
+# The geofence could not answer this. Events fire only for ARMED facilities and the one
+# caller of `arm_geofence` is `f05_load.arm_stop`, so a driver parked at a truck stop
+# for the night is invisible to `evaluate_ping`. Auto-arming was the obvious fix and was
+# rejected: armings write presence and event rows that M3's money reads, and §23 entries
+# 73, 93 and 107 are all the same story of something adjacent to the clock being changed
+# and the money going wrong.
+#
+# So this reads the ping trail through F3's `stationary_since` and WRITES NOTHING to the
+# location tables. It cannot affect a detention claim even if it is completely wrong.
+#
+# DWELL_MINUTES matches F3's own `DWELL_TICK_INTERVAL` deliberately: the product already
+# has one answer to "actually stopped here", and a second number would eventually
+# disagree with the first.
+DWELL_MINUTES = 15
+PROMPT_COOLDOWN = timedelta(hours=20)
+
+
+def lot_status_prompt_due(db: Session, account_id, lat: float, lon: float, gateway, now: datetime):
+    """Ask, if the driver has actually settled somewhere worth asking about.
+
+    Called from the position-ping route on every ping, so the ORDER of these checks is
+    load-bearing: the cheapest and most-often-false one runs first. A moving driver
+    costs one indexed read and nothing else.
+    """
+    # 1. Has this class been offered at all today? One row read, and it short-circuits
+    #    the whole path for the ~95% of pings that happen after a prompt has been made.
+    #    Counting ATTEMPTS not sends is what stops a suppressed row per ping (§23 102
+    #    renders suppressed rows, so that would be ninety held prompts in one inbox).
+    if notify.has_notification_since(
+        db, account_id, notify.LOT_STATUS_PROMPT_CLASS, now - PROMPT_COOLDOWN
+    ):
+        return None
+    # 2. Are they even stopped? False for every ping of a moving truck.
+    since = location.stationary_since(db, account_id, now)
+    if since is None or (now - since) < timedelta(minutes=DWELL_MINUTES):
+        return None
+    # 3. Only now is a spatial query worth paying for.
+    for fac in facility.nearest(db, lat, lon, radius_m=location.STATIONARY_RADIUS_M):
+        if fac.facility_type.value in PROMPTABLE_KINDS:
+            return prompt_for_lot_status(db, account_id, fac.id, gateway, now)
+    return None
 
 
 def queue_status_offline(

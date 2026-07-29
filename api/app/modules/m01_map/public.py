@@ -7,6 +7,7 @@ behind the F13 flag `m01_map`. Consumed by later modules and the UI layer.
 
 from .domain.enums import NavProvider, Preset
 from .domain.service import (
+    DWELL_MINUTES,
     FLAG_KEY,
     MAX_CORRIDOR_ENTRIES,
     MAX_CORRIDOR_SCALES,
@@ -17,6 +18,7 @@ from .domain.service import (
     ParkingPrediction,
     corridor_ahead,
     corridor_view,
+    lot_status_prompt_due,
     map_overlay,
     map_overlay_bbox,
     map_overlay_view,
@@ -55,7 +57,9 @@ __all__ = [
     "queue_status_offline",
     "record_map_open",
     "register_module",
+    "DWELL_MINUTES",
     "PROMPTABLE_KINDS",
+    "lot_status_prompt_due",
     "prompt_for_lot_status",
     "submit_status",
 ]

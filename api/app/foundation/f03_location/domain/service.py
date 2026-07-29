@@ -1,7 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
+from geoalchemy2 import Geography
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import delete, func, select
+from sqlalchemy import cast, delete, func, select
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.orm import Session
 
@@ -354,3 +355,80 @@ def purge_pings_older_than(db: Session, cutoff: datetime) -> int:
     result = db.execute(delete(LocationPing).where(LocationPing.received_at < cutoff))
     db.flush()
     return result.rowcount
+
+
+# --- Stationary detection, read-only (§23 entry 112, shape (c)) ---
+#
+# AI-CONTEXT: this exists because the geofence could NOT answer the question. Events
+# fire only for facilities with an active ARMING, and `arm_geofence` has one caller in
+# the tree — `f05_load.arm_stop` — so a driver parked at a truck stop for the night is
+# invisible to `evaluate_ping`. Auto-arming would have fixed it and was rejected
+# (owner decision): armings write presence and event rows that M3's money reads, and
+# §23 entries 73, 93 and 107 are all the same story of something adjacent to the clock
+# being changed and the money going wrong.
+#
+# So this reads the ping trail and writes NOTHING. No arming, no presence, no event.
+# It cannot affect a detention claim even if it is completely wrong, which is the whole
+# reason it is shaped this way.
+STATIONARY_RADIUS_M = 150.0
+STATIONARY_WINDOW = timedelta(hours=2)
+
+
+def stationary_since(
+    db: Session,
+    account_id,
+    now: datetime,
+    radius_m: float = STATIONARY_RADIUS_M,
+    window: timedelta = STATIONARY_WINDOW,
+) -> datetime | None:
+    """When the driver's current stay began, or None if they are not staying.
+
+    Walks BACKWARDS from the newest ping while each older one is still within
+    `radius_m` of it, and returns the oldest ping in that unbroken run. The first ping
+    outside the radius ends the stay — a driver who left and came back gets the second
+    visit, not the union of both, which is the same scoping mistake §23 entry 73 made
+    with geofence events and billed a driver $187.76 for it.
+
+    ONE query regardless of how many pings there are: the anchor is a scalar subquery,
+    so PostGIS flags the whole window against it server-side. Comparing them row by row
+    would be a per-ping round trip — the shape §23 entry 98 spent a session removing
+    from the map — and computing the distance in Python would grow a second geometry
+    implementation beside F2's, which `facility_distances` explicitly warns against.
+    Bounded by `window`, and the 250 m / 5 min client throttle (§23 entry 93) keeps that
+    a handful of rows.
+
+    The anchor stays IN SQL deliberately. Fetching it first and passing the value back
+    in casts a WKB element to text and PostGIS rejects it — "parse error - invalid
+    geometry" — which is the kind of failure that reads like a data problem and is
+    actually a round trip that should never have happened.
+    """
+    anchor = (
+        select(LocationPing.geom)
+        .where(LocationPing.account_id == account_id, LocationPing.occurred_at <= now)
+        .order_by(LocationPing.occurred_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    rows = db.execute(
+        select(
+            LocationPing.occurred_at,
+            func.ST_DWithin(
+                cast(LocationPing.geom, Geography), cast(anchor, Geography), radius_m
+            ),
+        )
+        .where(
+            LocationPing.account_id == account_id,
+            LocationPing.occurred_at >= now - window,
+            LocationPing.occurred_at <= now,
+        )
+        .order_by(LocationPing.occurred_at.desc())
+    ).all()
+    if not rows:
+        return None
+    since = None
+    for occurred_at, near in rows:
+        if not near:
+            break
+        since = occurred_at
+    return since
+

@@ -66,38 +66,22 @@ class GeocodeIn(BaseModel):
     address: str
 
 
-def _ask_about_the_lot(db, account, facility_id, now) -> None:
+def _ask_about_the_lot(db, account, lat, lon, now) -> None:
     """§23 entry 112 — the product's first question to a driver.
 
-    AI-CONTEXT: composed HERE for the same reason M5's EXIT carve-out is: a foundation
-    must not reach up into a module to tell it something happened, and this router is
-    already the place where an F3 event meets the modules that care.
+    Composed HERE for the same reason M5's EXIT carve-out is: a foundation must not
+    reach up into a module to tell it something happened, and this router is already
+    where a position ping meets the modules that care.
 
-    §13.4's ban on interactive prompts at speed is satisfied STRUCTURALLY: a dwell tick
-    cannot fire for a moving truck, so there is no driving check here to forget. Every
-    other refusal — wrong kind of facility, already reported, opted out, over the daily
-    cap, quiet hours — belongs to M1 and F8 and is not restated.
+    §13.4's ban on interactive prompts at speed is satisfied by the TRIGGER rather than
+    by a check somebody can forget: a driver who has not been within 150 m of one spot
+    for fifteen minutes is not asked, and a driver who has is parked by definition.
 
     The gateway is resolved per account so a configured deployment pushes to the
     driver's own browsers (§23 entry 111); an unconfigured one records to the inbox.
-
-    !!! THIS DOES NOT FIRE YET, AND THAT IS RECORDED RATHER THAN HIDDEN. !!!
-
-    `evaluate_ping` only emits events for facilities the driver has an ACTIVE ARMING
-    for, and `arm_geofence` has exactly one caller in the tree: `f05_load.arm_stop`.
-    So geofence events exist only for STOPS ON A LOAD — the shipper/receiver docks that
-    `PROMPTABLE_KINDS` deliberately excludes, because a driver dwelling at a dock is
-    working, not parking. **A driver who pulls into a truck stop for the night has no
-    arming there and produces no DWELL_TICK at all.**
-
-    Found by driving real pings, not by the suite: all thirteen prompt tests call
-    `prompt_for_lot_status` directly and prove the RULES, which is a different question
-    from whether anything ever calls it. Wiring the trigger means deciding how a
-    parking-type facility gets armed (§23 entry 112, reopened) — an F3 semantics change
-    that touches the machinery M3's money runs on, so it is an owner decision and not
-    something to slip in at the end of a long session.
     """
-    m1.prompt_for_lot_status(db, account.id, facility_id, notify.gateway_for(db, account.id), now)
+    m1.lot_status_prompt_due(db, account.id, lat, lon, notify.gateway_for(db, account.id), now)
+
 
 @router.post("/geocode")
 def geocode(
@@ -176,8 +160,12 @@ def ping(
     for event in events:
         if event.event_type is location.GeofenceEventType.EXIT:
             _warn_of_unrecoverable_gaps(db, account, event.facility_id, now)
-        elif event.event_type is location.GeofenceEventType.DWELL_TICK:
-            _ask_about_the_lot(db, account, event.facility_id, now)
+    # §23 entry 112: independent of the geofence, and it has to be. Events only fire
+    # for ARMED facilities, so a driver parked at a truck stop for the night produces
+    # none — this reads the ping trail instead and writes nothing to the location
+    # tables. The prompt's own checks are ordered cheapest-first inside M1.
+    _ask_about_the_lot(db, account, body.lat, body.lon, now)
+
 
     # the events go back so the client can react to its own movement without polling —
     # an EXIT is what tells the Load tab the driver has left the dock.

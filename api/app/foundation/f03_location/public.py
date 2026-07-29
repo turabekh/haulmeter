@@ -18,6 +18,8 @@ from .domain.service import (
     DEFAULT_RADIUS_M,
     DWELL_TICK_INTERVAL,
     GPS_DIVERGENCE_THRESHOLD,
+    STATIONARY_RADIUS_M,
+    STATIONARY_WINDOW,
     FacilityNotFound,
     arm_geofence,
     build_trace,
@@ -30,6 +32,7 @@ from .domain.service import (
     list_events,
     purge_pings_older_than,
     record_ping,
+    stationary_since,
     visit_window,
 )
 
@@ -56,5 +59,8 @@ __all__ = [
     "list_events",
     "purge_pings_older_than",
     "record_ping",
+    "stationary_since",
+    "STATIONARY_RADIUS_M",
+    "STATIONARY_WINDOW",
     "visit_window",
 ]

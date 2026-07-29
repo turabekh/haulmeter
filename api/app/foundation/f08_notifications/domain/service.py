@@ -623,3 +623,31 @@ def drop_subscription_by_endpoint(db: Session, account_id, endpoint: str) -> boo
     drop_subscription(db, sub)
     return True
 
+
+def has_notification_since(db: Session, account_id, category: str, since) -> bool:
+    """Was this class already OFFERED to this driver lately? (§23 entry 112)
+
+    AI-CONTEXT: counts ATTEMPTS, not deliveries, and that distinction is the point. A
+    caller that re-offers on every position ping would otherwise write a suppressed row
+    each time it lost to the budget — and the inbox deliberately RENDERS suppressed rows
+    (§23 entry 102), so a driver dwelling for eight hours would open it to find ninety
+    identical held prompts. Suppression is a decision about ONE notification, not a
+    licence to keep making the same one.
+
+    Scoped to the CATEGORY and not to a subject, because `Notification` does not store
+    `subject_ref` — that argument exists for the mute check and is not persisted. For a
+    class capped at one a day the distinction does not arise, and inventing a column to
+    make this read prettier would be the tail wagging the dog.
+    """
+    return (
+        db.scalar(
+            select(Notification.id)
+            .where(
+                Notification.account_id == account_id,
+                Notification.category == category,
+                Notification.created_at >= since,
+            )
+            .limit(1)
+        )
+        is not None
+    )

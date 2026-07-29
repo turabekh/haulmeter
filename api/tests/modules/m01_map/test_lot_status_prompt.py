@@ -180,3 +180,112 @@ def test_an_unknown_facility_is_not_asked_about(db):
     gw = notify.RecordingNotificationGateway()
 
     assert m1.prompt_for_lot_status(db, account.id, uuid.uuid4(), gw, NOW) is None
+
+
+# --- the TRIGGER, which is what the rules above were useless without (§23 entry 112) ---
+#
+# The first build of this feature hung the prompt off DWELL_TICK and shipped thirteen
+# green tests that all called `prompt_for_lot_status` directly. The geofence only emits
+# events for ARMED facilities and nothing arms a truck stop, so it could never have
+# fired. These tests drive PINGS, which is the only way to catch that.
+from app.foundation.f03_location import public as location  # noqa: E402
+
+
+def _ping(db, account, at, lat=DALLAS[0], lon=DALLAS[1]):
+    return location.evaluate_ping(db, account.id, lat, lon, occurred_at=at)
+
+
+def test_a_driver_parked_at_an_unarmed_truck_stop_is_asked(db):
+    """The case the geofence cannot see: no load, no stop, no arming — just a driver
+    who pulled in for the night."""
+    account = _driver(db)
+    _lot(db)
+    gw = notify.RecordingNotificationGateway()
+    _ping(db, account, NOW - timedelta(minutes=40))
+    _ping(db, account, NOW - timedelta(minutes=20))
+    _ping(db, account, NOW)
+
+    sent = m1.lot_status_prompt_due(db, account.id, *DALLAS, gw, NOW)
+
+    assert sent is not None
+    assert len(gw.sent) == 1
+
+
+def test_a_driver_still_rolling_is_not_asked(db):
+    """One ping is not a stay, and a truck that moved is not parked."""
+    account = _driver(db)
+    _lot(db)
+    gw = notify.RecordingNotificationGateway()
+    _ping(db, account, NOW - timedelta(minutes=40), lat=33.5, lon=-97.5)  # far away
+    _ping(db, account, NOW)
+
+    assert m1.lot_status_prompt_due(db, account.id, *DALLAS, gw, NOW) is None
+
+
+def test_five_minutes_parked_is_not_yet_a_stay(db):
+    account = _driver(db)
+    _lot(db)
+    gw = notify.RecordingNotificationGateway()
+    _ping(db, account, NOW - timedelta(minutes=5))
+    _ping(db, account, NOW)
+
+    assert m1.lot_status_prompt_due(db, account.id, *DALLAS, gw, NOW) is None
+
+
+def test_a_driver_parked_nowhere_near_a_lot_is_not_asked(db):
+    """Stationary at a rest stop that is not in the registry, or on a shoulder."""
+    account = _driver(db)
+    gw = notify.RecordingNotificationGateway()
+    _ping(db, account, NOW - timedelta(minutes=40))
+    _ping(db, account, NOW)
+
+    assert m1.lot_status_prompt_due(db, account.id, *DALLAS, gw, NOW) is None
+
+
+def test_the_ping_path_writes_nothing_to_the_location_tables(db):
+    """The whole reason shape (c) was chosen over auto-arming: this must not be able to
+    touch the machinery M3's money reads, even if it is completely wrong."""
+    account = _driver(db)
+    lot = _lot(db)
+    gw = notify.RecordingNotificationGateway()
+    _ping(db, account, NOW - timedelta(minutes=40))
+    _ping(db, account, NOW)
+    before = len(location.list_events(db, account.id, lot.id))
+
+    m1.lot_status_prompt_due(db, account.id, *DALLAS, gw, NOW)
+
+    assert location.list_events(db, account.id, lot.id) == []
+    assert before == 0
+    assert location.is_present(db, account.id, lot.id) is False
+
+
+def test_it_asks_once_and_then_stops_asking_on_every_ping(db):
+    """A driver dwelling for eight hours pings ~96 times. Without an ATTEMPT guard each
+    one writes a suppressed row, and §23 entry 102's inbox renders suppressed rows — so
+    the driver would open it to ninety identical held prompts."""
+    account = _driver(db)
+    _lot(db)
+    gw = notify.RecordingNotificationGateway()
+    _ping(db, account, NOW - timedelta(minutes=40))
+    _ping(db, account, NOW)
+
+    for i in range(6):
+        m1.lot_status_prompt_due(db, account.id, *DALLAS, gw, NOW + timedelta(minutes=5 * i))
+
+    rows = db.query(notify.Notification).filter_by(account_id=account.id).all()
+    assert len(rows) == 1
+    assert len(gw.sent) == 1
+
+
+def test_a_stay_ends_when_the_driver_leaves(db):
+    """The first ping outside the radius ends the stay — a driver who left and came back
+    gets the second visit, not the union of both (§23 entry 73's scoping mistake)."""
+    account = _driver(db)
+    _ping(db, account, NOW - timedelta(minutes=60))
+    _ping(db, account, NOW - timedelta(minutes=30), lat=33.5, lon=-97.5)  # left
+    _ping(db, account, NOW - timedelta(minutes=4))  # came back
+    _ping(db, account, NOW)
+
+    since = location.stationary_since(db, account.id, NOW)
+
+    assert since == NOW - timedelta(minutes=4)  # this visit, not the earlier one
