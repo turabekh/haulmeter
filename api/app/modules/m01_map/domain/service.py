@@ -123,16 +123,41 @@ def _preset_types(db: Session, preset: Preset) -> list:
     return types
 
 
-def _preset_keeps(preset: Preset, pin) -> bool:
+def _preset_keeps_kind(preset: Preset, facility_type: str, services) -> bool:
     """The kind list above is a candidate set; this is the decision. Drive gains the
-    extra kinds ONLY where they sell fuel, so it does not quietly become Tonight."""
+    extra kinds ONLY where they sell fuel, so it does not quietly become Tonight.
+
+    Takes the two fields rather than an object so it can judge a facility row or a
+    built pin — the filter runs before pins exist, and the corridor still has entries."""
     if preset == Preset.fuel:
-        return sells_fuel(pin.facility_type, pin.services)
-    if preset == Preset.drive and pin.facility_type in {
-        t.value for t in _DRIVE_EXTRA_IF_SELLS_FUEL
-    }:
-        return sells_fuel(pin.facility_type, pin.services)
+        return sells_fuel(facility_type, services)
+    if preset == Preset.drive and facility_type in {t.value for t in _DRIVE_EXTRA_IF_SELLS_FUEL}:
+        return sells_fuel(facility_type, services)
     return True
+
+
+def _preset_keeps(preset: Preset, pin) -> bool:
+    return _preset_keeps_kind(preset, pin.facility_type, pin.services)
+
+
+def _kept_facilities(db: Session, facilities, preset: Preset, required_amenities):
+    """AI-CONTEXT: both filters run on the facility ROW, before a pin exists.
+
+    They used to run on built pins, which meant every pin in the viewport was fully
+    constructed — coordinates, crowd status, badges — and only then thrown away by a
+    filter reading two fields the row already carried. `_has_amenities` went further
+    and re-fetched the facility it had just been handed."""
+    out = []
+    for fac in facilities:
+        attrs = fac.attributes or {}
+        if required_amenities:
+            amenities = attrs.get("amenities") or []
+            if not all(a in amenities for a in required_amenities):
+                continue
+        if not _preset_keeps_kind(preset, fac.facility_type.value, attrs.get("services") or []):
+            continue
+        out.append(fac)
+    return out
 
 
 def map_overlay(
@@ -144,12 +169,15 @@ def map_overlay(
     preset: Preset = Preset.drive,
     required_amenities: list[str] | None = None,
 ):
-    pins = mapsvc.overlay_pins(
-        db, center_lat, center_lon, radius_m, facility_types=_preset_types(db, preset)
+    facilities = _kept_facilities(
+        db,
+        mapsvc.facilities_in_area(
+            db, center_lat, center_lon, radius_m, facility_types=_preset_types(db, preset)
+        ),
+        preset,
+        required_amenities,
     )
-    if required_amenities:
-        pins = [p for p in pins if _has_amenities(db, p, required_amenities)]
-    pins = [p for p in pins if _preset_keeps(preset, p)]
+    pins = mapsvc.pins_for(db, facilities)
     if preset == Preset.tonight:
         pins = sorted(pins, key=lambda p: _PARKING_RANK.get(p.status, 2))
     return pins
@@ -180,11 +208,26 @@ def map_overlay_view(
 ):
     # returns individual pins when sparse; server-side clusters when dense. Payload
     # size is bounded either way (≤ cap pins, or the number of cluster cells).
-    pins = map_overlay(db, account_id, center_lat, center_lon, radius_m, preset, required_amenities)
-    if len(pins) <= cap:
-        return {"clustered": False, "pins": pins, "clusters": [], "total": len(pins)}
-    clusters = mapsvc.cluster_pins(pins, precision_deg=_cluster_precision_deg(radius_m))
-    return {"clustered": True, "pins": [], "clusters": clusters, "total": len(pins)}
+    #
+    # The COUNT is decided on filtered facility rows, so a clustered answer never
+    # builds the pins it is about to discard (§23 98).
+    facilities = _kept_facilities(
+        db,
+        mapsvc.facilities_in_area(
+            db, center_lat, center_lon, radius_m, facility_types=_preset_types(db, preset)
+        ),
+        preset,
+        required_amenities,
+    )
+    if len(facilities) > cap:
+        clusters = mapsvc.clusters_for(
+            db, facilities, precision_deg=_cluster_precision_deg(radius_m)
+        )
+        return {"clustered": True, "pins": [], "clusters": clusters, "total": len(facilities)}
+    pins = mapsvc.pins_for(db, facilities)
+    if preset == Preset.tonight:
+        pins = sorted(pins, key=lambda p: _PARKING_RANK.get(p.status, 2))
+    return {"clustered": False, "pins": pins, "clusters": [], "total": len(pins)}
 
 
 # beyond this viewport area, always cluster — a continental pan never returns pins
@@ -206,12 +249,15 @@ def map_overlay_bbox(
     preset: Preset = Preset.drive,
     required_amenities: list[str] | None = None,
 ):
-    pins = mapsvc.overlay_pins_bbox(
-        db, min_lat, min_lon, max_lat, max_lon, facility_types=_preset_types(db, preset)
+    facilities = _kept_facilities(
+        db,
+        mapsvc.facilities_in_bbox(
+            db, min_lat, min_lon, max_lat, max_lon, facility_types=_preset_types(db, preset)
+        ),
+        preset,
+        required_amenities,
     )
-    if required_amenities:
-        pins = [p for p in pins if _has_amenities(db, p, required_amenities)]
-    pins = [p for p in pins if _preset_keeps(preset, p)]
+    pins = mapsvc.pins_for(db, facilities)
     if preset == Preset.tonight:
         pins = sorted(pins, key=lambda p: _PARKING_RANK.get(p.status, 2))
     return pins
@@ -230,14 +276,22 @@ def map_overlay_view_bbox(
 ):
     # viewport-driven overlay (the primary map mode). Individual pins when sparse;
     # server-side clusters when dense OR when the viewport spans a huge area (§11.5).
-    pins = map_overlay_bbox(
-        db, account_id, min_lat, min_lon, max_lat, max_lon, preset, required_amenities
+    facilities = _kept_facilities(
+        db,
+        mapsvc.facilities_in_bbox(
+            db, min_lat, min_lon, max_lat, max_lon, facility_types=_preset_types(db, preset)
+        ),
+        preset,
+        required_amenities,
     )
     area = abs(max_lat - min_lat) * abs(max_lon - min_lon)
-    if len(pins) > cap or area > MAX_BBOX_DEG2:
+    if len(facilities) > cap or area > MAX_BBOX_DEG2:
         precision = _bbox_precision_deg(min_lat, min_lon, max_lat, max_lon)
-        clusters = mapsvc.cluster_pins(pins, precision_deg=precision)
-        return {"clustered": True, "pins": [], "clusters": clusters, "total": len(pins)}
+        clusters = mapsvc.clusters_for(db, facilities, precision_deg=precision)
+        return {"clustered": True, "pins": [], "clusters": clusters, "total": len(facilities)}
+    pins = mapsvc.pins_for(db, facilities)
+    if preset == Preset.tonight:
+        pins = sorted(pins, key=lambda p: _PARKING_RANK.get(p.status, 2))
     return {"clustered": False, "pins": pins, "clusters": [], "total": len(pins)}
 
 

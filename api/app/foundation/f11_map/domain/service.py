@@ -151,6 +151,131 @@ def _parking_status(db: Session, facility):
     return status, freshness, value.get("available")  # "available" present only for TPIMS
 
 
+def _statuses_for(db: Session, facilities) -> dict:
+    """AI-CONTEXT: every parking/crowd status in one query PER SIGNAL, not per pin.
+
+    `_parking_status` asked F10 for one belief at a time, so a 609-facility viewport
+    issued 609 belief queries. F10 has had `beliefs_for_signal` since the vendor layer
+    — its comment says "the map overlay needs this without an N+1" — and the map never
+    used it. Signals are grouped because the signal a facility carries depends on its
+    KIND, and there are a handful of kinds, not a handful of hundreds.
+
+    `subject_ref` is filtered to "" to match `get_belief`'s default: the parking status
+    of a SITE, not a belief some vendor holds about it."""
+    by_signal: dict = {}
+    for fac in facilities:
+        by_signal.setdefault(status_signal_for(fac.facility_type.value), []).append(fac.id)
+    out: dict = {}
+    for signal, ids in by_signal.items():
+        for belief in crowd.beliefs_for_signal(db, ids, signal):
+            if belief.subject_ref:
+                continue
+            value = belief.value or {}
+            out[belief.facility_id] = (
+                value.get("status"),
+                Freshness(
+                    reported_at=belief.freshest_at,
+                    sample_size=belief.sample_size,
+                    source=value.get("source"),
+                ),
+                value.get("available"),
+            )
+    return out
+
+
+def _default_badges_for(db: Session, facilities) -> dict:
+    """The DEFAULT provider set, batched. `fuel_price_badge` was a third per-pin belief
+    read; the fast path answers it for the whole viewport in one query. A caller that
+    passes its OWN providers keeps the per-facility seam — extension is not the hot
+    path, and a custom provider must not be forced to grow a bulk form."""
+    out: dict = {}
+    for belief in crowd.beliefs_for_signal(
+        db, [f.id for f in facilities], crowd.SignalType.fuel_price
+    ):
+        if belief.subject_ref:
+            continue
+        value = belief.value or {}
+        if "price_cents" in value:
+            out.setdefault(belief.facility_id, []).append(
+                Badge("fuel_price", value["price_cents"])
+            )
+    return out
+
+
+def pins_for(db: Session, facilities, badge_providers=None) -> list[Pin]:
+    """The list-shaped builder. Coordinates, statuses and the default badges are each
+    fetched for the whole set in one query rather than once per pin."""
+    facilities = list(facilities)
+    coords = facility_registry.coordinates_for(db, [f.id for f in facilities])
+    statuses = _statuses_for(db, facilities)
+    batched = _default_badges_for(db, facilities) if badge_providers is None else None
+    pins = []
+    for fac in facilities:
+        lat, lon = coords.get(fac.id, (None, None))
+        if lat is None:
+            continue
+        status, freshness, availability = statuses.get(fac.id, (None, None, None))
+        capacity = (fac.attributes or {}).get("capacity") if availability is not None else None
+        badges = (
+            list(batched.get(fac.id, ()))
+            if batched is not None
+            else [b for provider in badge_providers if (b := provider(db, fac)) is not None]
+        )
+        pins.append(
+            Pin(
+                facility_id=fac.id,
+                name=fac.name,
+                facility_type=fac.facility_type.value,
+                shape=PIN_SHAPES.get(fac.facility_type.value, DEFAULT_SHAPE),
+                lat=lat,
+                lon=lon,
+                status=status,
+                badges=badges,
+                freshness=freshness,
+                availability=availability,
+                capacity=capacity,
+                services=list((fac.attributes or {}).get("services") or []),
+            )
+        )
+    return pins
+
+
+def clusters_for(db: Session, facilities, precision_deg: float = 0.1) -> list[Cluster]:
+    """AI-CONTEXT: cluster WITHOUT building pins.
+
+    A clustered response contains a count, a centre and a dominant status — it never
+    contains a pin. The old path built every pin in full, badges and all, and then
+    discarded them: a statewide pan cost 2,155 queries to return 146 chips. Nothing
+    here needs a badge, a name or a shape, so nothing here asks for one."""
+    facilities = list(facilities)
+    coords = facility_registry.coordinates_for(db, [f.id for f in facilities])
+    statuses = _statuses_for(db, facilities)
+    buckets: dict[tuple[int, int], list[tuple[float, float, str | None]]] = {}
+    for fac in facilities:
+        lat, lon = coords.get(fac.id, (None, None))
+        if lat is None:
+            continue
+        status = (statuses.get(fac.id) or (None,))[0]
+        buckets.setdefault(
+            (round(lat / precision_deg), round(lon / precision_deg)), []
+        ).append((lat, lon, status))
+    clusters = []
+    for members in buckets.values():
+        counts: dict[str, int] = {}
+        for _, _, status in members:
+            if status is not None:
+                counts[status] = counts.get(status, 0) + 1
+        clusters.append(
+            Cluster(
+                count=len(members),
+                center_lat=sum(m[0] for m in members) / len(members),
+                center_lon=sum(m[1] for m in members) / len(members),
+                dominant_status=max(counts, key=counts.get) if counts else None,
+            )
+        )
+    return clusters
+
+
 def _pin_for(db: Session, facility, badge_providers) -> Pin:
     lat, lon = facility_registry.coordinates(db, facility)
     status, freshness, availability = _parking_status(db, facility)
@@ -182,6 +307,12 @@ def _facilities_in_area(db: Session, lat, lon, radius_m, facility_types):
     return list(seen.values())
 
 
+def facilities_in_area(db: Session, center_lat, center_lon, radius_m, facility_types=None):
+    """The rows, before anything is built from them. Exposed so a caller can FILTER and
+    COUNT on cheap data and only then decide whether it needs pins at all."""
+    return _facilities_in_area(db, center_lat, center_lon, radius_m, facility_types)
+
+
 def overlay_pins(
     db: Session,
     center_lat: float,
@@ -190,9 +321,8 @@ def overlay_pins(
     facility_types=None,
     badge_providers=None,
 ) -> list[Pin]:
-    providers = badge_providers or DEFAULT_BADGE_PROVIDERS
     facilities = _facilities_in_area(db, center_lat, center_lon, radius_m, facility_types)
-    return [_pin_for(db, fac, providers) for fac in facilities]
+    return pins_for(db, facilities, badge_providers)
 
 
 def _facilities_in_bbox(db, min_lat, min_lon, max_lat, max_lon, facility_types):
@@ -207,6 +337,10 @@ def _facilities_in_bbox(db, min_lat, min_lon, max_lat, max_lon, facility_types):
     return list(seen.values())
 
 
+def facilities_in_bbox(db: Session, min_lat, min_lon, max_lat, max_lon, facility_types=None):
+    return _facilities_in_bbox(db, min_lat, min_lon, max_lat, max_lon, facility_types)
+
+
 def overlay_pins_bbox(
     db: Session,
     min_lat: float,
@@ -216,9 +350,8 @@ def overlay_pins_bbox(
     facility_types=None,
     badge_providers=None,
 ) -> list[Pin]:
-    providers = badge_providers or DEFAULT_BADGE_PROVIDERS
     facilities = _facilities_in_bbox(db, min_lat, min_lon, max_lat, max_lon, facility_types)
-    return [_pin_for(db, fac, providers) for fac in facilities]
+    return pins_for(db, facilities, badge_providers)
 
 
 def cluster_pins(pins: list[Pin], precision_deg: float = 0.1) -> list[Cluster]:

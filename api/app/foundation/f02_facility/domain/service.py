@@ -371,6 +371,25 @@ def coordinates(db: Session, facility: Facility) -> tuple[float, float]:
     return lat, lon
 
 
+def coordinates_for(db: Session, facility_ids) -> dict:
+    """AI-CONTEXT: every coordinate in ONE query, keyed by id.
+
+    The map called `coordinates` once per facility while already holding the rows, so
+    a viewport of 609 sites spent 609 round trips learning where they were. The single
+    caller that needs one pair still has `coordinates` above; anything drawing a LIST
+    uses this. Geometry stays in SQL either way — PostGIS owns the projection, and a
+    Python-side WKB parse would be a second implementation of it."""
+    ids = list(facility_ids)
+    if not ids:
+        return {}
+    rows = db.execute(
+        select(Facility.id, func.ST_Y(Facility.geom), func.ST_X(Facility.geom)).where(
+            Facility.id.in_(ids)
+        )
+    ).all()
+    return {row[0]: (row[1], row[2]) for row in rows}
+
+
 def facility_locality(db: Session, facility: Facility) -> str | None:
     """Where this facility is, in the words a driver uses (§23 entry 76).
 
