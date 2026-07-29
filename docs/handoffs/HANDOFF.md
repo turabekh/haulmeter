@@ -3,14 +3,14 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-103.md](HANDOFF-103.md)** — read this first, every session.
+➡️ **[HANDOFF-104.md](HANDOFF-104.md)** — read this first, every session.
 
-> 103 continues **102** (same working session): Web Push is live and ENABLED on the
-> box, and §7.1 is the one claim a laptop could not check — no push has reached a real
-> handset yet. Read 102 for "the events were missing, not the notifications" and the
-> rule governing all three P0s; 101 for the detention P0, the freshness window and the
-> anchor rule; 100 for the map performance work, the inbox and the SSE channel; 099
-> for the facility-merge story and its §11 on the repo being public.
+> 104 continues **103** (same working session): F8 now runs in both directions — three
+> P0 classes tell a driver things, and the lot-status prompt asks them one. Its §4 is
+> the one to read: the first build passed thirteen tests while being structurally
+> incapable of firing. Read 103 for Web Push and the one-shot-prompt reasoning this
+> depends on; 102 for "the events were missing, not the notifications"; 101 for the
+> detention P0 and the anchor rule; 099 §11 for the repo being public.
 
 Each session ends by writing the next `HANDOFF-<n>.md` in this directory and updating
 this pointer to it. Full history is here in `docs/handoffs/`; the Session-0 bootstrap
