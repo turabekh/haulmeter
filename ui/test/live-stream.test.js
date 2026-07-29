@@ -118,3 +118,65 @@ describe("live stream (§23 entry 103)", () => {
     }
   });
 });
+
+// --- §23 entry 104: the thundering-herd guard ---
+describe("coalesce (§23 entry 104)", () => {
+  it("collapses a burst of events into one refetch", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    try {
+      const { coalesce } = await import("../src/core/live.js");
+      const fn = vi.fn();
+      const run = coalesce(fn, { minMs: 800, jitterMs: 2200 });
+
+      // a busy truck stop: five drivers report within a second of each other
+      run(); run(); run(); run(); run();
+      expect(fn).not.toHaveBeenCalled(); // nothing fires immediately
+
+      vi.advanceTimersByTime(900);
+      expect(fn).toHaveBeenCalledTimes(1); // ...and five events cost ONE refetch
+    } finally {
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
+
+  it("spreads the herd so a cell does not return in one instant", async () => {
+    // a ~40 km cell can hold a lot of drivers. Without jitter, one tap would produce
+    // one simultaneous overlay request per phone — against the endpoint §23 98 had
+    // just finished making cheap.
+    const { coalesce } = await import("../src/core/live.js");
+    const delays = new Set();
+    const realTimeout = globalThis.setTimeout;
+    vi.stubGlobal("setTimeout", (fn, ms) => {
+      delays.add(ms);
+      return realTimeout(() => {}, 0);
+    });
+    try {
+      for (let i = 0; i < 20; i++) coalesce(() => {}, { minMs: 800, jitterMs: 2200 })();
+      expect(delays.size).toBeGreaterThan(1);
+      for (const d of delays) {
+        expect(d).toBeGreaterThanOrEqual(800);
+        expect(d).toBeLessThanOrEqual(3000);
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("accepts new work again once the refetch has run", async () => {
+    vi.useFakeTimers();
+    try {
+      const { coalesce } = await import("../src/core/live.js");
+      const fn = vi.fn();
+      const run = coalesce(fn, { minMs: 10, jitterMs: 0 });
+      run();
+      vi.advanceTimersByTime(20);
+      run();
+      vi.advanceTimersByTime(20);
+      expect(fn).toHaveBeenCalledTimes(2); // not latched shut after the first
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

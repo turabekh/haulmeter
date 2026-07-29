@@ -70,3 +70,30 @@ export function openStream({ kind = "handoff", lat, lon, onEvent }) {
     source?.close();
   };
 }
+
+
+// AI-CONTEXT: §23 entry 104 — the thundering-herd guard, and why a live map needs one.
+//
+// A fan-out cell is ~40 km. One driver reporting "this lot is full" therefore wakes
+// EVERY stream in that cell, and if each of them immediately refetched the overlay,
+// one tap would produce one overlay request per nearby driver, all in the same
+// instant, against the endpoint §23 entry 98 had just finished making cheap. That is
+// how a feature meant to make the map feel alive becomes a self-inflicted load test.
+//
+// So events COALESCE — many arrivals collapse into one refetch — and the refetch is
+// JITTERED, so a hundred phones told the same thing at the same moment do not return
+// in the same moment. The delay is deliberately visible in product terms: a parking
+// status that lands two seconds late is still current; a map that stutters is not.
+export function coalesce(fn, { minMs = 800, jitterMs = 2200 } = {}) {
+  let timer = null;
+  return () => {
+    if (timer) return; // already scheduled — one refetch will cover every event since
+    timer = setTimeout(
+      () => {
+        timer = null;
+        fn();
+      },
+      minMs + Math.random() * jitterMs,
+    );
+  };
+}

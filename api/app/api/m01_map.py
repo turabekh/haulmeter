@@ -12,7 +12,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import canonical_facility_id, current_account, get_db
+from app.api.events import publish_status
 from app.foundation.f01_identity import public as identity
+from app.foundation.f02_facility import public as facility
 from app.foundation.f10_crowd import public as crowd
 from app.modules.m01_map import public as m1
 from app.modules.m03_detention import public as m3
@@ -272,6 +274,13 @@ def report(
         body.value,
         body.submitted_at or datetime.now(UTC),
     )
+    # §23 entry 104: tell the drivers nearby that this lot just changed. After the
+    # write, and carrying only the id — see `publish_status`.
+    target = canonical_facility_id(body.facility_id, db)
+    fac = facility.get_facility(db, target)
+    if fac is not None:
+        lat, lon = facility.coordinates(db, fac)
+        publish_status(target, lat, lon)
     return {
         "submission_id": str(submission.id),
         "presence_proven": submission.presence_proven,

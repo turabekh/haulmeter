@@ -25,7 +25,7 @@ import { useI18n } from "../core/i18n.js";
 import { SAMPLE_PINS, sampleHandoffs } from "../core/fixtures.js";
 import { lastFix, metersBetween } from "../core/location.js";
 import { presetFor, rememberPreset } from "../core/map-presets.js";
-import { openStream } from "../core/live.js";
+import { openStream, coalesce } from "../core/live.js";
 import { saved, saveForStop, unsave, facilityItem } from "../core/saved.js";
 import { withFoodBadges, foodBadgeFacilityIds } from "../core/vendors.js";
 import { statusReportFor, ageLabel } from "../core/presentation.js";
@@ -158,6 +158,11 @@ let handoffFrom = null;
 // underneath it. Belt and braces on purpose — the stream is an accelerator, never a
 // source of truth, and a driver whose socket died is exactly as well served as before.
 let closeStream = null;
+let closeStatusStream = null;
+
+// one report wakes every stream in a ~40 km cell, so the overlay refetch is coalesced
+// and jittered — see `coalesce`. A status two seconds late is still current.
+const refetchOverlay = coalesce(() => loadOverlay());
 
 function restartStream(lat, lon) {
   closeStream?.();
@@ -170,12 +175,25 @@ function restartStream(lat, lon) {
     // still open, and not the driver's own broadcast
     onEvent: () => loadHandoffs(),
   });
+  closeStatusStream?.();
+  closeStatusStream = openStream({
+    kind: "status",
+    lat,
+    lon,
+    // §11.7: the event carries an id, never a status. What a driver sees is whatever
+    // the overlay says after consensus and staleness are applied.
+    onEvent: () => refetchOverlay(),
+  });
 }
 
-onUnmounted(() => closeStream?.());
+onUnmounted(() => {
+  closeStream?.();
+  closeStatusStream?.();
+});
 onDeactivated(() => {
   closeStream?.();
-  closeStream = null;
+  closeStatusStream?.();
+  closeStream = closeStatusStream = null;
 });
 
 function onLocated({ lat, lon }) {

@@ -41,7 +41,7 @@ def cell_for(lat: float, lon: float) -> str:
 
 # what a driver may listen to. An allowlist rather than a free-form channel name, so a
 # client cannot subscribe to something the product never meant to broadcast.
-STREAMABLE = ("handoff",)
+STREAMABLE = ("handoff", "status")
 
 
 def _stream(kind: str, lat: float, lon: float) -> Iterator[str]:
@@ -140,3 +140,12 @@ def publish_handoff(handoff, lat: float, lon: float) -> None:
             "leaving_at": handoff.leaving_at.isoformat() if handoff.leaving_at else None,
         },
     )
+
+
+def publish_status(facility_id, lat: float, lon: float) -> None:
+    """Announce that a facility's crowd status changed. Deliberately carries the ID and
+    nothing else: the status a driver should see is whatever the OVERLAY says after
+    consensus, freshness and staleness are applied (§11.7), and a payload that carried
+    "full" would be a second, weaker source of truth that could disagree with the pin
+    rendered beside it."""
+    events.publish("status", cell_for(lat, lon), {"facility_id": str(facility_id)})
