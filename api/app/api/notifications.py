@@ -16,8 +16,14 @@ already looking at.
 
 The budget is NOT applied here. §13.1 caps unprompted INTERRUPTIONS at two a day; a
 driver who opens a list is asking, not being interrupted, so the inbox shows what the
-quiet-hours and budget rules suppressed as well. Deferring a notification is
-considerate; destroying it is lossy, and the two must not be confused.
+quiet-hours and budget rules suppressed as well.
+
+A SUPPRESSED NOTIFICATION IS FILED, NEVER RE-SENT (§13.3, owner decision in §23 entry
+116). This docstring used to say "deferring a notification is considerate; destroying it
+is lossy" — which read as a promise that a held P1 would arrive when the window closed.
+Nothing has ever done that: `dispatch` writes `status=suppressed` and no worker job
+re-dispatches. The record is what survives, and this inbox is the whole of it. **No
+surface may tell a driver that a held notification is on its way.**
 """
 
 import uuid
@@ -49,8 +55,9 @@ def _serialize(n) -> dict:
         "status": n.status.value,
         "channel": n.channel.value if n.channel else None,
         # why the driver did NOT get interrupted, when that is the case. §11.7's
-        # honesty rule applied to our own machinery: "we held this until morning" and
-        # "we sent this" are different facts and the surface may need to say which.
+        # honesty rule applied to our own machinery: "we did not buzz you about this"
+        # and "we sent this" are different facts and the surface may need to say which.
+        # It is NOT a promise of later delivery — see the module docstring.
         "suppressed_reason": n.suppress_reason.value if n.suppress_reason else None,
         "created_at": n.created_at.isoformat() if n.created_at else None,
         "read_at": n.read_at.isoformat() if n.read_at else None,

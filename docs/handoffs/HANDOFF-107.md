@@ -145,20 +145,19 @@ Check before the 1/day cap is ever raised.
   foreground, so a driver who crosses into Kansas gets their window moved with them. The
   dedupe makes it free — nothing is sent unless the zone actually changed — and a test
   drives Denver → Chicago and asserts both PUTs, proved RED by disabling the listener.
-- **QUIET HOURS DO NOT DEFER — THEY DISCARD, AND THE PRODUCT SAYS OTHERWISE.** Going to
-  add "3 alerts are waiting until 06:00" to the control turned up that it would have been
-  a lie. A P1 suppressed for quiet hours is written `status=suppressed` and **nothing ever
-  sends it.** The worker runs five jobs — `tpims_dynamic`, `tpims_static`, `eia_regional`,
-  `document_expiry`, `detention_clock` — and none re-dispatches. So the notification is
-  filed, and the driver sees it only if they go and open the inbox.
-  `api/app/api/notifications.py:19` states the opposite in as many words: *"Deferring a
-  notification is considerate; destroying it is lossy."* It defers nothing.
-  **This needs an owner decision, not a copy fix** (§22.2: notification behaviour is
-  never-improvise). Either a held P1 is re-dispatched when the window closes — a new
-  worker job, and a decision about what happens to one held for 8 hours that is no longer
-  true — or quiet hours are honestly "filed silently, read when you look", and §13.3 and
-  that docstring should say so. **Until then no surface should promise delivery**, which
-  is why the count was not built.
+- ~~**QUIET HOURS DO NOT DEFER — THEY DISCARD.**~~ **DECIDED — §23 entry 116: quiet hours
+  FILE silently.** A P1 suppressed for quiet hours is written `status=suppressed` and
+  nothing ever sends it; the worker runs five jobs and none re-dispatches, while three
+  files reasoned in prose about "deferring". The owner chose honest naming over a
+  redelivery job, and the rejected branch argues for it: a "30 minutes of free time left"
+  held at 23:00 is actively wrong at 06:00, and re-sending a stale P1 is worse than
+  silence. §13.3 now states it and adds that **no surface may promise later delivery**.
+  The copy was corrected too, because the decision made it false: `notifications.held`
+  said "Held until morning" on EVERY suppressed row — already wrong for `budget`,
+  `muted`, `resting` and `not_opted_in`, none of which have a morning — and now reads
+  "Held · not sent". **The count was deliberately not built**; the honest version is a
+  count of what is UNREAD, which is a fact rather than a promise (and §10.5 keeps it away
+  from a badge).
 
 **Carried from 106:** no place lists every muted lot · the generic opt-in endpoint would
 accept `protection_gap` · `GET /notifications/classes` returns classes with no surface.

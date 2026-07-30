@@ -455,9 +455,12 @@ def dispatch(
 # It returns EVERY notification addressed to the account, including the ones the
 # budget or quiet hours suppressed, and that is deliberate. §13.1's cap of two per day
 # governs UNPROMPTED interruptions — a driver who opens a list is not being
-# interrupted, they are asking. Hiding a suppressed P1 would mean the quiet-hours rule
-# silently destroyed information rather than deferring it, which is the difference
-# between being considerate and being lossy.
+# interrupted, they are asking.
+#
+# THIS LIST IS THE ONLY DELIVERY A SUPPRESSED NOTIFICATION EVER GETS (§13.3, owner
+# decision in §23 entry 116). Nothing re-dispatches when the quiet window closes, so
+# hiding a suppressed P1 here would not be "deferring" it — it would be destroying it.
+# That is why the inbox renders them, and why no surface may say one is on its way.
 #
 # `pending` is excluded: it has not been decided yet, and showing a driver something
 # the system has not finished thinking about is how a half-written row becomes a fact.
