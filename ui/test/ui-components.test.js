@@ -43,6 +43,21 @@ import en from "../src/core/i18n/en.json";
 import { useDriverState, DriverState } from "../src/core/state.js";
 import { SAMPLE_OWED, SAMPLE_EARNINGS } from "../src/core/fixtures.js";
 
+// AI-CONTEXT: find the call this test is ABOUT (§23 entry 115).
+//
+// These read `fetch.mock.calls[0]` and assumed the first request was theirs. Establishing
+// a session now also PUTs the driver's detected timezone — the browser is the only thing
+// that knows it, and §13.3's "local" was landing on UTC for everyone — so the first call
+// is no longer necessarily the one under test. Indexing into a call list is the same
+// brittleness HANDOFF-104 §6 corrected in an M5 assertion that read `delivered[0]`:
+// assert WHICH call, not which position.
+function callTo(fetchStub, fragment) {
+  const hit = fetchStub.mock.calls.find(([url]) => String(url).includes(fragment));
+  if (!hit) throw new Error(`no fetch to ${fragment}; saw ${fetchStub.mock.calls.map(([u]) => u)}`);
+  return hit;
+}
+
+
 const routerStub = { global: { stubs: { "router-link": { template: "<a class='rl'><slot/></a>" } } } };
 
 function testRouter() {
@@ -951,7 +966,7 @@ describe("VoiceSheet — copilot ask/answer (M11-FR1)", () => {
       await flushPromises();
       expect(w.find(".voice__answer").text()).toContain("$150.00");
       // the POST went to the voice endpoint
-      expect(fetchStub.mock.calls[0][0]).toContain("/voice/ask");
+      expect(callTo(fetchStub, "/voice/ask")[0]).toContain("/voice/ask");
     } finally {
       vi.unstubAllGlobals();
     }
@@ -1002,7 +1017,7 @@ describe("VoiceSheet — copilot ask/answer (M11-FR1)", () => {
       expect(instances[0].started).toBe(true); // auto-listens on open (voice-first)
       instances[0].onresult({ results: [[{ transcript: "what am I owed" }]] });
       await flushPromises();
-      expect(fetchStub.mock.calls[0][0]).toContain("/voice/ask");
+      expect(callTo(fetchStub, "/voice/ask")[0]).toContain("/voice/ask");
       expect(w.find(".voice__answer").text()).toContain("$150.00");
     } finally {
       vi.unstubAllGlobals();
@@ -1133,7 +1148,7 @@ describe("AuditSurface — settlement auditor (M9-FR1)", () => {
       expect(w.find(".result__figure").text()).toBe("$100.00"); // 10000c missed
       expect(w.find(".result__figure").classes()).toContain("result__figure"); // flare hero
       expect(w.text()).toContain("Review with your carrier"); // never legal advice
-      expect(fetchStub.mock.calls[0][0]).toContain("/money/settlements/audit");
+      expect(callTo(fetchStub, "/money/settlements/audit")[0]).toContain("/money/settlements/audit");
     } finally {
       vi.unstubAllGlobals();
     }
@@ -1197,7 +1212,7 @@ describe("HandoffSheet — spot relay (M10-FR2)", () => {
       const claimBtn = w.findAll(".claim").find((b) => b.text() === "Claim");
       await claimBtn.trigger("click");
       await flushPromises();
-      expect(fetchStub.mock.calls[0][0]).toContain("/community/handoff/h-1/claim");
+      expect(callTo(fetchStub, "/community/handoff/h-1/claim")[0]).toContain("/community/handoff/h-1/claim");
       expect(w.text()).toContain("Claimed");
     } finally {
       vi.unstubAllGlobals();
@@ -1247,7 +1262,7 @@ describe("ConditionSurface — cargo-condition capture (M5-FR2)", () => {
       expect(w.text()).toContain("Step 1 of 4"); // guided, one decision per step
       expect(w.text()).toContain("Trailer exterior");
       expect(w.find(".shoot").exists()).toBe(true); // camera-first target
-      expect(fetchStub.mock.calls[0][0]).toContain("/protection/condition/start");
+      expect(callTo(fetchStub, "/protection/condition/start")[0]).toContain("/protection/condition/start");
     } finally {
       vi.unstubAllGlobals();
       setActiveStop(null);
@@ -1434,7 +1449,7 @@ describe("IncidentSheet — incident capture (M5-FR4)", () => {
       await w.find("textarea").setValue("forklift hit the trailer");
       await w.find(".cta").trigger("click");
       await flushPromises();
-      const [url, opts] = fetchStub.mock.calls[0];
+      const [url, opts] = callTo(fetchStub, "/protection/incident");
       expect(String(url)).toContain("/protection/incident");
       expect(JSON.parse(opts.body)).toMatchObject({ kind: "damage", note: "forklift hit the trailer" });
       expect(opts.headers["Idempotency-Key"]).toBeTruthy(); // F12 exactly-once
@@ -1816,7 +1831,7 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       await flushPromises();
       expect(w.text()).toContain("Live Receiver"); // live stop context, not the fixture
       expect(w.find(".cta").text()).toContain("I've arrived"); // pre-arrival CTA
-      expect(fetchStub.mock.calls[0][0]).toContain("/load/stop-live-1/meter");
+      expect(callTo(fetchStub, "/load/stop-live-1/meter")[0]).toContain("/load/stop-live-1/meter");
       w.unmount();
     } finally {
       vi.unstubAllGlobals();

@@ -469,11 +469,18 @@ const SURFACES = [
           },
         ],
       },
+      // §23 entry 115: quiet hours. Same rule as the class switch above — the row
+      // renders only once the server answers, and an unmocked route 404s here.
+      "/notifications/prefs": {
+        timezone: "America/Denver", quiet_start: "22:00", quiet_end: "06:00",
+      },
     },
     open: [".alerts--link"],
-    // the SWITCH, not a row: the rows render from the inbox mock either way, and the
-    // newly built thing is the one worth proving present before anything is measured.
-    ready: ".prompt-class",
+    // the CONTROLS, not a row: the rows render from the inbox mock either way, and the
+    // newly built things are what is worth proving present before anything is measured.
+    // `:has()` twice, so this cannot go green with one of the two missing — which is
+    // exactly how both shipped unmeasured in entry 114.
+    ready: ".notif:has(.prompt-class):has(.quiet)",
   }],
   ["login", "/login"],
   ["evidence", "/load/00000000-0000-0000-0000-0000000000aa/evidence"],

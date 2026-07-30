@@ -189,3 +189,94 @@ describe("the mute toggle on the facility screen", () => {
     w.unmount();
   });
 });
+
+// AI-CONTEXT: §13.3's quiet hours (§23 entry 115) — the clause where BOTH halves were
+// unreachable. "Default 22:00-06:00 local (driver-adjustable)": the server measured the
+// window in UTC because nothing ever sent it a zone, and nothing could move the window.
+describe("quiet hours in the notifications sheet", () => {
+  const PREFS = { timezone: "America/Denver", quiet_start: "22:00", quiet_end: "06:00" };
+
+  it("shows the window and names the zone it is measured in", async () => {
+    stubFetch([["/notifications/prefs", () => jsonOnce(PREFS)]]);
+
+    const w = mount(NotificationsSheet, { props: { notifications: [] } });
+    await flushPromises();
+
+    const inputs = w.findAll(".quiet__input");
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0].element.value).toBe("22:00");
+    expect(inputs[1].element.value).toBe("06:00");
+    // the zone is STATED, not hidden: a phone reporting the wrong one is a fact the
+    // driver can only act on if they can see it
+    expect(w.text()).toContain("America/Denver");
+    w.unmount();
+  });
+
+  it("PUTs the window the driver chose, and only the window", async () => {
+    const fetchMock = stubFetch([
+      ["/notifications/prefs", (init) => (init.method === "PUT"
+        ? jsonOnce({ ...PREFS, quiet_start: "23:30" })
+        : jsonOnce(PREFS))],
+    ]);
+
+    const w = mount(NotificationsSheet, { props: { notifications: [] } });
+    await flushPromises();
+    const start = w.findAll(".quiet__input")[0];
+    await start.setValue("23:30");
+    await start.trigger("change");
+    await flushPromises();
+
+    const put = fetchMock.mock.calls.find(([, init]) => init && init.method === "PUT");
+    expect(put, "the window was never sent").toBeTruthy();
+    const body = JSON.parse(put[1].body);
+    expect(body.quiet_start).toBe("23:30");
+    // the zone is the browser's answer and must not ride along here, or a driver editing
+    // their window would overwrite a zone they never touched
+    expect(body).not.toHaveProperty("timezone");
+    w.unmount();
+  });
+
+  it("says plainly when the window is empty rather than leaving it as folklore", async () => {
+    stubFetch([
+      ["/notifications/prefs", () => jsonOnce({ ...PREFS, quiet_start: "03:00", quiet_end: "03:00" })],
+    ]);
+
+    const w = mount(NotificationsSheet, { props: { notifications: [] } });
+    await flushPromises();
+
+    expect(w.text()).toContain(en["quiet.always"]);
+    expect(w.text()).not.toContain("America/Denver");
+    w.unmount();
+  });
+
+  it("renders no window at all when the server never answered", async () => {
+    stubFetch([]);
+
+    const w = mount(NotificationsSheet, { props: { notifications: [] } });
+    await flushPromises();
+
+    expect(w.findAll(".quiet__input")).toHaveLength(0);
+    w.unmount();
+  });
+});
+
+describe("the timezone the server never had", () => {
+  it("a session PUTs the browser's detected zone, and only the zone", async () => {
+    logout();
+    const fetchMock = stubFetch([["/notifications/prefs", () => jsonOnce({})]]);
+
+    setToken("tok-zone");
+    await flushPromises();
+
+    const put = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).includes("/notifications/prefs") && init && init.method === "PUT",
+    );
+    expect(put, "nothing told the server where the driver is").toBeTruthy();
+    const body = JSON.parse(put[1].body);
+    expect(typeof body.timezone).toBe("string");
+    expect(body.timezone.length).toBeGreaterThan(0);
+    // partial on purpose: this fires on every sign-in and must not undo a window the
+    // driver set
+    expect(body).not.toHaveProperty("quiet_start");
+  });
+});

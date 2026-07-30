@@ -19,6 +19,17 @@ import {
 } from "../src/core/location.js";
 import { setToken, logout, setActiveStop } from "../src/core/api.js";
 
+// AI-CONTEXT: count PINGS, not requests (§23 entry 115).
+//
+// This throttle is the battery budget, and the assertions used to count every call the
+// stub saw. Establishing a session now also PUTs the driver's detected timezone — §13.3's
+// "local" had been landing on UTC for every driver — so a total is no longer a ping
+// count. What the test means is "how many positions did we send", and now it says so.
+function pings(fetchStub) {
+  return fetchStub.mock.calls.filter(([url]) => String(url).includes("/location/ping"));
+}
+
+
 const DALLAS = { lat: 32.7767, lon: -96.797 };
 
 // let the send's promise chain (fetch -> json -> assignment) actually settle
@@ -111,17 +122,17 @@ describe("F3 location reporting (PRD §7.3)", () => {
 
       geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon, accuracy: 10 });
       await settle();
-      expect(fetchStub).toHaveBeenCalledTimes(1);
+      expect(pings(fetchStub)).toHaveLength(1);
 
       // a few metres later, idle: not worth a request
       geo.emit({ latitude: DALLAS.lat + 0.0001, longitude: DALLAS.lon, accuracy: 10 });
       await settle();
-      expect(fetchStub).toHaveBeenCalledTimes(1);
+      expect(pings(fetchStub)).toHaveLength(1);
 
       // ~1 km later: worth a request
       geo.emit({ latitude: DALLAS.lat + 0.01, longitude: DALLAS.lon, accuracy: 10 });
       await settle();
-      expect(fetchStub).toHaveBeenCalledTimes(2);
+      expect(pings(fetchStub)).toHaveLength(2);
     });
   });
 
@@ -141,7 +152,7 @@ describe("F3 location reporting (PRD §7.3)", () => {
     geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon, accuracy: 6, speed: 0 });
     await settle();
 
-    const [url, init] = fetchStub.mock.calls[0];
+    const [url, init] = pings(fetchStub)[0];
     expect(String(url)).toContain("/location/ping");
     const body = JSON.parse(init.body);
     expect(body.lat).toBeCloseTo(DALLAS.lat);

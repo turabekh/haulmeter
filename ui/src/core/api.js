@@ -96,6 +96,58 @@ function mirrorTokenToIdb(value) {
 
 watch(token, mirrorTokenToIdb, { immediate: true, flush: "sync" });
 
+/* AI-CONTEXT: the driver's timezone, which nothing ever sent (§23 entry 115).
+ *
+ * §13.3 is "22:00-06:00 LOCAL". The server's `prefs.timezone` defaulted to "UTC" and no
+ * client, route or screen ever wrote it, so the window landed on the wrong eight hours
+ * for every driver on a US-only platform — silenced through the working afternoon,
+ * reachable at 03:00.
+ *
+ * The browser already knows, so there is no picker: a 400-entry IANA list on a 360 dp
+ * screen is the wrong control, and a driver should not have to configure their way out
+ * of a bug. It also follows the truck — `resolvedOptions()` reports where the device IS,
+ * which is what "local" means to someone who crosses three zones in a day.
+ *
+ * On the token WATCHER rather than at a call site, for the reason entry 113 records one
+ * line above: boot and sign-in are two call sites, and two call sites is the trap. This
+ * is what heals every existing driver — one PUT on their next app open, no action asked.
+ * Failures are swallowed; the next sign-in tries again. */
+function detectedTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
+let _sentTimezone = null;
+async function syncTimezone(value) {
+  if (!value) {
+    // signed out: forget what WE sent, or the next driver on this cab's tablet inherits
+    // the last one's dedupe and never gets their own zone recorded
+    _sentTimezone = null;
+    return;
+  }
+  if (typeof fetch === "undefined") return;
+  const zone = detectedTimezone();
+  // one PUT per zone per session: re-sending an unchanged value on every token touch
+  // would spend a request to tell the server what it already knows
+  if (!zone || zone === _sentTimezone) return;
+  try {
+    const resp = await fetch(`${API_BASE}/notifications/prefs`, {
+      method: "PUT",
+      headers: headers(),
+      // ONLY the zone. The PUT is partial server-side precisely so this cannot undo a
+      // quiet-hours window the driver set.
+      body: JSON.stringify({ timezone: zone }),
+    });
+    if (resp.ok) _sentTimezone = zone;
+  } catch {
+    /* offline — the next sign-in or app open tries again */
+  }
+}
+watch(token, syncTimezone, { immediate: true });
+
 export function setToken(value) {
   token.value = value;
   persist();
@@ -1146,6 +1198,24 @@ export async function muteVendor(vendorId) {
  * every driver while its tests opted in by calling the server's own service function.
  * The class list is fetched rather than assumed so the switch renders the driver's real
  * answer; "no preference row" is itself an answer (the default), not missing data. */
+/* §13.3's window, and the zone it is measured in (§23 entry 115). The zone is sent
+ * automatically on sign-in (see `syncTimezone`); this is the driver-adjustable half. */
+export async function fetchNotificationPrefs() {
+  return apiGet(`/notifications/prefs`, `notif-prefs`);
+}
+
+export async function setQuietHours(quietStart, quietEnd) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/notifications/prefs`, {
+    method: "PUT",
+    headers: headers(),
+    // the window only — the zone is the browser's answer, not something typed here
+    body: JSON.stringify({ quiet_start: quietStart, quiet_end: quietEnd }),
+  });
+  if (!resp.ok) throw new Error(`quiet hours failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchNotificationClasses() {
   return apiGet(`/notifications/classes`, `notif-classes`);
 }

@@ -28,7 +28,12 @@ import { Bell, Clock } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { ageLabel } from "../presentation.js";
 import { pushSupported, permissionState, isEnabled, enable, disable } from "../push.js";
-import { fetchNotificationClasses, setNotificationClass } from "../api.js";
+import {
+  fetchNotificationClasses,
+  setNotificationClass,
+  fetchNotificationPrefs,
+  setQuietHours,
+} from "../api.js";
 
 const props = defineProps({
   notifications: { type: Array, default: () => [] },
@@ -107,6 +112,46 @@ async function togglePrompt() {
   }
 }
 
+// AI-CONTEXT: quiet hours (§13.3, §23 entry 115) — the half of that clause that had no
+// surface, next to the half that had no zone.
+//
+// §13.3 is "default 22:00-06:00 local (driver-adjustable)". Neither was true: the server
+// measured the window in UTC because nothing ever sent it a zone, and nothing could move
+// the window either. The zone is now sent automatically on sign-in and is shown here
+// rather than hidden, because a driver whose phone reports the wrong one deserves to see
+// what we are using. There is no picker: a 400-entry IANA list on a 360 dp screen is the
+// wrong control, and the browser already knows the answer.
+const prefs = ref(null); // null until known — no control renders a guess
+const quietBusy = ref(false);
+
+async function refreshPrefs() {
+  try {
+    prefs.value = await fetchNotificationPrefs();
+  } catch {
+    prefs.value = null; // offline or no session
+  }
+}
+onMounted(refreshPrefs);
+
+async function onQuietChange() {
+  if (!prefs.value) return;
+  quietBusy.value = true;
+  try {
+    prefs.value = await setQuietHours(prefs.value.quiet_start, prefs.value.quiet_end);
+  } catch {
+    await refreshPrefs(); // never leave a window on screen that the server did not take
+  } finally {
+    quietBusy.value = false;
+  }
+}
+
+// start == end can contain no hour, because `in_quiet_hours` compares start <= t < end.
+// That is a real choice a driver can make, and saying so is cheaper than letting someone
+// discover it by setting both to the same time and wondering why nothing is ever held.
+const alwaysOn = computed(
+  () => !!prefs.value && prefs.value.quiet_start === prefs.value.quiet_end,
+);
+
 const rows = computed(() =>
   props.notifications.map((n) => ({
     ...n,
@@ -178,6 +223,37 @@ const rows = computed(() =>
         {{ promptOn ? t("prompts.lot_off") : t("prompts.lot_on") }}
       </button>
     </section>
+
+    <!-- §13.3, the driver-adjustable half. The zone is stated rather than chosen: the
+         browser knows it and a driver should not have to configure their way out of a
+         bug. `quiet` is the harness's handle — this row renders only after the server
+         answers, so a state it cannot prove it rendered ships unmeasured. -->
+    <section v-if="prefs" class="push quiet">
+      <p class="push__what">{{ t("quiet.what") }}</p>
+      <div class="quiet__row">
+        <label class="quiet__field">
+          <span class="quiet__label">{{ t("quiet.from") }}</span>
+          <input
+            v-model="prefs.quiet_start"
+            class="field__input quiet__input"
+            type="time"
+            :disabled="quietBusy"
+            @change="onQuietChange"
+          />
+        </label>
+        <label class="quiet__field">
+          <span class="quiet__label">{{ t("quiet.to") }}</span>
+          <input
+            v-model="prefs.quiet_end"
+            class="field__input quiet__input"
+            type="time"
+            :disabled="quietBusy"
+            @change="onQuietChange"
+          />
+        </label>
+      </div>
+      <p class="push__why">{{ alwaysOn ? t("quiet.always") : t("quiet.zone", { zone: prefs.timezone }) }}</p>
+    </section>
   </div>
 </template>
 
@@ -208,6 +284,39 @@ const rows = computed(() =>
   margin: 0;
   font-size: var(--type-caption-size);
   color: var(--text-2);
+}
+/* §202 forms, matching AuthSurface's `.field__input` declaration rather than inventing
+   a second look: 56 dp clears §6.5's 48 dp glove spec with room, and the two fields wrap
+   instead of shrinking so +40% under xx-XL grows the row rather than the target. */
+.quiet__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.quiet__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+.quiet__label {
+  font-size: var(--type-caption-size);
+  color: var(--text-2);
+}
+.quiet__input {
+  min-height: 56px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-control);
+  border: 1px solid var(--line-1);
+  background: var(--ink-1);
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+  width: 100%;
+}
+.quiet__input:disabled {
+  opacity: 0.5;
 }
 .notif__empty {
   margin: 0;
