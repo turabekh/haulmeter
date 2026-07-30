@@ -1139,6 +1139,43 @@ export async function muteVendor(vendorId) {
   return queuedPost(`/vendors/${vendorId}/mute`, {});
 }
 
+/* AI-CONTEXT: opt-in notification classes (§23 entry 114).
+ *
+ * `dispatch` refuses an opt-in class before any tier logic, and until these existed no
+ * screen could switch one on — so `lot_status_prompt` was suppressed `not_opted_in` for
+ * every driver while its tests opted in by calling the server's own service function.
+ * The class list is fetched rather than assumed so the switch renders the driver's real
+ * answer; "no preference row" is itself an answer (the default), not missing data. */
+export async function fetchNotificationClasses() {
+  return apiGet(`/notifications/classes`, `notif-classes`);
+}
+
+export async function setNotificationClass(classKey, optedIn) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/notifications/classes/${classKey}/opt-in`, {
+    method: "PUT",
+    headers: headers(),
+    body: JSON.stringify({ opted_in: optedIn }),
+  });
+  if (!resp.ok) throw new Error(`class pref failed: ${resp.status}`);
+  return resp.json();
+}
+
+/* Silencing the prompt at ONE lot. Both directions go through queuedPost so a driver
+ * who taps "don't ask about this lot" in a dead zone still gets what they asked for
+ * (§15.1) — the class switch above is not queued because it is not a roadside action. */
+export async function fetchPromptPref(facilityId) {
+  return apiGet(`/map/facility/${facilityId}/prompt-pref`, `prompt-pref:${facilityId}`);
+}
+
+export async function mutePrompts(facilityId) {
+  return queuedPost(`/map/facility/${facilityId}/mute-prompts`, {});
+}
+
+export async function unmutePrompts(facilityId) {
+  return queuedPost(`/map/facility/${facilityId}/unmute-prompts`, {});
+}
+
 // following a cook. One tap records the vendor, turns the food-alert class ON, and
 // clears any older mute on it — the server does all three, so the UI never has to
 // remember to (see F8 follow_subject).

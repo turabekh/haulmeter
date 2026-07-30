@@ -124,7 +124,11 @@ from 104 §7.1 except that it was guaranteed to fail before, and that everything
 is now proven on the deployed box: the dispatch, the tray actions, the token in
 IndexedDB, and the endpoint accepting sw.js's exact payload (§6). Android Chrome on
 https://haulmeter.online, sign in, More → notifications → "Turn on alerts", park inside
-a truck-stop geofence for 15 minutes. **Confirm the tray actions appear and that tapping
+a truck-stop geofence for 15 minutes.
+> **CORRECTION 2026-07-30 (§23 entry 114): "Turn on alerts" was not enough.** It enables
+> push; the prompt is ALSO gated on its class opt-in, which no surface could set, so this
+> would have failed as `not_opted_in`. The sheet now has a second switch beside the
+> alerts one — "Ask me about lots". Turn on both, and see HANDOFF-106 §7. **Confirm the tray actions appear and that tapping
 one posts the report WITHOUT opening the app.** If the app opens instead, the failure is
 narrow now — either the browser did not hand the action to the worker, or that handset's
 IndexedDB is empty, and the second is checkable from `chrome://inspect`.

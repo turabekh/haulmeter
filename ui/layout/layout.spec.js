@@ -457,14 +457,40 @@ const SURFACES = [
         ],
         unread: 1,
       },
+      // §23 entry 114: the class switch, which is the only way a driver can turn the
+      // lot-status prompt on. It renders ONLY once the server has answered — an
+      // unmocked route 404s here, and this state passed while measuring a sheet with no
+      // switch in it before this mock existed.
+      "/notifications/classes": {
+        classes: [
+          {
+            key: "lot_status_prompt", opted_in: false, opt_in_default: false,
+            max_per_day: 1, tier: "P1",
+          },
+        ],
+      },
     },
     open: [".alerts--link"],
-    ready: ".notif__row",
+    // the SWITCH, not a row: the rows render from the inbox mock either way, and the
+    // newly built thing is the one worth proving present before anything is measured.
+    ready: ".prompt-class",
   }],
   ["login", "/login"],
   ["evidence", "/load/00000000-0000-0000-0000-0000000000aa/evidence"],
   ["condition", "/protection/condition"],
   ["facility", "/facility/00000000-0000-0000-0000-0000000000bb"],
+  // §23 entry 114 — "don't ask about this lot". A separate state rather than mocks on
+  // `facility` above, which deliberately renders from fixtures: this row appears only
+  // after the server answers, so it needs an intercepted route to exist at all. Every
+  // other call 404s and the surface falls back to its fixtures exactly as it does today.
+  ["facility-prompt-mute", "/facility/00000000-0000-0000-0000-0000000000bb", {
+    mocks: {
+      "/map/facility/00000000-0000-0000-0000-0000000000bb/prompt-pref": {
+        facility_id: "00000000-0000-0000-0000-0000000000bb", muted: false,
+      },
+    },
+    ready: ".prompt-mute",
+  }],
 
   // the seven sheets (§8 NAV-3), each opened and measured where it actually renders
   ["sheet-more", "/load", {

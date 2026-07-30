@@ -130,7 +130,12 @@ as a scalar subquery so PostGIS flags the whole window server-side.
 because there are two things worth receiving: a detention P0 and a lot-status prompt
 with tray buttons. Open https://haulmeter.online on Android Chrome, sign in, More →
 notifications → "Turn on alerts", then either cross a free-time boundary or park inside
-a truck-stop geofence for 15 minutes. **Confirm the tray ACTIONS appear and that
+a truck-stop geofence for 15 minutes.
+> **CORRECTION 2026-07-30 (§23 entry 114): these steps could not have worked for the
+> prompt.** "Turn on alerts" enables PUSH — the browser permission and the subscription.
+> The lot-status prompt is also gated on its CLASS opt-in, which nothing could set, so
+> the prompt would have been suppressed `not_opted_in` and the test would have failed
+> pointing at the wrong layer. The sheet now carries the class switch too; turn on BOTH. **Confirm the tray ACTIONS appear and that
 tapping one posts the report without opening the app** — the service-worker action
 handler and the IndexedDB token read are the two pieces no test here can exercise.
 
@@ -156,6 +161,12 @@ is ever raised.**
 - **Nobody can turn the prompt off from inside a prompt.** §13.1's per-subject mute
   exists in F8 (`mute_subject`) and no surface uses it; the only control is the class
   opt-in in the notifications sheet.
+  > **CORRECTION 2026-07-30 (HANDOFF-105 successor, §23 entry 114): there was no such
+  > control.** No endpoint, client function or screen could set this class's opt-in —
+  > `set_class_opt_in` had exactly one caller in the tree, the vendor-alerts route — so
+  > `dispatch` suppressed `not_opted_in` for every driver, always, and the feature was
+  > unreachable. Both controls exist now. Left in place rather than deleted, because
+  > believing a control existed is why nobody looked for it.
 
 **Carried from 103:** no push has reached a real handset · the manifest ships with
 `"icons": []` · no push telemetry · iOS untested.

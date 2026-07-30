@@ -20,6 +20,9 @@ import {
   fetchQuestions,
   fetchServiceCenter,
   askQuestion,
+  fetchPromptPref,
+  mutePrompts,
+  unmutePrompts,
 } from "../core/api.js";
 import { verificationPresentation } from "../core/vendors.js";
 import { sampleProfile, sampleFacilityIntel, sampleQuestions } from "../core/fixtures.js";
@@ -65,8 +68,42 @@ async function load() {
   // fundamentally is, so this is one more card and never a different screen.
   serviceCenter.value = await fetchServiceCenter(route.params.id).catch(() => null);
   await loadQuestions();
+  await loadPromptPref();
 }
 onMounted(load);
+
+// AI-CONTEXT: "don't ask about this lot" — §13.1's per-subject mute, which F8 has had
+// since the vendor class shipped and no surface used (§23 entry 114, owner-chose here).
+//
+// It lives on the facility because this is the screen the prompt deep-links to, and
+// because mute and un-mute are then the SAME control in the same place: a mute a driver
+// cannot see is a mute they cannot undo. Without it the only escape from one unwanted
+// prompt was the whole class — and that switch sits on the notification permission
+// carrying the detention P0, which is one-shot (§23 entry 111).
+const promptsMuted = ref(null); // null = unknown; the row renders nothing rather than a guess
+const muteBusy = ref(false);
+
+async function loadPromptPref() {
+  try {
+    promptsMuted.value = (await fetchPromptPref(route.params.id)).muted;
+  } catch {
+    promptsMuted.value = null; // unauthenticated / offline — say nothing
+  }
+}
+
+async function toggleMute() {
+  muteBusy.value = true;
+  const next = !promptsMuted.value;
+  try {
+    await (next ? mutePrompts(route.params.id) : unmutePrompts(route.params.id));
+    promptsMuted.value = next;
+  } catch {
+    /* queuedPost already stored it for replay; leave the row alone rather than claim
+       a state that has not landed (§11.7) */
+  } finally {
+    muteBusy.value = false;
+  }
+}
 
 async function onAsk() {
   const text = questionText.value.trim();
@@ -205,6 +242,23 @@ async function onReview(payload) {
            interactive prompts in motion. -->
       <button v-if="!isDriving" class="cta cta--ghost" type="button" @click="asking = true">
         {{ t("qa.ask") }}
+      </button>
+    </section>
+
+    <!-- The prompt's own off switch, at the lot it is about. Muting is not composition
+         and could survive at speed, but it is still an interactive control on a screen
+         that withdraws while DRIVING, so it follows the same gate as everything else
+         here rather than being the one exception a driver has to discover. -->
+    <!-- `prompt-mute` exists for the §22.3 harness to aim at: a state it cannot select
+         is a state that ships unmeasured, and this row only renders once the server has
+         answered — so the harness needs a selector to wait for. -->
+    <section v-if="!isDriving && promptsMuted !== null" class="card prompt-mute">
+      <h2 class="card__title">{{ t("prompts.lot_title") }}</h2>
+      <p class="muted">
+        {{ promptsMuted ? t("prompts.lot_muted") : t("prompts.lot_elsewhere") }}
+      </p>
+      <button class="cta cta--ghost" type="button" :disabled="muteBusy" @click="toggleMute">
+        {{ promptsMuted ? t("prompts.lot_unmute") : t("prompts.lot_mute") }}
       </button>
     </section>
 
