@@ -2,8 +2,8 @@
 
 **Project:** Haulmeter — Consolidated Trucker Platform (mobile-first, driver pays $0).
 **Date:** 30 July 2026 · **Stack:** UP locally (`make down` to stop) · **Deployed:**
-https://haulmeter.online (GCE, `uzimiz-prod`) — **BEHIND this handoff's work.** The box
-has 105's token fix but no opt-in switch, so the prompt is still unreachable there.
+https://haulmeter.online (GCE, `uzimiz-prod`) — **current**, and both switches driven in a
+real browser on the box: opt in, mute a lot, un-mute it, each verified against the server.
 
 **State in one line:** a driver can finally turn the lot-status prompt on — and silence
 it at one lot without turning the whole class off.
@@ -21,8 +21,8 @@ it at one lot without turning the whole class off.
 | Tests | **pytest 1211 · vitest 587 · layout 181 · ruff + import-linter 30/30** |
 | §23 decision log | **114 entries** (114 this session) |
 | Handoffs | 000 → 106 |
-| Git | committed locally, **NOT pushed** — owner's call |
-| Deployed | **STALE.** Needs a deploy before §7.1 is possible |
+| Git | pushed; in sync with `origin/main` (public) |
+| Deployed | **current**, verified end to end on the box |
 | Working tree | clean except untracked `collect_files.py` (not mine) |
 
 ## 2. What shipped
@@ -111,19 +111,27 @@ question.**
   → **suppressed `not_opted_in`**. Every ping returned `events=[]` — 112's shape (c) still
   holding, the prompt firing with no geofence event at all.
 - **Then the same loop in a real browser**, registering through the login screen: both
-  switches tapped, both verified against the server in both directions.
+  switches tapped, both verified against the server in both directions — **locally, and
+  again on https://haulmeter.online after deploying.** On the box the class list also
+  reports `protection_gap` as `opted_in: true` by default and `lot_status_prompt` as
+  false, which is the state every driver was stuck in until today.
+- **`/api/health` answered 502 for a few seconds right after the deploy** and 200 on the
+  next try — the API container had just started. Worth knowing before anyone reads a
+  post-deploy 502 as a failed ship.
 - The dev DB now holds five `drive-…@example.com` and one `ui-drive-…@example.com`
-  account, plus the `idb-verify-…` pair from 105.
+  account, plus the `idb-verify-…` pair from 105; the box holds one `deploy-check-…` and
+  one `ui-drive-…` from the verification above, the second with a mute recorded and then
+  cleared on `I-94 EB Rest Area`.
 
 ## 7. Exact next task
 
-**1. Deploy, then put a push on a real handset.** The box cannot do this yet — it has no
-opt-in switch. After `./scripts/deploy.sh`: Android Chrome on https://haulmeter.online,
-sign in, More → notifications → **turn on BOTH** "Turn on alerts" (push) and "Ask me
-about lots" (the class), then park inside a truck-stop geofence for 15 minutes. **Confirm
+**1. Put a push on a real handset. Everything else is now in place on the box.** Android
+Chrome on https://haulmeter.online, sign in, More → notifications → **turn on BOTH**
+"Turn on alerts" (push) and "Ask me about lots" (the class — this is the switch that did
+not exist until today), then park inside a truck-stop geofence for 15 minutes. **Confirm
 the tray actions appear and that tapping one posts the report WITHOUT opening the app.**
 That last hop — browser → service worker action — is the only link in this feature no test
-here can exercise.
+here can exercise, and both switches are verified working on the deployed box (§6).
 
 **2. Watch whether prompted beliefs disagree with volunteered ones.** §23 entry 112 flags
 it and it is finally *possible* to measure, because prompts can now reach drivers.
