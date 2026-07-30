@@ -2,8 +2,9 @@
 
 **Project:** Haulmeter — Consolidated Trucker Platform (mobile-first, driver pays $0).
 **Date:** 31 July 2026 · **Stack:** UP locally (`make down` to stop) · **Deployed:**
-https://haulmeter.online (GCE, `uzimiz-prod`) — **BEHIND this handoff's work.** The box
-still measures quiet hours in UTC for every driver.
+https://haulmeter.online (GCE, `uzimiz-prod`) — **current**, and verified there from a
+browser that genuinely believed it was in Denver: signing in recorded the zone, the sheet
+named it, and moving the window stuck without clobbering it.
 
 **State in one line:** §13.3's "22:00–06:00 local" now means what it says, in the driver's
 own zone, without the driver doing anything.
@@ -21,8 +22,8 @@ own zone, without the driver doing anything.
 | Tests | **pytest 1235 · vitest 592 · layout 181 · ruff + import-linter 30/30** |
 | §23 decision log | **115 entries** (115 this session) |
 | Handoffs | 000 → 107 |
-| Git | committed locally, **NOT pushed** — owner's call |
-| Deployed | **STALE** |
+| Git | pushed; in sync with `origin/main` (public) |
+| Deployed | **current**, verified end to end on the box |
 | Working tree | clean except untracked `collect_files.py` (not mine) |
 
 ## 2. What shipped
@@ -30,7 +31,7 @@ own zone, without the driver doing anything.
 | Commit | What |
 |---|---|
 | `49e6814` | `set_prefs`, the prefs routes, and the measured quiet-hours suite |
-| _(this commit)_ | The timezone sync, the window control, six locales, the harness, these docs |
+| `4386b34` | The timezone sync, the window control, six locales, the harness, these docs |
 
 ## 3. What was wrong
 
@@ -109,12 +110,17 @@ driver heals on their next app open**, no action asked.
   zone; moving the window stuck; editing the window left the zone alone.
 - **Re-measured after the fix:** every US zone reads **22:00–06:00 local**, and a Denver
   P1 is sent at 09:00 and 19:00, held at 23:00 and 03:00.
-- The dev DB gained a `tz-drive-…@example.com` account from that run.
+- The dev DB gained a `tz-drive-…@example.com` account from that run; the box gained a
+  `tz-deploy-…` and a `tz-drive-…` from the post-deploy verification, the second carrying
+  a 23:30 window.
+- **The deployed check was run twice over**: the prefs routes by hand over HTTPS (default
+  UTC, PUT a zone, partial PUT keeps it, unknown zone 422 and changes nothing), then the
+  same browser drive against https://haulmeter.online. `/api/health` answered 200 on the
+  first try this time — the 502 recorded in 106 §6 was a startup race, not a pattern.
 
 ## 7. Exact next task
 
-**1. Deploy, then put a push on a real handset.** Unchanged from 106 §7.1 and now worth
-more: quiet hours no longer silence a US driver's afternoon, so a P1 sent during a test
+**1. Put a push on a real handset.** Unchanged from 106 §7.1 and now worth more: quiet hours no longer silence a US driver's afternoon, so a P1 sent during a test
 drive will actually arrive. Android Chrome on https://haulmeter.online, sign in, More →
 notifications → turn on **both** "Turn on alerts" and "Ask me about lots", park inside a
 truck-stop geofence for 15 minutes. **Confirm the tray actions appear and that tapping one
