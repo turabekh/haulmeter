@@ -21,6 +21,7 @@ considerate; destroying it is lossy, and the two must not be confused.
 """
 
 import uuid
+from datetime import time as dt_time
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -81,6 +82,63 @@ def mark_read(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "notification not found")
     notify.mark_notification_read(db, notification)
     return _serialize(notification)
+
+
+# --- Quiet hours and the zone they are measured in (§13.3, §23 entry 115) ---
+#
+# AI-CONTEXT: §13.3 is "default 22:00-06:00 LOCAL (driver-adjustable)". `prefs.timezone`
+# defaulted to "UTC" and nothing in the tree ever wrote it, so the window landed on the
+# wrong eight hours for every driver on a platform that serves US drivers exclusively —
+# silenced through the working afternoon, reachable at 03:00. Neither half of §13.3 had a
+# door: not the zone, not "driver-adjustable".
+#
+# The PUT is PARTIAL. The client sends the browser's detected zone on every sign-in, and
+# a whole-object write would silently undo a window the driver set.
+class PrefsIn(BaseModel):
+    timezone: str | None = None
+    quiet_start: dt_time | None = None
+    quiet_end: dt_time | None = None
+
+
+def _serialize_prefs(prefs) -> dict:
+    return {
+        "timezone": prefs.timezone,
+        # "HH:MM" — the shape <input type="time"> reads and writes, so the client never
+        # reformats a value it is about to send straight back
+        "quiet_start": prefs.quiet_start.strftime("%H:%M"),
+        "quiet_end": prefs.quiet_end.strftime("%H:%M"),
+    }
+
+
+@router.get("/prefs")
+def get_prefs(
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    return _serialize_prefs(notify.get_or_create_prefs(db, account.id))
+
+
+@router.put("/prefs")
+def put_prefs(
+    body: PrefsIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        prefs = notify.set_prefs(
+            db,
+            account.id,
+            timezone=body.timezone,
+            quiet_start=body.quiet_start,
+            quiet_end=body.quiet_end,
+        )
+    except notify.UnknownTimezone:
+        # 422 rather than 400: the value is well-formed and wrong, which is exactly what
+        # the rest of this API answers 422 for
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown timezone"
+        ) from None
+    return _serialize_prefs(prefs)
 
 
 # --- Opt-in classes (E-D1, §23 entry 114) ---

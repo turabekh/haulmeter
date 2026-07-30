@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
@@ -136,6 +136,48 @@ def get_or_create_prefs(db: Session, account_id) -> NotificationPrefs:
         prefs = NotificationPrefs(account_id=account_id)
         db.add(prefs)
         db.flush()
+    return prefs
+
+
+class UnknownTimezone(Exception):
+    pass
+
+
+def set_prefs(
+    db: Session,
+    account_id,
+    timezone: str | None = None,
+    quiet_start: time | None = None,
+    quiet_end: time | None = None,
+) -> NotificationPrefs:
+    """§13.3's window and the zone it is measured in (§23 entry 115).
+
+    AI-CONTEXT: `timezone` defaulted to "UTC" and **nothing in the tree ever wrote it**,
+    so "22:00-06:00 local" landed on the wrong eight hours for every driver — silenced
+    through the working afternoon and reachable at 03:00. The column existed and had no
+    door; see tests/foundation/f08_notifications/test_quiet_hours.py for the measured
+    per-zone table.
+
+    EVERY FIELD IS OPTIONAL, and that is load-bearing rather than convenience: the client
+    PUTs the browser's detected zone on every sign-in, and a whole-object write would
+    silently undo a window the driver had set. A test holds it.
+
+    The zone is validated by `ZoneInfo`'s own lookup — the only check that stays true as
+    tzdata changes, and the same object `in_quiet_hours` will use, so a value that stores
+    cannot fail at read time.
+    """
+    prefs = get_or_create_prefs(db, account_id)
+    if timezone is not None:
+        try:
+            ZoneInfo(timezone)
+        except Exception as exc:
+            raise UnknownTimezone(timezone) from exc
+        prefs.timezone = timezone
+    if quiet_start is not None:
+        prefs.quiet_start = quiet_start
+    if quiet_end is not None:
+        prefs.quiet_end = quiet_end
+    db.flush()
     return prefs
 
 
