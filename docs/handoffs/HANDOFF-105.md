@@ -2,8 +2,8 @@
 
 **Project:** Haulmeter — Consolidated Trucker Platform (mobile-first, driver pays $0).
 **Date:** 30 July 2026 · **Stack:** UP locally (`make down` to stop) · **Deployed:**
-https://haulmeter.online (GCE, `uzimiz-prod`) — **BEHIND by this handoff's fix.** The
-box still has the version where a tray tap cannot post.
+https://haulmeter.online (GCE, `uzimiz-prod`) — **current**, and the mirror verified in a
+real browser on the box: sign in and the token is in `haulmeter`/`kv`/`token`.
 
 **State in one line:** the lot-status prompt's tray buttons worked; answering with one
 could never send anything, and now can.
@@ -21,8 +21,8 @@ could never send anything, and now can.
 | Tests | **pytest 1193 · vitest 578 · layout 177 · ruff + import-linter 30/30** |
 | §23 decision log | **113 entries** (113 this session) |
 | Handoffs | 000 → 105 |
-| Git | committed locally, **NOT pushed** — owner's call |
-| Deployed | **STALE.** The fix is local only |
+| Git | pushed; in sync with `origin/main` (public) |
+| Deployed | **current**, verified end to end on the box |
 | Working tree | clean except untracked `collect_files.py` (not mine) |
 
 ## 2. What shipped
@@ -30,6 +30,7 @@ could never send anything, and now can.
 | Commit | What |
 |---|---|
 | `ea87d18` | The token mirror moves to the ref; the seam gets its first test (§23 113) |
+| `3f9b651` | This handoff and §23 entry 113 |
 
 ## 3. What was wrong
 
@@ -97,21 +98,36 @@ hand-placed calls.
   the key, reload, it comes back. **With the fix reverted the same script reports `null`,
   and still `null` after reload** — so the verification detects the defect rather than
   agreeing with the code. Five of the eleven new unit tests were RED before the change.
-  - Two proxies were needed to do it: the dev app calls `http://localhost:8008` and the
-    API's dev CORS allowlist is exactly `http://localhost:9008`, so the browser has to
-    see both on its own localhost or the run measures a CORS failure instead of the
-    mirror. §23 entry 92's trap, from the other side.
-- The dev DB now holds two `idb-verify-…@example.com` accounts from those runs.
+  - Two proxies were needed to do it locally: the dev app calls `http://localhost:8008`
+    and the API's dev CORS allowlist is exactly `http://localhost:9008`, so the browser
+    has to see both on its own localhost or the run measures a CORS failure instead of the
+    mirror. §23 entry 92's trap, from the other side. Deployed needs neither — it is
+    same-origin.
+- **Then re-run against https://haulmeter.online after deploying, and it passes there
+  too.** Grepping the built bundle for `indexedDB.open("haulmeter")` proves nothing, and
+  was worth stating: that string was in the bundle before the fix as well. The function
+  always shipped; only the call site was missing.
+- **The last link that does not need a handset was closed by hand.** `sw.js`'s exact
+  payload — `{facility_id, signal_type: "parking_fullness", value: {status: "some"}}` —
+  POSTed to the real `/api/map/report` on the box against a real `rest_area` returns
+  **HTTP 200** with a `submission_id` and `presence_proven: false` (correctly: that
+  account is not there). So every link is now proven except the browser delivering the
+  tray tap to the worker, which only a phone can do.
+- The dev DB holds two `idb-verify-…@example.com` accounts and **the box holds one**, plus
+  one `parking_fullness` belief on `I-94 EB Rest Area` from the check above — an
+  unproven-presence submission, so F10 weights it low, but it is real data on the box.
 
 ## 7. Exact next task
 
-**1. Put a push on a real handset — now worth doing, because the thing it tests can
-work.** Unchanged from 104 §7.1 except that it was guaranteed to fail before. Requires a
-**deploy first**, which is the owner's call. Then: Android Chrome on
+**1. Put a push on a real handset — and it is now the ONLY untested link.** Unchanged
+from 104 §7.1 except that it was guaranteed to fail before, and that everything around it
+is now proven on the deployed box: the dispatch, the tray actions, the token in
+IndexedDB, and the endpoint accepting sw.js's exact payload (§6). Android Chrome on
 https://haulmeter.online, sign in, More → notifications → "Turn on alerts", park inside
 a truck-stop geofence for 15 minutes. **Confirm the tray actions appear and that tapping
-one posts the report WITHOUT opening the app.** If the app opens, the token did not reach
-IndexedDB on that handset and §8's first item is back.
+one posts the report WITHOUT opening the app.** If the app opens instead, the failure is
+narrow now — either the browser did not hand the action to the worker, or that handset's
+IndexedDB is empty, and the second is checkable from `chrome://inspect`.
 
 **2. Watch whether prompted beliefs disagree with volunteered ones.** §23 entry 112
 flags it; nothing has measured it. **Check before the 1/day cap is ever raised.**
@@ -166,7 +182,7 @@ make test                            # pytest 1193 + vitest 578
 make ui-layout                        # 177, ~3 min — run it alone
 make lint                            # ruff + import-linter 30/30
 make vapid-keys                      # prints a pair; paste into infra/.env by hand
-./scripts/deploy.sh                  # ship to haulmeter.online — NEEDED for §7.1
+./scripts/deploy.sh                  # ship to haulmeter.online (already current)
 ```
 
 **The standing warning, in the form this session found it.** 104 ended by saying a suite

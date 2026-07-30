@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # AI-CONTEXT: push the working tree to the haulmeter testing VM and rebuild it.
 #
-# The repo has NO GIT REMOTE — HANDOFF §4.3 is "local commits only, NEVER push" — so a
-# deploy cannot be `git clone`. It is a copy of the working tree, which makes this
-# script the only record of what "deployed" means.
+# A deploy is a copy of the WORKING TREE, not a `git clone` — which makes this script the
+# only record of what "deployed" means, and means uncommitted edits ship. (This comment
+# used to say the repo had no remote and must never be pushed; it has been public at
+# github.com/turabekh/haulmeter since §23 entry 99, and CLAUDE.md rule 3 governs — push
+# and deploy are each the owner's call, every time.)
 #
 # THE TRAP THIS SCRIPT EXISTS TO PREVENT. macOS `tar` writes AppleDouble sidecars
 # (`._name`) for files carrying extended attributes. They are BINARY. Alembic globs
