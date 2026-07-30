@@ -140,12 +140,25 @@ Check before the 1/day cap is ever raised.
 - **A driver cannot see or change their zone if the browser reports it wrong.** The sheet
   states it; there is no override. Deliberate — see §4 — but it is the failure mode to
   watch for, and the fix if it bites is a picker after all.
-- **The timezone syncs once per session.** A driver who crosses a zone boundary mid-trip
-  keeps the zone detected at sign-in until the app reloads. §13.3 says "local" and this is
-  local-at-sign-in; a `visibilitychange` re-check would close it.
-- **Nothing tells the driver a notification was held.** The inbox renders suppressed rows
-  (§23 entry 102) but the quiet-hours control does not say "3 alerts are waiting until
-  06:00", which is the thing that would make the window feel real.
+- ~~**The timezone syncs once per session.**~~ **CLOSED later the same session:** a
+  `visibilitychange` listener re-checks the zone whenever the app returns to the
+  foreground, so a driver who crosses into Kansas gets their window moved with them. The
+  dedupe makes it free — nothing is sent unless the zone actually changed — and a test
+  drives Denver → Chicago and asserts both PUTs, proved RED by disabling the listener.
+- **QUIET HOURS DO NOT DEFER — THEY DISCARD, AND THE PRODUCT SAYS OTHERWISE.** Going to
+  add "3 alerts are waiting until 06:00" to the control turned up that it would have been
+  a lie. A P1 suppressed for quiet hours is written `status=suppressed` and **nothing ever
+  sends it.** The worker runs five jobs — `tpims_dynamic`, `tpims_static`, `eia_regional`,
+  `document_expiry`, `detention_clock` — and none re-dispatches. So the notification is
+  filed, and the driver sees it only if they go and open the inbox.
+  `api/app/api/notifications.py:19` states the opposite in as many words: *"Deferring a
+  notification is considerate; destroying it is lossy."* It defers nothing.
+  **This needs an owner decision, not a copy fix** (§22.2: notification behaviour is
+  never-improvise). Either a held P1 is re-dispatched when the window closes — a new
+  worker job, and a decision about what happens to one held for 8 hours that is no longer
+  true — or quiet hours are honestly "filed silently, read when you look", and §13.3 and
+  that docstring should say so. **Until then no surface should promise delivery**, which
+  is why the count was not built.
 
 **Carried from 106:** no place lists every muted lot · the generic opt-in endpoint would
 accept `protection_gap` · `GET /notifications/classes` returns classes with no surface.

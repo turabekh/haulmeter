@@ -280,3 +280,49 @@ describe("the timezone the server never had", () => {
     expect(body).not.toHaveProperty("quiet_start");
   });
 });
+
+describe("crossing a time zone mid-trip", () => {
+  it("re-checks the zone when the app comes back to the foreground", async () => {
+    logout();
+    const fetchMock = stubFetch([["/notifications/prefs", () => jsonOnce({})]]);
+    const real = Intl.DateTimeFormat;
+    const zoneStub = (zone) =>
+      vi.stubGlobal("Intl", {
+        ...Intl,
+        DateTimeFormat: () => ({ resolvedOptions: () => ({ timeZone: zone }) }),
+      });
+
+    try {
+      zoneStub("America/Denver");
+      setToken("tok-crossing");
+      await flushPromises();
+
+      // ...and the truck rolls into Kansas
+      zoneStub("America/Chicago");
+      document.dispatchEvent(new Event("visibilitychange"));
+      await flushPromises();
+
+      const zones = fetchMock.mock.calls
+        .filter(([url, init]) => String(url).includes("/notifications/prefs") && init?.method === "PUT")
+        .map(([, init]) => JSON.parse(init.body).timezone);
+      expect(zones).toEqual(["America/Denver", "America/Chicago"]);
+    } finally {
+      vi.stubGlobal("Intl", { ...Intl, DateTimeFormat: real });
+    }
+  });
+
+  it("says nothing when the zone has not changed", async () => {
+    logout();
+    const fetchMock = stubFetch([["/notifications/prefs", () => jsonOnce({})]]);
+
+    setToken("tok-samezone");
+    await flushPromises();
+    const before = fetchMock.mock.calls.length;
+
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushPromises();
+
+    // the dedupe is what makes a foreground re-check free
+    expect(fetchMock.mock.calls.length).toBe(before);
+  });
+});

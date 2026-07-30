@@ -148,6 +148,17 @@ async function syncTimezone(value) {
 }
 watch(token, syncTimezone, { immediate: true });
 
+/* A driver crosses two or three zones in a day and the app is not reloaded when they do,
+ * so a sign-in-only sync means the window drifts back off "local" by an hour the moment
+ * they cross a boundary — the same defect this entry exists to fix, in miniature.
+ * Re-checking when the app comes back to the foreground costs nothing: the dedupe above
+ * makes it a no-op unless the zone actually changed. */
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) syncTimezone(token.value);
+  });
+}
+
 export function setToken(value) {
   token.value = value;
   persist();
