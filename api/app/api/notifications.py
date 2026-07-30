@@ -83,6 +83,66 @@ def mark_read(
     return _serialize(notification)
 
 
+# --- Opt-in classes (E-D1, §23 entry 114) ---
+#
+# AI-CONTEXT: the routes that made an opt-in class reachable at all.
+#
+# `dispatch` gates on `is_opted_in` BEFORE any tier logic, and an opt-in class defaults
+# to off — so a class with no way to switch it on is not "off by default", it is dead.
+# `set_class_opt_in` had exactly one caller in the whole tree: the vendor-alerts route,
+# hardcoded to VENDOR_ALERT. `lot_status_prompt` therefore suppressed `not_opted_in` for
+# every driver, always, while its own tests opted in by calling the service function.
+# Third occurrence of that shape in one feature — see
+# tests/api/test_prompt_reachability_api.py, which asserts through routes only.
+#
+# Generic rather than a route per class: NOTIFICATION_CLASSES is already the registry
+# and `get_class` is already the validator, so a new class needs no new endpoint. The
+# registry is code-defined, so an unknown key is a client bug and gets a 404 rather than
+# a preference row that governs nothing.
+class ClassOptInIn(BaseModel):
+    opted_in: bool
+
+
+@router.get("/classes")
+def list_classes(
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """What the driver has chosen, and what the class would do — so a screen can render
+    the switch in its real state instead of guessing.
+
+    `opted_in` is `is_opted_in`, which reads the DEFAULT when no row exists. The absence
+    of a preference is an answer (silence is never consent), not missing data.
+    """
+    return {
+        "classes": [
+            {
+                "key": spec.key,
+                "opted_in": notify.is_opted_in(db, account.id, spec.key),
+                "opt_in_default": spec.opt_in_default,
+                "max_per_day": spec.max_per_day,
+                "tier": spec.tier.value,
+            }
+            for spec in notify.NOTIFICATION_CLASSES.values()
+        ]
+    }
+
+
+@router.put("/classes/{class_key}/opt-in")
+def set_class_opt_in(
+    class_key: str,
+    body: ClassOptInIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Turning it on, and off, through the same route — §21.8's symmetry is why this is
+    one PUT with a boolean rather than a subscribe/unsubscribe pair."""
+    if notify.get_class(class_key) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown notification class")
+    pref = notify.set_class_opt_in(db, account.id, class_key, body.opted_in)
+    return {"class": class_key, "opted_in": pref.opted_in}
+
+
 # --- Web Push registration (§13.1, §23 entry 111) ---
 class PushSubscriptionIn(BaseModel):
     endpoint: str

@@ -209,6 +209,31 @@ def mute_subject(
     return pref
 
 
+def unmute_subject(
+    db: Session, account_id, class_key: str, subject_ref: str
+) -> NotificationClassPref | None:
+    """The half `mute_subject` shipped without (§23 entry 114).
+
+    AI-CONTEXT: the only existing way out of a mute was `follow_subject`, which is
+    vendor-shaped and ALSO switches the whole class on — so a driver who silenced one
+    lot had no way back that did not change something else. `core/push.js` states the
+    rule this breaks outright: turning it off is exactly as easy as turning it on.
+
+    It deliberately leaves `opted_in` alone, which is `unfollow_subject`'s reasoning
+    mirrored: un-silencing one facility is not a class-level choice, and quietly making
+    that louder choice for someone would hand them notifications they never asked for.
+    Returns None when there was no preference row — asking for a state you are already
+    in is not a failure (the same posture as `/push/unsubscribe`).
+    """
+    pref = get_class_pref(db, account_id, class_key)
+    if pref is None:
+        return None
+    ref = str(subject_ref)
+    pref.muted_subjects = [s for s in (pref.muted_subjects or []) if s != ref]
+    db.flush()
+    return pref
+
+
 def is_subject_muted(db: Session, account_id, class_key: str, subject_ref: str | None) -> bool:
     if subject_ref is None:
         return False

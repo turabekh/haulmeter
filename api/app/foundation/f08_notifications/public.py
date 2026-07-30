@@ -74,6 +74,7 @@ from .domain.service import (
     set_class_opt_in,
     subscriptions_for,
     unfollow_subject,
+    unmute_subject,
     unread_count,
 )
 
@@ -95,6 +96,7 @@ __all__ = [
     "is_subject_muted",
     "unread_count",
     "mute_subject",
+    "unmute_subject",
     "set_class_opt_in",
     "unfollow_subject",
     "DriverState",

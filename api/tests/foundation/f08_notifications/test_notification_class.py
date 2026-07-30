@@ -216,3 +216,55 @@ def test_a_follow_does_not_bypass_a_single_cap(db):
     # and quiet hours still bite a follower
     quiet = _send(db, _account(db, "follow-quiet@example.com"), gateway, now=T0.replace(hour=23))
     assert quiet.status == notify.NotificationStatus.suppressed
+
+
+# --- unmuting, the half `mute_subject` shipped without (§23 entry 114) ---
+
+
+def test_unmuting_lets_the_subject_through_again(db):
+    account = _account(db, "unmute@example.com")
+    notify.set_class_opt_in(db, account.id, notify.VENDOR_ALERT_CLASS, True)
+    notify.mute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-7")
+    gateway = _gateway()
+    assert _send(db, account, gateway, subject_ref="vendor-7").suppress_reason == (
+        notify.SuppressReason.muted
+    )
+
+    notify.unmute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-7")
+
+    assert _send(db, account, gateway, subject_ref="vendor-7").status == (
+        notify.NotificationStatus.sent
+    )
+
+
+def test_unmuting_leaves_the_class_switch_alone(db):
+    """The trap `follow_subject` sets and this must not: it clears a mute AND opts the
+    class in. Un-silencing one subject is not consent to the whole class, which is
+    `unfollow_subject`'s rule pointing the other way."""
+    account = _account(db, "unmute-optout@example.com")
+    notify.mute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-8")
+
+    notify.unmute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-8")
+
+    assert notify.is_opted_in(db, account.id, notify.VENDOR_ALERT_CLASS) is False
+
+
+def test_unmuting_leaves_the_other_mutes_in_place(db):
+    account = _account(db, "unmute-one@example.com")
+    notify.mute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-9")
+    notify.mute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-10")
+
+    notify.unmute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-9")
+
+    assert notify.is_subject_muted(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-9") is False
+    assert notify.is_subject_muted(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-10") is True
+
+
+def test_unmuting_with_no_preference_row_is_not_an_error(db):
+    """A driver asking for a state they are already in has succeeded. Returning None
+    rather than creating an empty row keeps `is_opted_in` reading the DEFAULT, which is
+    the difference between "never asked" and "answered no"."""
+    account = _account(db, "unmute-nothing@example.com")
+
+    assert notify.unmute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-11") is None
+    assert notify.get_class_pref(db, account.id, notify.VENDOR_ALERT_CLASS) is None

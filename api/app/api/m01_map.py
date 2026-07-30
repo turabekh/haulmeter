@@ -15,6 +15,7 @@ from app.api.deps import canonical_facility_id, current_account, get_db, require
 from app.api.events import publish_status
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
+from app.foundation.f08_notifications import public as notify
 from app.foundation.f10_crowd import public as crowd
 from app.modules.m01_map import public as m1
 from app.modules.m03_detention import public as m3
@@ -288,6 +289,60 @@ def report(
         "submission_id": str(submission.id),
         "presence_proven": submission.presence_proven,
     }
+
+
+# AI-CONTEXT: silencing the lot-status prompt at ONE lot (§13.1's per-subject mute,
+# §23 entry 114 — owner-chose the placement).
+#
+# F8 has had `mute_subject` since the vendor class shipped and no surface used it for
+# this class, so the only control a driver had was the whole class. These three routes
+# are the per-subject half, and they live in M1 rather than on M2's `/facility` router
+# because that one is gated on `require_module("m02_facility_intel")` and this is M1's
+# notification class.
+#
+# CANONICALISING IS LOAD-BEARING, not tidiness. The prompt writes `subject_ref` from the
+# facility F2 resolved, so a mute recorded against a MERGED id would never match it: the
+# driver would tap "don't ask about this lot", get a 200, and be asked again the next
+# night. That is §23 entry 73's scoping mistake in a new place, and a test holds it.
+#
+# Two POSTs rather than one PUT with a boolean: both directions then go through the
+# client's `queuedPost`, so a driver who mutes a lot with no signal still mutes it
+# (§22.3's offline clause). The class-level switch is a PUT because it is not queued.
+@router.get("/facility/{facility_id}/prompt-pref")
+def prompt_pref(
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    return {
+        "facility_id": str(facility_id),
+        "muted": notify.is_subject_muted(
+            db, account.id, notify.LOT_STATUS_PROMPT_CLASS, str(facility_id)
+        ),
+    }
+
+
+@router.post("/facility/{facility_id}/mute-prompts")
+def mute_prompts(
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    notify.mute_subject(db, account.id, notify.LOT_STATUS_PROMPT_CLASS, str(facility_id))
+    return {"facility_id": str(facility_id), "muted": True}
+
+
+@router.post("/facility/{facility_id}/unmute-prompts")
+def unmute_prompts(
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Answers 200 whether or not a mute was there — the driver asked for a state and is
+    now in it, the same posture `/push/unsubscribe` takes. It leaves the CLASS alone: a
+    driver un-silencing one lot has not asked to be asked everywhere."""
+    notify.unmute_subject(db, account.id, notify.LOT_STATUS_PROMPT_CLASS, str(facility_id))
+    return {"facility_id": str(facility_id), "muted": False}
 
 
 @router.get("/scales-ahead")
