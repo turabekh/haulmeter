@@ -4,7 +4,7 @@
 // isAuthenticated gates the app (router guard); callers still fall back to
 // fixtures when a request fails offline. This module is the ONLY place the UI
 // talks to the backend — swap-friendly (§19).
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 
 // AI-CONTEXT: WHOSE localhost? (§23 entry 92)
 //
@@ -58,7 +58,17 @@ function persist() {
  * It is cleared on logout in the same breath as the rest, because a token that
  * outlived sign-out in a second store is exactly the kind of leftover nobody looks for.
  * Failures are swallowed — a browser with IDB blocked still signs in fine, it just
- * answers prompts by opening the app instead. */
+ * answers prompts by opening the app instead.
+ *
+ * IT BELONGS TO THE REF, NOT TO A CALLER (§23 entry 113). This was called by hand from
+ * `setToken` and `logout`, and `setToken` turns out to be TEST-ONLY: the real sign-in is
+ * `login`/`register` -> `_adopt`, which mirrored nothing, and the boot restore below
+ * assigns the ref directly. So the token was never in IndexedDB for any driver,
+ * `readToken` resolved null, and every tray tap silently fell back to opening the app.
+ * Watching the ref means the next code path that sets a token cannot forget — structural
+ * rather than guarded, for the same reason the lot-status prompt's DRIVING ban is.
+ * `flush: "sync"` keeps the timing of the hand-placed calls it replaces; `immediate`
+ * covers the restored session, which is what heals a driver already signed in. */
 function mirrorTokenToIdb(value) {
   if (typeof indexedDB === "undefined") return;
   try {
@@ -84,10 +94,11 @@ function mirrorTokenToIdb(value) {
   }
 }
 
+watch(token, mirrorTokenToIdb, { immediate: true, flush: "sync" });
+
 export function setToken(value) {
   token.value = value;
   persist();
-  mirrorTokenToIdb(value);
 }
 
 export function logout() {
@@ -95,7 +106,6 @@ export function logout() {
   account.value = null;
   email.value = null;
   persist();
-  mirrorTokenToIdb(null);
   clearCache(); // a new driver never sees the last one's cached reads
   saveQueue([]); // ...nor inherits their unsynced writes
 }
