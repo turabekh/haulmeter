@@ -8,8 +8,8 @@ stopped telling drivers "Held until morning" about notifications that never arri
 **State in one line:** the false copy is off production, and the layout harness's
 "known flake" turned out to be a real failure that the proposed fix would have buried.
 
-> This continues HANDOFF-108. It closes its §7.1 and its §7.3, and it **corrects 108 §5**,
-> which was wrong on the numbers.
+> This continues HANDOFF-108. It closes its §7.1, §7.3 and the label-shape half of its
+> §8, and it **corrects 108 §5**, which was wrong on the numbers.
 
 ---
 
@@ -18,11 +18,11 @@ stopped telling drivers "Held until morning" about notifications that never arri
 | Thing | Value |
 |---|---|
 | Migrations | head **0055_f08_push_subscription** (no new migration) |
-| Tests | **pytest 1235 · vitest 594 · ruff + import-linter 30/30** |
+| Tests | **pytest 1235 · vitest 596 · ruff + import-linter 30/30** |
 | Layout | **181 states, 181 passed** — twice, once under heavy load. No flake observed. |
 | §23 decision log | **116 entries** (none added — see §4) |
 | Handoffs | 000 → 109 |
-| Git | one commit ahead of `origin/main` (this session's harness fix + this doc) |
+| Git | **two commits ahead** of `origin/main` — the label test and this doc. The deploy and the harness fix are pushed. |
 | Deployed | **CURRENT** as of this session |
 | Working tree | clean except untracked `collect_files.py` (still not mine) |
 
@@ -32,6 +32,7 @@ stopped telling drivers "Held until morning" about notifications that never arri
 |---|---|
 | `5f987a9`…`71e1855` | 108's three commits — **pushed and deployed**, nothing new in them |
 | `af2dda1` | A `ready` timeout is a defect, not weather — and it now says which |
+| `d111a4b` | The SHAPE of a held label is asserted, not its i18n key (108 §8) |
 | _(this commit)_ | This handoff |
 
 ## 3. The deploy (108 §7.1, closed)
@@ -90,12 +91,57 @@ and `.report-chip=1` present; aborting `/src/main.js` reports `#app` never mount
 **No §23 entry.** This is a harness decision, not a design one — no colour, type size,
 spacing, component pattern, navigation or notification class was touched.
 
-## 5. Method notes
+## 5. The label test (108 §8, closed) — and the FOURTH copy of the retired claim
+
+108 §8 asked for a test that renders each `suppressed_reason` and asserts the label does
+not claim a time. It exists now, and writing it turned up the thing that justifies it.
+
+**`ui/test/notifications.test.js` still asserted "Quiet hours defer, they do not
+destroy"** in its own header. 108 corrected that claim in three files —
+`api/app/api/notifications.py`, `f08.inbox`, §23 entry 102 — and **missed the fourth,
+which was sitting in the test file for the very feature.** A claim that rots in three
+places rots in four; the only reason this one was found is that someone opened the file
+to write a test about it.
+
+**Then the obvious thing was done: `defer` was grepped across `api/app`, `ui/src`,
+`ui/test` and both governing docs. There is no fifth.** The two remaining mentions in
+`f08` are correct — both put "deferring" in scare quotes to negate it — and everything
+else is the unrelated Stripe/voice seams. Cheap, and it converts "I fixed the one I
+tripped over" into an answer.
+
+**Why the old tests could not have caught the label.** Every assertion here compares the
+render against `en["notifications.held"]` — the same table the component renders from.
+That proves the plumbing works and nothing else: it is true whatever the string says,
+which is why "Held until morning" was green for two sessions while being wrong for four
+of the five reasons. **A test that reads its expectation from the code under test is not
+a test of the content.**
+
+What is asserted instead is §13.3's operative clause — *no surface may promise that a
+held notification will arrive later* — in all six locales, plus that all five reasons
+render **one identical label**, which is what makes a single-string check sufficient.
+
+**Matching is per-term by mode, and that is not fussiness — one mode is wrong in two of
+these languages:**
+- **exact** — `до` is a Russian preposition; as a prefix it also fires on `документ`,
+  failing a *correct* label. A check that cries wolf is a check people delete.
+- **prefix (`утр*`)** — inflection: catches `утра` and `утром` without listing either.
+- **suffix (`*gacha`)** — **Uzbek is agglutinative and glues the postposition on**, so
+  "until morning" is the single token `ertalabgacha`, which a prefix match sails past.
+
+**All three modes proved independently, because an unexercised term in a forbidden list
+asserts nothing** — the same defect as prose, one layer down. Exact on a bare `до`;
+prefix on `Придержано до утра`; suffix on `tongacha` (chosen because it matches no
+listed prefix, so only the suffix rule can catch it); and the false-positive guard
+proved by a legitimate `документ` **passing**. English `Held until morning` and a clock
+time `Held · sends 06:00` both caught. Locale files restored and verified byte-clean
+afterwards.
+
+## 6. Method notes
 
 - **The flake did not reproduce, twice.** 181/181 in 2.3 min, and again in 3.4 min under
   load. That is not proof the intermittent failure is gone — it is intermittent by
   definition — but combined with the 80 ms ceiling it is enough to say the *mechanism*
-  §5 proposed is not the mechanism.
+  §4 proposed is not the mechanism.
 - **The instrumentation was thrown away.** Ready waits were measured with a temporary
   `console.log` over a real sweep, read, and removed. The number lives in the comment
   where the next person will read it, not in the harness where it would cost 181 lines
@@ -104,7 +150,7 @@ spacing, component pattern, navigation or notification class was touched.
   green was worthless; pytest was re-run on its own to confirm 1235. Worth remembering
   before trusting a piped suite.
 
-## 6. Exact next task
+## 7. Exact next task
 
 **1. Put a push on a real handset** — unchanged from 108 §7.2 and 107 §7.1, and now the
 top item. Still the only link in the notification stack no test here can exercise, and
@@ -121,27 +167,33 @@ schedule.
 has no reason to open the inbox. §13.3 forbids promising delivery; it does not forbid
 saying how many held notifications are unread. Shape is a §22.2 question.
 
-**4. A test that asserts the SHAPE of a suppression label** (108 §8). Every test compares
-against the i18n key, which is how "Held until morning" was wrong for four of five
-reasons across two sessions with a green suite throughout.
-
-**5. Watch whether prompted beliefs disagree with volunteered ones** (§23 entry 112).
+**4. Watch whether prompted beliefs disagree with volunteered ones** (§23 entry 112).
 Check before the 1/day cap is ever raised.
 
-**6. Give "claim paid" a second actor**, or accept it stays dormant (102 §4).
+**5. Give "claim paid" a second actor**, or accept it stays dormant (102 §4).
 
-**7. Coverage.** 9 states (WI IN IA MN KS KY MI OH TX). Unchanged.
+**6. Coverage.** 9 states (WI IN IA MN KS KY MI OH TX). Unchanged.
 
-## 7. Debt
+## 8. Debt
 
 **Closed from 108:** the box is current and the false copy is gone · the map states'
-`ready` budget is resolved — **as a measurement, not a change.**
+`ready` budget is resolved — **as a measurement, not a change** · the suppression-label
+shape test exists (§5), and took a fourth stale "defer" claim with it.
 
-**New this session (109):** none. The harness gained a diagnostic; nothing was deferred.
+**New this session (109):**
+- **The label test guards ONE string.** §13.3 says *no surface* may promise later
+  delivery; `TIME_PROMISE_TERMS` checks `notifications.held` and nothing else. The
+  quiet-hours caption, the class-switch copy and every server-side notification body are
+  unguarded, and the server's copy is English-only anyway (carried from 101). Widening it
+  means deciding which keys are in scope, which is a real question rather than a loop.
+- **The forbidden vocabulary is hand-maintained, per locale.** A seventh locale ships
+  with no terms and would pass vacuously — the same shape as the harness state that goes
+  green having measured nothing. There is no mechanism tying the term table to the locale
+  list; `locale-completeness.test.js` is where that link would belong.
 
 **Carried from 108:**
-- **An honest "what is waiting" surface does not exist** (§6.3 above).
-- **No test asserts the SHAPE of a suppression label** (§6.4 above).
+- **An honest "what is waiting" surface does not exist** (§7.3 above). The only
+  carried item from 108 still open.
 
 **Carried from 107:** a driver cannot override the zone if the browser reports it wrong
 (deliberate — §23 116's "no picker" reasoning).
@@ -171,11 +223,11 @@ detention terms not expressible in the UI · the profit calculator opens on inve
 defaults · dwell-risk thresholds unvalidated · `pin.shape` read by nothing · all live
 API keys on an internet-facing VM · **no backups** · **no monitoring**.
 
-## 8. Restarting
+## 9. Restarting
 
 ```
 make up                              # local stack
-make test                            # pytest 1235 + vitest 594 — do NOT pipe through tail (§5)
+make test                            # pytest 1235 + vitest 596 — do NOT pipe through tail (§6)
 make ui-layout                        # 181 states, ~2.5 min
 make lint                            # ruff + import-linter 30/30
 ```
@@ -190,3 +242,8 @@ claim that nobody had measured, in the same document. A number in a handoff is a
 too, and this one was off by two orders of magnitude and pointed the next session at a
 change that would have hidden a real bug. **Measure before you tune, especially when the
 last session already told you what the answer is.**
+
+**And the corollary, from §5.** 108 retired the "quiet hours defer" claim in three files
+and a fourth copy survived — in the test file for that exact feature, found only because
+someone opened it for an unrelated reason. **A claim does not live in one place.** When
+you retire one, grep for it; the copy you miss is the one that will be read next.
