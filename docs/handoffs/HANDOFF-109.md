@@ -1,9 +1,10 @@
 # HANDOFF-109 — the session that measured the flake instead of believing it
 
 **Project:** Haulmeter — Consolidated Trucker Platform (mobile-first, driver pays $0).
-**Date:** 31 July 2026 · **Stack:** **UP** · **Deployed:** https://haulmeter.online (GCE,
-`uzimiz-prod`) — **CURRENT.** 108's three commits are pushed and live, so the box has
-stopped telling drivers "Held until morning" about notifications that never arrive.
+**Date:** 31 July 2026 · **Stack:** **DOWN** (`make up` to start) · **Deployed:**
+https://haulmeter.online (GCE, `uzimiz-prod`) — **CURRENT and correct.** 108's three
+commits are pushed and live, so the box has stopped telling drivers "Held until morning"
+about notifications that never arrive.
 
 **State in one line:** the false copy is off production, and the layout harness's
 "known flake" turned out to be a real failure that the proposed fix would have buried.
@@ -11,29 +12,39 @@ stopped telling drivers "Held until morning" about notifications that never arri
 > This continues HANDOFF-108. It closes its §7.1, §7.3 and the label-shape half of its
 > §8, and it **corrects 108 §5**, which was wrong on the numbers.
 
+**Nothing is half-finished.** The working tree is clean, every test is green, and the
+two unpushed commits are complete units — see §1 and §7.1 for the one decision waiting
+on the owner.
+
 ---
 
 ## 1. Current state
 
 | Thing | Value |
 |---|---|
-| Migrations | head **0055_f08_push_subscription** (no new migration) |
-| Tests | **pytest 1235 · vitest 596 · ruff + import-linter 30/30** |
-| Layout | **181 states, 181 passed** — twice, once under heavy load. No flake observed. |
-| §23 decision log | **116 entries** (none added — see §4) |
+| Migrations | head **0055_f08_push_subscription** (no new migration this session) |
+| Tests | **pytest 1235 · vitest 596 · ruff + import-linter 30/30** — all green |
+| Layout | **181 states, 181 passed** — run three times, once under heavy load. No flake observed. |
+| §23 decision log | **116 entries** (none added — see §4 for why) |
 | Handoffs | 000 → 109 |
-| Git | **two commits ahead** of `origin/main` — the label test and this doc. The deploy and the harness fix are pushed. |
-| Deployed | **CURRENT** as of this session |
-| Working tree | clean except untracked `collect_files.py` (still not mine) |
+| Git | **two commits ahead** of `origin/main`: `d111a4b` (label test) and `d9235f3` (this doc). **Both are local-only and test/docs — nothing production-facing is unpushed.** |
+| Deployed | **CURRENT.** `af2dda1` and everything before it is on the box. |
+| Working tree | clean except untracked `collect_files.py` (still not mine, still untouched) |
+| Local stack | **DOWN**, brought down deliberately at end of session |
+
+**The two unpushed commits need no deploy** even when pushed: one is the Playwright
+harness, one is this document. Neither is in the built app. `git push` alone is enough.
 
 ## 2. What shipped
 
-| Commit | What |
-|---|---|
-| `5f987a9`…`71e1855` | 108's three commits — **pushed and deployed**, nothing new in them |
-| `af2dda1` | A `ready` timeout is a defect, not weather — and it now says which |
-| `d111a4b` | The SHAPE of a held label is asserted, not its i18n key (108 §8) |
-| _(this commit)_ | This handoff |
+| Commit | What | Pushed? |
+|---|---|---|
+| `71e1855`…`5f987a9` | 108's three commits — **pushed AND deployed**, nothing new in them | ✅ deployed |
+| `af2dda1` | A `ready` timeout is a defect, not weather — and it now says which | ✅ pushed |
+| `e6c0d5d` | This handoff, first form | ✅ pushed |
+| `d111a4b` | The SHAPE of a held label is asserted, not its i18n key (108 §8) | ❌ local |
+| `d9235f3` | This handoff, extended with §5 | ❌ local |
+| _(this commit)_ | This handoff, final form | ❌ local |
 
 ## 3. The deploy (108 §7.1, closed)
 
@@ -152,20 +163,38 @@ afterwards.
 
 ## 7. Exact next task
 
-**1. Put a push on a real handset** — unchanged from 108 §7.2 and 107 §7.1, and now the
-top item. Still the only link in the notification stack no test here can exercise, and
-**it needs the owner's hands.** Android Chrome on https://haulmeter.online, sign in,
-More → notifications, turn on **both** "Turn on alerts" and "Ask me about lots", park
-inside a truck-stop geofence for 15 minutes. **Confirm the tray actions appear and that
-tapping one posts the report WITHOUT opening the app.**
+**0. `git push`** — two local commits, `d111a4b` and `d9235f3` plus this one. **No deploy
+needed**: the harness and this document are not in the built app. This is the only loose
+end of the session and it is deliberate, not forgotten — rule 3 makes the push the
+owner's call each time.
 
-**2. If the layout sweep fails again, READ THE MESSAGE.** It now names the cause. If it
-says "the named surface did not open", that is a defect to chase, not a re-run to
-schedule.
+**1. Put a push on a real handset — THIS NEEDS THE OWNER'S HANDS, and no amount of
+further work here substitutes for it.** Unchanged from 108 §7.2 and 107 §7.1, and now
+the top item three sessions running. It is the only link in the notification stack that
+nothing in this repo can exercise: every layer beneath it is tested and green, and the
+whole feature is still unproven end to end.
+
+> Android Chrome on https://haulmeter.online → sign in → More → notifications →
+> turn on **BOTH** "Turn on alerts" and "Ask me about lots" → park inside a truck-stop
+> geofence for 15 minutes. **Confirm the tray actions appear, and that tapping one posts
+> the report WITHOUT opening the app.**
+>
+> If it fails, the likely suspects in order: the class opt-in (§23 114 — the switch that
+> did not exist), the IndexedDB token mirror (§23 113 — `sw.js` reads what `api.js`
+> writes), and `sw.js`'s hardcoded `/api/map/report` (correct in prod, wrong in dev).
+> iOS is untested and needs an INSTALLED PWA for push at all.
+
+**2. If the layout sweep fails, READ THE MESSAGE — do not re-run it.** As of `af2dda1`
+it names its own cause. "the named surface did not open" is a defect to chase; "#app
+NEVER MOUNTED" is the dev server. **Neither is load, and the budget does not need
+raising** — §4 is the measurement that settles it.
 
 **3. An honest "what is waiting" surface** (108 §8) — a driver who was not interrupted
-has no reason to open the inbox. §13.3 forbids promising delivery; it does not forbid
-saying how many held notifications are unread. Shape is a §22.2 question.
+has no reason to open the inbox, so a held notification can sit unseen indefinitely.
+§13.3 forbids promising delivery; it does not forbid saying how many held notifications
+are **unread**, which is a fact rather than a promise. **Shape is a §22.2 question and
+therefore an OWNER DECISION — do not improvise it.** §10.5 keeps it away from a badge,
+which rules out the obvious answer and is most of why this is still open.
 
 **4. Watch whether prompted beliefs disagree with volunteered ones** (§23 entry 112).
 Check before the 1/day cap is ever raised.
@@ -225,12 +254,30 @@ API keys on an internet-facing VM · **no backups** · **no monitoring**.
 
 ## 9. Restarting
 
+**The stack was brought DOWN at the end of this session.** Nothing is mid-migration and
+no container holds state that `make up` will not rebuild — Postgres is a named volume
+and survives.
+
 ```
-make up                              # local stack
-make test                            # pytest 1235 + vitest 596 — do NOT pipe through tail (§6)
-make ui-layout                        # 181 states, ~2.5 min
+make up                              # local stack — it is DOWN. Runs the port preflight first.
+make test                            # pytest 1235 + vitest 596
 make lint                            # ruff + import-linter 30/30
+make ui-layout                       # 181 states, ~2.5 min
+git push                             # two local commits; NO deploy needed (§7.0)
 ```
+
+**Three things that will save the next session time, all learned the hard way here:**
+
+- **Never pipe `make test` through `tail`/`grep`.** The pipeline reports the LAST
+  command's exit code, so a failing suite exits 0 and reads as green. Redirect to a file
+  and check `$?` instead. My first green this session was worthless.
+- **Other projects run on this machine** (`sift`, `atlas` containers were up throughout).
+  `make down` only touches LONGHAUL's compose project; leave the others alone. The port
+  preflight in `make up` is what protects against the collision.
+- **`make ui-layout-only STATE=<name>` (~45 s)** is the right loop while building. The
+  full sweep is for shared tokens, global stylesheets, `layout.spec.js` itself, and
+  handoffs. Note `STATE` is a `-g` pattern: `STATE="sheet-map-report — "` matches the
+  layout-rules test only, `STATE="sheet-map"` matches all six map sheets.
 
 **The standing warning, sixth form.** 104: a suite answers "does this do what it was
 written to do", never "is this reachable". 105: the agreement between two components can
