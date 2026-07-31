@@ -753,12 +753,67 @@ async function settle(page, live) {
   // measured against it. Silence here is the failure mode that kept the live Load
   // tab unmeasured for four sessions.
   if (live && live.ready) {
-    // 15 s, not 5. Under four workers the mocked overlay can land later than a
-    // lightly-loaded machine suggests, and a `ready` that times out looks exactly
-    // like a broken surface — which is how three states "failed" a run in which
-    // nothing about them was wrong.
-    await page.waitForSelector(live.ready, { state: "attached", timeout: 15_000 });
+    // 15 s is a BACKSTOP, not a tolerance, and the difference is the whole point.
+    //
+    // MEASURED, across a full 181-state sweep at four workers: the slowest `ready`
+    // in the suite resolves in 80 ms, and the map states everyone suspects — the
+    // ones that "timed out" — sit at 29-39 ms. The budget is ~190x the worst wait
+    // ever observed. Nothing here is marginal.
+    //
+    // So a timeout at 15 s does NOT mean "the machine was busy". A wait that is
+    // normally 39 ms does not become 15 000 ms under load; it becomes 80 ms. It
+    // means the selector NEVER ATTACHED — the app did not mount, or an `open` step
+    // clicked something whose handler was not wired, or the surface is genuinely
+    // broken. HANDOFF-108 §5 proposed raising this budget again; raising it would
+    // only make the same failure take twice as long to report, which is why the
+    // number is unchanged and this comment replaced the reasoning instead.
+    //
+    // What DID change: the failure now says which of those it was. A check that
+    // cannot explain itself is a check people learn to ignore, and two sessions
+    // guessing at "flake" is what that looks like.
+    try {
+      await page.waitForSelector(live.ready, { state: "attached", timeout: 15_000 });
+    } catch {
+      throw new Error(await readyDiagnosis(page, live));
+    }
   }
+}
+
+// AI-CONTEXT: turns a `ready` timeout from a guess into a finding.
+//
+// Only two verdicts, because only two are supported by what the DOM can show. An
+// unmounted #app is unambiguous: the dev server or a boot error, never load. Anything
+// else means the app booted and the named surface still did not open, which is a
+// defect — the same wait is tens of milliseconds in a healthy run.
+//
+// The open-step census is reported as EVIDENCE, never as a third verdict. A step
+// target missing at diagnosis time proves nothing on its own: `click()` would already
+// have thrown its own error had the target been absent when it mattered, and a chip
+// that is legitimately replaced by the sheet it opens is absent here for an innocent
+// reason. Naming that "the surface changed under the harness" would be the same
+// confident-and-unchecked reasoning §5 already cost two sessions.
+async function readyDiagnosis(page, live) {
+  const steps = (live.open || []).map((s) => s.click || s.upload || s);
+  const seen = await page.evaluate(
+    ([sels, readySel]) => {
+      const root = document.querySelector("#app");
+      return {
+        url: location.href,
+        mounted: !!(root && root.childElementCount),
+        bodyEls: document.querySelectorAll("body *").length,
+        steps: sels.map((s) => [s, document.querySelectorAll(s).length]),
+        ready: document.querySelectorAll(readySel).length,
+      };
+    },
+    [steps, live.ready],
+  );
+  if (!seen.mounted) {
+    return `ready "${live.ready}" never attached and #app NEVER MOUNTED (${seen.bodyEls} elements on ${seen.url}) — the app did not boot. Suspect the dev server or a runtime error, NOT load.`;
+  }
+  const census = seen.steps.length
+    ? seen.steps.map(([s, n]) => `${s}=${n}`).join(", ")
+    : "(no open steps)";
+  return `ready "${live.ready}" never attached (count ${seen.ready}) though #app mounted with ${seen.bodyEls} elements on ${seen.url}. The named surface did not open. This is a DEFECT, not load: the slowest ready in the whole sweep is 80 ms against a 15 s budget. Open-step targets at failure: ${census}.`;
 }
 
 // AI-CONTEXT: the theme dimension was REMOVED on evidence, not on a hunch.
