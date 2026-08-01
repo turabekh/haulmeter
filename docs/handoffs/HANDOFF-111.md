@@ -22,7 +22,7 @@ Everything is pushed and deployed.
 | Thing | Value |
 |---|---|
 | Migrations | head **0056_a09_facility_geog_idx** — the A9 §4 geography index, deployed |
-| Tests | **pytest 1297 · vitest 612 · layout 193 · ruff + import-linter 30/30** |
+| Tests | **pytest 1300 · vitest 612 · layout 193 · ruff + import-linter 30/30** |
 | §23 decision log | **119 entries** — 117 approved, 118 the delegation, 119 the §18 portal list |
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
@@ -537,6 +537,40 @@ pins, Chicago 9, St Louis 9, Fargo 3.
 **Backup taken and restore re-verified at the new size** — 8,316 facility rows including
 merged, alembic head matching, PostGIS intact. That number is worth noting on its own: the
 registry has grown ~70% today and the restore proof still runs in the nightly window.
+
+## 20. Chunked commits — 3.07 GiB became 177 MiB, measured on the box
+
+Streaming the read fixed the parse and not the ingest; `ingest_records` accumulated every
+ORM object until the end. `commit_every` closes that, with `expunge_all` doing the part
+that actually frees anything — committing alone shrinks the transaction and not the
+process.
+
+Measured during a real us-midwest run on the deployed box:
+
+| | container peak |
+|---|---|
+| one transaction | **3.07 GiB** of 3.83 |
+| chunked at 500 | **177 MiB**, settling at 103 |
+
+**The comparison is not perfectly like-for-like and should not be quoted as if it were:**
+the 3.07 GiB run created 1,800 facilities, and this one matched all 7,033 because the data
+was already there. The accumulation the fix targets happens on both paths, but a
+create-heavy region will sit somewhere above 177 MiB.
+
+**Off by default**, and only when the caller asked for a commit at all — `commit=False`
+means nothing persists, and chunking that ignored it would break that promise quietly.
+The trade (a dead run leaves earlier chunks committed) is safe only because ingest is
+idempotent on `(source_kind, external_ref)`.
+
+**Two assertions were written and thrown away, which is the part worth keeping.**
+"Another connection sees the rows mid-run" is untestable through the fixture at all —
+`db` joins an outer transaction with `create_savepoint`, so a commit releases a savepoint
+and nothing becomes visible to anyone. And "the identity map is empty after a chunk" was
+**vacuous**: it is weakly referenced, so it is empty with or without chunking. The
+contrast test written to guard that assertion is what caught it — without the contrast it
+would have been a green test measuring nothing, on the same day this session found five
+of those. The tests assert the cadence and the resume property; the memory claim is
+settled above, where it is real.
 
 ## 7. Debt
 
