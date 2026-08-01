@@ -624,8 +624,19 @@ def _centroid(geom: dict) -> tuple[float, float] | None:
     return None
 
 
+# AI-CONTEXT: `osmium export` emits no `@id`, so the coordinate-string fallback below is
+# what 21,265 of the registry's 21,268 osm source rows are ACTUALLY keyed on. It is not a
+# unique id — us-south contains six coordinates carrying more than one feature, and the
+# second insert violates `uq_source_record_kind_ref`. That is how an 800 MB region ingest
+# died three quarters of the way through.
+#
+# The FIRST feature at a point keeps the bare "lat,lon", deliberately. A cleaner scheme
+# (a digest of tags+coords, or re-exporting with `--add-unique-id`) would change every
+# existing ref, orphan all 21,265 rows, and re-create the registry as duplicates on the
+# next ingest — a far larger accident than the one being fixed. Recorded as debt instead.
 def parse_osm(geojson: dict) -> list[StagedRecord]:
     out: list[StagedRecord] = []
+    seen_refs: dict[str, int] = {}
     for feature in geojson.get("features", []):
         tags = feature.get("properties") or {}
         ftype = _osm_type(tags)
@@ -636,6 +647,11 @@ def parse_osm(geojson: dict) -> list[StagedRecord]:
             continue
         lat, lon = center
         osm_id = str(tags.get("@id") or tags.get("id") or feature.get("id") or f"{lat},{lon}")
+        if osm_id in seen_refs:
+            seen_refs[osm_id] += 1
+            osm_id = f"{osm_id}#{seen_refs[osm_id]}"
+        else:
+            seen_refs[osm_id] = 1
         name = normalize_name(tags.get("name") or "") or placeholder_name(ftype)
         amenities = []
         if tags.get("shower") == "yes" or tags.get("amenity") == "shower":

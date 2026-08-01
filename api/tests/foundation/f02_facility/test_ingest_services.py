@@ -329,3 +329,35 @@ def test_a_truck_TERM_must_be_a_word_not_a_fragment():
     assert adapters.osm_serves_trucks({"name": "Zt Auto & Truck"})
     assert adapters.osm_serves_trucks({"name": "Woodford Diesel Performance Llc"})
     assert adapters.osm_serves_trucks({"name": "Big Rig Chrome Shop"})
+
+
+def test_two_unnamed_features_at_the_SAME_POINT_get_different_refs():
+    """Found by us-south failing on `uq_source_record_kind_ref` after 800 MB of it had
+    already loaded.
+
+    `osmium export` emits no `@id`, so the fallback — the coordinate string — is what
+    21,265 of the registry's 21,268 osm source rows are actually keyed on. It is not a
+    unique id: us-south contains six coordinates shared by more than one feature, and
+    the second insert violates the constraint.
+
+    The FIRST feature at a point keeps the bare `lat,lon`, deliberately. Changing that
+    would orphan every existing row and re-create the whole registry as duplicates on
+    the next ingest — a much larger accident than the one being fixed."""
+    doc = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [-80.8315948, 25.32376102]},
+                "properties": {"amenity": "parking", "hgv": "designated"},
+            },
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [-80.8315948, 25.32376102]},
+                "properties": {"amenity": "truck_stop", "hgv": "yes"},
+            },
+        ],
+    }
+    refs = [r.external_ref for r in facility.parse_osm(doc)]
+    assert len(refs) == len(set(refs)), f"colliding refs: {refs}"
+    assert refs[0] == "25.32376102,-80.8315948", "the first must keep the bare form"
