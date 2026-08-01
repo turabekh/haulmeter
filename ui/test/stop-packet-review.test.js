@@ -12,6 +12,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import StopPacketsSurface from "../src/surfaces/StopPacketsSurface.vue";
+import LoadSurface from "../src/surfaces/LoadSurface.vue";
 import { routes } from "../src/router.js";
 import { setToken, logout } from "../src/core/api.js";
 import en from "../src/core/i18n/en.json";
@@ -94,5 +95,42 @@ describe("Stop packet review (A1 req 5)", () => {
     await w.find(".packet__send").trigger("click");
     await flushPromises();
     expect(w.text()).toContain(en["packet.send_failed"]);
+  });
+});
+
+
+// AI-CONTEXT: the cross-link. A queue nobody can reach is a queue that fills up in
+// private — which is worse than the feature being absent, because the driver believes
+// their paperwork is handled. NAV-5: cross-links are VERBS, not menu entries.
+describe("Load tab — reaching the queue (NAV-5)", () => {
+  it("offers the link only when paperwork is actually waiting", async () => {
+    // absent rather than empty, like the vendor section and the dwell-risk row. §10.2's
+    // Load tab is dense already, and a permanent "0 waiting" row is noise on the screen
+    // a driver reads at a dock.
+    setToken("tok");
+    const stub = vi.fn((url) =>
+      String(url).includes("/protection/stop-packets")
+        ? jsonOk([])
+        : jsonOk({}),
+    );
+    vi.stubGlobal("fetch", stub);
+    const w = mount(LoadSurface, { global: { plugins: [router()] } });
+    await flushPromises();
+    expect(w.find(".load__packets").exists()).toBe(false);
+  });
+
+  it("names how many and links to the review screen", async () => {
+    setToken("tok");
+    const stub = vi.fn((url) =>
+      String(url).includes("/protection/stop-packets")
+        ? jsonOk([PACKET])
+        : jsonOk({}),
+    );
+    vi.stubGlobal("fetch", stub);
+    const w = mount(LoadSurface, { global: { plugins: [router()] } });
+    await flushPromises();
+    const link = w.find(".load__packets");
+    expect(link.exists()).toBe(true);
+    expect(link.attributes("href")).toContain("/protection/packets");
   });
 });

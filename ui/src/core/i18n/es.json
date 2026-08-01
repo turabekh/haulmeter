@@ -602,6 +602,7 @@
   "packet.title": "Papeleo por enviar",
   "packet.to": "Para",
   "packet.unknown_recipient": "Destinatario desconocido",
+  "packet.waiting": "{n} paquete en espera — revíselo antes de enviarlo",
   "place.back": "Volver a mi ubicación",
   "place.button": "Otro lugar",
   "place.failed": "No se pudo conectar con el buscador de lugares. Revisa tu conexión e inténtalo de nuevo.",

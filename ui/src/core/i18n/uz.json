@@ -602,6 +602,7 @@
   "packet.title": "Yuboriladigan hujjatlar",
   "packet.to": "Kimga",
   "packet.unknown_recipient": "Qabul qiluvchi noma'lum",
+  "packet.waiting": "{n} ta paket kutmoqda — yuborishdan oldin tekshiring",
   "place.back": "O‘zimga qaytish",
   "place.button": "Boshqa joy",
   "place.failed": "Joy qidiruvchisiga ulanib bo‘lmadi. Aloqani tekshirib, qayta urinib ko‘ring.",

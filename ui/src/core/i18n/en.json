@@ -602,6 +602,7 @@
   "packet.title": "Paperwork to send",
   "packet.to": "To",
   "packet.unknown_recipient": "Unknown recipient",
+  "packet.waiting": "{n} packet waiting — check before it sends",
   "place.back": "Back to me",
   "place.button": "Somewhere else",
   "place.failed": "Could not reach the place finder. Check your connection and try again.",

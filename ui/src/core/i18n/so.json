@@ -602,6 +602,7 @@
   "packet.title": "Waraaqaha la dirayo",
   "packet.to": "Loo dirayo",
   "packet.unknown_recipient": "Qofka la diray lama garanayo",
+  "packet.waiting": "{n} xirmo ayaa sugaya — hubi ka hor inta aan la dirin",
   "place.back": "Ku noqo halkayga",
   "place.button": "Meel kale",
   "place.failed": "Lama gaari karin raadiyaha goobaha. Hubi xiriirkaaga oo mar kale isku day.",

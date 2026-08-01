@@ -30,7 +30,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { Check, Camera, Send, Clock, TriangleAlert, ChevronDown } from "lucide-vue-next";
-import { useRouter } from "vue-router";
+import { RouterLink, useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import IncidentSheet from "../core/components/IncidentSheet.vue";
@@ -46,6 +46,7 @@ import {
   arriveAtStop,
   fetchMeter,
   fetchActiveLoad,
+  fetchStopPackets,
   fetchLoadHistory,
   endActiveLoad,
   sendDetentionNotice,
@@ -88,6 +89,14 @@ const snapping = ref(false);
 // §10.2's empty-state action. The manual "Start a load" form now lives inside this
 // sheet as the fallback when a rate con cannot be read, rather than as a rival action.
 const importing = ref(false);
+// AI-CONTEXT: A1 req 5's cross-link (NAV-5 — cross-links are VERBS). A queue nobody can
+// reach is a queue that fills up in private, which is worse than the feature being
+// absent: the driver believes their paperwork is handled.
+//
+// ABSENT when empty, like the vendor section and the dwell-risk row. §10.2's Load tab is
+// dense already, and a permanent "0 waiting" line is noise on the screen a driver reads
+// at a dock.
+const waitingPackets = ref([]);
 // §10.2's single-CTA rule, honoured without stranding capability: the rungs the
 // ladder passes over and this stop's other actions live one tap away in a sheet.
 const more = ref(false);
@@ -215,6 +224,16 @@ async function loadMeter() {
 }
 
 onMounted(async () => {
+  // A1: what is waiting for this driver to look at. Failure is silent on purpose — the
+  // Load tab's job is the meter, and a paperwork fetch that 500s must not take the
+  // detention clock down with it.
+  if (isAuthenticated.value) {
+    try {
+      waitingPackets.value = await fetchStopPackets();
+    } catch {
+      waitingPackets.value = [];
+    }
+  }
   // no locally-remembered stop? ask the server if this driver has one armed
   // (fresh-device resume) before settling on the resting Meter.
   if (!activeStopId.value && isAuthenticated.value) {
@@ -453,6 +472,12 @@ async function endLoad() {
 <template>
   <div class="load">
     <p v-if="incidentToast" class="toast" role="status">{{ incidentToast }}</p>
+
+    <!-- A1 req 5: the driver's way into the review queue. A verb, and a count, because
+         "2 waiting" is a different decision from "1". -->
+    <RouterLink v-if="waitingPackets.length" class="load__packets" to="/protection/packets">
+      {{ t("packet.waiting", { n: waitingPackets.length }) }}
+    </RouterLink>
 
     <section class="card meter-card">
       <TheMeter :label="meterLabel" :figure="meterFigure" :variant="variant" :status="meterStatus" />
@@ -824,6 +849,21 @@ async function endLoad() {
 </template>
 
 <style scoped>
+/* the cross-link reads as an action, not a banner: hairline card, thumb-height, and it
+   is absent entirely when nothing waits (§10.2 keeps this tab dense with WORK) */
+.load__packets {
+  display: block;
+  min-height: 56px;
+  padding: var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
+  background: var(--ink-1);
+  color: var(--text-1);
+  font-size: var(--type-label-size);
+  line-height: var(--type-body-line);
+  text-decoration: none;
+}
+
 .load {
   padding: var(--s-4);
 }

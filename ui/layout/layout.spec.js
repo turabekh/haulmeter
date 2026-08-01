@@ -675,6 +675,27 @@ const SURFACES = [
   ["map-preset-service", "/", {
     mocks: mapMocks(REPAIR_PIN), open: [{ click: ".chip", nth: 5 }], ready: ".chip[aria-selected='true']",
   }],
+  // A1's cross-link on the Load tab, measured because it lands on the densest driver
+  // screen in the product — §10.2 is the Meter plus the stop context plus the evidence
+  // checklist, and a new row there has to earn its 56 dp at 360.
+  ["load-packet-waiting", "/load", {
+    mocks: {
+      ...LIVE_MOCKS,
+      "/protection/stop-packets": [
+        {
+          id: "11111111-1111-1111-1111-111111111111",
+          state: "draft",
+          drafted_at: "2026-08-01T12:00:00+00:00",
+          reference: "BL-77421",
+          recipient: "accountspayable@boltlogistics.example",
+          counterparty_name: "Bolt Logistics",
+          facility_name: "Midwest Distribution Center — Dock 4",
+        },
+      ],
+    },
+    stop: LIVE_STOP,
+    ready: ".load__packets",
+  }],
   // A1 req 5's review screen — a new surface, so it is measured at 360 dp with the rest
   // rather than shipping unseen. Two states because the EMPTY one is what most drivers
   // see most days, and §15.3 gives it a sentence rather than a blank page.
