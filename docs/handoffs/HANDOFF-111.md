@@ -22,8 +22,8 @@ Everything is pushed and deployed.
 | Thing | Value |
 |---|---|
 | Migrations | head **0056_a09_facility_geog_idx** — the A9 §4 geography index, deployed |
-| Tests | **pytest 1289 · vitest 607 · layout 193 · ruff + import-linter 30/30** |
-| §23 decision log | **118 entries** — 117 (Service chip) **approved**, 118 (the delegation) added |
+| Tests | **pytest 1290 · vitest 609 · layout 193 · ruff + import-linter 30/30** |
+| §23 decision log | **119 entries** — 117 approved, 118 the delegation, 119 the §18 portal list |
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
 | Deployed | **CURRENT** — A5, A12, **all nine states re-extracted**, backups, alerting |
@@ -339,6 +339,36 @@ whether or not the id resolves. It passed against the broken code and proved not
 **Still open from §5: the admin merge-review SURFACE.** `GET /admin/facilities/{id}/duplicates`
 is the API half and shows exactly what the pipeline would have considered a duplicate — the
 same function, so the two cannot drift. There is no UI on it.
+
+## 14. The merge-review surface existed — it just could not be reviewed with
+
+A9 §5 asks for one. **It already exists**: `AdminData` has the facilities table, a
+per-facility "possible duplicates" button, and a merge action calling the same
+`find_duplicate_candidates` the pipeline uses, so the two cannot drift. **Fourth v2.0
+claim this session that does not match the code**, after A5's "most of this exists",
+`search_service_facilities`, and A3.
+
+So the work was not building it. It was making it reviewable:
+
+- **A suggestion is a figure**, and §11.7 does not let one travel without what produced
+  it. The console rendered a candidate's NAME and nothing else — an operator deciding
+  "same place?" could not tell 5 m from 140 m, which is the difference between one site
+  mapped twice and the rest area on the other carriageway. It carries **distance and
+  kind** now: the evidence judging 95 merges by hand actually needed today.
+- **A merge happened on one click**, and there is no unmerge from this console. §8 gives
+  destructive actions their own confirm; this one names both sites, the distance, and
+  says plainly that it cannot be undone. Composed from AdminFlags' existing confirm.
+
+Both proved red by reverting the template. Six locales.
+
+**§23 entry 119 records rather than decides.** The Admin Console is a §18 portal and has
+been one in the code for many sessions — `meta: {portal: true}`, `max-width: 1200px`,
+which is §18's own figure — while §18 still opened *"the ONLY non-mobile-first surfaces"*
+and named three. The vendor portal was a fifth, logged as E-D3 because it needed logging;
+§18's list never caught up. **A document that says "only these three" while the product
+ships five is not stricter, it is unreliable** — the next session finds a surface that is
+not on the list and has to guess whether that is a defect or an omission. LAW 0 is
+untouched, and its closing sentence still means what it says.
 
 ## 7. Debt
 
