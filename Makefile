@@ -158,16 +158,16 @@ repair-contact:
 # restart. Both happened. The bucket is the copy that survives; the container's is
 # disposable and treated that way.
 osm-publish:
-	@test -f api/data/osm/$(STATE).geojson || (echo "no api/data/osm/$(STATE).geojson — run osm-extract first"; exit 1)
-	gzip -c api/data/osm/$(STATE).geojson > /tmp/$(STATE).geojson.gz
-	gcloud storage cp /tmp/$(STATE).geojson.gz gs://haulmeter-sources/osm/$(STATE).geojson.gz
-	@rm -f /tmp/$(STATE).geojson.gz
-	@echo "published gs://haulmeter-sources/osm/$(STATE).geojson.gz"
+	@test -f api/data/osm/$(NAME).geojson || (echo "no api/data/osm/$(NAME).geojson — run osm-extract first"; exit 1)
+	gzip -c api/data/osm/$(NAME).geojson > /tmp/$(NAME).geojson.gz
+	gcloud storage cp /tmp/$(NAME).geojson.gz gs://haulmeter-sources/osm/$(NAME).geojson.gz
+	@rm -f /tmp/$(NAME).geojson.gz
+	@echo "published gs://haulmeter-sources/osm/$(NAME).geojson.gz"
 
 # pull that extract onto the DEPLOYED box and ingest it, then print the snapshot row
 # so what the box is running is answerable (A12 req 3)
 ingest-remote:
-	@bash scripts/ingest_remote.sh $(STATE)
+	@bash scripts/ingest_remote.sh $(NAME)
 
 # A9 §5: merge the duplicates the OLD geohash blocking missed — "Flying J Travel
 # Center" twice, 3 m apart, because a cell boundary ran between them. DRY_RUN=0 applies.
@@ -181,15 +181,24 @@ repair-duplicates:
 # written here. A hand-kept copy lived in this recipe and drifted from the rules until
 # six of the eight service rules were starved of the tags they read — no tire shop or
 # repair yard could enter the registry by any path. Do not inline the tags again.
+# A9 §2: "Batch by Geofabrik region rather than by state — four downloads instead of
+# 51." A region lives one path level up from a state (north-america/us-midwest vs
+# north-america/us/wisconsin), so NAME carries whichever you asked for and GEO_PATH
+# resolves it. `make osm-extract STATE=wisconsin` and `make osm-extract REGION=us-midwest`
+# both work, and everything downstream — the rendered tag filter, osm-publish,
+# ingest-remote — is identical either way.
+NAME = $(if $(REGION),$(REGION),$(STATE))
+GEO_PATH = $(if $(REGION),$(REGION),us/$(STATE))
+
 osm-extract:
 	mkdir -p api/data/osm
-	curl -fSL -o api/data/osm/$(STATE).osm.pbf \
-	  https://download.geofabrik.de/north-america/us/$(STATE)-latest.osm.pbf
+	curl -fSL -o api/data/osm/$(NAME).osm.pbf \
+	  https://download.geofabrik.de/north-america/$(GEO_PATH)-latest.osm.pbf
 	TAGS="$$($(COMPOSE) run --rm --no-deps -T api python -m scripts.osm_filter_args)"; \
 	test -n "$$TAGS" || (echo "osm_filter_args produced nothing — refusing to extract" && exit 1); \
 	docker run --rm -v "$(PWD)/api/data/osm:/data" $(OSMIUM_IMAGE) sh -c "\
 	  apt-get update -qq && apt-get install -y -qq --no-install-recommends osmium-tool >/dev/null && \
-	  osmium tags-filter /data/$(STATE).osm.pbf $$TAGS \
-	    -o /data/$(STATE)-filtered.osm.pbf --overwrite && \
-	  osmium export /data/$(STATE)-filtered.osm.pbf -o /data/$(STATE).geojson --overwrite"
-	@echo "wrote api/data/osm/$(STATE).geojson"
+	  osmium tags-filter /data/$(NAME).osm.pbf $$TAGS \
+	    -o /data/$(NAME)-filtered.osm.pbf --overwrite && \
+	  osmium export /data/$(NAME)-filtered.osm.pbf -o /data/$(NAME).geojson --overwrite"
+	@echo "wrote api/data/osm/$(NAME).geojson"
