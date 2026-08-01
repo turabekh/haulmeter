@@ -27,6 +27,8 @@ const confirming = ref(null);
 const scopes = ref([]);
 const scope = ref("global");
 const config = ref({});
+const declarations = ref({});
+const errors = ref({});
 const provenance = ref({});
 const draft = ref({});
 
@@ -74,18 +76,49 @@ async function toggleGate(flag, gate) {
   await load();
 }
 
+// AI-CONTEXT: DECLARED keys as well as set ones. This panel rendered `body.entries` —
+// rows that EXIST — so a key nobody had configured yet appeared nowhere, and A1 req 1's
+// capture checklist is the first config any component in the product reads. "It is
+// configuration, not code" is only true if an operator can find it.
 async function loadConfig() {
   const body = await fetchConfig(scope.value);
-  config.value = body.entries;
+  const declared = body.declared || {};
+  const merged = {};
+  for (const [key, row] of Object.entries(declared)) merged[key] = row.value;
+  Object.assign(merged, body.entries || {});
+  config.value = merged;
+  declarations.value = declared;
   provenance.value = body.provenance || {};
-  draft.value = { ...body.entries };
+  draft.value = Object.fromEntries(Object.entries(merged).map(([k, v]) => [k, asText(v)]));
+  errors.value = {};
+}
+
+// an object rendered into a text input is "[object Object]", and saving that writes the
+// string back — the operator destroys the config they opened the page to adjust.
+function asText(value) {
+  return value !== null && typeof value === "object" ? JSON.stringify(value) : value;
 }
 
 async function save(key) {
   const raw = draft.value[key];
-  // numbers stay numbers: a config read as "28" where 28 was meant is a silent
-  // type change that only shows up as odd behaviour later
-  const value = raw !== "" && !isNaN(Number(raw)) ? Number(raw) : raw;
+  let value;
+  const text = String(raw).trim();
+  if (text.startsWith("{") || text.startsWith("[")) {
+    // structured config (the capture checklist is a dict of stop type -> items).
+    // A malformed edit must NOT be saved as its own broken text: `capture_checklist`
+    // would read a quoted blob as a list of characters and ask for nothing coherent.
+    try {
+      value = JSON.parse(text);
+    } catch {
+      errors.value = { ...errors.value, [key]: true };
+      return;
+    }
+  } else {
+    // numbers stay numbers: a config read as "28" where 28 was meant is a silent
+    // type change that only shows up as odd behaviour later
+    value = raw !== "" && !isNaN(Number(raw)) ? Number(raw) : raw;
+  }
+  errors.value = { ...errors.value, [key]: false };
   await saveConfig(key, value, scope.value);
   await loadConfig();
 }
@@ -181,6 +214,14 @@ onMounted(async () => {
           <tr v-for="(value, key) in config" :key="key">
             <td class="table__name">
               {{ key }}
+              <!-- what is tunable but untouched: an operator comparing what they
+                   changed against what shipped needs to see which is which -->
+              <div v-if="declarations[key] && !declarations[key].set" class="table__muted">
+                {{ t("admin.cfg.default") }}
+              </div>
+              <div v-if="declarations[key]?.description" class="table__muted">
+                {{ declarations[key].description }}
+              </div>
               <!-- provenance: who set this, when, and what it replaced -->
               <div v-if="provenance[key]?.set_by" class="table__muted">
                 {{ t("admin.cfg.set_by") }} {{ provenance[key].set_by }}
@@ -191,6 +232,7 @@ onMounted(async () => {
             </td>
             <td>
               <input v-model="draft[key]" class="field__input" type="text" />
+              <div v-if="errors[key]" class="table__muted">{{ t("admin.cfg.bad_json") }}</div>
             </td>
             <td>
               <button class="btn" type="button" @click="save(key)">{{ t("admin.add") }}</button>

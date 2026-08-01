@@ -298,7 +298,18 @@ def get_config(
             "set_by": actor.email if actor else None,
             "previous": (last.before or {}).get("value") if last else None,
         }
-    return {"scope": scope, "entries": entries, "provenance": provenance}
+    # AI-CONTEXT: DECLARED keys too — this endpoint listed only rows that exist, so a
+    # key nobody had set yet appeared nowhere, and `/config/scopes` two lines down
+    # promised an operator "never has to guess a scope name to discover what is
+    # configurable" while guessing the KEY stayed the only way in. A1 req 1's capture
+    # checklist is the first config any component reads, and it would have shipped as
+    # configuration nobody could find.
+    return {
+        "scope": scope,
+        "entries": entries,
+        "provenance": provenance,
+        "declared": flags.declared_configs(db, scope),
+    }
 
 
 @router.get("/config/scopes")
@@ -306,10 +317,13 @@ def config_scopes(
     _admin: identity.Account = Depends(current_admin),
     db: Session = Depends(get_db),
 ) -> list[str]:
-    # every scope that actually has entries, so an operator never has to guess a
-    # scope name to discover what is configurable
-    rows = db.execute(select(flags.ConfigEntry.scope).distinct().order_by(flags.ConfigEntry.scope))
-    return [row[0] for row in rows]
+    # every scope that has entries OR declarations. Entries alone meant a box where
+    # nothing had been configured yet returned an EMPTY list — so the console's scope
+    # dropdown was empty, and the declared keys behind it were unreachable. The promise
+    # in the line below was the one this endpoint was failing to keep.
+    rows = db.execute(select(flags.ConfigEntry.scope).distinct())
+    declared = db.execute(select(flags.ConfigDeclaration.scope).distinct())
+    return sorted({row[0] for row in rows} | {row[0] for row in declared})
 
 
 @router.post("/config")

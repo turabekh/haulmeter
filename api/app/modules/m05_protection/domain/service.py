@@ -53,6 +53,14 @@ def register_module(db: Session) -> None:
     from app.foundation.f14_admin import public as admin
 
     flags.register_flag(db, FLAG_KEY, description="M5 Protection & Document Wallet")
+    # A1 req 1 — the checklist is configuration, so an operator has to be able to FIND
+    # it. Declaring does not write a value: see ConfigDeclaration's AI-CONTEXT.
+    flags.register_config(
+        db,
+        CAPTURE_CHECKLIST_CONFIG,
+        DEFAULT_CAPTURE_CHECKLIST,
+        "Capture checklist per stop type (A1 req 1)",
+    )
     admin.register_admin_view(db, "m05.protection", MODULE, "Protection", "/admin/m05/protection")
 
 

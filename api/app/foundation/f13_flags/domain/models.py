@@ -54,6 +54,31 @@ class ValidationGate(Base):
     flag: Mapped[FeatureFlag] = relationship(back_populates="gates")
 
 
+class ConfigDeclaration(Base):
+    """AI-CONTEXT: what is configurable, as opposed to what has been configured.
+
+    `ConfigEntry` holds rows that EXIST, and `/admin/config` lists exactly those — so a
+    key nobody had set yet appeared nowhere, and its own endpoint promised an operator
+    "never has to guess a scope name to discover what is configurable" while guessing
+    the KEY remained the only way in.
+
+    Declaring is deliberately NOT setting. Seeding the default into a ConfigEntry would
+    pin it at the moment the box first booted, and every later change to the code
+    default would silently fail to apply anywhere that had ever run.
+    """
+
+    __tablename__ = "config_declaration"
+    __table_args__ = {"schema": SCHEMA}
+
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    scope: Mapped[str] = mapped_column(String(60), index=True, default="global")
+    default_value: Mapped[dict] = mapped_column(JSON, default=dict)
+    description: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    declared_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ConfigEntry(Base):
     __tablename__ = "config_entry"
     __table_args__ = {"schema": SCHEMA}

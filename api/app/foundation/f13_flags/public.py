@@ -6,13 +6,14 @@ validation gates are activation preconditions; the config registry holds runtime
 tables. Consumed by every module.
 """
 
-from .domain.models import ConfigEntry, FeatureFlag, ValidationGate
+from .domain.models import ConfigDeclaration, ConfigEntry, FeatureFlag, ValidationGate
 from .domain.service import (
     FlagNotFound,
     GateNotSatisfied,
     add_gate,
     can_activate,
     clear_kill,
+    declared_configs,
     disable,
     enable,
     get_config,
@@ -21,6 +22,7 @@ from .domain.service import (
     is_enabled,
     is_switched_off,
     kill,
+    register_config,
     register_flag,
     satisfy_gate,
     set_config,
@@ -28,6 +30,7 @@ from .domain.service import (
 )
 
 __all__ = [
+    "ConfigDeclaration",
     "ConfigEntry",
     "FeatureFlag",
     "ValidationGate",
@@ -38,12 +41,14 @@ __all__ = [
     "clear_kill",
     "disable",
     "enable",
+    "declared_configs",
     "get_config",
     "get_gate",
     "get_scope",
     "is_enabled",
     "is_switched_off",
     "kill",
+    "register_config",
     "register_flag",
     "satisfy_gate",
     "set_config",

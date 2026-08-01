@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import ConfigEntry, FeatureFlag, ValidationGate
+from .models import ConfigDeclaration, ConfigEntry, FeatureFlag, ValidationGate
 
 
 class GateNotSatisfied(Exception):
@@ -174,6 +174,47 @@ def is_enabled(db: Session, flag_key: str) -> bool:
 
 
 # --- Config registry ---
+def register_config(db: Session, key: str, default, description: str | None = None,
+                    scope: str = "global") -> "ConfigDeclaration":
+    """Declare that a key is tunable, WITHOUT writing a value for it.
+
+    Called from `register_module`, which runs on every boot — so it is idempotent, and a
+    code default that changed is what the console shows afterwards. See the model's
+    AI-CONTEXT for why this does not seed a ConfigEntry."""
+    row = db.get(ConfigDeclaration, key)
+    if row is None:
+        row = ConfigDeclaration(
+            key=key, scope=scope, default_value=default, description=description
+        )
+        db.add(row)
+    else:
+        row.default_value = default
+        row.description = description
+        row.scope = scope
+    db.flush()
+    return row
+
+
+def declared_configs(db: Session, scope: str = "global") -> dict:
+    """Everything tunable in this scope, whether or not anyone has tuned it — with the
+    shipped default beside the set value, because an operator comparing what they
+    changed against what shipped needs both."""
+    out = {}
+    for row in db.scalars(
+        select(ConfigDeclaration).where(ConfigDeclaration.scope == scope).order_by(
+            ConfigDeclaration.key
+        )
+    ):
+        entry = db.get(ConfigEntry, row.key)
+        out[row.key] = {
+            "default": row.default_value,
+            "description": row.description,
+            "set": entry is not None,
+            "value": entry.value if entry is not None else row.default_value,
+        }
+    return out
+
+
 def set_config(db: Session, key: str, value, scope: str = "global") -> ConfigEntry:
     entry = db.get(ConfigEntry, key)
     if entry is None:
