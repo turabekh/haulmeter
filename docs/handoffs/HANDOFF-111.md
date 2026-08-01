@@ -22,12 +22,12 @@ Everything is pushed and deployed.
 | Thing | Value |
 |---|---|
 | Migrations | head **0056_a09_facility_geog_idx** — the A9 §4 geography index, deployed |
-| Tests | **pytest 1270 · vitest 607 · layout 193 · ruff + import-linter 30/30** |
+| Tests | **pytest 1282 · vitest 607 · layout 193 · ruff + import-linter 30/30** |
 | §23 decision log | **118 entries** — 117 (Service chip) **approved**, 118 (the delegation) added |
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
 | Deployed | **CURRENT** — A5, A12, **all nine states re-extracted**, backups, alerting |
-| Coverage | `repair` **12 → 458** · callable phones **0 → 807** (§10) |
+| Coverage | `repair` **12 → 449** · callable phones **0 → 756** (§10), after §12's dedupe |
 | Backups | **gs://haulmeter-backups**, nightly 03:30 UTC, 30-day lifecycle, **restore proven** |
 | Alerting | GCP uptime check + policy → **turabekh@gmail.com**, **delivery confirmed by the owner** |
 
@@ -155,7 +155,13 @@ a restore performed and verified, an alert triggered deliberately and received.
 box. See §10. The manual step is gone: `make osm-publish STATE=x` then
 `make ingest-remote STATE=x`.
 
-**4. A9's §4 gate is measured and half-done** (§11). The geography index is in and deployed;
+**4. A9's §4 and §5 gates are both measured and done** (§11, §12). What remains of A9 is
+the **admin merge-review surface** §5 also asks for, and `/admin/facilities/*` still not
+resolving merged ids — the 95 merges made today mean 95 more ids where an admin URL and a
+driver URL answer about different places. That is now the oldest untouched item in A9.
+Superseded detail follows for the record:
+
+**(was) A9's §4 gate is measured and half-done** (§11). The geography index is in and deployed;
 `_enrich` is bounded at ~275 ms worst case and does NOT block a national run. What A9 still
 needs is its own §5 — **dedupe at density**, which is the untested one: geohash-7 blocking
 with 0.4 name similarity will produce more false merges once metros are dense, and
@@ -253,6 +259,49 @@ return clusters instead of pins, which is §11.5 working as designed.
 ~60 ms of fixed overhead swamped the difference. And an 800 ms figure from `curl` on my
 machine was almost entirely WAN latency to us-central1. **Neither a dev container nor a
 laptop round-trip is a performance measurement.**
+
+## 12. A9 §5 measured — the fear was right, the cause was wrong
+
+§5 predicts geohash blocking at 0.4 similarity "will produce more false merges once metros
+are dense". Measured on the nine-state registry:
+
+- **Not one** of the 1,078 merges happened beyond 150 m. A geohash-7 cell is ~153 m, so the
+  name path was already bounded by its own blocking — it could never have merged two Pilots
+  a kilometre apart.
+- **What it does instead is MISS.** 191 live pairs sat within 60 m with similar names,
+  unmerged, **every sampled one in a different cell**: "Flying J Travel Center" twice at 3 m,
+  "Blue Beacon Truck Wash #74" twice at 20 m. Two pins, one place, because a boundary runs
+  between them. Density makes that worse, not better — more sites, more edges.
+
+Blocking is a geography predicate now (indexed since 0056) at **60 m**, which is the audit's
+number rather than a guess: identical-name pairs are **91%** of candidates within 30 m and
+**22%** beyond 90 m. Past that the neighbours are mostly other places.
+
+**Widening what is reachable needed four guards, and three came from looking at rows.**
+
+| Guard | Evidence |
+|---|---|
+| A placeholder is not evidence | 69 of the 191 are two facilities both named "Rest Area" — a name this code wrote |
+| Opposite carriageways are two places | "Turnout Eastbound"/"Westbound", 32 m apart at 0.64 similarity |
+| A bare compass word, when it is the only difference | **the dry run was about to merge "Dale City … Rest Area South" into "…North"** |
+| A different number | **the dry run was about to merge "Nhs Rest Stop Or Truck Facility 7" into "…17"** |
+
+The last two are the ones worth remembering. `direction_of` ignores a bare "North" so that
+"North Platte Truck Stop" survives — **right about one name and wrong about a pair.** The
+fix is to compare rather than extract. And a number in a facility name is an identifier that
+trigram similarity cannot see, being one character inside a long string.
+
+**Neither was caught by a test.** Both came from dry-running the repair over the real
+registry and reading what it proposed — which is why `repair_duplicates` prints every merge
+before it makes one.
+
+**Applied: 95 pairs merged on the laptop and 95 on the box, idempotent on re-run.**
+Identical-name duplicates fell from 91 to 3, and those 3 are cross-KIND pairs ("TA" as both
+a truck stop and a parking property, 17 m apart) that the script declines on purpose —
+choosing which kind survives is the co-location question, with its own rules.
+
+Production after the repair: **5,343 live facilities · 449 repair · 756 callable.** The
+counts fall slightly because duplicates stopped being counted twice, which is the point.
 
 ## 7. Debt
 
