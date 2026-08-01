@@ -22,7 +22,7 @@ Everything is pushed and deployed.
 | Thing | Value |
 |---|---|
 | Migrations | head **0056_a09_facility_geog_idx** — the A9 §4 geography index, deployed |
-| Tests | **pytest 1290 · vitest 612 · layout 193 · ruff + import-linter 30/30** |
+| Tests | **pytest 1296 · vitest 612 · layout 193 · ruff + import-linter 30/30** |
 | §23 decision log | **119 entries** — 117 approved, 118 the delegation, 119 the §18 portal list |
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
@@ -426,6 +426,48 @@ the per-state form, with everything downstream — the rendered tag filter, `osm
 first region: it overlaps seven states already validated today, so known data sanity-checks
 the run, and it adds IL, MO, NE, ND and SD. **One region first, measured, before committing
 to the other three** — which is A9 §1's own discipline applied one level up.
+
+## 17. us-midwest — the first region, and two things it caught
+
+**7,033 records parsed, 1,800 new facilities.** Locally: 5,339 → 7,139 live, repair
+450 → 595, callable phones 756 → 1,017, and 48 states now carry at least one OSM-derived
+facility. The region path is the same code as the state path — only the URL differs.
+
+**It would have been OOM-killed on the box, and that was found before running it.**
+`read_geojson_file` is `json.load`, and the deployed box is an e2-medium: 3 GB total,
+~2 GB available. Measured on the real 573 MB export (1,289,915 features):
+
+| | peak RSS |
+|---|---|
+| `json.load` | **4,677 MB** |
+| `iter_geojson_features` | **80 MB** |
+
+`osmium export` writes one feature per line, so it streams. **The fallback was the part
+that mattered** — every fixture is pretty-printed, and a reader that silently returned
+nothing for them would have made every ingest test in the package vacuous at once. My
+first version guessed from the FIRST LINE, which is also true of a single-line file, so
+`readline()` swallowed the whole document and it returned zero features **without
+raising**. Caught by the runner test. It falls back on having streamed *nothing* now,
+which cannot be fooled that way.
+
+**A9 §3's warning reproduced exactly, on the region path only.** The batch left **194
+scales and 163 fuel islands unmerged** — the spec cites 203 and 162 for Texas. The
+co-located rule is order-dependent *within* a batch, so it bites when an amenity is
+processed before its host; the nine per-state ingests did not trigger it because the
+hosts were already in the registry. All merged by the sanctioned repairs.
+
+**And the ninth "not carried across".** The region audit surfaced "Yosemity Sams Autocare
+Center" as a truck repair facility: `semi` matched inside "Yo-**semi**-ty".
+`direction_of` has guarded exactly this since it was written — *"a direction must be a
+WORD, not a letter inside one; Sbarro is not southbound"* — and the truck terms, added
+later the same day, did not carry the rule across. **The reasoning was already written
+down, twelve lines away.** Fixed with a leading word boundary, so `truck` still matches
+"Trucking".
+
+**One row of that is already in production** and stays: F2's status vocabulary is
+candidate / confirmed / merged, and none of them means "this should not be here". Not
+worth inventing a state for one autocare shop — recorded because at fifty states it will
+not be one.
 
 ## 7. Debt
 
