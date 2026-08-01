@@ -22,7 +22,7 @@ Everything is pushed and deployed.
 | Thing | Value |
 |---|---|
 | Migrations | head **0056_a09_facility_geog_idx** — the A9 §4 geography index, deployed |
-| Tests | **pytest 1296 · vitest 612 · layout 193 · ruff + import-linter 30/30** |
+| Tests | **pytest 1297 · vitest 612 · layout 193 · ruff + import-linter 30/30** |
 | §23 decision log | **119 entries** — 117 approved, 118 the delegation, 119 the §18 portal list |
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
@@ -468,6 +468,41 @@ down, twelve lines away.** Fixed with a leading word boundary, so `truck` still 
 candidate / confirmed / merged, and none of them means "this should not be here". Not
 worth inventing a state for one autocare shop — recorded because at fifty states it will
 not be one.
+
+## 18. The region ingest died on the box and left no trace — which was my bug
+
+The first us-midwest run on production ended with **no new facilities, no error, and no
+`job_run` row at all.** Not a failed one. Nothing.
+
+That is a defect in the A12 requirement-3 telemetry I added this morning. The started
+row was written inside the **same transaction as the work**, so when the process was
+killed the rollback took the evidence with it.
+`test_a_failed_load_is_recorded_as_a_failure_not_silence` covers an EXCEPTION — which
+the code catches and records — and **not** a kill. On a 2 GB e2-medium running a 3 GB
+ingest, killed is the likely ending, not the exotic one. *"One row per attempt"* was
+true only for the failures polite enough to raise.
+
+Telemetry runs on its **own connection** now, so the ingest's rollback cannot reach it.
+Verified on the box mid-run:
+
+```
+started_at 08:08:31 | ok=f | still_running=t
+```
+
+A started-but-never-finished row is exactly what an operator needs — it says "this
+died", which silence does not.
+
+**Bound to the CALLER'S engine, not `SessionLocal`,** and that is not a detail: the test
+suite runs against a **separate database**, so a hardcoded `SessionLocal` wrote the row
+into the DEV database while the test looked in the test one. It never found it, and every
+suite run had been quietly polluting dev.
+
+**And a consequence worth stating**: streaming the READ fixed the parse (4,677 MB → 80 MB)
+and did **not** fix the ingest. The api container still sat at **3.07 GiB of 3.83** during
+the run, because `ingest_records` holds the whole batch and a SQLAlchemy session in one
+transaction. That is the next thing to fix if the remaining regions are larger — chunked
+commits are safe here because ingest is idempotent on `(source_kind, external_ref)`, so a
+re-run resumes rather than duplicating.
 
 ## 7. Debt
 
