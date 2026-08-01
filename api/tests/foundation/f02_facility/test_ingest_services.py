@@ -187,6 +187,33 @@ def test_one_repair_shop_never_absorbs_another(db):
     assert fac.name == "Kenworth of Milwaukee"
 
 
+def test_a_placeholder_name_is_never_adopted_whatever_kind_wrote_it(db):
+    """Found by reading the ingested rows, not by reasoning about them: a nameless
+    parking lot beside a nameless repair shop came out of the pull CALLED "Repair".
+
+    The adoption guard excluded exactly one placeholder — `placeholder_name(
+    fuel_station)` — because fuel was the only co-located kind when it was written.
+    Every other kind's placeholder passed it, and this predates A5: 18 truck stops and
+    a rest area in the live registry are named "Weigh Station" today, plus a
+    weigh station named "Scale". The rule was always "do not adopt a name this code
+    invented"; it just named one of them.
+
+    A placeholder is not a name. Swapping "Parking Property" for "Repair" trades one
+    invented label for a worse one — it tells a driver the lot IS a repair shop."""
+    from app.foundation.f02_facility.domain import service as svc
+    from app.foundation.f02_facility.domain.ingest.adapters import placeholder_name
+
+    for ftype in facility.FacilityType:
+        host = facility.Facility(
+            name=placeholder_name(facility.FacilityType.parking_property),
+            facility_type=facility.FacilityType.parking_property,
+        )
+        assert not svc.host_should_adopt_name(host, placeholder_name(ftype)), (
+            f"adopted the placeholder this code writes for {ftype.value}"
+        )
+        assert svc.host_should_adopt_name(host, "Ottery Brothers Truck Wash")
+
+
 def test_truck_relevance_is_one_definition():
     # the same question the type rule asks, asked directly — so a caller cannot invent
     # a second answer to it (the §23 entry 94 regression, one layer down)

@@ -210,12 +210,23 @@ def host_should_adopt_name(host: Facility, incoming_name: str) -> bool:
     safe: one pin AND the only real name on the site, rather than one pin and a
     nameless pin a driver cannot search for. The guard against renaming a real place
     is unchanged — a host whose name is not a placeholder never adopts.
+
+    A5: the incoming guard named ONE placeholder, `fuel_station`'s, because fuel was
+    the only co-located kind when it was written. Every other kind's placeholder was
+    adopted, and it had already happened — 18 truck stops and a rest area in the live
+    registry are named "Weigh Station", and a weigh station is named "Scale". Adding
+    `repair` to the co-located kinds put "Repair" on a parking lot the same way, which
+    is how this was found. The rule was always "never adopt a name this code invented";
+    it just spelled one of them out. A placeholder is not a name, whichever kind wrote
+    it, and swapping "Parking Property" for "Repair" makes the map read WORSE — it
+    tells a driver the lot is a repair shop.
     """
     from .ingest.adapters import placeholder_name
 
     if host.name != placeholder_name(host.facility_type):
         return False
-    return bool(incoming_name) and incoming_name != placeholder_name(FacilityType.fuel_station)
+    invented = {placeholder_name(ftype) for ftype in FacilityType}
+    return bool(incoming_name) and incoming_name not in invented
 
 
 def merge_facilities(db: Session, canonical: Facility, duplicate: Facility) -> Facility:
