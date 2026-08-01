@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     # the import screen states plainly rather than guessing a coordinate.
     mapbox_token: str = Field(default="")
 
+    # AI-CONTEXT: where a COUNTERPARTY reaches this platform from their inbox. A
+    # broker opening a detention notice is outside every session and every origin we
+    # control, so a relative link is useless to them — M5's share endpoint returns
+    # "/pack/s/<token>" and the client makes it absolute, which an email cannot do.
+    # Empty means "we cannot address ourselves", and the notice then says the evidence
+    # is available on request rather than printing a link that goes nowhere.
+    public_base_url: str = Field(default="")
+
     smtp_host: str = Field(default="mailpit")
     smtp_port: int = Field(default=1038)
 

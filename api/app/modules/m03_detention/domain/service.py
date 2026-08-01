@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.foundation.f01_identity import public as identity
 from app.foundation.f03_location import public as location
 from app.foundation.f04_evidence import public as evidence
@@ -587,6 +588,30 @@ def open_receivable(
     return receivable
 
 
+def render_pack_bytes(db: Session, pack) -> bytes:
+    """`render_pack_pdf(pack, context)` — the db is not a parameter, and the context is
+    what carries the artifact images. M5 builds the same thing one module over; this
+    stays minimal deliberately, because M3's pack is composed from the evidence log
+    rather than from a photo set."""
+    return evidence.render_pack_pdf(pack, evidence.PackContext())
+
+
+def _notice_body(db: Session, shared) -> str:
+    """§12.1: state facts and next steps. An honest body names where the evidence IS —
+    and when this deployment cannot address itself, says so rather than printing a link
+    that goes nowhere."""
+    base = (get_settings().public_base_url or "").rstrip("/")
+    where = (
+        f"The GPS-verified detention evidence is here: {base}/pack/s/{shared.token}"
+        if base
+        else "The GPS-verified detention evidence pack is available on request."
+    )
+    return (
+        f"{where}\n\n"
+        "The invoice is raised per the rate confirmation's detention terms."
+    )
+
+
 # --- Claim pack on EXIT (M3-FR5 / FR9) ---
 def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=None) -> dict:
     accrue_events(db, claim)
@@ -597,6 +622,24 @@ def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=Non
     log = db.get(evidence.EvidenceLog, claim.evidence_log_ref)
     evidence.anchor_chain(db, log)
     pack = evidence.compose_pack(db, log, evidence.PackTemplate.detention_claim)
+
+    # AI-CONTEXT: the notice used to say "please find attached" and attach nothing.
+    # `send_email(to_ref, subject, body)` is the WHOLE F8 gateway protocol — there is no
+    # attachment parameter in any of its four implementations — so the broker received a
+    # claim about evidence they had no way to reach. Every piece needed already existed
+    # and had simply never been connected on this path: F4 pins the rendered bytes and
+    # issues a token, and `/pack/s/<token>` serves the PDF. M5 has used both since it
+    # shipped. This is M3's wedge document, so it is the worst place in the product for
+    # prose to be describing a behaviour nobody checked (§23 entry 116, addressed to a
+    # counterparty instead of a developer).
+    shared = evidence.share_pack(
+        db,
+        log,
+        pack.template,
+        render_pack_bytes(db, pack),
+        claim.account_id,
+        now=now,
+    )
 
     receivable = None
     if claim.mode == ClaimMode.invoice and claim.amount_cents > 0:
@@ -609,15 +652,14 @@ def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=Non
             gateway=gateway,
             now=now,
             notice_subject="Detention invoice",
-            notice_body="Please find attached the GPS-verified detention evidence and invoice "
-            "per the rate confirmation.",
+            notice_body=_notice_body(db, shared),
         )
         claim.receivable_ref = receivable.id
         claim.state = ClaimState.invoiced
     else:
         claim.state = ClaimState.exported  # company-driver: pack for carrier, no invoice
     db.flush()
-    return {"pack": pack, "claim": claim, "receivable": receivable}
+    return {"pack": pack, "claim": claim, "receivable": receivable, "shared": shared}
 
 
 # --- Dunning cadence (M3-FR6) ---
