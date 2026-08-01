@@ -676,8 +676,11 @@ so it needs a send path that carries a document and opens no receivable. That do
 exist, and it is the piece to build first because everything else hangs off it.
 
 **The six pieces, in the order I would take them:**
-1. A **document-only counterparty send** (F8 + F5), opening no receivable. Everything else
-   depends on it.
+1. ~~A **document-only counterparty send**~~ — **half done** (§27). The hard part, making a
+   pack REACHABLE from an email at all, is solved and deployed: share the pack, put the
+   absolute link in the body. What A1 still needs is the same thing without
+   `open_receivable`, which also opens a receivable and calls `record_claim` on the
+   counterparty — a Stop Packet is not a claim and must not touch either.
 2. `PackTemplate.stop_packet` — a title and tone distinct from `stop_record`, which is an
    export a DRIVER reaches rather than a handoff a clerk receives (v1.0 §5.5: neutral).
 3. The **F3 EXIT trigger** at a `shipper_receiver` stop, following M3's pattern.
@@ -686,6 +689,44 @@ exist, and it is the piece to build first because everything else hangs off it.
 5. **Driver review before send.** A1 requirement 5, and the one with teeth: a packet the
    driver did not see is a document they cannot vouch for.
 6. The **F13 capture checklist** per stop type, which A1 says is configuration and not code.
+
+## 27. The detention notice promised an attachment that did not exist
+
+Found while mapping A1's send path, in **M3 — the product's wedge**. Its outbound body
+read:
+
+> "Please find attached the GPS-verified detention evidence and invoice per the rate
+> confirmation."
+
+**Nothing was attached.** `send_email(to_ref, subject, body)` is the whole F8 gateway
+protocol across all four implementations — there is no attachment parameter anywhere —
+and the notice carried no link either. A broker receiving that email had no way to reach
+the evidence being claimed against them.
+
+**Every piece already existed and had never been connected on this path.** F4's
+`share_pack` pins the rendered bytes and issues a token; `/pack/s/<token>` serves the PDF;
+M5 has used both since it shipped. M3 composed a pack and then described it in prose.
+
+Same class as §23 entry 116's "quiet hours defer", with two differences that make it
+worse: **the prose is addressed to a counterparty rather than a developer**, and it is the
+document the entire contingency model rests on.
+
+`PUBLIC_BASE_URL` is new and empty by default, because a deployment that cannot address
+itself must not print half a URL — the notice then says the evidence is available on
+request, which §12.4 accepts and a dead link does not. Both branches are tested. Set to
+`https://haulmeter.online` on the box and verified there.
+
+**THE DEFECT WAS LATENT, NOT LIVE, and that is the uncomfortable part.** Production runs
+`RecordingNotificationGateway` — `# F8 seam (dev)` — and the real adapter raises
+`NotImplementedError("wired at activation")`. So no broker email has ever left this
+platform, and the wrong copy would first have reached a real counterparty on the day
+somebody wired the transport: exactly the day nobody would be re-reading body text.
+
+**A fact that belongs in the open**: production holds **45 outbound threads and 45
+outbound messages, every one marked `sent_at`**, and not one was transmitted. That is
+correct for an `environment=test` box running the recording gateway, and it is also a
+database asserting delivery that did not happen. Anyone validating A1, A5 or the detention
+wedge on this box should know that "sent" there means "recorded".
 
 ## 21. Debt
 
