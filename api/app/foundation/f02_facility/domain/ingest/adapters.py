@@ -672,6 +672,64 @@ def read_geojson_file(path: str) -> dict:
         return json.load(fh)
 
 
+# AI-CONTEXT: A9 §4's "handle volume before it arrives", handled before it arrived.
+#
+# `read_geojson_file` is `json.load` — the whole file at once. Fine for a state (Texas's
+# 200 MB) and NOT fine for a REGION, which is what A9 §2 says to batch by.
+#
+# MEASURED on the real us-midwest export (573 MB, 1,289,915 features), not estimated:
+#   json.load                peak RSS 4677 MB
+#   iter_geojson_features    peak RSS   80 MB
+# The deployed box is an e2-medium: 3 GB total, ~2 GB available. So the regional ingest
+# would have been OOM-KILLED there — not failed, killed, which reads as "the ingest
+# hung" and leaves nothing to debug.
+#
+# `osmium export` writes ONE FEATURE PER LINE, so the file streams. The committed
+# fixtures are pretty-printed, so both shapes must work, and the FALLBACK matters more
+# than the fast path: a reader that quietly returned nothing for a fixture would make
+# every ingest test in this package vacuous at once.
+def iter_geojson_features(path: str):
+    import json
+
+    with open(path) as fh:
+        streamed = False
+        for line in fh:
+            line = line.strip().rstrip(",")
+            if not line or line in ("]", "]}", "}") or line.startswith('{"type":"FeatureColl'):
+                continue
+            try:
+                feature = json.loads(line)
+            except json.JSONDecodeError as exc:
+                if streamed:
+                    # mid-stream garbage IS a truncated download, and a partial ingest
+                    # that looks like a small region is worse than an error (the same
+                    # reasoning as backup_db.sh's dump-size guard)
+                    raise ValueError(
+                        f"{path}: truncated or corrupt after {exc.lineno} lines"
+                    ) from exc
+                break  # not one-per-line after all — fall through to the whole-file read
+            if isinstance(feature, dict) and feature.get("type") == "Feature":
+                streamed = True
+                yield feature
+        if streamed:
+            return
+        # PRETTY-PRINTED, or the whole document on one line. Falling back on "streamed
+        # nothing" rather than on a header guess is what makes this safe: the first
+        # version tested the FIRST LINE for `"features"`, which is true of a one-line
+        # file too — so `readline()` swallowed the entire document, the loop had nothing
+        # left, and it returned ZERO features without raising. Silent empty, which is
+        # the exact failure the fixtures test exists to catch, in a shape I had not
+        # imagined. Do not reintroduce a header heuristic here.
+        fh.seek(0)
+        yield from json.load(fh).get("features", [])
+
+
+def parse_osm_features(features) -> list[StagedRecord]:
+    """The same rules `parse_osm` applies, over an ITERABLE rather than a loaded dict —
+    so the streaming path the box uses reaches exactly the code the tests exercise."""
+    return parse_osm({"features": features})
+
+
 # --- Chain locators (Pilot/Love's/TA) — STUB ONLY ---
 class ChainLocatorAdapter:
     """AI-CONTEXT: source-adapter seam for chain locators. Deliberately unimplemented

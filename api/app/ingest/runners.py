@@ -148,8 +148,11 @@ def run_tpims_dynamic(db: Session, now: datetime | None = None, commit: bool = T
 
 def run_osm(db: Session, geojson_path: str, commit: bool = True) -> facility.IngestStats:
     def load():
-        geojson = facility.ingest.read_geojson_file(geojson_path)
-        return facility.ingest_records(db, facility.parse_osm(geojson), batch_id=_batch("osm"))
+        # STREAMED, not loaded whole. Measured on us-midwest (573 MB): json.load peaks
+        # at 4677 MB and the box has ~2 GB, so it would be OOM-killed there; streaming
+        # peaks at 80 MB. See `iter_geojson_features`.
+        records = facility.parse_osm_features(facility.iter_geojson_features(geojson_path))
+        return facility.ingest_records(db, records, batch_id=_batch("osm"))
 
     stats = _record_load(db, "ingest_osm", lambda: _snapshot(geojson_path), load)
     if commit:
