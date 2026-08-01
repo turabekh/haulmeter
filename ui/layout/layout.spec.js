@@ -95,6 +95,18 @@ const LIVE_MOCKS = {
     photos_captured: 0,
     photos_required: 4,
     bol_captured: false,
+    // AI-CONTEXT: A1 req 1's checklist, shape-matched for the same reason as the two
+    // fields above (§23 entries 84/85). The meter carries it now, and a mock without it
+    // renders the single-row fallback — measuring the screen without the thing that was
+    // just added to it. A DELIVERY: five configured items, four of them rows, and the
+    // longest label in the set (lumper receipt) is the one that has to survive +40%.
+    checklist: [
+      { item: "bol", kind: "document", captured: true, required: true },
+      { item: "pod", kind: "document", captured: false, required: true },
+      { item: "cargo_condition", kind: "condition_photo", captured: false, required: true },
+      { item: "lumper_receipt", kind: "document", captured: false, required: true },
+      { item: "damage", kind: "document", captured: false, required: false },
+    ],
     appointment_end: "2026-07-27T06:10:50.993277+00:00",
     appointment_source: "rate_con_parse",
     next_stop: {
@@ -695,6 +707,15 @@ const SURFACES = [
     },
     stop: LIVE_STOP,
     ready: ".load__packets",
+  }],
+  // A1 req 1: the capture sheet reached from a checklist ROW rather than the Snap BOL
+  // CTA. The row is a 48 dp target inside §10.2's densest card, and the sheet it opens
+  // is type-fixed — the state exists to measure both at 360 with the glove spec.
+  ["load-checklist-capture", "/load", {
+    mocks: LIVE_MOCKS,
+    stop: LIVE_STOP,
+    open: [".checklist__snap"],
+    ready: ".cap__field",
   }],
   // A1 req 5's review screen — a new surface, so it is measured at 360 dp with the rest
   // rather than shipping unseen. Two states because the EMPTY one is what most drivers

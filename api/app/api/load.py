@@ -647,6 +647,11 @@ def meter(
         # the checklist rendered an unconditional tick for the BOL. A checklist that
         # always says yes is decoration.
         "bol_captured": m5.has_bol(db, stop.id),
+        # A1 requirement 1: the capture checklist for THIS stop type, from F13 config.
+        # `bol_captured` above is the one hardcoded row it replaces on the screen — a
+        # DELIVERY needs a POD and has no seal to record, and asking for the wrong
+        # artifact is how a checklist teaches a driver to ignore it.
+        "checklist": m5.stop_checklist(db, stop),
         # M5-FR1: a driver can only protect themselves from a MIS-PARSED appointment
         # if they can see the window before they arrive AND tell whether a machine
         # read it. A value typed by hand carries different confidence from one an

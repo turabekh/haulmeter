@@ -217,9 +217,7 @@ def _load_paperwork(db: Session, stop_docs: list) -> list[dict]:
         load = group["load"]
         stops = loads.list_stops(db, load)
         origin = facility.get_facility(db, stops[0].facility_id) if stops else None
-        destination = (
-            facility.get_facility(db, stops[-1].facility_id) if len(stops) > 1 else None
-        )
+        destination = facility.get_facility(db, stops[-1].facility_id) if len(stops) > 1 else None
         rows.append(
             {
                 "load_id": str(load.id),
@@ -546,6 +544,121 @@ def share_pack(db: Session, log_ref, pack, account_id, recipient=None, now=None,
     )
 
 
+# --- A1 req 1: the capture checklist, as CONFIGURATION ---
+#
+# AI-CONTEXT: "The checklist is configuration (F13), not code" is the requirement, not a
+# note on it. `CONDITION_SEQUENCE` next door is a hardcoded list, and changing it means a
+# deploy — a checklist that varies by customer, by lane and by what a receiver actually
+# demands cannot live there. §7.13 puts exactly this kind of thing in F13: "runtime
+# config: rate tables, geofence tuning parameters, points economy rates".
+#
+# A DELIVERY is not a PICKUP. A driver dropping a load has a POD to photograph and no
+# seal to record; a driver collecting one has the seal and no POD. Asking for the wrong
+# artifact is how a checklist teaches people to ignore it.
+CAPTURE_CHECKLIST_CONFIG = "a01.capture_checklist"
+
+DEFAULT_CAPTURE_CHECKLIST: dict[str, list[str]] = {
+    "pickup": ["bol", "seal", "cargo_condition", "damage"],
+    "delivery": ["bol", "pod", "cargo_condition", "lumper_receipt", "damage"],
+}
+
+
+# Where each item is actually captured. `None` means nowhere, and the tests refuse to
+# let a default checklist name one — A5's starved-rule lesson: a rule whose input never
+# arrives is not a rule, it is a rule-shaped absence that reads as working.
+_DOC_ITEMS = {
+    "bol": "bol",
+    "pod": "pod",
+    "lumper_receipt": "lumper_receipt",
+    "seal": "seal",
+    "damage": "damage",
+}
+
+# A clean stop has no damage to photograph. Reporting it as incomplete is how a
+# checklist becomes noise, and a dismissed checklist is the rubber-stamp failure
+# `draft_stop_packet_on_exit` exists to avoid.
+IF_APPLICABLE_ITEMS = frozenset({"damage"})
+
+
+def checklist_capture_path(item: str):
+    """What a driver would press to satisfy this row, or None if nothing would."""
+    from app.foundation.f06_documents import public as documents
+
+    if item == "cargo_condition":
+        return ("condition_photo", None)
+    doc = _DOC_ITEMS.get(item)
+    # answerable means a driver can actually PRESS something. `capture_document` is the
+    # only writer of a stop's paperwork and it refuses anything outside DRIVER_DOC_TYPES,
+    # so a type the enum knows but that writer rejects is still nowhere.
+    if doc is None or doc not in DRIVER_DOC_TYPES:
+        return None
+    return ("document", documents.DocType(doc))
+
+
+def stop_checklist(db: Session, stop) -> list[dict]:
+    """This stop's paperwork, answered honestly against what has actually been captured.
+
+    `has_bol` learned the near half of this: it rendered an unconditional tick and "a
+    checklist that always says yes is decoration". The far half is a row that can only
+    ever say no, which teaches the same lesson faster."""
+    from app.foundation.f06_documents import public as documents
+
+    rows = []
+    for item in capture_checklist(db, stop.stop_type):
+        path = checklist_capture_path(item)
+        if path is None:
+            continue
+        kind, doc_type = path
+        if kind == "document":
+            captured = bool(documents.documents_for_subject(db, "stop", stop.id, doc_type=doc_type))
+        else:
+            phase = (
+                CapturePhase.pickup
+                if stop.stop_type is loads.StopType.pickup
+                else CapturePhase.delivery
+            )
+            captured = bool(
+                db.scalar(
+                    select(ConditionCapture).where(
+                        ConditionCapture.stop_ref == stop.id,
+                        ConditionCapture.phase == phase,
+                        ConditionCapture.photo_count > 0,
+                    )
+                )
+            )
+        rows.append(
+            {
+                "item": item,
+                "kind": kind,
+                "captured": captured,
+                "required": item not in IF_APPLICABLE_ITEMS,
+            }
+        )
+    return rows
+
+
+def checklist_outstanding(db: Session, stop) -> list[str]:
+    """What is still missing and actually required — the sentence a driver can act on
+    while they are still standing where it can be closed (M5-FR5's reason for existing)."""
+    return [r["item"] for r in stop_checklist(db, stop) if r["required"] and not r["captured"]]
+
+
+def capture_checklist(db: Session, stop_type) -> list[str]:
+    """What this stop's paperwork should contain. Configured per stop type, with a
+    default that is NOT empty — an unconfigured deployment must still ask for the
+    paperwork, or the feature is one nobody switches on.
+
+    An unknown or partially-configured stop type falls back rather than returning
+    nothing: a checklist that silently asks for nothing looks exactly like a checklist
+    that was satisfied, which is A5's starved-rule defect wearing different clothes."""
+    from app.foundation.f13_flags import public as flags
+
+    key = stop_type.value if hasattr(stop_type, "value") else str(stop_type)
+    configured = flags.get_config(db, CAPTURE_CHECKLIST_CONFIG) or {}
+    items = configured.get(key) or DEFAULT_CAPTURE_CHECKLIST.get(key)
+    return list(items) if items else list(DEFAULT_CAPTURE_CHECKLIST["delivery"])
+
+
 # --- A1: draft on EXIT, send when the DRIVER says so (v2.0 §3 A1 req 3 and 5) ---
 def draft_stop_packet_on_exit(db: Session, account_id, facility_id, now: datetime):
     """AI-CONTEXT: A1 requirement 5 is the whole design of this function.
@@ -759,7 +872,23 @@ def auto_file_on_arrival(db: Session, stop, account_id, arrived_at=None, gateway
 # flows that create documents as a side effect — a lumper receipt comes from M4's
 # claim, a settlement from M9 — and offering them here would invite a driver to file
 # a receipt in the wrong place.
-DRIVER_DOC_TYPES = ["cdl", "med_card", "insurance", "permit", "rate_con", "bol", "pod", "other"]
+# AI-CONTEXT: `lumper_receipt`, `seal` and `damage` join this list because A1's capture
+# checklist names them and this is the ONLY writer of a stop's paperwork. Without them,
+# `checklist_capture_path` reports no path and the checklist refuses to carry the row —
+# which is the honest outcome, and not the useful one.
+DRIVER_DOC_TYPES = [
+    "cdl",
+    "med_card",
+    "insurance",
+    "permit",
+    "rate_con",
+    "bol",
+    "pod",
+    "other",
+    "lumper_receipt",
+    "seal",
+    "damage",
+]
 # the credentials an expiry date is meaningful for. A BOL does not expire.
 EXPIRING_DOC_TYPES = ["cdl", "med_card", "insurance", "permit"]
 # AI-CONTEXT: types a driver holds exactly ONE of at a time, so filing a new one

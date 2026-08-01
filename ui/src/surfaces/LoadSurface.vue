@@ -86,6 +86,11 @@ function onIncidentFiled(e) {
 // against the account, so the row could never turn green no matter what the driver
 // photographed. The endpoint has accepted a stop since the writer shipped.
 const snapping = ref(false);
+// AI-CONTEXT: which artifact the capture sheet is for. The sheet was hardcoded to the
+// BOL because the BOL was the only row; A1's checklist asks for four more, and a row a
+// driver can read but not satisfy is the same starved defect as a rule whose input
+// never arrives. `openCapture` is how each row closes itself.
+const snapType = ref("bol");
 // §10.2's empty-state action. The manual "Start a load" form now lives inside this
 // sheet as the fallback when a rate con cannot be read, rather than as a rival action.
 const importing = ref(false);
@@ -165,7 +170,12 @@ async function onLoadCreated() {
 }
 async function onBolCaptured() {
   snapping.value = false;
-  await loadMeter(); // the checklist row closes the moment the BOL lands
+  await loadMeter(); // the checklist row closes the moment the document lands
+}
+function openCapture(row) {
+  if (row.captured) return; // nothing to do; re-filing is the Docs tab's job
+  snapType.value = row.item;
+  snapping.value = true;
 }
 const filed = ref(null); // the generated claim result, once filed
 // §15.5 shows the card for a permission the DRIVER has to restore. "unavailable"
@@ -274,6 +284,32 @@ const photosDone = computed(
 // decoration — and the honest answer for most stops today is "not yet", which is
 // exactly what FR5 is for.
 const bolCaptured = computed(() => live.value?.bol_captured === true);
+
+// AI-CONTEXT: A1 requirement 1 — the paperwork rows are CONFIGURATION (F13), per stop
+// type, not one hardcoded BOL line. A driver dropping a load has a POD to photograph
+// and no seal to record; asking for the wrong artifact is how a checklist teaches
+// someone to ignore it.
+//
+// `kind === "document"` only. `cargo_condition` is also on the configured checklist and
+// the photos row below already renders it WITH its 2/4 denominator — two rows saying the
+// same thing in different words is worse than one.
+const docChecklist = computed(() => {
+  const rows = live.value?.checklist;
+  if (!Array.isArray(rows)) {
+    // an offline payload cached before A1 carries only the single flag. Rendering the
+    // old row is truthful; rendering nothing would tell a driver this stop needs no
+    // paperwork at all, which is the one answer that is never right.
+    return [{ item: "bol", captured: bolCaptured.value, required: true }];
+  }
+  return rows.filter((r) => r.kind === "document");
+});
+
+// §16: status is colour AND icon AND label. The label has to flip too — the glyph alone
+// is what a driver misses. `damage` flips to "No damage recorded" rather than a
+// not-captured phrasing, because a clean stop is complete, not deficient.
+function docLabel(row) {
+  return t(`load.doc.${row.item}${row.captured ? "" : "_missing"}`);
+}
 const nextStop = computed(() => live.value?.next_stop ?? null);
 
 // AI-CONTEXT: M5-FR1's protection is the WINDOW, not the verdict.
@@ -560,10 +596,15 @@ async function endLoad() {
             </span>
             <span v-if="arrivedAt" class="checklist__count">{{ arrivedAt }}</span>
           </li>
-          <li class="checklist__item">
-            <Check v-if="bolCaptured" :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
-            <Camera v-else :size="20" :stroke-width="2" aria-hidden="true" />
-            {{ bolCaptured ? t("load.bol") : t("load.bol_missing") }}
+          <li v-for="row in docChecklist" :key="row.item" class="checklist__item">
+            <template v-if="row.captured">
+              <Check :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
+              {{ docLabel(row) }}
+            </template>
+            <button v-else class="checklist__snap" type="button" @click="openCapture(row)">
+              <Camera :size="20" :stroke-width="2" aria-hidden="true" />
+              {{ docLabel(row) }}
+            </button>
           </li>
           <li class="checklist__item">
             <Check v-if="photosDone" :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
@@ -617,7 +658,7 @@ async function endLoad() {
       <button v-if="rung === 'arrive'" class="cta" type="button" @click="onArrive">
         {{ t("load.arrive") }}
       </button>
-      <button v-else-if="rung === 'bol'" class="cta" type="button" @click="snapping = true">
+      <button v-else-if="rung === 'bol'" class="cta" type="button" @click="openCapture({ item: 'bol' })">
         {{ t("load.cta.bol") }}
       </button>
       <button v-else-if="rung === 'notice'" class="cta" type="button" @click="onSendNotice">
@@ -645,7 +686,7 @@ async function endLoad() {
           v-if="!preArrival && !bolCaptured && rung !== 'bol'"
           class="rungs__item"
           type="button"
-          @click="snapping = true"
+          @click="openCapture({ item: 'bol' })"
         >
           {{ t("load.cta.bol") }}
         </button>
@@ -837,10 +878,15 @@ async function endLoad() {
         </button>
       </BottomSheet>
 
-      <BottomSheet :open="snapping" :title="t('load.cta.bol')" @close="snapping = false">
+      <BottomSheet
+        :open="snapping"
+        :title="snapType === 'bol' ? t('load.cta.bol') : t('load.capture_title')"
+        @close="snapping = false"
+      >
         <DocumentCaptureSheet
+          :key="snapType"
           :stop-id="activeStopId"
-          fixed-type="bol"
+          :fixed-type="snapType"
           @captured="onBolCaptured"
         />
       </BottomSheet>
@@ -1025,6 +1071,24 @@ async function endLoad() {
   gap: var(--s-2);
   font-size: var(--type-body-size);
   color: var(--text-1);
+}
+/* §6.5's glove spec: a checklist row a driver can act on is a real target, 48 dp tall.
+   It inherits the row's type and colour rather than becoming a second kind of button —
+   the affordance is that it is tappable, not that it looks like a CTA. */
+.checklist__snap {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 48px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--type-body-size);
+  color: var(--text-1);
+  text-align: left;
+  cursor: pointer;
 }
 .ok {
   color: var(--ledger-500);
