@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,7 +25,22 @@ SCHEMA = "f02"
 
 class Facility(Base):
     __tablename__ = "facility"
-    __table_args__ = {"schema": SCHEMA}
+    # AI-CONTEXT: A9 §4 — the GEOGRAPHY index, declared here and not only in a migration.
+    #
+    # `spatial_index=True` on `geom` gives a GiST index on the GEOMETRY. Every distance
+    # query in this package casts to geography — `ST_DWithin(geom::geography, ...)` — and
+    # a geometry index cannot answer that, so all six were sequential scans. Measured on
+    # the box: 6,512 rows examined to return 26, in 28 ms. With this index, 30 rows and
+    # 13.5 ms. The halving is not the point; a seq scan is LINEAR and A9 multiplies this
+    # table by roughly six.
+    #
+    # Declared on the MODEL because the test database is built by `create_all`, not by
+    # alembic — an index that lives only in a migration is invisible to every test, which
+    # is its own small version of the defect this session kept finding.
+    __table_args__ = (
+        Index("ix_facility_geog", text("(geom::geography)"), postgresql_using="gist"),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     facility_type: Mapped[FacilityType] = mapped_column(
