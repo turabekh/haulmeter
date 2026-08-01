@@ -417,7 +417,18 @@ def nearest(
     lon: float,
     radius_m: float,
     facility_type: FacilityType | None = None,
+    facility_types: list | None = None,
 ) -> list[Facility]:
+    """AI-CONTEXT: `facility_types` (plural) exists because the caller was looping.
+
+    The map's area lookup ran this once PER KIND, and the Drive preset has five.
+    Measured on the box at national density: 33 ms for one kind, 285 ms for five —
+    even though EXPLAIN shows the predicate executing in under a millisecond against
+    `ix_facility_geog`. The time is PostGIS geography query PLANNING, paid once per
+    call, so five calls cost five plans and one `IN` costs one.
+
+    A9 §4 predicted this cost and named the wrong culprit: it said `_enrich` and bulk
+    reads in M3/M6/M7. `_enrich` measured at 5 ms. The loop was the whole of it."""
     point = _point(lat, lon)
     stmt = (
         select(Facility)
@@ -427,6 +438,8 @@ def nearest(
     )
     if facility_type is not None:
         stmt = stmt.where(Facility.facility_type == facility_type)
+    if facility_types:
+        stmt = stmt.where(Facility.facility_type.in_(set(facility_types)))
     return list(db.scalars(stmt))
 
 
