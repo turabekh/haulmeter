@@ -50,19 +50,56 @@ def _snapshot(path: str) -> dict:
 def _record_load(db: Session, job_name: str, source, work):
     """One row per ATTEMPT, following the JobRun rule the worker already uses: a load
     that dies leaves a row saying so, or the newest healthy-looking row is from the run
-    BEFORE the broken one and the box reports data it is not running."""
-    run = admin.start_job_run(db, job_name, datetime.now(UTC))
+    BEFORE the broken one and the box reports data it is not running.
+
+    AI-CONTEXT: the started row is COMMITTED before the work, and that is not tidiness.
+    The first version wrote it inside the same transaction as the ingest, which covers a
+    load that politely raises and NOT a load that is killed — and on the deployed
+    e2-medium (~2 GB free, and a region ingest sits at 3 GB) killed is the likely ending,
+    not the exotic one. A real us-midwest run died that way: the rollback took the
+    failure row with it, so there were no facilities, no error, and no trace that
+    anything had been attempted at all.
+
+    A started-but-never-finished row is precisely the evidence an operator wants. It
+    says "this died", which silence does not.
+    """
+    from sqlalchemy.orm import Session as _Session
+
+    # OWN CONNECTION, not the ingest's. Telemetry that shares the transaction it reports
+    # on disappears with it — which is the whole failure: a rollback (or a kill) took the
+    # evidence along with the data. On its own connection the started row is durable the
+    # moment it is written, and the ingest's own rollback cannot reach it.
+    #
+    # Bound to the CALLER'S engine rather than `SessionLocal`, and that is not a detail:
+    # the test suite runs against a separate database, so a hardcoded SessionLocal wrote
+    # the row into the DEV database while the test looked in the test one — never found
+    # it, and quietly polluted dev on every run.
+    bind = db.get_bind()
+    engine = getattr(bind, "engine", bind)
+    telemetry = _Session(bind=engine)
+    try:
+        run = admin.start_job_run(telemetry, job_name, datetime.now(UTC))
+        telemetry.commit()
+        run_id = run.id
+    finally:
+        telemetry.close()
+
+    def _finish(**fields):
+        session = _Session(bind=engine)
+        try:
+            row = session.get(admin.JobRun, run_id)
+            admin.finish_job_run(session, row, datetime.now(UTC), **fields)
+            session.commit()
+        finally:
+            session.close()
+
     try:
         snapshot = source() if callable(source) else source
         stats = work()
     except Exception as exc:
-        admin.finish_job_run(db, run, datetime.now(UTC), ok=False, error=str(exc)[:500])
-        db.flush()
+        _finish(ok=False, error=str(exc)[:500])
         raise
-    admin.finish_job_run(
-        db,
-        run,
-        datetime.now(UTC),
+    _finish(
         ok=True,
         summary={
             "snapshot": snapshot,
@@ -146,7 +183,9 @@ def run_tpims_dynamic(db: Session, now: datetime | None = None, commit: bool = T
     return {"applied": applied, "skipped": skipped}
 
 
-def run_osm(db: Session, geojson_path: str, commit: bool = True) -> facility.IngestStats:
+def run_osm(
+    db: Session, geojson_path: str, commit: bool = True, _work=None
+) -> facility.IngestStats:
     def load():
         # STREAMED, not loaded whole. Measured on us-midwest (573 MB): json.load peaks
         # at 4677 MB and the box has ~2 GB, so it would be OOM-killed there; streaming
@@ -154,7 +193,7 @@ def run_osm(db: Session, geojson_path: str, commit: bool = True) -> facility.Ing
         records = facility.parse_osm_features(facility.iter_geojson_features(geojson_path))
         return facility.ingest_records(db, records, batch_id=_batch("osm"))
 
-    stats = _record_load(db, "ingest_osm", lambda: _snapshot(geojson_path), load)
+    stats = _record_load(db, "ingest_osm", lambda: _snapshot(geojson_path), _work or load)
     if commit:
         db.commit()
     return stats
