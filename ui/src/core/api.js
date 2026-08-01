@@ -630,6 +630,27 @@ export async function report(facilityId, signalType, value) {
 // moment this fires is a driver standing beside a broken truck, which is exactly where
 // there is no signal. The one event we most need to see is the one most likely to
 // happen offline.
+// A1 requirement 5: the queue a driver reviews before anything reaches a dispatcher.
+export async function fetchStopPackets() {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/protection/stop-packets`, { headers: headers() });
+  if (!resp.ok) throw new Error(`stop packets ${resp.status}`);
+  return resp.json();
+}
+
+// NOT queued through F12, deliberately. A queued send would report success from a dead
+// dock and leave the driver believing their paperwork went out — and §12.4 forbids
+// exactly that. The draft is already durable server-side; the driver can tap again.
+export async function sendStopPacket(packetId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/protection/stop-packets/${packetId}/send`, {
+    method: "POST",
+    headers: postHeaders(newOpId()),
+  });
+  if (!resp.ok) throw new Error(`send packet ${resp.status}`);
+  return resp.json();
+}
+
 export function recordServiceCall(facilityId) {
   return queuedPost(`/map/facility/${facilityId}/called`, {});
 }

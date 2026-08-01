@@ -75,6 +75,64 @@ def on_time(
     }
 
 
+# AI-CONTEXT: A1 requirement 5's surface. The queue is only worth building if a driver
+# can see WHAT they are about to send and to WHOM — a list saying "1 packet" with a Send
+# button satisfies the letter of "the driver reviews" and none of its point. §11.7's rule
+# that a figure travels with what produced it applies to a document more than a number.
+@router.get("/stop-packets")
+def stop_packets(
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    from app.foundation.f02_facility import public as facility
+    from app.foundation.f05_load import public as loads
+
+    out = []
+    for packet in m5.drafted_packets(db, account.id):
+        stop = loads.get_stop(db, packet.stop_ref)
+        load = loads.get_load(db, stop.load_id) if stop is not None else None
+        cp = (
+            loads.get_counterparty(db, packet.counterparty_ref)
+            if packet.counterparty_ref is not None
+            else None
+        )
+        fac = facility.get_facility(db, stop.facility_id) if stop is not None else None
+        out.append(
+            {
+                "id": str(packet.id),
+                "state": packet.state.value,
+                "drafted_at": packet.drafted_at.isoformat(),
+                "reference": getattr(load, "reference_number", None),
+                "recipient": getattr(cp, "contact_email", None),
+                "counterparty_name": getattr(cp, "name", None),
+                "facility_name": getattr(fac, "name", None),
+            }
+        )
+    return out
+
+
+@router.post("/stop-packets/{packet_id}/send")
+def send_stop_packet_route(
+    packet_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    packet = m5.get_stop_packet(db, packet_id, account.id)
+    if packet is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "packet not found")
+    try:
+        # idempotent by design: a retried tap must not put a second document in an inbox
+        packet = m5.send_drafted_packet(db, packet, gateway=_GATEWAY, now=datetime.now(UTC))
+    except ValueError as exc:
+        # A deployment with no PUBLIC_BASE_URL cannot put the paperwork anywhere the
+        # dispatcher can reach. For a CLAIM the notice still carries meaning without the
+        # link; for a HANDOFF the link IS the document, so sending would deliver an empty
+        # promise. Refused plainly rather than 500ing at a driver, and the draft stays in
+        # the queue so nothing is lost.
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    return {"id": str(packet.id), "state": packet.state.value}
+
+
 @router.get("/wallet")
 def wallet(
     account: identity.Account = Depends(current_account),

@@ -38,6 +38,7 @@ const SOURCE = {
   docs: "DocsSurface",
   bookings: "BookingsSurface",
   more: "MoreSurface",
+  "stop-packets": "StopPacketsSurface",
 };
 
 // the driver app: everything that is not a §18 portal and not a public page

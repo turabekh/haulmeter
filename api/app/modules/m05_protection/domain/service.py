@@ -591,6 +591,26 @@ def draft_stop_packet_on_exit(db: Session, account_id, facility_id, now: datetim
     return packet
 
 
+def drafted_packets(db: Session, account_id) -> list:
+    """The driver's queue: what is waiting for them to look at, oldest first — a packet
+    from this morning should not be buried under one from an hour ago."""
+    return list(
+        db.scalars(
+            select(StopPacket)
+            .where(StopPacket.account_id == account_id)
+            .where(StopPacket.state == StopPacketState.draft)
+            .order_by(StopPacket.drafted_at)
+        )
+    )
+
+
+def get_stop_packet(db: Session, packet_id, account_id):
+    """Scoped to the OWNER. One driver's paperwork is not another's to send, and a
+    document that leaves under the wrong name is not recoverable by apologising."""
+    packet = db.get(StopPacket, packet_id)
+    return packet if packet is not None and packet.account_id == account_id else None
+
+
 def send_drafted_packet(db: Session, packet, gateway, now=None, base_url_required: bool = True):
     """The driver's act. Idempotent: a retried tap must not put a second document in a
     dispatcher's inbox."""

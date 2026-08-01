@@ -675,6 +675,29 @@ const SURFACES = [
   ["map-preset-service", "/", {
     mocks: mapMocks(REPAIR_PIN), open: [{ click: ".chip", nth: 5 }], ready: ".chip[aria-selected='true']",
   }],
+  // A1 req 5's review screen — a new surface, so it is measured at 360 dp with the rest
+  // rather than shipping unseen. Two states because the EMPTY one is what most drivers
+  // see most days, and §15.3 gives it a sentence rather than a blank page.
+  ["packets-review", "/protection/packets", {
+    mocks: {
+      "/protection/stop-packets": [
+        {
+          id: "11111111-1111-1111-1111-111111111111",
+          state: "draft",
+          drafted_at: "2026-08-01T12:00:00+00:00",
+          reference: "BL-77421",
+          recipient: "accountspayable@boltlogistics.example",
+          counterparty_name: "Bolt Logistics",
+          facility_name: "Midwest Distribution Center — Dock 4",
+        },
+      ],
+    },
+    ready: ".packet__send",
+  }],
+  ["packets-review-empty", "/protection/packets", {
+    mocks: { "/protection/stop-packets": [] },
+    ready: ".packets__empty",
+  }],
   // §23 entry 99's "somewhere else" sheet — a new sheet, so it gets measured at
   // 360 dp with the rest rather than shipping unseen. The chip that opens it renders
   // only when NOT driving (Forbidden #11), which is the default state here.
