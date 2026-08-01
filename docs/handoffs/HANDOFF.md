@@ -3,8 +3,17 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-111.md](HANDOFF-111.md)** — read this first, every session.
+➡️ **[HANDOFF-112.md](HANDOFF-112.md)** — read this first, every session.
 
+> **112** finishes **A1 requirement 1 — the capture checklist**, and the finding underneath
+> it is that the requirement's own last clause was the hard part: "the checklist is
+> configuration (F13), not code" was true in the code and **false in every interface an
+> operator has**. `a01.capture_checklist` is the first config key any component in this
+> product reads, and `/admin/config` listed only keys somebody had already set.
+>
+> **112 is COMMITTED BUT NOT PUSHED AND NOT DEPLOYED.** Production is at
+> `0057_a01_stop_packet`; migrations `0058` and `0059` are applied to dev only.
+>
 > 110 and 111 are one working session, the first under **PRD v2.0**
 > (`docs/trucker-platform-prd-v2-amendment.md`, now build law beside the v1.0 PRD).
 >
