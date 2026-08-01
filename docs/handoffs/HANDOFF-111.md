@@ -145,38 +145,40 @@ a restore performed and verified, an alert triggered deliberately and received.
 
 ## 6. Exact next task
 
-**1. Answer §5.** One look in an inbox decides whether the alerting half of A12 is real.
+Rewritten clean. This section had become a stack of superseded items with "(was)" markers
+on them, which is the same rot the rest of this session kept finding — a next-task list
+nobody can act on is worse than a short one.
 
-**2. A5 still needs a driver; A12 does not and is DONE.** A12's validation is about the world
-(a restore, an alert) and both halves are now observed. A5's is about a person: its
-`service_call_tapped` count is 1 and that one is mine.
+**1. A5 IS STILL UNVALIDATED, and it is the only thing between this work and v2.0's own
+definition of done.** Everything else about it is finished and live: the map finds repair
+shops in 48 states, 1,008 of them are callable, and a tap records
+`service_call_tapped`. That count is **1**, and it is mine. **A driver who is not the
+owner has to use it.** No amount of further building moves this.
 
-**3. DONE — all nine covered states now run the corrected filter**, on the laptop and on the
-box. See §10. The manual step is gone: `make osm-publish STATE=x` then
-`make ingest-remote STATE=x`.
+**2. Put a push on a real handset — STILL YOURS**, and now six sessions old. Android
+Chrome on the deployed site, sign in, More → notifications, turn on BOTH switches, park
+in a truck-stop geofence for 15 minutes. It is the only link in the notification stack
+nothing in this repo can exercise.
 
-**4. A9's §4 and §5 gates are measured and done** (§11, §12, §13), except the merge-review
-UI. Previously-stated next step, now superseded in part:
+**3. Finish the national rollout.** us-midwest is live. us-northeast, us-west and
+us-south were extracting when this was written. Per region:
+`make osm-extract REGION=x` → `make osm-publish REGION=x` → `make ingest-remote REGION=x`
+→ **then `repair-scales`, `repair-fuel`, `repair-duplicates`, which the region path
+genuinely needs** (§17: midwest left 194 scales and 163 fuel islands unmerged, exactly as
+A9 §3 predicts). Audit each with `scripts/audit_truck_names.py` BEFORE loading.
 
-**(was) A9's §4 and §5 gates are both measured and done** (§11, §12). What remains of A9 is
-the **admin merge-review surface** §5 also asks for, and `/admin/facilities/*` still not
-resolving merged ids — the 95 merges made today mean 95 more ids where an admin URL and a
-driver URL answer about different places. That is now the oldest untouched item in A9.
-Superseded detail follows for the record:
+**4. Two owner decisions still block Group 1 work.** A2 needs **D5** (lot-status trigger:
+arrival or settled), A4 needs **D3** (fuel filter: new chip or a state on the existing
+preset). §2's delegation does not cover these — v2.0 §6 is a different document and says
+"no session may resolve these".
 
-**(was) A9's §4 gate is measured and half-done** (§11). The geography index is in and deployed;
-`_enrich` is bounded at ~275 ms worst case and does NOT block a national run. What A9 still
-needs is its own §5 — **dedupe at density**, which is the untested one: geohash-7 blocking
-with 0.4 name similarity will produce more false merges once metros are dense, and
-`/admin/facilities/*` still does not resolve merged ids. That is the next real piece of A9,
-and unlike §4 it has no measurement yet.
+**5. A1 — Stop Packet is the largest unstarted Group 1 requirement**, and the highest
+frequency burden drivers actually described. It needs no open decision.
 
-**5. Put a push on a real handset — STILL YOURS, five sessions running.**
-
-**6. A3** (the freshness badge says "1 driver" about a DOT feed) is the cheapest remaining
-Group 1 defect. **A2 needs D5, A4 needs D3** — those two decisions are still open and the
-delegation in §2 does not cover them: v2.0 §6 is a different document and says "no session
-may resolve these".
+**6. What A9 still has open**, in the order I would take it: **§6 TPIMS live availability
+is 1 state** and is forms and emails rather than code; **§7 chain locators** is decision
+**D6**; **§8's ODbL share-alike position** is decision **D2** (the attribution line
+itself already exists and is live).
 
 ## 10. All nine states re-extracted, and A3 was already fixed
 
@@ -572,7 +574,7 @@ would have been a green test measuring nothing, on the same day this session fou
 of those. The tests assert the cadence and the resume property; the memory claim is
 settled above, where it is real.
 
-## 7. Debt
+## 21. Debt
 
 **Closed this session:** no backups · no monitoring · the disk was about to fill · "what is
 the box running" was unanswerable · design-prd entry 117 was blocked on a signature.
@@ -610,7 +612,7 @@ not exist · the profit calculator opens on invented defaults · dwell-risk thre
 unvalidated · "claim paid" is dormant · notification copy is English-only server-side ·
 **all live API keys are still on an internet-facing VM**.
 
-## 8. What I did NOT verify
+## 22. What I did NOT verify
 
 - **That the alert email arrives.** §5. Everything up to the send is proven; the inbox is not.
 - **That a restore works on a DIFFERENT machine.** The verification restores onto the same
@@ -623,7 +625,7 @@ unvalidated · "claim paid" is dormant · notification copy is English-only serv
   backup taken during a large ingest could legitimately sit further behind live than that.
 - **Anything about A9's national density.** Untouched.
 
-## 9. Restarting
+## 23. Restarting
 
 ```
 make up                              # local stack
