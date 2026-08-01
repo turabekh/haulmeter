@@ -21,8 +21,8 @@ Everything is pushed and deployed.
 
 | Thing | Value |
 |---|---|
-| Migrations | head **0055_f08_push_subscription** (no new migration this session) |
-| Tests | **pytest 1268 · vitest 607 · layout 193 · ruff + import-linter 30/30** |
+| Migrations | head **0056_a09_facility_geog_idx** — the A9 §4 geography index, deployed |
+| Tests | **pytest 1270 · vitest 607 · layout 193 · ruff + import-linter 30/30** |
 | §23 decision log | **118 entries** — 117 (Service chip) **approved**, 118 (the delegation) added |
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
@@ -155,11 +155,12 @@ a restore performed and verified, an alert triggered deliberately and received.
 box. See §10. The manual step is gone: `make osm-publish STATE=x` then
 `make ingest-remote STATE=x`.
 
-**4. A9 is now unblocked on its stated blocker.** A12's backups exist and are proven, and the
-disk has room. What A9 still needs before a national run is §4 of its own spec — the bulk
-reads and the GiST-on-expression indexes — because `_enrich` is per-pin and the 300-pin cap
-will bind in every metro at national density. **Measure with `EXPLAIN (ANALYZE)` before
-multiplying the table**, which its spec says and this session's habit agrees with.
+**4. A9's §4 gate is measured and half-done** (§11). The geography index is in and deployed;
+`_enrich` is bounded at ~275 ms worst case and does NOT block a national run. What A9 still
+needs is its own §5 — **dedupe at density**, which is the untested one: geohash-7 blocking
+with 0.4 name similarity will produce more false merges once metros are dense, and
+`/admin/facilities/*` still does not resolve merged ids. That is the next real piece of A9,
+and unlike §4 it has no measurement yet.
 
 **5. Put a push on a real handset — STILL YOURS, five sessions running.**
 
@@ -208,6 +209,50 @@ dropping it cost nothing.
 **The digests match across machines**, which is what A12 requirement 3 was for: Indiana loaded
 locally and on the box both record `481cbd335d578e9d`, so "are the laptop and the box running
 the same extract" is now a question with an answer instead of an assumption.
+
+## 11. A9 §4 measured — the index was the problem, `_enrich` is not (yet)
+
+A12 unblocked A9 this morning, so its §4 gate — *"handle volume before it arrives"* — was
+the next work. It names two things. **Measurement supports one of them and softens the other.**
+
+**The index was real, and worse than described.** `spatial_index=True` on `geom` builds a
+GEOMETRY index; every distance query in F2 casts to geography, and a geometry index cannot
+answer that. **All six were sequential scans**, and nobody noticed because 6,516 rows is
+28 ms. Measured on the box:
+
+| | rows examined | time |
+|---|---|---|
+| before | **6,512** to return 26 | 28 ms |
+| after (`ix_facility_geog`) | **30** | 13.5 ms |
+
+The halving is not the point — a seq scan is linear at a measured ~4.3 µs/row, and
+`_facilities_in_area` issues one query **per facility type**, so Drive's five kinds would
+cost most of a second at national density. Migration `0056_a09_facility_geog_idx`, deployed,
+head confirmed on the box.
+
+**`_enrich` is bounded, and A9 §4 overstates it.** It says the per-pin enrichment means
+"bulk reads in M3, M6 and M7 come first". Measured server-side, from inside the api
+container so the wire is not in the number:
+
+| viewport | pins | median |
+|---|---|---|
+| r=8 km | 7 | 63 ms |
+| r=50 km | 50 | 147 ms |
+| r=150 km | 188 | 192 ms |
+| r=400 km | 0 (591 clustered) | 108 ms |
+
+That is **~0.71 ms per pin** (a linear fit across three points, not an isolation of
+`_enrich` alone), so the 300-pin cap puts the worst case at **~275 ms server-side** — inside
+§20's 300 ms tab switch, and the clustering above the cap is what keeps it there. **Bulk
+reads are the next optimisation, not a prerequisite.** What A9 §4 actually predicts is a UX
+change rather than an outage: at national density more metro viewports cross the cap and
+return clusters instead of pins, which is §11.5 working as designed.
+
+**One measurement trap worth carrying.** The first numbers came from the laptop and showed a
+20% gain where the box shows a halving — the local postgres runs amd64 under emulation and
+~60 ms of fixed overhead swamped the difference. And an 800 ms figure from `curl` on my
+machine was almost entirely WAN latency to us-central1. **Neither a dev container nor a
+laptop round-trip is a performance measurement.**
 
 ## 7. Debt
 
