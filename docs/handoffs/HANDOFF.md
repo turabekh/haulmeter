@@ -13,6 +13,8 @@ results, exact next task, and blockers always live in the latest numbered handof
 >
 > **112 is pushed and deployed · haulmeter.online CURRENT at `0059_f13_config_decl`**,
 > verified against the box, with the backup restored and verified at the new schema.
+> **The local stack is DOWN** (owner on a break) — `make up` restores it; production is
+> untouched and serving.
 >
 > 110 and 111 are one working session, the first under **PRD v2.0**
 > (`docs/trucker-platform-prd-v2-amendment.md`, now build law beside the v1.0 PRD).

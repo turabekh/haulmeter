@@ -4,7 +4,9 @@
 > of **A1 — requirement 1, the capture checklist** — and the finding underneath it is
 > that the requirement's own last clause was the hard part.
 >
-> **Stack UP · everything pushed and deployed · haulmeter.online CURRENT.**
+> **Stack DOWN (owner taking a break) · everything pushed and deployed ·
+> haulmeter.online CURRENT and serving.** Only the LOCAL dev compose stack was stopped;
+> production is untouched and running.
 > Verified against the artifact, not the deploy script's output: production head is
 > `0059_f13_config_decl`, `f06.doc_type` carries `seal` and `damage`, the declaration row
 > exists and is UNSET, both checklists resolve with a real capture path for every item,
@@ -23,6 +25,7 @@
 | Gates | **pytest 1345 · vitest 632 · layout 209 · import-linter 30/30** |
 | Migrations | dev **and production** head `0059_f13_config_decl` |
 | Working tree | clean apart from untracked `collect_files.py` (pre-existing, not mine) |
+| Local stack | **DOWN** — `make down` at the end of the session. `make up` restores it |
 | Deploy | run at the owner's word, then verified against the box (see the banner) |
 
 ## 2. A1 requirement 1 — what it actually asked for
@@ -182,9 +185,17 @@ the single-row fallback, and `load-checklist-capture` opens the sheet from a row
 
 ## 10. Restarting
 
+The local stack is **down**. Nothing is broken and nothing is half-applied — the dev
+database keeps its volume, so `make up` returns it at head `0059_f13_config_decl` with
+the same data it had. Production is unaffected by any of this and is serving.
+
 ```
-make up          # preflight, then the full stack
+make up          # preflight (fails loud with the conflicting PID), then the full stack
 make test        # 1345 pytest + 632 vitest — do NOT pipe it
 make lint        # ruff + import-linter (30 contracts)
-make ui-layout   # 209 states, ~4 min
+make ui-layout   # 209 states, ~4 min — only after touching a token or layout.spec itself
 ```
+
+Nothing is waiting on a background job, an ingest, or a queue. The session ended at a
+clean boundary: A1 requirement 1 is complete and deployed, and the next task (§8) is an
+owner decision, not a continuation.
