@@ -310,3 +310,22 @@ def test_a_fuel_station_named_diesel_is_not_a_repair_shop():
     assert "node/960" not in recs or recs["node/960"].facility_type != (
         facility.FacilityType.repair
     )
+
+
+def test_a_truck_TERM_must_be_a_word_not_a_fragment():
+    """"Yosemity Sams Autocare Center" was admitted as a truck repair facility across
+    the whole midwest region, because "Yo-SEMI-ty" contains `semi`.
+
+    `direction_of` has guarded exactly this since it was written — "a direction must be
+    a WORD, not a letter inside one; Sbarro is not southbound" — and the truck terms,
+    added later in the same session, did not carry the rule across. Ninth instance of
+    that failure here, and the cheapest one to have prevented."""
+    from app.foundation.f02_facility.domain.ingest import adapters
+
+    assert not adapters.osm_serves_trucks({"name": "Yosemity Sams Autocare Center"})
+    assert adapters.osm_serves_trucks({"name": "Semi Service Inc"})
+    assert adapters.osm_serves_trucks({"name": "Anderson Semi Repair"})
+    # the terms that DO earn their place keep working, including inside punctuation
+    assert adapters.osm_serves_trucks({"name": "Zt Auto & Truck"})
+    assert adapters.osm_serves_trucks({"name": "Woodford Diesel Performance Llc"})
+    assert adapters.osm_serves_trucks({"name": "Big Rig Chrome Shop"})

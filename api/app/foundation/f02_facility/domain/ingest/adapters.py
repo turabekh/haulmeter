@@ -7,6 +7,7 @@ capacity), TPIMS (MAASTO real-time availability), OSM (Geofabrik extracts, ODbL)
 and a chain-locator STUB (no scraping — ToS review pending). Never Google Places.
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Protocol
@@ -437,9 +438,19 @@ _TRUCK_EXPLICIT_TAGS = (
 )
 
 
+# AI-CONTEXT: a term must be a WORD, not a fragment inside one. "Yosemity Sams Autocare
+# Center" was admitted across the entire midwest region because "Yo-SEMI-ty" contains
+# `semi`. `direction_of` has guarded exactly this since it was written — "a direction
+# must be a WORD, not a letter inside one; Sbarro is not southbound" — and these terms,
+# added later the same day, did not carry the rule across. Leading boundary only: `truck`
+# must still match "Trucking" and "Trucks".
+_TRUCK_NAME_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(t) for t in _TRUCK_NAME_TERMS) + ")", re.IGNORECASE
+)
+
+
 def _osm_truck_named(tags: dict) -> bool:
-    name = str(tags.get("name") or "").lower()
-    return any(term in name for term in _TRUCK_NAME_TERMS)
+    return bool(_TRUCK_NAME_RE.search(str(tags.get("name") or "")))
 
 
 def _osm_truck_explicit(tags: dict) -> bool:
