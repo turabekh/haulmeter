@@ -29,7 +29,7 @@ Everything is pushed and deployed.
 | Deployed | **CURRENT** — A5, A12, **all nine states re-extracted**, backups, alerting |
 | Coverage | `repair` **12 → 458** · callable phones **0 → 807** (§10) |
 | Backups | **gs://haulmeter-backups**, nightly 03:30 UTC, 30-day lifecycle, **restore proven** |
-| Alerting | GCP uptime check + policy → **turabekh@gmail.com** (see §5 — the last inch is unconfirmed) |
+| Alerting | GCP uptime check + policy → **turabekh@gmail.com**, **delivery confirmed by the owner** |
 
 ## 2. design-prd rule 6 now DELEGATES (§23 entry 118)
 
@@ -53,7 +53,7 @@ reconstruct from the code.
 | Requirement | State |
 |---|---|
 | 1. Automated backups with a **proven restore** | **DONE.** Nightly 03:30 UTC → `gs://haulmeter-backups`; restore verified nightly at 04:15 and **performed by hand twice today** |
-| 2. One health alert that reaches a human | **BUILT, last inch unconfirmed** — see §5 |
+| 2. One health alert that reaches a human | **DONE and VALIDATED** — fired deliberately, **owner confirmed the email arrived** |
 | 3. Every data load records a snapshot identifier | **DONE**, and proven on the box |
 
 **v2.0 §7 item 7 — "a database restore has been performed and verified" — is satisfied.**
@@ -113,7 +113,7 @@ the corrected one produce that same filename and differ by 65 repair shops.
    **`gs://haulmeter-sources`**, and `make osm-publish` / `make ingest-remote` make the round
    trip one command each — the manual `docker cp` is gone.
 
-## 5. The alert's last inch is NOT confirmed, and I could not confirm it
+## 5. The alert works — fired deliberately, and it arrived
 
 Built and live: a GCP uptime check on `https://haulmeter.online/api/health` from three US
 regions every 5 minutes, an alert policy firing below 40% success over 5 minutes, and an
@@ -129,23 +129,27 @@ channel. The check failed from all three regions for ~8 minutes, which is well p
 60-second condition, so the incident opened and the notification was dispatched. **Both test
 objects have been deleted.**
 
-**What I could not do is look in the inbox.** The channel's `verificationStatus` reads unset
-and `sendVerificationCode` 404s, and an unverified email channel can silently deliver
-nothing — which would be this session's own defect, one layer out: a capability wired to
-something nothing reaches.
+**The owner confirmed the email arrived.** That is A12 requirement 2's validation clause in
+full — *"an alert is triggered deliberately and arrives"* — and it is the half nobody usually
+does, because building the policy feels like finishing.
 
-> **OWNER, one thing: did an email from Google Cloud Monitoring arrive around 04:25 UTC
-> titled something like "ALERT PIPELINE TEST (delete me)"?** If yes, A12 requirement 2 is
-> validated and the phase DoD item is closeable. If no, the channel needs verifying from the
-> console (Monitoring → Alerting → Notification channels → Email → verify), and until then
-> **the alert is decorative.**
+**One thing to carry forward, because it nearly stopped this:** the channel's
+`verificationStatus` reads unset and `sendVerificationCode` 404s, and I took that as evidence
+the channel might silently deliver nothing. **It was a red herring** — an email channel
+created through the API by a project owner delivers without an explicit verification step.
+The status field is not the signal; the arriving email is. Do not spend time chasing that
+field again.
+
+**A12 IS COMPLETE.** All three requirements built, and both halves of its stated validation —
+a restore performed and verified, an alert triggered deliberately and received.
 
 ## 6. Exact next task
 
 **1. Answer §5.** One look in an inbox decides whether the alerting half of A12 is real.
 
-**2. A5 and A12 both still need a driver.** A5's `service_call_tapped` count is 1 and that
-one is mine. A12's alert is unconfirmed. Under v2.0 §2 neither is validated.
+**2. A5 still needs a driver; A12 does not and is DONE.** A12's validation is about the world
+(a restore, an alert) and both halves are now observed. A5's is about a person: its
+`service_call_tapped` count is 1 and that one is mine.
 
 **3. DONE — all nine covered states now run the corrected filter**, on the laptop and on the
 box. See §10. The manual step is gone: `make osm-publish STATE=x` then

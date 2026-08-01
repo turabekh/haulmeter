@@ -20,10 +20,11 @@ results, exact next task, and blockers always live in the latest numbered handof
 > "what is the box running" has an answer.
 >
 > **Stack UP · everything pushed and deployed · haulmeter.online CURRENT.**
-> **ONE THING NEEDS THE OWNER'S EYES: did the test alert email arrive? (111 §5.)** Until
-> that is answered the alerting half of A12 is decorative. A5 and A12 are both still
-> unvalidated under v2.0 §2 — no driver has used either. A push on a real handset is now
-> five sessions old.
+> **A12 is COMPLETE and validated** — restore performed and verified, alert fired
+> deliberately and the owner confirmed it arrived. All nine covered states were re-extracted
+> through the corrected filter: **repair facilities 12 → 458, callable phones 0 → 807.**
+> **A5 is still unvalidated** — no driver who is not the owner has used it. A push on a real
+> handset is five sessions old.
 >
 > Read 110 for the starved rules and the A5 measurements; 109 for the measured flake; 108
 > for the quiet-hours decision; 099 §11 for the repo being public.
