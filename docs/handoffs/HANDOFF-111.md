@@ -399,6 +399,34 @@ One thing the measurement did surface and I left alone: **fleet's table renders 
 360 px viewport.** One pixel, almost certainly a border, no page overflow. Recorded rather
 than chased.
 
+## 16. Going national — the preconditions, checked one at a time
+
+A9 is "the single largest product risk" and its stated blocker (A12) is done. Before
+starting a national run I checked what else A9 names, and **two of the three were already
+satisfied**:
+
+- **§8's ODbL attribution line is "required either way", independent of decision D2. It
+  already exists** — `map.data_credit` = "© OpenStreetMap contributors (ODbL)" in all six
+  locales, rendered when no basemap carries it. **Fifth v2.0 claim this session that is
+  already true in the code.**
+- **§1's "verify against one state before the national run" is done** — nine states, and
+  the filter fix that made them possible is what started this whole session.
+- **§3's "run repair-fuel and repair-scales after every ingest" was NOT done** after
+  today's nine states, and I only noticed by re-reading the spec. Checked: scales had
+  nothing to fix, fuel had **one** branded service area to re-type, applied on both the
+  laptop and the box. The warning earns its keep, and barely — its worst case (Texas's
+  162 unmerged islands) does not reproduce when the hosts already exist in the registry,
+  which they now do.
+
+**§2's regional batching is implemented**: `make osm-extract REGION=us-midwest` alongside
+the per-state form, with everything downstream — the rendered tag filter, `osm-publish`,
+`ingest-remote` — identical either way.
+
+**us-midwest is 2.48 GB and was in flight when this was written.** It is deliberately the
+first region: it overlaps seven states already validated today, so known data sanity-checks
+the run, and it adds IL, MO, NE, ND and SD. **One region first, measured, before committing
+to the other three** — which is A9 §1's own discipline applied one level up.
+
 ## 7. Debt
 
 **Closed this session:** no backups · no monitoring · the disk was about to fill · "what is
