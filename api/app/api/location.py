@@ -160,6 +160,11 @@ def ping(
     for event in events:
         if event.event_type is location.GeofenceEventType.EXIT:
             _warn_of_unrecoverable_gaps(db, account, event.facility_id, now)
+            # A1: leaving a dock DRAFTS the paperwork packet. It does not send it —
+            # requirement 5 is that the driver reviews first, and a document going to a
+            # broker under their name describing a stop they have not looked at is the
+            # one thing M3-FR6, M11-FR3 and M5-FR1 would each refuse.
+            m5.draft_stop_packet_on_exit(db, account.id, event.facility_id, now)
     # §23 entry 112: independent of the geofence, and it has to be. Events only fire
     # for ARMED facilities, so a driver parked at a truck stop for the night produces
     # none — this reads the ping trail instead and writes nothing to the location

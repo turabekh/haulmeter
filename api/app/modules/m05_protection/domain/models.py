@@ -9,13 +9,14 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
 
-from .enums import CapturePhase
+from .enums import CapturePhase, StopPacketState
 
 SCHEMA = "m05"
 ACCOUNT_FK = "f01.account.id"
@@ -92,4 +93,38 @@ class OnTimeConsent(Base):
     load_ref: Mapped[uuid.UUID] = mapped_column(unique=True, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     counterparty_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class StopPacket(Base):
+    """AI-CONTEXT: A1 — the paperwork handed to a dispatcher after a stop.
+
+    It exists as a ROW because it is drafted by one actor (an EXIT event) and sent by
+    another (the driver), and everything in between is waiting. A packet held only in
+    memory could not be reviewed, which is the requirement.
+
+    ONE PER STOP, enforced. Geofences bounce, and two drafts for one stop is two
+    documents a driver has to reject — the second of which teaches them the queue is
+    noise, which is how a review step becomes a rubber stamp.
+    """
+
+    __tablename__ = "stop_packet"
+    __table_args__ = (
+        UniqueConstraint("stop_ref", name="uq_stop_packet_stop"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="CASCADE"), index=True
+    )
+    stop_ref: Mapped[uuid.UUID] = mapped_column(index=True)
+    counterparty_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    state: Mapped[StopPacketState] = mapped_column(
+        Enum(StopPacketState, name="stop_packet_state", schema=SCHEMA),
+        default=StopPacketState.draft,
+    )
+    drafted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    shared_pack_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

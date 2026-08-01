@@ -20,8 +20,8 @@ from app.foundation.f05_load import public as loads
 from app.foundation.f06_documents import public as documents
 from app.foundation.f08_notifications import public as notify
 
-from .enums import CONDITION_SEQUENCE, INSPECTION_DOC_TYPES, CapturePhase
-from .models import ConditionCapture, Incident, OnTimeConsent, OnTimeProof
+from .enums import CONDITION_SEQUENCE, INSPECTION_DOC_TYPES, CapturePhase, StopPacketState
+from .models import ConditionCapture, Incident, OnTimeConsent, OnTimeProof, StopPacket
 
 FLAG_KEY = "m05_protection"
 MODULE = "m05"
@@ -544,6 +544,72 @@ def share_pack(db: Session, log_ref, pack, account_id, recipient=None, now=None,
     return evidence.share_pack(
         db, log, pack.template, content, account_id, recipient=recipient, now=now
     )
+
+
+# --- A1: draft on EXIT, send when the DRIVER says so (v2.0 §3 A1 req 3 and 5) ---
+def draft_stop_packet_on_exit(db: Session, account_id, facility_id, now: datetime):
+    """AI-CONTEXT: A1 requirement 5 is the whole design of this function.
+
+    "The driver reviews before it sends. Nothing leaves silently. A packet the driver
+    did not see is a document they cannot vouch for."
+
+    The obvious build — EXIT fires, packet sends — is the one A1 forbids, and the rest
+    of the product agrees with it: M3-FR6 has the driver approve before send, M11-FR3's
+    ghostwriter does, M5-FR1 is per-load opt-in. A document going to a broker under a
+    driver's name, describing a stop they have not looked at, is the one thing none of
+    those would allow.
+
+    So this DRAFTS and returns. Sending is `send_drafted_packet`, and the gap between
+    them is a person.
+
+    Scoped to `shipper_receiver` because that is where paperwork happens. A draft per
+    fuel stop would train a driver to dismiss the queue, and a review step that is
+    always dismissed is a rubber stamp with extra taps.
+    """
+    fac = facility.get_facility(db, facility_id)
+    if fac is None or fac.facility_type is not facility.FacilityType.shipper_receiver:
+        return None
+    # the driver's current ARMED stop, and it must be the one they just left. F3 only
+    # emits events for armed facilities, so an EXIT elsewhere is not this driver's dock.
+    stop = loads.active_stop_for_account(db, account_id)
+    if stop is None or stop.facility_id != facility_id:
+        return None
+    existing = db.scalar(select(StopPacket).where(StopPacket.stop_ref == stop.id))
+    if existing is not None:
+        # geofences bounce; one stop is one document
+        return existing
+    load = loads.get_load(db, stop.load_id)
+    packet = StopPacket(
+        account_id=account_id,
+        stop_ref=stop.id,
+        counterparty_ref=getattr(load, "counterparty_id", None),
+        state=StopPacketState.draft,
+        drafted_at=now,
+    )
+    db.add(packet)
+    db.flush()
+    return packet
+
+
+def send_drafted_packet(db: Session, packet, gateway, now=None, base_url_required: bool = True):
+    """The driver's act. Idempotent: a retried tap must not put a second document in a
+    dispatcher's inbox."""
+    if packet.state is StopPacketState.sent:
+        return packet
+    result = send_stop_packet(
+        db,
+        packet.account_id,
+        stop_ref=packet.stop_ref,
+        counterparty_ref=packet.counterparty_ref,
+        gateway=gateway,
+        now=now,
+        base_url_required=base_url_required,
+    )
+    packet.state = StopPacketState.sent
+    packet.sent_at = now or datetime.now(UTC)
+    packet.shared_pack_ref = result["shared"].id
+    db.flush()
+    return packet
 
 
 # --- A1: the Stop Packet, a routine handoff (v2.0 §3 A1) ---

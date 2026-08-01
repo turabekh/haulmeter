@@ -6,7 +6,12 @@ mode, incident capture, protection summary. Runs behind the F13 flag
 m05_protection.
 """
 
-from .domain.enums import CONDITION_SEQUENCE, INSPECTION_DOC_TYPES, CapturePhase
+from .domain.enums import (
+    CONDITION_SEQUENCE,
+    INSPECTION_DOC_TYPES,
+    CapturePhase,
+    StopPacketState,
+)
 from .domain.models import ConditionCapture, Incident, OnTimeConsent, OnTimeProof
 from .domain.service import (
     DRIVER_DOC_TYPES,
@@ -27,6 +32,7 @@ from .domain.service import (
     condition_photo_count,
     condition_sequence,
     dispatch_expiry_reminders,
+    draft_stop_packet_on_exit,
     expiry_reminders_due,
     file_on_time_proof,
     has_bol,
@@ -42,6 +48,7 @@ from .domain.service import (
     render_pack,
     restore_blocked_by,
     restore_own_document,
+    send_drafted_packet,
     send_stop_packet,
     set_on_time_consent,
     share_pack,
@@ -94,6 +101,9 @@ __all__ = [
     "protection_summary",
     "render_pack",
     "set_on_time_consent",
+    "draft_stop_packet_on_exit",
+    "send_drafted_packet",
+    "StopPacketState",
     "send_stop_packet",
     "share_pack",
     "register_module",

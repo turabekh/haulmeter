@@ -13,7 +13,7 @@ from .domain.models import (
     EvidenceRecord,
     SharedPack,
 )
-from .domain.render import PackContext
+from .domain.render import PackContext, template_title
 from .domain.service import (
     ChainVerification,
     EvidencePack,
@@ -74,5 +74,6 @@ __all__ = [
     "stop_evidence",
     "create_log",
     "render_pack_pdf",
+    "template_title",
     "verify_chain",
 ]

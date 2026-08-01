@@ -41,3 +41,9 @@ class PackTemplate(enum.Enum):
     # show a fragment of a load. A driver who photographed a pickup and a delivery had
     # eight photos in the system and no document holding more than four.
     load_record = "load_record"
+    # AI-CONTEXT: A1. A ROUTINE HANDOFF, not a claim and not an export. `stop_record`
+    # already describes one stop, but it is the document a DRIVER reaches for their own
+    # records; this one lands in a dispatcher's inbox. Same reasoning `incident` was
+    # added for — the template picks the title, and a handoff announcing itself as a
+    # "Stop record" is wrong on the one line whose whole job is to say what this is.
+    stop_packet = "stop_packet"

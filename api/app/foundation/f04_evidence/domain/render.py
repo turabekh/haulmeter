@@ -94,6 +94,10 @@ PRODUCER = "Haulmeter Evidence Pack 1"
 # `_divergence_note` for why this number and why it lives here rather than in config)
 DISCLOSE_DIVERGENCE_S = 300
 
+def template_title(template) -> str:
+    return TEMPLATE_TITLES.get(template, "Evidence pack")
+
+
 TEMPLATE_TITLES = {
     PackTemplate.detention_claim: "Detention claim",
     PackTemplate.tonu: "Truck ordered, not used",
@@ -102,6 +106,7 @@ TEMPLATE_TITLES = {
     PackTemplate.incident: "Incident report",
     PackTemplate.stop_record: "Stop record",
     PackTemplate.load_record: "Load record",
+    PackTemplate.stop_packet: "Stop paperwork packet",
 }
 
 _fonts_registered = False
