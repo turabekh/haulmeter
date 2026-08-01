@@ -204,9 +204,32 @@ def upsert_record(
 
 
 def ingest_records(
-    db: Session, records: list[StagedRecord], batch_id: str | None = None
+    db: Session,
+    records,
+    batch_id: str | None = None,
+    commit_every: int | None = None,
+    _after_chunk=None,
 ) -> IngestStats:
+    """AI-CONTEXT: `commit_every` exists because A9 batches by REGION.
+
+    Streaming the read fixed the parse (4,677 MB -> 80 MB on us-midwest) and did NOT fix
+    this: the api container still sat at 3.07 GiB of the box's 3.83 during that run,
+    because this loop accumulates every ORM object until the end. us-midwest is the
+    SMALLEST of the four regions.
+
+    OFF by default. Every existing caller keeps one transaction, because changing when
+    other people's data becomes visible is a much bigger change than it looks.
+
+    The trade — a run that dies leaves earlier chunks committed — is only safe because
+    ingest is idempotent on (source_kind, external_ref): a half-finished run is a
+    shorter re-run, not a corrupt registry. Without that, this would be the wrong fix.
+
+    `expunge_all` is the half that actually frees memory. Committing alone leaves every
+    Facility and FacilitySource in the session's identity map, so the transaction
+    shrinks and the process does not.
+    """
     stats = IngestStats()
+    since_commit = 0
     for rec in records:
         if rec.lat is None or rec.lon is None or not rec.external_ref:
             stats.skipped += 1
@@ -218,6 +241,16 @@ def ingest_records(
         else:
             stats.matched += 1
         stats.facility_ids.add(facility.id)
+        since_commit += 1
+        if commit_every and since_commit >= commit_every:
+            db.commit()
+            db.expunge_all()
+            since_commit = 0
+            if _after_chunk is not None:
+                _after_chunk(stats.staged)
+    if commit_every:
+        db.commit()
+        db.expunge_all()
     return stats
 
 

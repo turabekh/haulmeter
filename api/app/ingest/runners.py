@@ -30,6 +30,11 @@ def _batch(name: str) -> str:
 # session is the argument: the old filter and the corrected one produce a file of the
 # same name that differ by 65 repair shops. "When did the box get the good one" is a
 # question only content can answer.
+# big enough that the per-chunk commit is not the cost, small enough that a killed
+# region run loses minutes rather than everything
+OSM_COMMIT_EVERY = 500
+
+
 def _snapshot(path: str) -> dict:
     import hashlib
 
@@ -191,7 +196,18 @@ def run_osm(
         # at 4677 MB and the box has ~2 GB, so it would be OOM-killed there; streaming
         # peaks at 80 MB. See `iter_geojson_features`.
         records = facility.parse_osm_features(facility.iter_geojson_features(geojson_path))
-        return facility.ingest_records(db, records, batch_id=_batch("osm"))
+        # CHUNKED: A9 batches by region, and one region in one transaction sat at
+        # 3.07 GiB of the box's 3.83. Safe only because ingest is idempotent on
+        # (source_kind, external_ref) — a run that dies is a shorter re-run.
+        # only when the caller actually wants a commit — `commit=False` means "nothing
+        # persists", and chunking that ignored it would break that promise quietly,
+        # which is worse than not chunking
+        return facility.ingest_records(
+            db,
+            records,
+            batch_id=_batch("osm"),
+            commit_every=OSM_COMMIT_EVERY if commit else None,
+        )
 
     stats = _record_load(db, "ingest_osm", lambda: _snapshot(geojson_path), _work or load)
     if commit:
