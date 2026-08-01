@@ -3,25 +3,24 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-109.md](HANDOFF-109.md)** — read this first, every session.
+➡️ **[HANDOFF-110.md](HANDOFF-110.md)** — read this first, every session.
 
-> 109 closes 108's deploy: **the box is CURRENT** and no longer tells drivers "Held
-> until morning" about notifications that never arrive. It also **corrects 108 §5** —
-> the map states' `ready` budget was never marginal (the slowest `ready` in the whole
-> 181-state sweep is **80 ms** against 15 s), so the raise it proposed would have
-> buried a real failure rather than fixed a flake; a timeout there now names its own
-> cause. And it closes 108 §8's label-shape test, which turned up a **fourth** copy of
-> the retired "quiet hours defer" claim in the test file for that very feature.
+> 110 is the **first session under PRD v2.0** (`docs/trucker-platform-prd-v2-amendment.md`,
+> which is now build law alongside the v1.0 PRD). It builds **A5 — Service & repair
+> discovery** end to end, and the finding underneath it is the session: **six of the eight
+> OSM service rules had never fired once**, because the extract filter never passed the tags
+> they read. The registry held 12 repair facilities, 0 tire shops, and **0 phone numbers on
+> 4,869 facilities**. The obvious fix — extend the filter — would have produced exactly
+> nothing, because a second unmeasured gate rejected all 2,638 candidates.
 >
-> **Stack is DOWN · two local commits to push (no deploy needed) · the one thing still
-> needing the owner's hands is a push on a real handset** (§7.1).
+> **Stack is UP · six commits to push · this one NEEDS A DEPLOY (A5 is driver-facing) ·
+> `make repair-contact DRY_RUN=0` must run on the box after it · §23 entry 117 is PROPOSED
+> and needs the owner's yes/no · A5 has no validation observation and no way to make one
+> (§7.2) · a push on a real handset is still the item four sessions old.**
 >
-> Read 108 for the quiet-hours file/defer decision and the copy correction; 107 for the
-> quiet-hours inversion and the per-zone table; 106 for the prompt's opt-in; 105 for the
-> token the tray answer never had; 104 for the trigger that could not fire; 103 for Web
-> Push and the one-shot-prompt reasoning; 102 for "the events were missing, not the
-> notifications"; 101 for the detention P0 and the anchor rule; 099 §11 for the repo
-> being public.
+> Read 109 for the measured-flake correction and the label test; 108 for the quiet-hours
+> file/defer decision; 107 for the quiet-hours inversion; 101 for the detention P0 and the
+> anchor rule; 099 §11 for the repo being public.
 
 Each session ends by writing the next `HANDOFF-<n>.md` in this directory and updating
 this pointer to it. Full history is here in `docs/handoffs/`; the Session-0 bootstrap
