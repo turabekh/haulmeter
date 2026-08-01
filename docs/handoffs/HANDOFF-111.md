@@ -21,7 +21,7 @@ Everything is pushed and deployed.
 
 | Thing | Value |
 |---|---|
-| Migrations | head **0056_a09_facility_geog_idx** — the A9 §4 geography index, deployed |
+| Migrations | head **0057_a01_stop_packet** — A1's review queue, deployed |
 | Tests | **pytest 1300 · vitest 612 · layout 193 · ruff + import-linter 30/30** |
 | §23 decision log | **119 entries** — 117 approved, 118 the delegation, 119 the §18 portal list |
 | Handoffs | 000 → 111 |
@@ -727,6 +727,52 @@ outbound messages, every one marked `sent_at`**, and not one was transmitted. Th
 correct for an `environment=test` box running the recording gateway, and it is also a
 database asserting delivery that did not happen. Anyone validating A1, A5 or the detention
 wedge on this box should know that "sent" there means "recorded".
+
+## 28. A1 is built and deployed — drafted on EXIT, sent by a person
+
+**Requirement 5 shaped everything**: *"The driver reviews before it sends. Nothing leaves
+silently. A packet the driver did not see is a document they cannot vouch for."* The
+obvious build — EXIT fires, packet sends — is the one A1 forbids, and the rest of the
+product agrees: M3-FR6 has the driver approve, M11-FR3's ghostwriter does, M5-FR1 is
+per-load opt-in.
+
+| piece | state |
+|---|---|
+| document-only counterparty send | **done** — opens no receivable, records no claim |
+| `PackTemplate.stop_packet` | **done** — separate title from `stop_record` |
+| F3 EXIT trigger at a `shipper_receiver` | **done** — DRAFTS, never sends |
+| driver review before send | **done** — full-screen surface + Load-tab cross-link |
+| F12 queueing | **deliberately not done** — see below |
+| F13 capture checklist | **not built** |
+
+**Three refusals worth keeping**, each of which would have been easier to skip:
+
+- **The send is NOT queued through F12**, unlike A5's call tap. A queued send would
+  report success from a dead dock and leave the driver believing their paperwork went
+  out — §12.4 forbids exactly that. The draft is durable server-side, so the honest
+  failure is "not sent" and another tap.
+- **A deployment with no `PUBLIC_BASE_URL` returns 503 rather than sending.** For a
+  detention CLAIM the notice still means something without a link; for a HANDOFF the link
+  **is** the document, so sending would deliver an empty promise.
+- **Three of the five send tests assert ABSENCES** — no receivable, no claim-count
+  change, no claim/demand/dispute/invoice language. A broker whose claim count rose
+  because a driver sent their paperwork would be a compounding lie about that broker, and
+  PRD §15 names driver fear of blacklisting as a top risk.
+
+**The DRIVING harness caught me claiming a posture I had not built.** The route said
+`withdraws` and the surface never read the driver state; `driving-posture.test.js` calls
+that *"claiming a behaviour it does not have — the exact defect this whole mechanism
+exists to stop repeating"*. The action withdraws at speed now while the LIST stays
+visible: hiding what is waiting would only conceal the backlog.
+
+Deployed and verified against the artifact — `/protection/stop-packets` answers 200, the
+served bundle carries the surface and its six-locale strings, `m05.stop_packet` exists on
+the box, and the restore proof passes at head `0057_a01_stop_packet`.
+
+**A1 IS NOT VALIDATED.** Its clause is "a driver who is not the owner completes a real
+stop, sends a real packet, and the recipient confirms it arrived usable" — and on this box
+the recipient would confirm nothing, because the email adapter is an unwired seam (§27).
+Built, deployed, and waiting on the same thing as A5.
 
 ## 21. Debt
 
