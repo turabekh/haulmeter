@@ -22,7 +22,7 @@ Everything is pushed and deployed.
 | Thing | Value |
 |---|---|
 | Migrations | head **0056_a09_facility_geog_idx** — the A9 §4 geography index, deployed |
-| Tests | **pytest 1290 · vitest 609 · layout 193 · ruff + import-linter 30/30** |
+| Tests | **pytest 1290 · vitest 612 · layout 193 · ruff + import-linter 30/30** |
 | §23 decision log | **119 entries** — 117 approved, 118 the delegation, 119 the §18 portal list |
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
@@ -369,6 +369,35 @@ and named three. The vendor portal was a fifth, logged as E-D3 because it needed
 ships five is not stricter, it is unreliable** — the next session finds a surface that is
 not on the list and has to guess whether that is a defect or an omission. LAW 0 is
 untouched, and its closing sentence still means what it says.
+
+## 15. §18's contract, measured before it was tested
+
+§23 entry 119 exposed that nothing checks the five portals. Rather than write tests for
+the whole contract, I measured it on the real portals at 1920 and 360 first:
+
+| | 1920 | 360 |
+|---|---|---|
+| admin · owner · fleet · scorecard | no page overflow | **no page overflow** |
+| portals importing a driver screen | — | **none** |
+
+**So §18's two load-bearing rules already hold.** What is unenforced is the one that is
+silent when broken: *"they share `ui/core` tokens and components where sensible but NEVER
+import driver-app screens"*. That is the same boundary import-linter holds on the Python
+side, and it now has a test — one that finds the portals **from the router**, because a
+hand-kept list is the same drift one layer up, and that covers the admin console's nested
+panels, because AdminShell is the route component and a reused driver screen would land in
+a panel where nothing was looking. Proved red by importing `MapSurface` into `AdminData`.
+
+**What I deliberately did NOT build:** four portals × four variants in the layout sweep,
+to guard a 1200 dp cap and a responsiveness promise that measurement says are already met.
+That is ~2 minutes added to every run, and `ui-layout`'s own note says a check that is
+painful to run stops being run — which costs more than the assertion pays. The measurement
+above is the evidence; if a portal regresses, it will be because someone changed it, and
+that is when a state is worth adding.
+
+One thing the measurement did surface and I left alone: **fleet's table renders 361 px in a
+360 px viewport.** One pixel, almost certainly a border, no page overflow. Recorded rather
+than chased.
 
 ## 7. Debt
 
