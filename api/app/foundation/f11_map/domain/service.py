@@ -65,6 +65,11 @@ class Pin:
     # keyed on facility_type can only be drawn on the pin a co-location merge is about
     # to remove; keyed on this, it follows the fact onto the surviving pin.
     services: list[str] = field(default_factory=list)
+    # A5: the card renders from a pin, so a phone that stops at the facility row is a
+    # phone the driver cannot tap. Absent rather than empty — the card decides whether
+    # to offer a call by asking whether there IS one, and "" answers yes.
+    phone: str | None = None
+    opening_hours: str | None = None
 
 
 @dataclass
@@ -202,6 +207,33 @@ def _default_badges_for(db: Session, facilities) -> dict:
     return out
 
 
+# AI-CONTEXT: ONE place a Pin is built from a facility. There were two — the bulk
+# builder below and the single-facility one further down — and A5 walked straight
+# into the trap §23 entry 113 documents: `phone` was added to one of them, every
+# unit test passed, and the map (which uses the other) still had no phone number.
+# Two constructors for one object is an agreement owned by neither, exactly like the
+# token the tray answer never had. Everything a pin says about a facility is said
+# here; the callers differ only in how they FETCHED the pieces.
+def _build_pin(fac, lat, lon, status, badges, freshness, availability, capacity) -> Pin:
+    attrs = fac.attributes or {}
+    return Pin(
+        facility_id=fac.id,
+        name=fac.name,
+        facility_type=fac.facility_type.value,
+        shape=PIN_SHAPES.get(fac.facility_type.value, DEFAULT_SHAPE),
+        lat=lat,
+        lon=lon,
+        status=status,
+        badges=badges,
+        freshness=freshness,
+        availability=availability,
+        capacity=capacity,
+        services=list(attrs.get("services") or []),
+        phone=attrs.get("phone"),
+        opening_hours=attrs.get("opening_hours"),
+    )
+
+
 def pins_for(db: Session, facilities, badge_providers=None) -> list[Pin]:
     """The list-shaped builder. Coordinates, statuses and the default badges are each
     fetched for the whole set in one query rather than once per pin."""
@@ -222,20 +254,7 @@ def pins_for(db: Session, facilities, badge_providers=None) -> list[Pin]:
             else [b for provider in badge_providers if (b := provider(db, fac)) is not None]
         )
         pins.append(
-            Pin(
-                facility_id=fac.id,
-                name=fac.name,
-                facility_type=fac.facility_type.value,
-                shape=PIN_SHAPES.get(fac.facility_type.value, DEFAULT_SHAPE),
-                lat=lat,
-                lon=lon,
-                status=status,
-                badges=badges,
-                freshness=freshness,
-                availability=availability,
-                capacity=capacity,
-                services=list((fac.attributes or {}).get("services") or []),
-            )
+            _build_pin(fac, lat, lon, status, badges, freshness, availability, capacity)
         )
     return pins
 
@@ -281,23 +300,17 @@ def _pin_for(db: Session, facility, badge_providers) -> Pin:
     status, freshness, availability = _parking_status(db, facility)
     capacity = (facility.attributes or {}).get("capacity") if availability is not None else None
     badges = [b for provider in badge_providers if (b := provider(db, facility)) is not None]
-    return Pin(
-        facility_id=facility.id,
-        name=facility.name,
-        facility_type=facility.facility_type.value,
-        shape=PIN_SHAPES.get(facility.facility_type.value, DEFAULT_SHAPE),
-        lat=lat,
-        lon=lon,
-        status=status,
-        badges=badges,
-        freshness=freshness,
-        availability=availability,
-        capacity=capacity,
-        services=list((facility.attributes or {}).get("services") or []),
-    )
+    return _build_pin(facility, lat, lon, status, badges, freshness, availability, capacity)
 
 
+# AI-CONTEXT: None means EVERY type; an empty list means NO types. They were the same
+# thing here — both falsy, both answered "all" — and a caller that filtered its type
+# list down to nothing got the whole registry back instead of nothing. A5 walked into
+# it switching the Service preset off: the kill switch returned every facility in the
+# viewport. "No filter" and "filtered to nothing" are opposite instructions.
 def _facilities_in_area(db: Session, lat, lon, radius_m, facility_types):
+    if facility_types is not None and len(facility_types) == 0:
+        return []
     if not facility_types:
         return facility_registry.nearest(db, lat, lon, radius_m)
     seen: dict = {}
@@ -326,6 +339,8 @@ def overlay_pins(
 
 
 def _facilities_in_bbox(db, min_lat, min_lon, max_lat, max_lon, facility_types):
+    if facility_types is not None and len(facility_types) == 0:
+        return []
     if not facility_types:
         return facility_registry.in_bbox(db, min_lat, min_lon, max_lat, max_lon)
     seen: dict = {}

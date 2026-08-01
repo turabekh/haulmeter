@@ -39,6 +39,12 @@ def _serialize_pin(pin) -> dict:
         "status": pin.status,
         "availability": pin.availability,  # int count or "Low" category (never int-parsed)
         "capacity": pin.capacity,
+        # A5: what the SITE offers, and how to reach it. `services` reached the Pin
+        # object long before this and stopped there — never serialized, so the client
+        # could not have rendered a service list if it wanted to.
+        "services": pin.services,
+        "phone": pin.phone,
+        "opening_hours": pin.opening_hours,
         "badges": [{"kind": b.kind, "value": b.value} for b in pin.badges],
         "freshness": (
             {

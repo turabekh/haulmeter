@@ -547,3 +547,30 @@ def test_overlay_stays_quiet_below_the_sample_floor(client, db):
     ).json()["pins"]
     pin = next(p for p in pins if p["name"] == "Barely Seen")
     assert [b for b in pin["badges"] if b["kind"] == "dwell_risk"] == []
+
+
+def test_overlay_carries_the_service_list_and_the_phone_a_driver_taps(client, db):
+    """A5: the card's call action and service rows render from the OVERLAY payload.
+    `services` reached the Pin object and stopped there — the serializer never sent
+    it — so a rule proved at three layers still could not put a repair shop's phone
+    on a screen. One layer short is the whole distance."""
+    headers = _auth(client)
+    shop = facility.create_facility(
+        db, facility.FacilityType.repair, "Portage Diesel Repair", *DALLAS
+    )
+    shop.attributes = {
+        "services": ["truck_repair", "tire"],
+        "phone": "+1-608-555-0199",
+        "opening_hours": "Mo-Fr 07:00-18:00",
+    }
+    db.flush()
+
+    pins = client.get(
+        "/map/overlay",
+        params={"lat": DALLAS[0], "lon": DALLAS[1], "radius_m": 3000, "preset": "service"},
+        headers=headers,
+    ).json()["pins"]
+    pin = next(p for p in pins if p["name"] == "Portage Diesel Repair")
+    assert pin["services"] == ["truck_repair", "tire"]
+    assert pin["phone"] == "+1-608-555-0199"
+    assert pin["opening_hours"] == "Mo-Fr 07:00-18:00"

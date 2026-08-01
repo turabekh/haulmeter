@@ -93,3 +93,16 @@ def test_corridor_excludes_off_heading(db):
     _facility(db, facility.FacilityType.truck_stop, "East", (32.7767, -96.6500))
     entries = mapsvc.corridor(db, *ORIGIN, heading_deg=0.0, max_distance_m=40000, half_angle_deg=45)
     assert [e.name for e in entries] == []
+
+
+def test_no_filter_and_filtered_to_nothing_are_opposite_instructions(db):
+    """`None` means every type; `[]` means no types. Both were falsy and both answered
+    "all", so a caller whose type list filtered down to nothing got the entire registry
+    back. Found switching A5's Service preset OFF: the kill switch returned every
+    facility in the viewport instead of none."""
+    facility.create_facility(db, facility.FacilityType.truck_stop, "Stop", 43.07, -89.40)
+
+    assert mapsvc.facilities_in_area(db, 43.07, -89.40, 5000, facility_types=None)
+    assert mapsvc.facilities_in_area(db, 43.07, -89.40, 5000, facility_types=[]) == []
+    assert mapsvc.facilities_in_bbox(db, 42.0, -90.0, 44.0, -88.0, facility_types=None)
+    assert mapsvc.facilities_in_bbox(db, 42.0, -90.0, 44.0, -88.0, facility_types=[]) == []

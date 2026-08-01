@@ -609,6 +609,18 @@ def parse_osm(geojson: dict) -> list[StagedRecord]:
         if tags.get("hgv") in ("yes", "designated") or tags.get("access") == "hgv":
             amenities.append("truck_parking")
         attributes = {"amenities": amenities, "osm_tags": tags}
+        # A5: promote contact facts OUT of the raw blob. They were always in it — 633
+        # facilities in the live registry carry `phone` inside `osm_tags` and 245 carry
+        # `opening_hours` — and nothing read them, so not one facility in the registry
+        # had a phone number a driver could tap. Absent rather than empty: the card
+        # asks whether there IS a phone, and "" answers yes.
+        for key, tag_names in (
+            ("phone", ("phone", "contact:phone")),
+            ("opening_hours", ("opening_hours",)),
+        ):
+            value = next((str(tags[t]).strip() for t in tag_names if tags.get(t)), "")
+            if value:
+                attributes[key] = value
         # E3.2: services ride alongside the kind, so a truck stop with a tire bay
         # keeps BOTH facts (the kind stays truck_stop; the service list gains "tire").
         services = osm_services(tags)

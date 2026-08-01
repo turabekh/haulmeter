@@ -42,7 +42,13 @@
     {
       "type": "Feature",
       "geometry": { "type": "Point", "coordinates": [-90.1500, 38.6500] },
-      "properties": { "@id": "node/906", "shop": "car_repair", "name": "Diesel Doctors" }
+      "properties": {
+        "@id": "node/906",
+        "shop": "car_repair",
+        "name": "Diesel Doctors",
+        "phone": "+1-608-555-0134",
+        "opening_hours": "Mo-Fr 07:00-18:00"
+      }
     },
     {
       "type": "Feature",

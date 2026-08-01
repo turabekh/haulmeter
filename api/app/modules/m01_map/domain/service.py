@@ -31,6 +31,16 @@ MODULE = "m01"
 # exists; see HANDOFF-076), so the OSM pull is governed by the existing
 # f02_ingest_osm flag and this gates only what a DRIVER sees.
 WEIGH_STATION_FLAG = "m01_weigh_stations"
+# A5: the Service preset. A KILL switch (`is_switched_off`), like the module routes and
+# unlike the weigh-station LAYER above — this ships working and can be switched off,
+# because §23 entry 105's rule is that a registry hiccup must never take a shipped
+# capability dark.
+SERVICE_PRESET_FLAG = "a05_service_preset"
+# The world this depends on is ingest coverage, which is exactly what was broken: the
+# service rules were starved of their tags for the whole life of the project and
+# nothing recorded that anywhere an operator could see. The gate is where that fact
+# now lives (v2.0 acceptance criterion 6).
+SERVICE_INGEST_GATE = "service_ingest_verified"
 # scales are sparse; a corridor stack is for the next few decisions, not a listing
 MAX_CORRIDOR_SCALES = 2
 # design-prd §11.4 names the size: "a vertical next 3 exits/facilities card stack".
@@ -75,7 +85,40 @@ PRESET_TYPES: dict[Preset, list] = {
         facility.FacilityType.shipper_receiver,
         facility.FacilityType.fuel_station,
     ],
+    # A5. The candidate set is the same lesson E3.3 paid for on fuel: a service is a
+    # fact about a SITE, not a kind, so the kinds that can host one all belong here.
+    # Measured on the Wisconsin pull — 10 of the 65 repair records merged into a
+    # truck stop or a parking property, and listing only `repair` would have hidden
+    # every TA Truck Service and Love's Truck Care behind the pin it merged into.
+    Preset.service: [
+        facility.FacilityType.repair,
+        facility.FacilityType.truck_stop,
+        facility.FacilityType.rest_area,
+        facility.FacilityType.parking_property,
+        facility.FacilityType.shipper_receiver,
+    ],
 }
+
+# A5: the services this preset is ABOUT. Deliberately not every SERVICE_KIND — `fuel`
+# has its own preset and `scale` rides Drive, and a chip that answered "where can I
+# get fixed" with every truck stop that sells diesel would answer nothing at all.
+SERVICE_PRESET_KINDS = (
+    facility.SERVICE_REPAIR,
+    facility.SERVICE_TIRE,
+    facility.SERVICE_WASH,
+    facility.SERVICE_MOBILE_REPAIR,
+    facility.SERVICE_TOWING,
+    facility.SERVICE_PARTS,
+)
+
+
+def has_service(facility_type: str, services) -> bool:
+    """ONE definition, for the same reason `sells_fuel` is one: the preset that SHOWS
+    a pin and the card that lists its services must not be able to disagree about
+    whether a site can fix a truck (the §23 entry 94 regression)."""
+    return facility_type == facility.FacilityType.repair.value or any(
+        s in SERVICE_PRESET_KINDS for s in (services or ())
+    )
 
 # E3.3: a parking property is Tonight's layer, not Drive's — EXCEPT when a fuel island
 # merged into it, because before that merge it was a fuel_station pin that Drive showed.
@@ -106,6 +149,20 @@ def register_module(db: Session) -> None:
     flags.register_flag(
         db, WEIGH_STATION_FLAG, description="M1 Weigh-station layer (E3.1, OSM-sourced)"
     )
+    flags.register_flag(
+        db,
+        SERVICE_PRESET_FLAG,
+        description="A5 Service preset — repair, tire, wash and parts on the map",
+    )
+    flags.add_gate(
+        db,
+        SERVICE_PRESET_FLAG,
+        SERVICE_INGEST_GATE,
+        note=(
+            "The OSM extract passes the service tags AND a state has been re-ingested "
+            "through them. Nine states of coverage is not this gate being satisfied."
+        ),
+    )
     admin.register_admin_view(db, "m01.map", MODULE, "Road Intelligence Map", "/admin/m01/map")
 
 
@@ -113,6 +170,8 @@ def _preset_types(db: Session, preset: Preset) -> list:
     """The weigh-station layer is flag-gated, so an un-activated layer contributes no
     pins rather than being filtered out client-side — a driver never downloads a
     layer they cannot see."""
+    if preset == Preset.service and flags.is_switched_off(db, SERVICE_PRESET_FLAG):
+        return []
     types = list(PRESET_TYPES[preset])
     if preset == Preset.drive:
         types += [t for t in _DRIVE_EXTRA_IF_SELLS_FUEL if t not in types]
@@ -133,6 +192,8 @@ def _preset_keeps_kind(preset: Preset, facility_type: str, services) -> bool:
     built pin — the filter runs before pins exist, and the corridor still has entries."""
     if preset == Preset.fuel:
         return sells_fuel(facility_type, services)
+    if preset == Preset.service:
+        return has_service(facility_type, services)
     if preset == Preset.drive and facility_type in {t.value for t in _DRIVE_EXTRA_IF_SELLS_FUEL}:
         return sells_fuel(facility_type, services)
     return True
