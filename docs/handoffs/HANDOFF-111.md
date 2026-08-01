@@ -27,7 +27,7 @@ Everything is pushed and deployed.
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
 | Deployed | **CURRENT** — A5, A12, **all nine states re-extracted**, backups, alerting |
-| Coverage | `repair` **12 → 449** · callable phones **0 → 756** (§10), after §12's dedupe |
+| Coverage | `repair` **12 → 594** · callable **0 → 1,008** · **48 states** · us-midwest loaded (§17, §19) |
 | Backups | **gs://haulmeter-backups**, nightly 03:30 UTC, 30-day lifecycle, **restore proven** |
 | Alerting | GCP uptime check + policy → **turabekh@gmail.com**, **delivery confirmed by the owner** |
 
@@ -516,6 +516,27 @@ the run, because `ingest_records` holds the whole batch and a SQLAlchemy session
 transaction. That is the next thing to fix if the remaining regions are larger — chunked
 commits are safe here because ingest is idempotent on `(source_kind, external_ref)`, so a
 re-run resumes rather than duplicating.
+
+## 19. us-midwest is live on production, and both machines agree
+
+| production | this morning | now |
+|---|---|---|
+| live facilities | 4,874 | **6,786** |
+| `repair` | **12** | **594** |
+| callable phones | **0** | **1,008** |
+| states represented | 9 (OSM) | **48** |
+
+**The post-ingest repairs produced identical numbers on both machines** — 194 scales and
+163 fuel islands merged, 0 duplicates, 0 chains, laptop and box. Same input, same result,
+which is the cheapest possible check that the two are running the same code and the same
+extract, and it is the check A12 requirement 3's digest exists to make possible.
+
+Live through the deployed API in states that had nothing this morning: Omaha 12 service
+pins, Chicago 9, St Louis 9, Fargo 3.
+
+**Backup taken and restore re-verified at the new size** — 8,316 facility rows including
+merged, alembic head matching, PostGIS intact. That number is worth noting on its own: the
+registry has grown ~70% today and the restore proof still runs in the nightly window.
 
 ## 7. Debt
 
