@@ -3,7 +3,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci vapid-keys \
         seed seed-wallet purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
-        repair-fuel repair-contact ui-layout ui-layout-only
+        repair-fuel repair-contact osm-publish ingest-remote ui-layout ui-layout-only
 
 STATE ?= wisconsin
 # osmium-tool is packaged in Debian/Ubuntu; install it in a slim base at run time
@@ -151,6 +151,23 @@ repair-fuel:
 # ingested before the adapter read them. DRY_RUN=0 applies.
 repair-contact:
 	$(COMPOSE) exec api python -m scripts.repair_contact
+
+# AI-CONTEXT: the durable home for an ingest source. A deploy ships CODE — `api/data`
+# is excluded from the bundle — so an extract copied into the api container evaporates
+# on the next deploy, and one copied to /tmp on the host evaporates on the next VM
+# restart. Both happened. The bucket is the copy that survives; the container's is
+# disposable and treated that way.
+osm-publish:
+	@test -f api/data/osm/$(STATE).geojson || (echo "no api/data/osm/$(STATE).geojson — run osm-extract first"; exit 1)
+	gzip -c api/data/osm/$(STATE).geojson > /tmp/$(STATE).geojson.gz
+	gcloud storage cp /tmp/$(STATE).geojson.gz gs://haulmeter-sources/osm/$(STATE).geojson.gz
+	@rm -f /tmp/$(STATE).geojson.gz
+	@echo "published gs://haulmeter-sources/osm/$(STATE).geojson.gz"
+
+# pull that extract onto the DEPLOYED box and ingest it, then print the snapshot row
+# so what the box is running is answerable (A12 req 3)
+ingest-remote:
+	@bash scripts/ingest_remote.sh $(STATE)
 
 # OSM extract: download a Geofabrik state pbf (host curl), then osmium-filter +
 # export truck-relevant features in a container. Output -> api/data/osm/ (gitignored).
