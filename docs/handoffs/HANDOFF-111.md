@@ -27,7 +27,7 @@ Everything is pushed and deployed.
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
 | Deployed | **CURRENT** — A5, A12, **all nine states re-extracted**, backups, alerting |
-| Coverage | `repair` **12 → 594** · callable **0 → 1,008** · **48 states** · us-midwest loaded (§17, §19) |
+| Coverage | **NATIONAL** — `repair` **12 → 1,698** · callable **0 → 2,460** · **50 states** return results (§24) |
 | Backups | **gs://haulmeter-backups**, nightly 03:30 UTC, 30-day lifecycle, **restore proven** |
 | Alerting | GCP uptime check + policy → **turabekh@gmail.com**, **delivery confirmed by the owner** |
 
@@ -573,6 +573,43 @@ contrast test written to guard that assertion is what caught it — without the 
 would have been a green test measuring nothing, on the same day this session found five
 of those. The tests assert the cadence and the resume property; the memory claim is
 settled above, where it is real.
+
+## 24. A9's acceptance criterion is MET — all 50 states return results
+
+**"Every US state returns non-zero truck-relevant results at a metro-scale viewport"**
+(A9 acceptance) — checked through the deployed API, one metro per state:
+
+```
+states with non-zero results: 48 / 48 contiguous     ZERO: none
+Alaska 7 · Hawaii 9
+```
+
+Alaska and Hawaii are **separate Geofabrik extracts, not part of the four US regions**,
+and I only found that by testing them. Both are tiny (0.13 GB and 0.025 GB) and are now
+loaded, so "50 states" is literally true rather than nearly true.
+
+| production | this morning | now |
+|---|---|---|
+| live facilities | 4,874 | **15,147** |
+| `repair` | **12** | **1,698** |
+| callable phones | **0** | **2,460** |
+| states with results | 9 | **50** |
+
+Live service pins where there was nothing this morning: Phoenix 40, Seattle 23, Denver 16,
+Atlanta 14, Boston 6, Nashville 4.
+
+**The post-ingest repairs are not optional on the region path** and the numbers say why —
+795 scales and 696 fuel islands merged into their hosts across the four regions, exactly
+the order-dependency A9 §3 warns about. Laptop and box produced identical figures again.
+
+**Backup and restore re-proven at national scale**: 18,322 facility rows restored and
+verified, head matching, PostGIS intact. The registry is ~3.75× this morning's size and
+the nightly proof still fits its window.
+
+**One measurement artifact worth not misreading**: the `states=48` figure in the database
+counts distinct `attributes.state` values, which come from the NTAD/TPIMS feeds rather
+than OSM. Alaska and Hawaii carry no such attribute. **The map query is the honest test
+of coverage, and it says 50.**
 
 ## 21. Debt
 
