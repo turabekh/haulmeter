@@ -337,6 +337,22 @@ SERVICE_KINDS = (
     SERVICE_FUEL,
 )
 
+# AI-CONTEXT: A5 — the services that make a site a SERVICE CENTER, which is not the
+# same list. Selling a truck fuel or weighing it is not doing something TO it, and
+# conflating the two produced a real wrong answer in the real Madison overlay: "Mobil
+# Diesel" came back as a repair shop, because `fuel` counted as a service and `diesel`
+# in the name counted as serving trucks. One definition, used by the ingest rule that
+# TYPES a facility and by the map preset that FILTERS for one — the two must not be
+# able to disagree about what "can fix my truck" means (§23 entry 94).
+REPAIR_SERVICE_KINDS = (
+    SERVICE_TIRE,
+    SERVICE_WASH,
+    SERVICE_REPAIR,
+    SERVICE_MOBILE_REPAIR,
+    SERVICE_TOWING,
+    SERVICE_PARTS,
+)
+
 _OSM_SERVICE_RULES = [
     (lambda t: t.get("shop") == "tyres" or t.get("service:vehicle:tyres") == "yes", SERVICE_TIRE),
     (
@@ -428,6 +444,13 @@ def _osm_truck_named(tags: dict) -> bool:
 
 def _osm_truck_explicit(tags: dict) -> bool:
     return any(tags.get(key) in values for key, values in _TRUCK_EXPLICIT_TAGS)
+
+
+def repairs_trucks(tags: dict) -> bool:
+    """A site is a `repair` FACILITY when it does something to a truck and serves
+    trucks. Both halves are needed and the first one is the one that was missing —
+    `bool(osm_services(t))` was true of every fuel pump and every weighbridge."""
+    return any(s in REPAIR_SERVICE_KINDS for s in osm_services(tags)) and osm_serves_trucks(tags)
 
 
 def osm_serves_trucks(tags: dict) -> bool:
@@ -564,7 +587,7 @@ _OSM_TYPE_RULES = [
     # every neighbourhood car wash lands in the registry. `_osm_hgv` alone was the
     # gate and it matched nothing at all here; see `osm_serves_trucks` for the measured
     # replacement it is now one third of.
-    (lambda t: bool(osm_services(t)) and osm_serves_trucks(t), FacilityType.repair),
+    (lambda t: repairs_trucks(t), FacilityType.repair),
 ]
 
 

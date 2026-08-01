@@ -10,7 +10,7 @@
      (and tests) never load the ~200 KB library. -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
-import { Truck, TreePine, SquareParking, Fuel, Warehouse, Circle, UtensilsCrossed, DollarSign, Clock } from "lucide-vue-next";
+import { Truck, TreePine, SquareParking, Fuel, Warehouse, Wrench, Circle, UtensilsCrossed, DollarSign, Clock } from "lucide-vue-next";
 import {
   statusPresentation,
   isStale,
@@ -39,6 +39,11 @@ const ICONS = {
   parking_property: SquareParking,
   fuel_station: Fuel,
   shipper_receiver: Warehouse,
+  // A5: a repair facility drew the bare `Circle` fallback — the one kind on the map a
+  // driver looks for while stopped at the roadside was the one with no glyph. The
+  // Service chip uses this same Wrench, which is what lets an icon chip mean anything
+  // at all (the shared-vocabulary rule PresetChips depends on).
+  repair: Wrench,
 };
 function iconFor(pin) {
   return ICONS[pin.facility_type] || Circle;

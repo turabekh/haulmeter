@@ -197,6 +197,32 @@ const BOOKABLE_PIN = {
   capacity: null,
   badges: [{ kind: "bookable", value: 2400, spot_id: "00000000-0000-0000-0000-0000000000a9" }],
 };
+// A5: a repair shop with everything a broken-down driver needs from it — the service
+// list, the hours, and a number to call. 17 of the 45 repair facilities in the real
+// registry carry a phone, so this is the GOOD case; the state below it is the common
+// one, and both have to fit at 360 dp.
+const REPAIR_PIN = {
+  ...TRUCK_STOP_PIN,
+  facility_id: "00000000-0000-0000-0000-0000000000a5",
+  name: "Portage Diesel Repair",
+  facility_type: "repair",
+  status: null,
+  availability: null,
+  capacity: null,
+  freshness: null,
+  badges: [],
+  services: ["truck_repair", "tire", "wash"],
+  phone: "+1-608-555-0199",
+  opening_hours: "Mo-Fr 07:00-18:00",
+};
+const REPAIR_PIN_NO_CONTACT = {
+  ...REPAIR_PIN,
+  facility_id: "00000000-0000-0000-0000-0000000000a6",
+  name: "Badger Truck Services",
+  services: ["truck_repair"],
+  phone: null,
+  opening_hours: null,
+};
 const FUEL_PIN = {
   ...TRUCK_STOP_PIN,
   facility_id: "00000000-0000-0000-0000-0000000000a3",
@@ -632,6 +658,22 @@ const SURFACES = [
     },
     open: [".saved-chip"],
     ready: ".saved__row",
+  }],
+  // A5: the Service preset's card, both halves. The second is not an edge case —
+  // 28 of the 45 repair facilities have no phone number, so a card with no call
+  // action is what most drivers will see, and it must not leave a hole in the layout.
+  ["sheet-facility-service", "/", {
+    mocks: mapMocks(REPAIR_PIN), open: [pinOf(REPAIR_PIN)], ready: ".fac__call",
+  }],
+  ["sheet-facility-service-nocontact", "/", {
+    mocks: mapMocks(REPAIR_PIN_NO_CONTACT),
+    open: [pinOf(REPAIR_PIN_NO_CONTACT)],
+    ready: ".fac__services",
+  }],
+  // the sixth chip has to survive the +40% pseudo-locale in a row that already holds
+  // five — the chips are icons, but the row's geometry is what this measures
+  ["map-preset-service", "/", {
+    mocks: mapMocks(REPAIR_PIN), open: [{ click: ".chip", nth: 5 }], ready: ".chip[aria-selected='true']",
   }],
   // §23 entry 99's "somewhere else" sheet — a new sheet, so it gets measured at
   // 360 dp with the rest rather than shipping unseen. The chip that opens it renders

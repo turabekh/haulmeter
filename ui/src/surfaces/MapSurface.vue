@@ -90,6 +90,12 @@ const PRESET_TYPES = {
   // M13: Food is a filter over the lots vendors actually work, not a new layer —
   // §11.1 caps active layers at two, and the badge does the signalling.
   food: ["truck_stop", "rest_area", "parking_property"],
+  // A5: a service is a fact about a SITE, not a kind, so every kind that can host a
+  // repair bay belongs here — 10 of Wisconsin's 65 repair records merged into a truck
+  // stop or a parking property, and filtering on `repair` alone would hide every one
+  // of them. This list is the OFFLINE fallback only; the server filters on
+  // `has_service`, which is the one definition.
+  service: ["repair", "truck_stop", "rest_area", "parking_property", "shipper_receiver"],
 };
 const PARKING_RANK = { empty: 0, some: 1, null: 2, full: 3 };
 
@@ -303,6 +309,11 @@ const pins = computed(() => {
 // "your filter hid them" call for different next actions, and telling a driver the
 // first when the second is true would make them stop looking.
 const foodEmpty = computed(() => preset.value === "food" && pins.value.length === 0);
+// A5 / §15.3: an honest empty state, because it will be the common one for a while.
+// Coverage is nine states and the service rules were starved for the whole life of
+// the project, so a driver in most of the country will tap this chip and find
+// nothing. "None mapped here yet" is a true sentence; a blank map is not.
+const serviceEmpty = computed(() => preset.value === "service" && pins.value.length === 0);
 const filteredEmpty = computed(() => foodEmpty.value && filtersActive.value);
 
 const rawPins = computed(() => {
@@ -838,6 +849,7 @@ async function submitPrice(cents) {
         </button>
       </p>
       <!-- Q-7: one quiet line + the recruitment affordance. No filler, no scolding. -->
+      <p v-else-if="serviceEmpty" class="food-empty">{{ t("map.service_none") }}</p>
       <p v-else-if="foodEmpty" class="food-empty">
         {{ t("vendor.none_nearby") }}
         <button

@@ -21,7 +21,7 @@
      Density is the point: five 48 dp squares instead of five text pills, in a row
      56 dp tall rather than 64. -->
 <script setup>
-import { Navigation, Moon, Warehouse, Fuel, UtensilsCrossed } from "lucide-vue-next";
+import { Navigation, Moon, Warehouse, Fuel, UtensilsCrossed, Wrench } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 
 const props = defineProps({
@@ -38,6 +38,12 @@ const presets = [
   { key: "work", label: "map.preset.work", icon: Warehouse },
   { key: "fuel", label: "map.preset.fuel", icon: Fuel },
   { key: "food", label: "map.preset.food", icon: UtensilsCrossed },
+  // A5 / §23 E-D2's precedent again: drivers asked for repair shops, tire shops and
+  // "other entities that may help". NAV-1 governs TABS and is untouched — this row is
+  // a filter, and it already scrolls, so a sixth chip costs nothing at 360 dp. Wrench
+  // is the glyph the map already draws on a `repair` pin, so the chip and the pins it
+  // reveals say the same thing (the shared-vocabulary rule above).
+  { key: "service", label: "map.preset.service", icon: Wrench },
 ];
 </script>
 

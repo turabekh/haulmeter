@@ -276,3 +276,37 @@ def test_non_list_attributes_still_overwrite_by_priority(db):
     assert "services" in facility.UNION_KEYS
     assert "capacity" not in facility.UNION_KEYS
     assert "amenities" not in facility.UNION_KEYS
+
+
+def test_a_fuel_station_named_diesel_is_not_a_repair_shop():
+    """Found in the REAL Madison overlay, not in a fixture: "Mobil Diesel" came back
+    as a `repair` facility carrying only a `fuel` service.
+
+    Two rules combined into a wrong answer. `fuel` and `scale` are SERVICE_KINDS, so
+    "has any service" was true of a pump; and `diesel` is a truck-name term, so "serves
+    trucks" was true of anything with Diesel in its name. A site is a SERVICE CENTER
+    only if it does something to the truck — selling it fuel or weighing it is not
+    that, which is the same line the Service preset draws one layer up."""
+    recs = {
+        r.external_ref: r
+        for r in facility.parse_osm(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [-89.4, 43.07]},
+                        "properties": {
+                            "@id": "node/960",
+                            "amenity": "fuel",
+                            "fuel:diesel": "yes",
+                            "name": "Mobil Diesel",
+                        },
+                    }
+                ],
+            }
+        )
+    }
+    assert "node/960" not in recs or recs["node/960"].facility_type != (
+        facility.FacilityType.repair
+    )

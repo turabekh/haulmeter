@@ -12,9 +12,19 @@
      (M7-FR5), so real per-station prices displace the regional baseline over time. -->
 <script setup>
 import { computed } from "vue";
-import { Navigation, SquareParking, Fuel, UtensilsCrossed, Warehouse, Clock } from "lucide-vue-next";
+import {
+  Navigation,
+  SquareParking,
+  Fuel,
+  UtensilsCrossed,
+  Warehouse,
+  Clock,
+  Phone,
+  Wrench,
+} from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import StatusPill from "./StatusPill.vue";
+import { useDriverState } from "../state.js";
 import { formatMiles, freshnessLabel, isStale, SCALE_TYPES } from "../presentation.js";
 import { formatMoney } from "../meter.js";
 import { useI18n } from "../i18n.js";
@@ -51,9 +61,30 @@ const emit = defineEmits([
   "handoff",
   "vendor",
   "open-stop",
+  "save-for-stop",
 ]);
 const { t } = useI18n();
 const router = useRouter();
+const { isDriving } = useDriverState();
+
+// AI-CONTEXT: A5 — reaching the shop. Three rows, each ABSENT rather than empty when
+// there is nothing to say (§15.3 / the Q-7 rule the vendor section follows).
+//
+// The absent case is the COMMON one and that is the whole reason these are guarded:
+// 28 of the 45 repair facilities in the registry have no phone number. A call button
+// that does nothing is worse than no button for someone standing beside a broken
+// truck at night.
+const phone = computed(() => props.pin.phone || null);
+const openingHours = computed(() => props.pin.opening_hours || null);
+// only the services a driver in trouble is looking for. `fuel` and `scale` are
+// services too and belong to their own preset and layer — listing them here would
+// turn "what can this place do for me" into a description of every truck stop.
+const SERVICE_ROWS = ["truck_repair", "tire", "wash", "mobile_repair", "towing", "parts"];
+const serviceList = computed(() =>
+  SERVICE_ROWS.filter((s) => (props.pin.services || []).includes(s)).map((s) =>
+    t(`facility.service.${s}`),
+  ),
+);
 
 function viewFacility() {
   router.push(`/facility/${props.pin.facility_id}`);
@@ -192,6 +223,21 @@ function vendorLine(entry) {
       <span class="fac__dwell-basis">{{ dwellRisk.sample_size }} {{ t("profile.stops_basis") }}</span>
     </p>
 
+    <!-- A5: what this place can do for a truck, and how to reach it. Each row is
+         absent rather than empty — the card is read in ten seconds. -->
+    <p v-if="serviceList.length" class="fac__services">
+      <Wrench :size="16" :stroke-width="2" aria-hidden="true" />
+      <span>{{ serviceList.join(" · ") }}</span>
+    </p>
+    <p v-if="openingHours" class="fac__hours">
+      <Clock :size="16" :stroke-width="2" aria-hidden="true" />
+      <!-- verbatim, never parsed into "open now" (§11.7): an OSM opening_hours string
+           is a claim by whoever typed it, and a shop that answers the phone at 03:00
+           for a roadside callout is exactly the case a computed "Closed" would get
+           wrong when it matters most. -->
+      <span>{{ openingHours }}</span>
+    </p>
+
     <!-- M6: a fully-booked lot says so (no silent missing button) -->
     <div v-if="parkingFull" class="fac__full">
       <SquareParking :size="16" :stroke-width="2" aria-hidden="true" />
@@ -326,6 +372,26 @@ function vendorLine(entry) {
       <Fuel :size="18" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.report_price") }}
     </button>
+    <!-- A5 req 3: tap to call. An anchor, not a button — `tel:` is the platform's job
+         and a handset already knows how to place a call.
+
+         DRIVING swaps it for save-for-stop rather than hiding it. Forbidden #11 bans
+         interactive prompts at speed and §11.4 makes corridor taps deferred-safe, and
+         placing a call is the most interactive thing on this card. Composed from
+         §11.4's existing rule, not invented: the same queue the saved chip reads. -->
+    <a v-if="phone && !isDriving" class="cta cta--secondary fac__call" :href="`tel:${phone}`">
+      <Phone :size="18" :stroke-width="2" aria-hidden="true" />
+      {{ t("facility.call") }}
+    </a>
+    <button
+      v-else-if="phone"
+      class="cta cta--secondary fac__call-later"
+      type="button"
+      @click="emit('save-for-stop', pin)"
+    >
+      <Phone :size="18" :stroke-width="2" aria-hidden="true" />
+      {{ t("facility.call_at_stop") }}
+    </button>
     <button class="cta cta--tertiary" type="button" @click="viewFacility">
       {{ t("facility.view") }}
     </button>
@@ -383,6 +449,22 @@ function vendorLine(entry) {
   align-items: baseline;
   gap: var(--s-2);
   margin-top: var(--s-3);
+}
+/* an anchor styled as a button still carries the browser's underline, which made
+   Call the one action on the card that did not look like the others */
+.fac__call {
+  text-decoration: none;
+  justify-content: center;
+}
+.fac__services,
+.fac__hours {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: var(--s-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
 }
 .fac__full {
   display: flex;

@@ -99,25 +99,17 @@ PRESET_TYPES: dict[Preset, list] = {
     ],
 }
 
-# A5: the services this preset is ABOUT. Deliberately not every SERVICE_KIND — `fuel`
-# has its own preset and `scale` rides Drive, and a chip that answered "where can I
-# get fixed" with every truck stop that sells diesel would answer nothing at all.
-SERVICE_PRESET_KINDS = (
-    facility.SERVICE_REPAIR,
-    facility.SERVICE_TIRE,
-    facility.SERVICE_WASH,
-    facility.SERVICE_MOBILE_REPAIR,
-    facility.SERVICE_TOWING,
-    facility.SERVICE_PARTS,
-)
-
-
 def has_service(facility_type: str, services) -> bool:
     """ONE definition, for the same reason `sells_fuel` is one: the preset that SHOWS
-    a pin and the card that lists its services must not be able to disagree about
-    whether a site can fix a truck (the §23 entry 94 regression)."""
+    a pin and the rule that TYPES a facility as a repair shop must not be able to
+    disagree about what "can fix my truck" means (the §23 entry 94 regression).
+
+    `REPAIR_SERVICE_KINDS` is deliberately not every SERVICE_KIND — `fuel` has its own
+    preset and `scale` rides Drive. It lives in F2 beside the ingest rule that reads
+    it; this module had its own copy for about an hour, which is exactly how the two
+    definitions this comment warns about get started."""
     return facility_type == facility.FacilityType.repair.value or any(
-        s in SERVICE_PRESET_KINDS for s in (services or ())
+        s in facility.REPAIR_SERVICE_KINDS for s in (services or ())
     )
 
 # E3.3: a parking property is Tonight's layer, not Drive's — EXCEPT when a fuel island
@@ -149,10 +141,21 @@ def register_module(db: Session) -> None:
     flags.register_flag(
         db, WEIGH_STATION_FLAG, description="M1 Weigh-station layer (E3.1, OSM-sourced)"
     )
+    # AI-CONTEXT: `enabled=True` is load-bearing, and its absence shipped this feature
+    # DEAD. `register_flag` creates a row with enabled=False, and `is_switched_off`
+    # reads "a row that says not enabled" as switched off — so registering the flag was
+    # what turned the preset off. The real endpoint returned zero service pins in
+    # Madison while 45 repair facilities sat in the table.
+    #
+    # Same reasoning the module registry records for the twelve module flags: a kill
+    # switch exists so a capability can be STOPPED, not so it starts stopped. An
+    # existing row is left alone by `register_flag`, so an owner's decision to switch
+    # this off still survives every restart.
     flags.register_flag(
         db,
         SERVICE_PRESET_FLAG,
         description="A5 Service preset — repair, tire, wash and parts on the map",
+        enabled=True,
     )
     flags.add_gate(
         db,

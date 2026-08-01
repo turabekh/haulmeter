@@ -63,6 +63,27 @@ def test_the_preset_and_the_card_cannot_disagree_about_what_a_service_is():
     assert not m1.has_service("rest_area", [])
 
 
+def test_the_preset_works_once_its_flag_is_REGISTERED(db):
+    """Found by driving the real endpoint against the real registry, not by a test —
+    the API returned ZERO service pins in Madison while 45 repair facilities sat in
+    the table.
+
+    `register_flag` creates a row with `enabled=False`, and `is_switched_off` reads
+    "a row that says not enabled" as switched off. So the flag that was supposed to
+    make this killable made it born dead. The kill-switch test below passed anyway,
+    because before `register_module` runs there is no row at all and the predicate
+    fails OPEN — it asserted the un-registered state and called it the default.
+
+    A capability that is off the moment it is registered is the exact defect this
+    whole requirement exists to fix, one layer up: not a missing feature, a feature
+    nothing reaches."""
+    _fac(db, facility.FacilityType.repair, "Portage Diesel Repair", *MADISON,
+         services=["truck_repair"])
+    m1.register_module(db)
+    pins = m1.map_overlay(db, _account(db).id, *MADISON, 5000, preset=m1.Preset.service)
+    assert [p.name for p in pins] == ["Portage Diesel Repair"]
+
+
 def test_the_preset_can_be_killed_without_a_deploy(db):
     """Kill-switch semantics, like the module routes and deliberately NOT `is_enabled`:
     a capability that ships works until somebody switches it off. §23 entry 105 —

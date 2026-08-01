@@ -78,11 +78,13 @@ describe("TabBar (design-prd §4 NAV-1)", () => {
 });
 
 describe("PresetChips (design-prd §11.3)", () => {
-  it("offers the five presets and emits selection", async () => {
-    // four §11.3 presets + Food (M13 / §23 E-D2, owner-approved)
+  it("offers the six presets and emits selection", async () => {
+    // four §11.3 presets + Food (M13 / §23 E-D2) + Service (A5, same precedent).
+    // NAV-1's five-tab law is about TABS and is asserted separately — this row is a
+    // filter, and it scrolls.
     const w = mount(PresetChips, { props: { modelValue: "drive" } });
     const chips = w.findAll(".chip");
-    expect(chips).toHaveLength(5);
+    expect(chips).toHaveLength(6);
     await chips[1].trigger("click");
     expect(w.emitted()["update:modelValue"][0]).toEqual(["tonight"]);
   });
@@ -101,6 +103,7 @@ describe("PresetChips (design-prd §11.3)", () => {
       en["map.preset.work"],
       en["map.preset.fuel"],
       en["map.preset.food"],
+      en["map.preset.service"],
     ]);
     // long-press / hover reaches the same name
     expect(chips[4].attributes("title")).toBe(en["map.preset.food"]);
