@@ -250,6 +250,46 @@ def fetch_tpims(url: str) -> list[dict]:
 
 
 # --- OSM (Geofabrik extract, osmium-filtered GeoJSON) ---
+# AI-CONTEXT: the tags the osmium extract must pass, and the ONLY copy of that list.
+# `make osm-extract` renders its filter from here (scripts/osm_filter_args.py), so the
+# extract and the rules below cannot drift.
+#
+# They HAD drifted, totally. The Makefile carried its own hand-kept list of five
+# patterns, and six of the eight service rules read tags it never passed — measured
+# across the filtered Wisconsin and Texas extracts, `shop=tyres`, `shop=truck_repair`,
+# `shop=truck_parts` and `service:vehicle:*` appeared ZERO times in either. Those rules
+# had never fired. `_osm_hgv` read `truck=yes` that never arrived either, and
+# `fuel:diesel` — the tag E3.3 added so a Flying J carries its own diesel fact — only
+# ever arrived on features admitted for some OTHER reason.
+#
+# A tag added here costs extract size and nothing else: a feature the type rules do not
+# claim is skipped at parse time and never reaches the database.
+OSM_EXTRACT_TAGS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("highway", ("rest_area", "services")),
+    ("amenity", ("truck_stop", "fuel", "parking", "weighbridge", "weigh_station", "car_wash")),
+    ("shop", ("tyres", "truck_repair", "car_repair", "truck_parts")),
+    ("hgv", ()),
+    ("access", ("hgv",)),
+    ("truck", ("yes",)),
+    ("fuel:diesel", ()),
+    ("fuel:hgv_diesel", ()),
+    ("service:vehicle:tyres", ()),
+    ("service:vehicle:car_wash", ()),
+    ("service:vehicle:truck_repair", ()),
+    ("service:vehicle:mobile_repair", ()),
+    ("service:vehicle:parts", ()),
+)
+
+
+def osm_extract_filter_args() -> list[str]:
+    """osmium `tags-filter` selectors. `nwr/key=v1,v2` for a value list, `nwr/key` for
+    any value."""
+    return [
+        f"nwr/{key}={','.join(values)}" if values else f"nwr/{key}"
+        for key, values in OSM_EXTRACT_TAGS
+    ]
+
+
 def _osm_hgv(tags: dict) -> bool:
     # truck-relevant: a fuel/parking POI only counts if it admits heavy goods
     # vehicles — otherwise we'd ingest every gas station and parking lot in a state.
@@ -331,6 +371,69 @@ _OSM_SERVICE_RULES = [
 def osm_services(tags: dict) -> list[str]:
     # every matching service, not the first — a yard that washes AND does tires is both
     return [name for rule, name in _OSM_SERVICE_RULES if rule(tags)]
+
+
+# AI-CONTEXT: A5 — whether a service POI serves TRUCKS. Measured on the full Wisconsin
+# extract (2,638 features carrying a service tag) rather than reasoned about, and the
+# measurement inverted the obvious answer:
+#
+#   `_osm_hgv` matches ZERO of the 2,638. Not one. A repair shop is not an access-
+#   controlled area, so nobody tags `hgv` on it — the only access tags present at all
+#   are `customers` (19) and `private` (9). Gating services on `_osm_hgv`, as the type
+#   rule did, meant the filter fix alone would have produced exactly nothing.
+#
+# What DOES separate them, hand-audited over all 76 matches:
+#   · an explicitly truck-specific TAG — 30 features
+#   · trucks NAMED in the business name — 57 features, and two-thirds of the real finds
+#     carry no truck tag at all: "Diesel Doctors", "Portage Diesel Repair", "Truck
+#     Country", "Ottery Brothers Truck Wash" are all plain `shop=car_repair`. So is
+#     "TA Truck Service", and so is Love's. Dropping the name signal drops most of them.
+#
+# The remaining 2,562 are the car trade — 1,347 `shop=car_repair`, 1,060 `amenity=
+# car_wash` — and they must stay out. A truck driver's map that answers "where can I
+# get fixed" with a neighbourhood oil-change bay is worse than one that answers nothing.
+#
+# TERMS EARN THEIR PLACE ON THE DATA, which is why two obvious ones are missing:
+#   · `fleet` — 13 of its 14 Wisconsin matches are "Fleet Farm", a regional retail
+#     chain, whose CAR WASH would have become a truck repair facility. "Fleet XL" is
+#     caught by its own `shop=truck_repair` tag, so the term buys nothing and costs 13.
+#   · `trailer` — its one match is "…Trailer Sales & Accessories", a false positive.
+#     Genuine "Truck & Trailer Repair" yards are caught by `truck`.
+# Both are one-state measurements; a term that starts earning its place elsewhere can
+# be added on the same evidence that removed these.
+_TRUCK_NAME_TERMS = (
+    "truck",
+    "semi",
+    "diesel",
+    "big rig",
+    "18 wheel",
+    "18-wheeler",
+    "freightliner",
+    "peterbilt",
+    "kenworth",
+)
+# tags that mean "trucks" on their own, with no access tag and no name needed
+_TRUCK_EXPLICIT_TAGS = (
+    ("shop", ("truck_repair", "truck_parts")),
+    ("service:vehicle:truck_repair", ("yes",)),
+    ("service:vehicle:parts", ("yes",)),
+    ("service:vehicle:mobile_repair", ("yes",)),
+)
+
+
+def _osm_truck_named(tags: dict) -> bool:
+    name = str(tags.get("name") or "").lower()
+    return any(term in name for term in _TRUCK_NAME_TERMS)
+
+
+def _osm_truck_explicit(tags: dict) -> bool:
+    return any(tags.get(key) in values for key, values in _TRUCK_EXPLICIT_TAGS)
+
+
+def osm_serves_trucks(tags: dict) -> bool:
+    """`_osm_hgv` stays in the disjunction: it is the existing rule, it costs nothing,
+    and a state that tags access properly should still be believed."""
+    return _osm_hgv(tags) or _osm_truck_explicit(tags) or _osm_truck_named(tags)
 
 
 # AI-CONTEXT: E3.1 weigh-station tags, taken from real OSM usage (taginfo, Jul 2026)
@@ -417,7 +520,16 @@ def _osm_is_branded_service_area(tags: dict) -> bool:
 # special case: `colocated_host` returns None when nothing hosts it and it keeps its
 # own pin. What it does need is `fuel_station` OUT of COLOCATED_HOST_TYPES, so the two
 # rules below still hold and one pump cannot host another.
-_COLOCATED_AMENITY_TYPES = frozenset({FacilityType.scale, FacilityType.fuel_station})
+# A5 adds `repair` on the same evidence and the same reasoning. Measured on the new
+# Wisconsin extract: 10 of the 65 repair records stand within the 150 m co-location
+# radius of a destination facility, and they are the service bays of the truck stops
+# a driver already knows — TA Truck Service (×3), Love's Truck Care, Bosselman's Boss
+# Shop. As their own pins they would be a second TA beside every TA. Standing alone a
+# repair shop IS a destination, which needs no special case: `colocated_host` returns
+# None and it keeps its pin (exactly the fuel_station argument).
+_COLOCATED_AMENITY_TYPES = frozenset(
+    {FacilityType.scale, FacilityType.fuel_station, FacilityType.repair}
+)
 
 
 def _osm_is_colocated_amenity(tags: dict, ftype: FacilityType) -> bool:
@@ -448,9 +560,11 @@ _OSM_TYPE_RULES = [
     # outrank a catch-all.
     (lambda t: _osm_is_weighbridge(t) and _osm_is_commercial_scale(t), FacilityType.scale),
     (lambda t: _osm_is_weighbridge(t), FacilityType.weigh_station),
-    # a service POI only counts as a truck facility when it admits heavy goods
-    # vehicles — otherwise every neighbourhood car wash lands in the registry.
-    (lambda t: bool(osm_services(t)) and _osm_hgv(t), FacilityType.repair),
+    # a service POI only counts as a truck facility when it serves TRUCKS — otherwise
+    # every neighbourhood car wash lands in the registry. `_osm_hgv` alone was the
+    # gate and it matched nothing at all here; see `osm_serves_trucks` for the measured
+    # replacement it is now one third of.
+    (lambda t: bool(osm_services(t)) and osm_serves_trucks(t), FacilityType.repair),
 ]
 
 

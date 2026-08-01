@@ -38,6 +38,36 @@
       "type": "Feature",
       "geometry": { "type": "Point", "coordinates": [-90.1400, 38.6400] },
       "properties": { "@id": "node/905", "amenity": "car_wash", "name": "Sudsy Car Wash" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.1500, 38.6500] },
+      "properties": { "@id": "node/906", "shop": "car_repair", "name": "Diesel Doctors" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.1600, 38.6600] },
+      "properties": { "@id": "node/907", "amenity": "car_wash", "name": "Fleet Farm Car Wash" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.1700, 38.6700] },
+      "properties": {
+        "@id": "node/908",
+        "shop": "tyres",
+        "service:vehicle:truck_repair": "yes",
+        "name": "Pomp's Tire Service"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.1800, 38.6800] },
+      "properties": { "@id": "node/909", "shop": "car_repair", "name": "Sunshine Auto Repair" }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-90.1900, 38.6900] },
+      "properties": { "@id": "node/910", "amenity": "car_wash", "name": "Ottery Brothers Truck Wash" }
     }
   ]
 }

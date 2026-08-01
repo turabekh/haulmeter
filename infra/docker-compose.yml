@@ -73,6 +73,12 @@ services:
       - "${API_PORT}:${API_PORT}"
     volumes:
       - ../api:/app
+      # AI-CONTEXT: read-only, and only so a test can assert the `osm-extract` recipe
+      # still renders its tag list from the ingest rules instead of keeping its own
+      # copy. That copy existed and drifted until six service rules were starved. The
+      # alternative was a test that skips when the file is absent, and a check that
+      # skips is a check that reports nothing while looking green.
+      - ../Makefile:/repo/Makefile:ro
     depends_on:
       postgres:
         condition: service_healthy

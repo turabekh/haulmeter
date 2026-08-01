@@ -149,15 +149,20 @@ repair-fuel:
 
 # OSM extract: download a Geofabrik state pbf (host curl), then osmium-filter +
 # export truck-relevant features in a container. Output -> api/data/osm/ (gitignored).
+#
+# The tag list is RENDERED from the ingest rules (scripts/osm_filter_args.py), never
+# written here. A hand-kept copy lived in this recipe and drifted from the rules until
+# six of the eight service rules were starved of the tags they read — no tire shop or
+# repair yard could enter the registry by any path. Do not inline the tags again.
 osm-extract:
 	mkdir -p api/data/osm
 	curl -fSL -o api/data/osm/$(STATE).osm.pbf \
 	  https://download.geofabrik.de/north-america/us/$(STATE)-latest.osm.pbf
-	docker run --rm -v "$(PWD)/api/data/osm:/data" $(OSMIUM_IMAGE) sh -c '\
+	TAGS="$$($(COMPOSE) run --rm --no-deps -T api python -m scripts.osm_filter_args)"; \
+	test -n "$$TAGS" || (echo "osm_filter_args produced nothing — refusing to extract" && exit 1); \
+	docker run --rm -v "$(PWD)/api/data/osm:/data" $(OSMIUM_IMAGE) sh -c "\
 	  apt-get update -qq && apt-get install -y -qq --no-install-recommends osmium-tool >/dev/null && \
-	  osmium tags-filter /data/$(STATE).osm.pbf \
-	    nwr/highway=rest_area,services nwr/amenity=truck_stop nwr/hgv nwr/access=hgv \
-	    nwr/amenity=weighbridge,weigh_station \
+	  osmium tags-filter /data/$(STATE).osm.pbf $$TAGS \
 	    -o /data/$(STATE)-filtered.osm.pbf --overwrite && \
-	  osmium export /data/$(STATE)-filtered.osm.pbf -o /data/$(STATE).geojson --overwrite'
+	  osmium export /data/$(STATE)-filtered.osm.pbf -o /data/$(STATE).geojson --overwrite"
 	@echo "wrote api/data/osm/$(STATE).geojson"

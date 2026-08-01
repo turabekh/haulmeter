@@ -157,12 +157,20 @@ COLOCATED_RADIUS_M = 150.0
 # other — left in, one fuel island could absorb the one across the forecourt. A pump
 # beside a STANDALONE fuel station therefore no longer merges; measured cost today is
 # zero, since every scale that had a host has already been merged by `repair-scales`.
+# AI-CONTEXT: `repair` LEFT this set when A5 made it a co-located amenity, for the
+# same reason `fuel_station` was never in it: a kind that merges into a host must not
+# also be able to host, or one absorbs the other. Measured — 4 of the 29 within-radius
+# repair pairs in Wisconsin are different businesses, and "TA Truck Service" 80 m from
+# "Lakeside International Trucks" would have silently become one place.
+#
+# It cost nothing to remove: across the new Wisconsin extract AND the live nine-state
+# registry, the number of co-located amenities whose ONLY host is a repair facility is
+# zero. Checked before the change, not assumed by it.
 COLOCATED_HOST_TYPES = frozenset(
     {
         FacilityType.truck_stop,
         FacilityType.rest_area,
         FacilityType.parking_property,
-        FacilityType.repair,
         FacilityType.shipper_receiver,
     }
 )
