@@ -1,3 +1,5 @@
+import re
+
 from geoalchemy2 import Geography
 from geoalchemy2.elements import WKTElement
 from sqlalchemy import cast, func, select
@@ -129,17 +131,121 @@ def search_by_name(db: Session, name: str, limit: int = 5) -> list[tuple[Facilit
     return [(row[0], float(row[1])) for row in db.execute(stmt)]
 
 
+# AI-CONTEXT: A9 §5, measured on the nine-state registry rather than reasoned about.
+#
+# §5 predicts that geohash blocking at 0.4 similarity "will produce more false merges
+# once metros are dense". The fear is right; the cause is not. NOT ONE of the 1,078
+# merges in the registry happened beyond 150 m — a geohash-7 cell is ~153 m, so the name
+# path was already bounded by its own blocking. What it does instead is MISS: 191 pairs
+# of live facilities sit within 60 m with similar names and were never merged, every
+# sampled one in a DIFFERENT cell. "Flying J Travel Center" twice at 3 m. "Blue Beacon
+# Truck Wash #74" twice at 20 m. Two pins, one place, because a boundary runs between.
+#
+# Blocking is therefore a geography predicate now (indexed since migration 0056) instead
+# of a string prefix. 60 m rather than the cell's ~153 m, and that is the audit talking:
+# identical-name pairs are 91% of candidates within 30 m and 22% beyond 90 m. Past that
+# distance the neighbours are mostly OTHER PLACES.
+DEDUP_RADIUS_M = 60.0
+
+# a direction as a WORD, in the forms the data actually uses — bare (`NB`), the DOT
+# suffix (`Ebl`), and spelled out (`Eastbound`, `East Bound`). Deliberately NOT bare
+# "North"/"South": "North Platte Truck Stop" is a place, not a carriageway.
+_DIRECTION_RE = re.compile(
+    r"\b(?:([nsew])b l?|([nsew])bl?|(north|south|east|west)\s*bound)\b",
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def direction_of(name: str) -> str | None:
+    """Which carriageway this name claims, or None.
+
+    The discriminator neither distance nor similarity provides: "Turnout Eastbound" and
+    "Turnout Westbound" are 32 m apart at 0.64 similarity and are two different rest
+    areas; "Wood I-75 NB" and "Wood Interstate 75 NB" are 49 m apart at 0.52 and are
+    one. Merging the first pair takes a rest area off the map for every driver heading
+    the other way."""
+    match = _DIRECTION_RE.search(name or "")
+    if match is None:
+        return None
+    token = next(g for g in match.groups() if g)
+    return token[0].upper()
+
+
+def _is_placeholder(name: str) -> bool:
+    from .ingest.adapters import placeholder_name
+
+    return name in {placeholder_name(ftype) for ftype in FacilityType}
+
+
+# AI-CONTEXT: both of these came out of DRY-RUNNING the repair over the real registry,
+# not out of a test — the rule as first written was about to make two false merges.
+#
+# `direction_of` ignores a bare "North"/"South" on purpose, because "North Platte Truck
+# Stop" is a place and not a carriageway. That is right about ONE name and wrong about a
+# PAIR: "Dale City Truck-Only Safety Rest Area South" and "…North" are identical apart
+# from that word, so there the word is the whole distinction. Compare, don't extract.
+_BARE_DIRECTION_RE = re.compile(r"\b(north|south|east|west)\b", re.IGNORECASE)
+_NUMBER_RE = re.compile(r"\d+")
+
+
+def _names_disagree(left: str, right: str) -> bool:
+    """Do these two names actively contradict each other on an identifying token?
+
+    Trigram similarity cannot see either of these, because both are a character or two
+    inside a long string:
+      · a bare compass word that is the ONLY difference — opposite carriageways
+      · a different NUMBER — "Nhs Rest Stop Or Truck Facility 7" is not "…17", and a
+        number in a facility name is an identifier, not decoration
+    Agreement is not required, only the absence of disagreement: "Hurley Rest Area 103"
+    and "Rest Area #103" share their number and are one place.
+    """
+    left_numbers = set(_NUMBER_RE.findall(left or ""))
+    right_numbers = set(_NUMBER_RE.findall(right or ""))
+    if left_numbers and right_numbers and left_numbers != right_numbers:
+        return True
+    left_bare = {m.lower() for m in _BARE_DIRECTION_RE.findall(left or "")}
+    right_bare = {m.lower() for m in _BARE_DIRECTION_RE.findall(right or "")}
+    if left_bare != right_bare:
+        # only when stripping the word makes the two names the SAME — otherwise
+        # "West Harrison Weigh Station" and "Weigh Station" would stop matching, and
+        # that pair is one facility.
+        strip = lambda s: _BARE_DIRECTION_RE.sub("", s or "").casefold().split()  # noqa: E731
+        if strip(left) == strip(right):
+            return True
+    return False
+
+
 def find_duplicate_candidates(db: Session, name: str, lat: float, lon: float) -> list[Facility]:
-    block = geohash_util.encode(lat, lon, DEDUP_GEOHASH_PRECISION)
+    point = cast(_point(lat, lon), Geography)
     stmt = (
         select(Facility)
-        .where(Facility.geohash.like(f"{block}%"))
+        .where(func.ST_DWithin(cast(Facility.geom, Geography), point, DEDUP_RADIUS_M))
         .where(Facility.status != FacilityStatus.merged)
         .where(~Facility.is_dev)  # real-data ingest never merges into DEV_SEED facilities
         .where(func.similarity(Facility.name, name) >= DEDUP_NAME_SIMILARITY)
         .order_by(func.similarity(Facility.name, name).desc())
     )
-    return list(db.scalars(stmt))
+    incoming_direction = direction_of(name)
+    incoming_placeholder = _is_placeholder(name)
+    out = []
+    for candidate in db.scalars(stmt):
+        # A PLACEHOLDER IS NOT EVIDENCE. 69 of the 191 missed pairs are two facilities
+        # both called "Rest Area" — a name this code wrote. `similarity` says 1.0 and it
+        # means nothing. Only when NEITHER side has a real name is there nothing to go
+        # on; a nameless feature beside a named one is what `host_should_adopt_name`
+        # exists for, and still merges.
+        if incoming_placeholder and _is_placeholder(candidate.name):
+            continue
+        # OPPOSITE CARRIAGEWAYS ARE TWO PLACES. Only a stated DISAGREEMENT blocks: one
+        # side naming a direction and the other staying silent ("Homestead SB" beside
+        # "Homestead", 18 m) is not a conflict.
+        other = direction_of(candidate.name)
+        if incoming_direction and other and incoming_direction != other:
+            continue
+        if _names_disagree(name, candidate.name):
+            continue
+        out.append(candidate)
+    return out
 
 
 # AI-CONTEXT: a co-located amenity merges into the site it stands in by PROXIMITY
