@@ -43,6 +43,8 @@
   "admin.fac.add": "Add facility",
   "admin.fac.dupes": "Possible duplicates",
   "admin.fac.merge": "Merge duplicate",
+  "admin.fac.merge_confirm_body": "The duplicate keeps its id and resolves to the surviving site. There is no unmerge from this console.",
+  "admin.fac.merge_confirm_title": "Merge these two facilities?",
   "admin.fac.no_delete": "Facilities are never deleted — merge a duplicate instead.",
   "admin.fac.provenance": "Your edit is added as an admin source — it never erases what a feed recorded.",
   "admin.fac.search": "Search facilities",

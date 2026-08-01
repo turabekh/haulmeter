@@ -113,3 +113,27 @@ def test_merging_into_a_merged_id_lands_on_the_canonical(db, client):
     # is the response BODY naming the canonical site.
     assert other.merged_into_id == canonical.id, "a merge must not chain onto a shadow"
     assert resp.json()["name"] == "Flying J Travel Center"
+
+
+def test_a_duplicate_suggestion_carries_the_evidence_it_was_based_on(db, client):
+    """§11.7 does not let a figure travel without what produced it, and a merge
+    suggestion is a figure. The console rendered a candidate's NAME and nothing else, so
+    an operator deciding "same place?" could not tell 5 m from 140 m — which is the
+    difference between one site mapped twice and the rest area on the other carriageway.
+
+    It is the evidence this session needed to judge 95 merges by hand: distance, and the
+    kind. Without them the reviewer is guessing, and a merge cannot be undone from the
+    console."""
+    canonical = facility.create_facility(
+        db, facility.FacilityType.truck_stop, "Flying J Travel Center", *SEATTLE
+    )
+    facility.create_facility(
+        db, facility.FacilityType.truck_stop, "Flying J Travel Center",
+        SEATTLE[0] + 0.0002, SEATTLE[1],
+    )
+    headers = _admin_headers(client, db)
+
+    rows = client.get(f"/admin/facilities/{canonical.id}/duplicates", headers=headers).json()
+    assert rows, "the fixture must have a duplicate"
+    assert rows[0]["distance_m"] == pytest.approx(22, abs=5)
+    assert rows[0]["facility_type"] == "truck_stop"

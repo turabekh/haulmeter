@@ -813,6 +813,54 @@ describe("Facility editor (decision 7)", () => {
     expect(w.text()).toContain("merge a duplicate instead");
   });
 
+  it("shows the evidence a merge suggestion rests on, not just a name", async () => {
+    // §11.7: a suggestion is a figure and a figure travels with what produced it. Name
+    // alone cannot tell 5 m from 140 m — one site mapped twice, or the rest area on the
+    // other carriageway. This is what judging 95 merges by hand actually needed.
+    stubFetch({
+      "/admin/ingest": INGEST,
+      "/admin/facilities": [FACILITY],
+      "/admin/facilities/f-1/duplicates": [
+        { ...FACILITY, facility_id: "f-2", name: "Gateway Truck Service", distance_m: 22 },
+      ],
+    });
+    const w = mount(AdminData);
+    await flushPromises();
+    await w.findAll(".btn").find((b) => b.text().includes("Possible duplicates")).trigger("click");
+    await flushPromises();
+    expect(w.find(".fac__dupe-evidence").text()).toContain("22 m");
+    expect(w.find(".fac__dupe-evidence").text()).toContain("repair");
+  });
+
+  it("does not merge on one click — there is no unmerge", async () => {
+    // design-prd §8: destructive actions get their own confirm. A merge cannot be
+    // undone from this console, and it used to happen on a single click.
+    const fetchStub = stubFetch({
+      "/admin/ingest": INGEST,
+      "/admin/facilities": [FACILITY],
+      "/admin/facilities/f-1/duplicates": [
+        { ...FACILITY, facility_id: "f-2", name: "Gateway Truck Service", distance_m: 22 },
+      ],
+      "POST /admin/facilities/f-1/merge": { ...FACILITY },
+    });
+    const w = mount(AdminData);
+    await flushPromises();
+    await w.findAll(".btn").find((b) => b.text().includes("Possible duplicates")).trigger("click");
+    await flushPromises();
+
+    await w.findAll(".btn").find((b) => b.text().includes("Merge duplicate")).trigger("click");
+    await flushPromises();
+    expect(
+      fetchStub.mock.calls.some((c) => String(c[0]).includes("/merge")),
+      "a merge left before anyone confirmed it",
+    ).toBe(false);
+    expect(w.text()).toContain("no unmerge");
+
+    await w.find(".fac__merge-confirm").trigger("click");
+    await flushPromises();
+    expect(fetchStub.mock.calls.some((c) => String(c[0]).includes("/merge"))).toBe(true);
+  });
+
   it("sends a rename as a PATCH through the pipeline", async () => {
     const fetchStub = stubFetch({
       "/admin/ingest": INGEST,

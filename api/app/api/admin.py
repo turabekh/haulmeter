@@ -5,6 +5,7 @@ admin portal (design-prd §18), not the driver app. Read-only where it can be;
 the only mutations are flag toggles and moderation decisions.
 """
 
+import math
 import uuid
 from datetime import UTC, datetime
 
@@ -1270,6 +1271,15 @@ class MergeIn(BaseModel):
     duplicate_id: uuid.UUID
 
 
+def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    radius = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * radius * math.asin(math.sqrt(a))
+
+
 def _facility_out(db: Session, fac) -> dict:
     from app.foundation.f02_facility import public as facility
 
@@ -1471,11 +1481,25 @@ def facility_duplicates(
     if fac is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "facility not found")
     lat, lon = facility.coordinates(db, fac)
-    return [
-        _facility_out(db, candidate)
-        for candidate in facility.find_duplicate_candidates(db, fac.name, lat, lon)
-        if candidate.id != fac.id
-    ]
+    out = []
+    for candidate in facility.find_duplicate_candidates(db, fac.name, lat, lon):
+        if candidate.id == fac.id:
+            continue
+        row = _facility_out(db, candidate)
+        # §11.7 does not let a figure travel without what produced it, and a merge
+        # SUGGESTION is a figure. The console rendered a candidate's name alone, so an
+        # operator deciding "same place?" could not tell 5 m from 140 m — the difference
+        # between one site mapped twice and the rest area on the other carriageway. This
+        # is the evidence this session needed to judge 95 merges by hand, and a merge
+        # cannot be undone from the console.
+        c_lat, c_lon = facility.coordinates(db, candidate)
+        row["distance_m"] = (
+            round(_haversine_m(lat, lon, c_lat, c_lon))
+            if None not in (lat, lon, c_lat, c_lon)
+            else None
+        )
+        out.append(row)
+    return out
 
 
 # --- E-D5 mode (a): assisted edit from the console, attributed ---

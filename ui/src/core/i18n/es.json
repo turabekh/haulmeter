@@ -43,6 +43,8 @@
   "admin.fac.add": "Añadir instalación",
   "admin.fac.dupes": "Posibles duplicados",
   "admin.fac.merge": "Fusionar duplicado",
+  "admin.fac.merge_confirm_body": "El duplicado conserva su id y apunta al sitio que queda. No hay forma de deshacer desde esta consola.",
+  "admin.fac.merge_confirm_title": "¿Fusionar estas dos instalaciones?",
   "admin.fac.no_delete": "Las instalaciones nunca se eliminan: fusiona el duplicado.",
   "admin.fac.provenance": "Tu edición se añade como fuente admin: nunca borra lo que registró un feed.",
   "admin.fac.search": "Buscar instalaciones",

@@ -43,6 +43,8 @@
   "admin.fac.add": "Obyekt qoʻshish",
   "admin.fac.dupes": "Ehtimoliy nusxalar",
   "admin.fac.merge": "Nusxani birlashtirish",
+  "admin.fac.merge_confirm_body": "Dublikat o'z id sini saqlaydi va qolgan obyektga yo'naltiradi. Bu konsoldan bekor qilib bo'lmaydi.",
+  "admin.fac.merge_confirm_title": "Ushbu ikki obyekt birlashtirilsinmi?",
   "admin.fac.no_delete": "Obyektlar oʻchirilmaydi — nusxani birlashtiring.",
   "admin.fac.provenance": "Tahririgiz admin manbasi sifatida qoʻshiladi — u hech qachon feed yozganini oʻchirmaydi.",
   "admin.fac.search": "Obyekt qidirish",

@@ -59,7 +59,17 @@ async function findDupes(fac) {
   dupes.value = { ...dupes.value, [fac.facility_id]: await facilityDuplicates(fac.facility_id) };
 }
 
+// AI-CONTEXT: a merge cannot be undone from this console — there is no unmerge — so
+// design-prd §8's destructive rule applies: it gets its own confirm naming what goes.
+// One click used to do it, beside a suggestion that showed only a name.
+const merging = ref(null);
+
+function requestMerge(canonical, duplicate) {
+  merging.value = { canonical, duplicate };
+}
+
 async function merge(canonicalId, duplicateId) {
+  merging.value = null;
   await mergeFacility(canonicalId, duplicateId);
   dupes.value = {};
   await loadFacilities();
@@ -136,8 +146,16 @@ onMounted(async () => {
                 {{ t("admin.fac.dupes") }}
               </button>
               <div v-for="d in dupes[f.facility_id] || []" :key="d.facility_id" class="fac__dupe">
+                <!-- §11.7: a suggestion is a figure, and a figure travels with what
+                     produced it. Name alone cannot tell 5 m from 140 m, which is the
+                     difference between one site mapped twice and the rest area on the
+                     other carriageway. -->
                 <span class="table__muted">{{ d.name }}</span>
-                <button class="btn" type="button" @click="merge(f.facility_id, d.facility_id)">
+                <span class="fac__dupe-evidence">
+                  {{ d.facility_type }}<template v-if="d.distance_m !== null && d.distance_m !== undefined">
+                    · {{ d.distance_m }} m</template>
+                </span>
+                <button class="btn" type="button" @click="requestMerge(f, d)">
                   {{ t("admin.fac.merge") }}
                 </button>
               </div>
@@ -146,6 +164,25 @@ onMounted(async () => {
         </tbody>
       </table>
       <p class="panel__note">{{ t("admin.fac.no_delete") }}</p>
+
+      <div v-if="merging" class="confirm" role="alertdialog">
+        <p class="confirm__title">{{ t("admin.fac.merge_confirm_title") }}</p>
+        <p class="confirm__key">
+          {{ merging.duplicate.name }} → {{ merging.canonical.name }}
+          <template v-if="merging.duplicate.distance_m !== null && merging.duplicate.distance_m !== undefined">
+            · {{ merging.duplicate.distance_m }} m
+          </template>
+        </p>
+        <p class="confirm__body">{{ t("admin.fac.merge_confirm_body") }}</p>
+        <button
+          class="btn btn--danger fac__merge-confirm"
+          type="button"
+          @click="merge(merging.canonical.facility_id, merging.duplicate.facility_id)"
+        >
+          {{ t("admin.confirm") }}
+        </button>
+        <button class="btn" type="button" @click="merging = null">{{ t("admin.cancel") }}</button>
+      </div>
 
       <div class="fac__form">
         <input v-model="draft.name" class="field__input" type="text" :placeholder="t('admin.acct.name')" />

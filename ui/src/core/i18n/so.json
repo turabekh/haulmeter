@@ -43,6 +43,8 @@
   "admin.fac.add": "Ku dar xarun",
   "admin.fac.dupes": "Nuqullo suurtagal ah",
   "admin.fac.merge": "Isku dar nuqul",
+  "admin.fac.merge_confirm_body": "Nuqulku wuxuu hayaa id-giisa wuxuuna u socdaa goobta hartay. Konsoolkan lagama noqon karo.",
+  "admin.fac.merge_confirm_title": "Ma isku darsanaa labadan goob?",
   "admin.fac.no_delete": "Xarumaha waligood lama tirtiro — halkii isku dar nuqulka.",
   "admin.fac.provenance": "Wax ka beddelkaagu wuxuu ku darsamaa isha admin — waligiis ma tirtiro waxa feed-ku duubay.",
   "admin.fac.search": "Raadi xarumaha",
