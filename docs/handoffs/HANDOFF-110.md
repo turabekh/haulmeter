@@ -2,8 +2,9 @@
 
 **Project:** Haulmeter — Consolidated Trucker Platform (mobile-first, driver pays $0).
 **Date:** 1 August 2026 · **Stack:** **UP** locally (`make down` to stop) · **Deployed:**
-https://haulmeter.online — **BEHIND by six commits**, all of them this session's. Nothing
-on the box is wrong; it simply does not have A5.
+https://haulmeter.online — **CURRENT, and verified against the artifact rather than the
+script's "done".** A5 is live: 9 service pins near Madison, 5 of them callable, and a call
+tap recorded in the production database.
 
 **State in one line:** the map can find a repair shop and call it — and the reason it never
 could was not a missing feature but six ingest rules that had never once received the tags
@@ -13,7 +14,7 @@ they read.
 > Service & repair discovery** (Group 1), owner-approved plan, built end to end.
 
 **Nothing is half-finished.** Working tree clean apart from the untracked `collect_files.py`
-(still not mine). Six commits, all local — see §7.0.
+(still not mine). Everything is pushed and on the box.
 
 ---
 
@@ -22,22 +23,23 @@ they read.
 | Thing | Value |
 |---|---|
 | Migrations | head **0055_f08_push_subscription** — **no new migration**, `services`/`phone` ride in the existing `attributes` JSON |
-| Tests | **pytest 1262 · vitest 605 · layout 193 · ruff + import-linter 30/30** — all green, all run unpiped |
+| Tests | **pytest 1265 · vitest 607 · layout 193 · ruff + import-linter 30/30** — all green, all run unpiped |
 | §23 decision log | **117 entries** — 117 added this session, **status `proposed`**, needs your yes/no (§7.2) |
 | Handoffs | 000 → 110 |
-| Git | **six commits ahead** of `origin/main`, all local |
-| Deployed | **STALE by six commits.** Nothing false is on the box; A5 is simply absent |
+| Git | **in sync** with `origin/main` (public) |
+| Deployed | **CURRENT.** A5 code, the corrected Wisconsin data, and the contact backfill are all on the box |
 | Local stack | **UP** |
 
 ## 2. What shipped
 
 | Commit | What | Pushed? |
 |---|---|---|
-| `e2aee9e` | The service rules had never fired — the extract starved them | ❌ local |
-| `b678bcc` | A placeholder is not a name, whichever kind wrote it | ❌ local |
-| `8599afa` | The Service preset, and a phone a driver can actually tap | ❌ local |
-| `21044e2` | The Service chip, the call, and the shop rows — driven on the real map | ❌ local |
-| _(this doc + §23 117)_ | This handoff | ❌ local |
+| `e2aee9e` | The service rules had never fired — the extract starved them | ✅ deployed |
+| `b678bcc` | A placeholder is not a name, whichever kind wrote it | ✅ deployed |
+| `8599afa` | The Service preset, and a phone a driver can actually tap | ✅ deployed |
+| `21044e2` | The Service chip, the call, and the shop rows — driven on the real map | ✅ deployed |
+| `9b72db9` | This handoff + §23 entry 117 (proposed) | ✅ pushed |
+| `3fd4208` | Make the call OBSERVABLE, or A5 cannot be validated at all | ✅ pushed + deployed |
 
 ## 3. A5's premise was false, and measuring it is the whole session
 
@@ -148,24 +150,43 @@ adding `repair` to the co-located kinds produced a parking lot called "Repair".
 
 ## 7. Exact next task
 
-**0. `git push` — six commits, and this one wants a DEPLOY too**, unlike 109's. A5 is
-driver-facing: `git push` then `./scripts/deploy.sh`. **Then run `make repair-contact
-DRY_RUN=0` on the box** — 639 phone numbers and 253 opening-hours strings are sitting unread
-in `osm_tags` in production and the backfill is what promotes them. The outgoing diff was
-scanned for secrets (rule 3, public repo); the only hit is the amendment's own prose about
-not committing secrets.
+**0. DONE — pushed and deployed, and verified against the artifact.** Both diffs were secret-
+scanned before leaving (rule 3, public repo). What was done to production, in order:
+
+| Step | Result |
+|---|---|
+| `git push` + `./scripts/deploy.sh` | served bundle carries `map.preset.service`, `facility.call`, `map.service_none`; `/api/health` 200 |
+| `pg_dump` before touching data | `/tmp/haulmeter-pre-a05.sql.gz` on the box — **there are still no automated backups (A12)**, so this was a manual precaution and it is not one |
+| `repair-contact DRY_RUN=0` | 839 facilities updated · **625 callable phones, 246 with hours** |
+| shipped the corrected Wisconsin extract and re-ingested | **12 → 44 repair facilities** |
+| second deploy (the call observation) | POST `/map/facility/{id}/called` → 204, and the row is in `f14.analytics_event` |
+
+**The deploy ships CODE, not DATA**, and that is worth carrying forward: `api/data` is
+excluded from the bundle, so the extract had to be `docker cp`'d into the api container by
+hand. **The other eight states still run the old filter on the box.** Each needs
+`make osm-extract STATE=<x>` locally, then the same manual copy — or a better path than the
+one I used.
+
+A first-response `/api/health` came back empty and 200 on the retry: the startup race 106 §6
+recorded, not a pattern.
 
 **1. §23 entry 117 is PROPOSED and needs your decision.** The sixth preset chip. It invents
 nothing — existing chip, existing Lucide set, NAV-1 untouched, exactly E-D2's Food-chip
 precedent — but E-D2 was logged, so this is logged. If you say no, the chip comes out and the
 preset stays reachable from the server.
 
-**2. A5 IS NOT VALIDATED, and cannot be from here.** v2.0 §2: done means a driver who is not
-the owner has used it and the outcome is in the database. What exists is the capability and
-the data. What does not exist is **any way to observe the call** — there is no telemetry on
-the tap, so "a driver found and called a shop" is currently unobservable even if it happens.
-Decide whether the tap records an F14 event before treating A5 as closeable. **This is the
-one thing standing between A5 and Phase DoD #6.**
+**2. A5 IS OBSERVABLE NOW, AND STILL NOT VALIDATED.** The gap I flagged here is closed: the
+tap posts to `/map/facility/{id}/called` and emits `service_call_tapped`, queued through F12
+because a breakdown is exactly where there is no signal. The question v2.0 §7 item 6 asks is
+now answerable:
+
+```
+select count(*) from f14.analytics_event where event_name = 'service_call_tapped';
+```
+
+**It reads 1, and that one is mine** — a verification call from this session's own account.
+**Validation needs a driver who is not the owner.** Until that number moves for someone else,
+A5 is built, deployed, observable and unvalidated, which under v2.0 §2 is not done.
 
 **3. Coverage is still nine states, and A5 makes that worse, not better.** A driver in the
 other 41 taps a wrench and gets an honest "none mapped here yet". A9 is blocked by A12, and
@@ -183,8 +204,21 @@ feed — a trust defect on the daily-open surface), **A1** (Stop Packet, the lar
 ## 8. Debt
 
 **New this session (110):**
-- **A5 has no validation observation and no way to produce one.** §7.2. The requirement is
-  built, tested and driven; that is not what v2.0 calls done.
+- **A5 is observable but unvalidated.** §7.2. The only `service_call_tapped` row is mine.
+- **The UI has NO LINT AT ALL.** `make lint` is ruff + import-linter, both Python. A missing
+  import in a `.vue` file is a runtime `ReferenceError` nothing catches — and one shipped
+  green today: `recordServiceCall` was used in MapSurface and never imported, with every
+  unit test passing. A surface test now covers that path (proved red by deleting the import
+  again), but the CLASS is uncovered. ESLint with `no-undef` is the fix and it is a
+  toolchain decision with a wide blast radius, so it wants its own scoped work rather than
+  the end of a session. I hand-rolled a probe to size the gap and it returned 477 hits with
+  a false-positive rate that made it useless — which is itself the argument for the real tool.
+- **`record_map_open` is exported and called by NOTHING** — not a route, not a test — in the
+  same file as the event helper A5 just added. Wiring DAU/MAU is its own decision; the dead
+  export is recorded here so the next session does not rediscover it.
+- **A deploy ships code, not data.** `api/data` is excluded from the bundle, so putting the
+  corrected Wisconsin extract on the box meant a `docker cp` into the running container by
+  hand. Doing that for 50 states is not a process.
 - **Nothing re-types an existing facility.** "Mobil Diesel" is still a `repair` facility in
   the dev DB — measured, it is the **only** such row, and it was created by this session's own
   ingest run, so production has none. A `repair-*` pass would fix it if it ever spreads.
@@ -231,16 +265,23 @@ does not resolve merged ids · M2-FR4 does not exist · per-stop detention terms
 Stated plainly, because an unverified claim in a handoff becomes law by the third session that
 reads it.
 
-- **No driver has used any of this.** A5's validation is untested and untestable from here.
+- **No driver has used any of this.** The one recorded call tap is mine, from a verification
+  account on the box (`a05-obs-…@example.com`, alongside `a05-verify-…` from the overlay
+  check — the same kind of residue 107 left behind).
 - **Only Wisconsin was re-extracted.** The other eight states still run the old filter, so
   their service rules are still starved. `make osm-extract STATE=<x>` then `make ingest-osm`
   fixes each, and each costs a ~280 MB download.
 - **The name-term list was audited on ONE state.** `fleet` and `trailer` were dropped on
   Wisconsin evidence alone; both may earn their place elsewhere, and a term that is wrong in
   another state will show up as a car garage on a truck map.
-- **Nothing was deployed and nothing was pushed.** The box does not have A5 and has not had
-  `repair-contact` run against it.
+- **The deployed UI was never opened in a browser.** Production was verified over HTTP —
+  bundle strings, overlay payload, the call endpoint, the analytics row — and the SCREEN was
+  driven only against the local stack. The two are the same build, but that is an inference,
+  not an observation.
 - **The six locales are not native-reviewed.**
+- **The production restore was never tested.** I took a `pg_dump` before mutating the box and
+  never restored it, so it is an untested backup — precisely what A12 exists to fix, and
+  precisely the false comfort a backup nobody has restored provides.
 - **I did not measure map render cost at the new pin density.** Wisconsin gained 33
   facilities, which is nothing; A9's national density is where `_enrich` and the 300-pin cap
   bind, and that measurement belongs to A9.
