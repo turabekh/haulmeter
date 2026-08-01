@@ -22,7 +22,7 @@ Everything is pushed and deployed.
 | Thing | Value |
 |---|---|
 | Migrations | head **0056_a09_facility_geog_idx** — the A9 §4 geography index, deployed |
-| Tests | **pytest 1282 · vitest 607 · layout 193 · ruff + import-linter 30/30** |
+| Tests | **pytest 1289 · vitest 607 · layout 193 · ruff + import-linter 30/30** |
 | §23 decision log | **118 entries** — 117 (Service chip) **approved**, 118 (the delegation) added |
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
@@ -155,7 +155,10 @@ a restore performed and verified, an alert triggered deliberately and received.
 box. See §10. The manual step is gone: `make osm-publish STATE=x` then
 `make ingest-remote STATE=x`.
 
-**4. A9's §4 and §5 gates are both measured and done** (§11, §12). What remains of A9 is
+**4. A9's §4 and §5 gates are measured and done** (§11, §12, §13), except the merge-review
+UI. Previously-stated next step, now superseded in part:
+
+**(was) A9's §4 and §5 gates are both measured and done** (§11, §12). What remains of A9 is
 the **admin merge-review surface** §5 also asks for, and `/admin/facilities/*` still not
 resolving merged ids — the 95 merges made today mean 95 more ids where an admin URL and a
 driver URL answer about different places. That is now the oldest untouched item in A9.
@@ -302,6 +305,40 @@ choosing which kind survives is the co-location question, with its own rules.
 
 Production after the repair: **5,343 live facilities · 449 repair · 756 callable.** The
 counts fall slightly because duplicates stopped being counted twice, which is the point.
+
+## 13. A9 §5's other half — admin URLs, and merges that chained
+
+**`/admin/facilities/*` now resolves merged ids.** `canonical_facility_id` has been on
+every driver-facing route since §23's merged-id fix and was never carried across — **the
+eighth instance this session** of a mechanism fixed in one place and not the others. The
+cost was not theoretical: an admin editing a merged id edited the **shadow**. The patch
+recorded, the audit log saying it happened, and the map showing the old value forever.
+
+**Reading those three routes together turned up a second thing nobody had guarded: a merge
+could land on a row that was itself merged.** Measured — **146 rows locally and 149 on the
+box** pointed at a shadow. Reads survived because `resolve_canonical` walks the chain, and
+the fact that it carries a `seen` set means somebody had already worked out that a **cycle**
+was reachable from here. Nothing prevented either.
+
+- A chain is a **tax**: every read of one of those ids walks it, and A9 makes more merges.
+- A cycle is worse — `resolve_canonical` would answer with whichever row its guard broke on,
+  which is a wrong answer delivered confidently.
+
+Guarded inside `merge_facilities` rather than in its callers, because there are four of them
+(the ingest pipeline, the admin route, and two repair scripts) and a rule kept in three
+places out of four is exactly what this session kept finding. `flatten_merge_chains`
+re-points the rows written before the guard: **146 flattened locally, 149 on the box, zero
+remaining, idempotent.**
+
+**Two of the three admin tests were proved red against unresolved routes; the third holds
+either way** because `merge_facilities` also resolves. That is defence in depth, not proof,
+and the test says so rather than claiming credit it has not earned — an earlier draft
+asserted only that a merged row is absent from its own duplicate suggestions, which is true
+whether or not the id resolves. It passed against the broken code and proved nothing.
+
+**Still open from §5: the admin merge-review SURFACE.** `GET /admin/facilities/{id}/duplicates`
+is the API half and shows exactly what the pipeline would have considered a duplicate — the
+same function, so the two cannot drift. There is no UI on it.
 
 ## 7. Debt
 
