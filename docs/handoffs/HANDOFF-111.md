@@ -469,10 +469,12 @@ candidate / confirmed / merged, and none of them means "this should not be here"
 worth inventing a state for one autocare shop — recorded because at fifty states it will
 not be one.
 
-## 18. The region ingest died on the box and left no trace — which was my bug
+## 18. The telemetry bug was real; my diagnosis of the symptom was not
 
-The first us-midwest run on production ended with **no new facilities, no error, and no
-`job_run` row at all.** Not a failed one. Nothing.
+**Two separate things happened here and only the first one was what I thought.**
+
+**The real bug.** The first us-midwest run on production ended with **no new facilities,
+no error, and no `job_run` row at all.** Not a failed one. Nothing.
 
 That is a defect in the A12 requirement-3 telemetry I added this morning. The started
 row was written inside the **same transaction as the work**, so when the process was
@@ -496,6 +498,17 @@ died", which silence does not.
 suite runs against a **separate database**, so a hardcoded `SessionLocal` wrote the row
 into the DEV database while the test looked in the test one. It never found it, and every
 suite run had been quietly polluting dev.
+
+**THE MISDIAGNOSIS, recorded because it is the more useful half.** After the fix I ran the
+ingest again and concluded from low memory and an empty log that it had "died again", twice.
+It had not. Both runs were **still going** — memory was low because the parse phase had
+finished and the DB-write phase is cheap, and the log was empty because output was buffered.
+All four attempts eventually completed, every one recording 3,960 facilities. The ingest is
+idempotent, so four runs cost nothing but time (`created=0` on the repeats proves it), and
+the lesson is the one this project keeps relearning from the other direction: **absence of a
+signal is not evidence of death.** I read two absences as a fact and said so out loud before
+checking the row that would have answered it — the `job_run` row I had just built for
+exactly this purpose, which was sitting there saying `running`.
 
 **And a consequence worth stating**: streaming the READ fixed the parse (4,677 MB → 80 MB)
 and did **not** fix the ingest. The api container still sat at **3.07 GiB of 3.83** during
