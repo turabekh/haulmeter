@@ -651,6 +651,42 @@ first — one active query, 2% CPU — which is the only reason the number was w
 on. HANDOFF-108 measured under four workers and called a straggler a defect; 109 had to
 undo it.
 
+## 26. A1 — the groundwork, measured, so the next session does not start blind
+
+**A1 Stop Packet is the next buildable requirement**: Group 1, no open decision, and the
+amendment calls it the highest-frequency unaddressed burden drivers reported. I did the
+discovery rather than the build, because a multi-hour build started here would have ended
+half-finished, and this handoff is worth more than a partial feature.
+
+**What already exists** — the amendment is right that most of it does:
+
+| A1 needs | exists as |
+|---|---|
+| the composer, "one composer, many templates" | `evidence.compose_pack(db, log, PackTemplate.X)` |
+| a per-stop document | **`PackTemplate.stop_record` already exists** — "arrival, notice, departure, and the paperwork filed there" (§23 71) |
+| pack-on-EXIT | M3's `generate_pack` is exactly that shape |
+| hash-chained artifacts | `evidence.anchor_chain` |
+| the counterparty | F5's counterparty registry |
+
+**Where "nothing new is required" is optimistic, and it is one specific thing.** Every
+outbound path in this codebase is attached to MONEY. The only way a pack currently reaches
+a counterparty is `open_receivable(..., notice_subject, notice_body, gateway)` — it opens a
+receivable in F7 and sends through F8. **A1 is explicitly "not a claim and not a dispute"**,
+so it needs a send path that carries a document and opens no receivable. That does not
+exist, and it is the piece to build first because everything else hangs off it.
+
+**The six pieces, in the order I would take them:**
+1. A **document-only counterparty send** (F8 + F5), opening no receivable. Everything else
+   depends on it.
+2. `PackTemplate.stop_packet` — a title and tone distinct from `stop_record`, which is an
+   export a DRIVER reaches rather than a handoff a clerk receives (v1.0 §5.5: neutral).
+3. The **F3 EXIT trigger** at a `shipper_receiver` stop, following M3's pattern.
+4. **F12 queueing**, so a packet composed in a dead dock sends on reconnect — the same
+   reasoning as A5's call tap.
+5. **Driver review before send.** A1 requirement 5, and the one with teeth: a packet the
+   driver did not see is a document they cannot vouch for.
+6. The **F13 capture checklist** per stop type, which A1 says is configuration and not code.
+
 ## 21. Debt
 
 **Closed this session:** no backups · no monitoring · the disk was about to fill · "what is
