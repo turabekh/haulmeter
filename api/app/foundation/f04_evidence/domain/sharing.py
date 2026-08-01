@@ -64,6 +64,25 @@ def _share_days(db: Session) -> int:
     return int(flags.get_config(db, CONFIG_SHARE_DAYS, DEFAULT_SHARE_DAYS))
 
 
+# AI-CONTEXT: ONE definition of "where does a counterparty open this pack".
+#
+# F4 issues the token, so F4 answers where it lives. M3's detention notice needed it
+# first and A1's Stop Packet needs the identical thing, with M5's on-time proof a third
+# caller waiting. Three modules building the same URL from the same token is the shape of
+# §23 entry 94's regression, and this session found nine mechanisms fixed in one place
+# and not the others before writing this line.
+#
+# Returns None rather than a half-formed URL. A deployment with no PUBLIC_BASE_URL cannot
+# address itself, and a broken link in an email to a broker is worse than an honest
+# sentence saying the evidence is available on request (§12.4). The caller writes the
+# sentence, because only the caller knows the document.
+def share_link(shared) -> str | None:
+    from app.core.config import get_settings
+
+    base = (get_settings().public_base_url or "").rstrip("/")
+    return f"{base}/pack/s/{shared.token}" if base else None
+
+
 def share_pack(
     db: Session,
     log: EvidenceLog,

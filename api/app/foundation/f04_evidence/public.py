@@ -37,6 +37,7 @@ from .domain.sharing import (
     open_share,
     resolve_share,
     revoke_share,
+    share_link,
     share_pack,
     shares_for_log,
 )
@@ -54,6 +55,7 @@ __all__ = [
     "open_share",
     "resolve_share",
     "revoke_share",
+    "share_link",
     "share_pack",
     "shares_for_log",
     "ArtifactType",

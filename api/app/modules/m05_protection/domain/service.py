@@ -546,6 +546,76 @@ def share_pack(db: Session, log_ref, pack, account_id, recipient=None, now=None,
     )
 
 
+# --- A1: the Stop Packet, a routine handoff (v2.0 §3 A1) ---
+def send_stop_packet(
+    db: Session,
+    account_id,
+    stop_ref,
+    counterparty_ref,
+    gateway,
+    now: datetime | None = None,
+    recipient: str | None = None,
+    base_url_required: bool = True,
+):
+    """AI-CONTEXT: A1 — the paperwork a driver photographs after loading, sent for them.
+
+    Composed from two things that already worked and had never been put together: M5's
+    on-time notice (a counterparty message that opens NO receivable) and the pack link
+    M3 gained an hour ago. What A1 adds is the document.
+
+    WHAT THIS DELIBERATELY DOES NOT DO, and it is most of the requirement. The only
+    existing path from a pack to a counterparty is M3's `open_receivable`, which also:
+
+      · opens a RECEIVABLE in F7 — money the driver is claiming, and
+      · calls `record_claim` on the counterparty, incrementing the claim history that
+        feeds M8 pricing and M12 analytics.
+
+    A1 says the Stop Packet is "explicitly not a claim and not a dispute". A broker whose
+    claim count rose because a driver sent their paperwork would be a quiet, compounding
+    lie about that broker — and PRD §15 names driver fear of blacklisting as a top risk,
+    which is precisely the fear a spurious claim record would justify. Neither is called
+    here, and the tests assert the absences as hard as the presence.
+    """
+    now = now or datetime.now(UTC)
+    stop = loads.get_stop(db, stop_ref)
+    load = loads.get_load(db, stop.load_id) if stop is not None else None
+
+    log = evidence.create_log(db, account_id, stop_ref=stop_ref, label="stop-packet")
+    evidence.append_record(
+        db,
+        log,
+        evidence.RecordType.SYSTEM,
+        {"event": "stop_packet", "stop_ref": str(stop_ref)},
+        occurred_at=now,
+    )
+    evidence.anchor_chain(db, log)
+    pack = evidence.compose_pack(db, log, evidence.PackTemplate.stop_record)
+    shared = evidence.share_pack(
+        db, log, pack.template, render_pack(db, pack), account_id, recipient=recipient, now=now
+    )
+
+    # A1 requirement 4: the reference an accounts-payable clerk files by, in the SUBJECT,
+    # so they never have to open it to know what it belongs to.
+    reference = getattr(load, "reference_number", None) if load is not None else None
+    subject = f"Stop paperwork · {reference}" if reference else "Stop paperwork"
+
+    link = evidence.share_link(shared)
+    if link is None and base_url_required:
+        raise ValueError("PUBLIC_BASE_URL is unset; a packet with no link reaches nobody")
+    where = (
+        f"The stop paperwork is here: {link}"
+        if link
+        else "The stop paperwork is available on request."
+    )
+    cp = loads.get_counterparty(db, counterparty_ref) if counterparty_ref is not None else None
+    to_ref = recipient or (cp.contact_email if cp is not None else None) or "counterparty@unknown"
+    thread = notify.create_thread(
+        db, account_id, subject=subject, counterparty_ref=counterparty_ref
+    )
+    notify.send_counterparty_message(db, thread, where, gateway, to_ref, now=now)
+    return {"pack": pack, "shared": shared, "thread": thread}
+
+
 # --- FR1: the per-load opt-in and the automatic filing ---
 def set_on_time_consent(
     db: Session, account_id, load_ref, enabled: bool, counterparty_email: str | None = None

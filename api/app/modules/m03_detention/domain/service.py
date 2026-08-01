@@ -15,7 +15,6 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.foundation.f01_identity import public as identity
 from app.foundation.f03_location import public as location
 from app.foundation.f04_evidence import public as evidence
@@ -599,11 +598,14 @@ def render_pack_bytes(db: Session, pack) -> bytes:
 def _notice_body(db: Session, shared) -> str:
     """§12.1: state facts and next steps. An honest body names where the evidence IS —
     and when this deployment cannot address itself, says so rather than printing a link
-    that goes nowhere."""
-    base = (get_settings().public_base_url or "").rstrip("/")
+    that goes nowhere.
+
+    The URL is built by F4, which issued the token. It was built here first and moved
+    the moment a second caller needed it, which is the whole of §23 entry 94's lesson."""
+    link = evidence.share_link(shared)
     where = (
-        f"The GPS-verified detention evidence is here: {base}/pack/s/{shared.token}"
-        if base
+        f"The GPS-verified detention evidence is here: {link}"
+        if link
         else "The GPS-verified detention evidence pack is available on request."
     )
     return (
