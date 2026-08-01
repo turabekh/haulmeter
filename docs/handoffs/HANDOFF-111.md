@@ -27,7 +27,7 @@ Everything is pushed and deployed.
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
 | Deployed | **CURRENT** — A5, A12, **all nine states re-extracted**, backups, alerting |
-| Coverage | **NATIONAL** — `repair` **12 → 1,698** · callable **0 → 2,460** · **50 states** return results (§24) |
+| Coverage | **NATIONAL** — `repair` **12 → 1,698** · callable **0 → 2,460** · **50 states**, within §20 budget (§24, §25) |
 | Backups | **gs://haulmeter-backups**, nightly 03:30 UTC, 30-day lifecycle, **restore proven** |
 | Alerting | GCP uptime check + policy → **turabekh@gmail.com**, **delivery confirmed by the owner** |
 
@@ -610,6 +610,46 @@ the nightly proof still fits its window.
 counts distinct `attributes.state` values, which come from the NTAD/TPIMS feeds rather
 than OSM. Alaska and Hawaii carry no such attribute. **The map query is the honest test
 of coverage, and it says 50.**
+
+## 25. …and the map renders within budget at national density
+
+A9's acceptance criterion has a second half — *"and the map renders within budget at
+national density"* — which only became checkable once density was real. It was **not**
+met, and finding out took measuring the thing rather than assuming the index had settled
+it.
+
+| overlay, on the box at 15,147 facilities | before | after |
+|---|---|---|
+| metro 8 km | 639 ms | **79 ms** |
+| metro 25 km | 730 ms | **100 ms** |
+| service preset | 441 ms | **79 ms** |
+| regional 150 km | 780 ms | **205 ms** |
+| continental (180 clusters) | 5,087 ms | **1,590 ms** |
+
+§20 allows 300 ms for a tab switch and 4 s for a cold map. Metro views sit at 79–205 ms
+and the continental worst case at 1.59 s.
+
+**A9 §4 predicted this cost and named the wrong culprit.** It says *"`_enrich` is per-pin
+… bulk reads in M3, M6 and M7 come first"*. Measured:
+
+```
+flags.is_enabled                 1.7 ms
+facilities_in_area (1 type)     33.1 ms
+facilities_in_area (5 types)   284.9 ms
+pins_for                         5.2 ms
+```
+
+`_enrich` is 5 ms. The area lookup ran **one query per facility kind** and Drive has
+five. Each costs ~33 ms even though `EXPLAIN` shows the predicate executing in under a
+millisecond against `ix_facility_geog` — the time is PostGIS geography query **planning**,
+paid once per call. One `IN` pays it once.
+
+**I nearly reported the contaminated numbers.** The first measurement ran while the
+duplicate repair was issuing 15,000 geography queries at the same database, and 639 ms
+would have been a load artifact rather than a baseline. I checked `pg_stat_activity`
+first — one active query, 2% CPU — which is the only reason the number was worth acting
+on. HANDOFF-108 measured under four workers and called a straggler a defect; 109 had to
+undo it.
 
 ## 21. Debt
 
