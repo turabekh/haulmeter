@@ -5,8 +5,8 @@
 **CURRENT**, with A5 and A12 both live and both verified on the box.
 
 **State in one line:** the box now backs itself up offsite, proves the backup restores,
-tells a human when it dies, and can answer which data it is running — none of which it
-could do this morning.
+tells a human when it dies, and can answer which data it is running — none of which it could
+do this morning — and the map it serves went from 12 repair shops to 458.
 
 > **This continues HANDOFF-110, which is the same working session.** 110 has A5 and the
 > starved-rules finding; this has the owner's delegation of design-prd rule 6 and
@@ -26,7 +26,8 @@ Everything is pushed and deployed.
 | §23 decision log | **118 entries** — 117 (Service chip) **approved**, 118 (the delegation) added |
 | Handoffs | 000 → 111 |
 | Git | **in sync** with `origin/main` (public) |
-| Deployed | **CURRENT** — A5, A12, the corrected Wisconsin data, backups, alerting |
+| Deployed | **CURRENT** — A5, A12, **all nine states re-extracted**, backups, alerting |
+| Coverage | `repair` **12 → 458** · callable phones **0 → 807** (§10) |
 | Backups | **gs://haulmeter-backups**, nightly 03:30 UTC, 30-day lifecycle, **restore proven** |
 | Alerting | GCP uptime check + policy → **turabekh@gmail.com** (see §5 — the last inch is unconfirmed) |
 
@@ -108,8 +109,9 @@ the corrected one produce that same filename and differ by 65 repair shops.
 4. **A deploy destroys anything copied into a container.** The Wisconsin extract was
    `docker cp`'d in, and the next deploy recreated the container and took it with it — then
    the VM stop cleared `/tmp` and took the host copy too. The *data* survived (postgres is a
-   named volume); the *source* did not. Ingest sources now live in **`gs://haulmeter-sources`**,
-   which is durable, but the copy-into-the-container step remains manual (§6).
+   named volume); the *source* did not. Ingest sources now live in
+   **`gs://haulmeter-sources`**, and `make osm-publish` / `make ingest-remote` make the round
+   trip one command each — the manual `docker cp` is gone.
 
 ## 5. The alert's last inch is NOT confirmed, and I could not confirm it
 
@@ -145,12 +147,9 @@ something nothing reaches.
 **2. A5 and A12 both still need a driver.** A5's `service_call_tapped` count is 1 and that
 one is mine. A12's alert is unconfirmed. Under v2.0 §2 neither is validated.
 
-**3. The other eight states still run the old extract filter.** Wisconsin is corrected on
-both the laptop and the box; MI/OH/TX/IN/IA/MN/KS/KY are not, so their service rules are
-still starved. Per state: `make osm-extract STATE=<x>` (~280 MB download), then
-`make ingest-osm`, then upload to `gs://haulmeter-sources/osm/` and pull it down on the box.
-**That last part is manual and should not stay that way** — a `make ingest-remote STATE=<x>`
-that pulls from the sources bucket inside the container is the obvious next shape.
+**3. DONE — all nine covered states now run the corrected filter**, on the laptop and on the
+box. See §10. The manual step is gone: `make osm-publish STATE=x` then
+`make ingest-remote STATE=x`.
 
 **4. A9 is now unblocked on its stated blocker.** A12's backups exist and are proven, and the
 disk has room. What A9 still needs before a national run is §4 of its own spec — the bulk
@@ -165,6 +164,47 @@ Group 1 defect. **A2 needs D5, A4 needs D3** — those two decisions are still o
 delegation in §2 does not cover them: v2.0 §6 is a different document and says "no session
 may resolve these".
 
+## 10. All nine states re-extracted, and A3 was already fixed
+
+**A3 needed no work, and that is the finding.** v2.0 §3 says the freshness badge "reads
+`7m · 1 driver` even when the source is an authoritative DOT feed". It does not, and has not
+since commit `f6f8e85` — `freshnessLabel` renders "official feed" whenever the belief carries
+a source, with tests at both the pure-function and component level. Verified against the real
+payload rather than the tests: a live TPIMS-backed rest area returns
+`{"sample_size": 1, "source": "tpims"}`, which is exactly the case the amendment describes,
+and it renders as a feed. **Third v2.0 claim this session that did not match the code.**
+
+What remains of A3 is the amendment's `7m · IDOT` — naming the agency rather than a generic
+"official feed". I did not build it, because **IDOT would be wrong**: the one configured feed
+is `truckparking.travelmidwest.com`, the MAASTO regional exchange covering several midwest
+states, not one DOT. Naming a specific agency would need an invented state→agency table, and
+getting that wrong on a trust feature is worse than a generic label. If it is wanted, the
+honest string is the publisher ("Travel Midwest"), which invents nothing.
+
+**The eight remaining states were re-extracted, audited, ingested locally and loaded onto the
+box.** Production, before and after today:
+
+| | this morning | now |
+|---|---|---|
+| `repair` facilities | **12** | **458** |
+| facilities with a callable phone | **0** | **807** |
+| with opening hours | 0 | 352 |
+| total facilities | 4,874 | 5,438 |
+
+Live service pins, checked through the deployed API: Indianapolis 20 · Detroit 15 · Houston
+12 · Dallas 11 · Minneapolis 7 · Columbus 6 · Louisville 4.
+
+**Every state was audited before loading** with the new `scripts/audit_truck_names.py`, which
+lists what the NAME rule alone admitted — the only one of the three truck signals that can
+admit something absurd. Indiana's 55, Iowa's 30 and Texas's 242 are all genuine truck
+businesses (Boss Truck Shop, JX Truck Center, Blue Beacon Truck Wash, Big Rigs Lube Center).
+`trailer` never appears without `truck` in any of them, which is the third confirmation that
+dropping it cost nothing.
+
+**The digests match across machines**, which is what A12 requirement 3 was for: Indiana loaded
+locally and on the box both record `481cbd335d578e9d`, so "are the laptop and the box running
+the same extract" is now a question with an answer instead of an assumption.
+
 ## 7. Debt
 
 **Closed this session:** no backups · no monitoring · the disk was about to fill · "what is
@@ -172,6 +212,13 @@ the box running" was unanswerable · design-prd entry 117 was blocked on a signa
 
 **New (111):**
 - **The alert's delivery is unconfirmed** (§5).
+- **Two false positives survive the name rule, both real and both minor.** Louisville's
+  "Transit Authority of River City Garage" is a municipal BUS depot that OSM says repairs
+  trucks — a driver cannot use it. Iowa's "Dick's Truck Stop" is typed `repair` because OSM
+  mapped it only as a wash. Neither is worth a blacklist off one example, and inferring
+  facility KIND from a name is the fragile move the rule deliberately avoids elsewhere.
+- **A3 is effectively closed but not formally.** §10 — the defect it describes does not
+  exist; the refinement it asks for would be wrong as written.
 - **Ingest sources reach the box by hand.** `gcloud storage cp` then `docker cp`, and the
   second half evaporates on the next deploy. Fine for one state, not a process for fifty.
 - **`gsutil` does not work on the box** and `gcloud storage` does. Anything written against
