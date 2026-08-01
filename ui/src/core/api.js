@@ -625,6 +625,16 @@ export async function report(facilityId, signalType, value) {
   return queuedPost("/map/report", { facility_id: facilityId, signal_type: signalType, value });
 }
 
+// AI-CONTEXT: A5's validation observation (v2.0 §2 — "done" is an observation, and a
+// bare `tel:` link leaves none). QUEUED rather than fired-and-forgotten, because the
+// moment this fires is a driver standing beside a broken truck, which is exactly where
+// there is no signal. The one event we most need to see is the one most likely to
+// happen offline.
+export function recordServiceCall(facilityId) {
+  return queuedPost(`/map/facility/${facilityId}/called`, {});
+}
+
+
 export async function confirmFuelPrice(facilityId, priceCentsPerGal) {
   // M7-FR5: crowd diesel-price confirmation; queues offline (F12) and syncs later
   return queuedPost("/fuel/confirm-price", {

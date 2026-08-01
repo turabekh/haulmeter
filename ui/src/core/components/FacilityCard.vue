@@ -62,6 +62,7 @@ const emit = defineEmits([
   "vendor",
   "open-stop",
   "save-for-stop",
+  "call-tapped",
 ]);
 const { t } = useI18n();
 const router = useRouter();
@@ -379,7 +380,12 @@ function vendorLine(entry) {
          interactive prompts at speed and §11.4 makes corridor taps deferred-safe, and
          placing a call is the most interactive thing on this card. Composed from
          §11.4's existing rule, not invented: the same queue the saved chip reads. -->
-    <a v-if="phone && !isDriving" class="cta cta--secondary fac__call" :href="`tel:${phone}`">
+    <a
+      v-if="phone && !isDriving"
+      class="cta cta--secondary fac__call"
+      :href="`tel:${phone}`"
+      @click="emit('call-tapped', pin)"
+    >
       <Phone :size="18" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.call") }}
     </a>

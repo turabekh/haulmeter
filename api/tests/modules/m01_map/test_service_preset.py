@@ -7,6 +7,8 @@ data is there, and the one thing it must never do is answer "where can I get fix
 with every truck stop that sells diesel.
 """
 
+from datetime import UTC, datetime
+
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f13_flags import public as flags
@@ -107,3 +109,32 @@ def test_the_flag_carries_the_gate_that_says_the_data_arrived(db):
     gate = flags.get_gate(db, m1.SERVICE_PRESET_FLAG, "service_ingest_verified")
     assert gate is not None
     assert not gate.satisfied  # nine states of coverage is not "done"
+
+
+def test_a_tapped_call_is_recorded_so_the_requirement_can_be_VALIDATED(db):
+    """v2.0 §2: a requirement is done when a driver who is not the owner has used it
+    and the outcome is OBSERVABLE IN THE DATABASE. A5's validation is "a driver with a
+    breakdown finds and calls a shop" — and with a bare `tel:` link there is nothing to
+    observe. The capability would have shipped unvalidatable, which under the new law
+    means unfinishable.
+
+    Named `service_call_tapped`, not `service_call`, because a tap is what this can
+    see. Whether the shop answered is not in evidence, and §11.7's honesty rule is not
+    suspended for numbers only we read."""
+    from app.foundation.f14_admin import public as admin
+
+    shop = _fac(db, facility.FacilityType.repair, "Portage Diesel Repair", *MADISON,
+                services=["truck_repair"], phone="+1-608-742-3039")
+    account = _account(db)
+
+    m1.record_service_call(db, account.id, shop.id, datetime(2026, 8, 1, 14, 0, tzinfo=UTC))
+
+    assert admin.count_events(db, "service_call_tapped", module="m01") == 1
+    # which SHOP, so "a driver called a repair shop" can be told apart from a driver
+    # ringing a truck stop's front desk — the validation is about the former
+    assert (
+        admin.count_events(
+            db, "service_call_tapped", properties_match={"facility_id": str(shop.id)}
+        )
+        == 1
+    )

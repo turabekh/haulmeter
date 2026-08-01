@@ -574,3 +574,29 @@ def test_overlay_carries_the_service_list_and_the_phone_a_driver_taps(client, db
     assert pin["services"] == ["truck_repair", "tire"]
     assert pin["phone"] == "+1-608-555-0199"
     assert pin["opening_hours"] == "Mo-Fr 07:00-18:00"
+
+
+def test_a_call_tap_is_recorded_over_HTTP(client, db):
+    """The domain helper next to this one, `record_map_open`, is exported and called by
+    NOTHING — not a route, not a test. A5's own defect, sitting in the same file. So
+    this asserts the wire, not the function: the client's POST is what has to reach
+    the recorder."""
+    from app.foundation.f14_admin import public as admin
+
+    headers = _auth(client)
+    shop = facility.create_facility(
+        db, facility.FacilityType.repair, "Portage Diesel Repair", *DALLAS
+    )
+    resp = client.post(f"/map/facility/{shop.id}/called", headers=headers)
+    assert resp.status_code == 204
+    assert (
+        admin.count_events(
+            db, "service_call_tapped", properties_match={"facility_id": str(shop.id)}
+        )
+        == 1
+    )
+
+
+def test_a_call_tap_needs_a_session(client, db):
+    shop = facility.create_facility(db, facility.FacilityType.repair, "Shop", *DALLAS)
+    assert client.post(f"/map/facility/{shop.id}/called").status_code == 401

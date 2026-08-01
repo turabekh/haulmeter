@@ -675,3 +675,24 @@ def nav_deeplink(lat: float, lon: float, provider: NavProvider = NavProvider.goo
 
 def record_map_open(db: Session, account_id, occurred_at: datetime):
     return admin.emit(db, "map_open", MODULE, occurred_at, account_id=account_id)
+
+
+# AI-CONTEXT: A5's validation, and the reason it exists at all. v2.0 §2 moved "done"
+# from "the tests are green" to "a driver who is not the owner has used it and the
+# outcome is OBSERVABLE IN THE DATABASE" — and a bare `tel:` link leaves nothing to
+# observe. A5 would have shipped complete and unvalidatable, which under the new law
+# is unfinished.
+#
+# `service_call_tapped`, not `service_call`. A tap is what this can see; whether the
+# shop picked up is not in evidence, and §11.7's rule against faking confidence is not
+# suspended for numbers only we read. The facility id rides along so "a driver called
+# a REPAIR SHOP" can be told apart from a driver ringing a truck stop's front desk.
+def record_service_call(db: Session, account_id, facility_id, occurred_at: datetime):
+    return admin.emit(
+        db,
+        "service_call_tapped",
+        MODULE,
+        occurred_at,
+        account_id=account_id,
+        properties={"facility_id": str(facility_id)},
+    )

@@ -314,6 +314,22 @@ def report(
 # Two POSTs rather than one PUT with a boolean: both directions then go through the
 # client's `queuedPost`, so a driver who mutes a lot with no signal still mutes it
 # (§22.3's offline clause). The class-level switch is a PUT because it is not queued.
+# AI-CONTEXT: A5's validation observation. v2.0 §2 makes "done" an observation about
+# a person, and a `tel:` anchor leaves none — so the tap posts here. 204: the driver is
+# already dialling and there is nothing to say back.
+#
+# `canonical_facility_id` rather than the raw id, because a merged facility must record
+# against the pin that survived — the same resolution every other route here uses, and
+# the one `/admin/facilities/*` still does not (carried debt).
+@router.post("/facility/{facility_id}/called", status_code=204)
+def record_call(
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> None:
+    m1.record_service_call(db, account.id, facility_id, datetime.now(UTC))
+
+
 @router.get("/facility/{facility_id}/prompt-pref")
 def prompt_pref(
     facility_id: uuid.UUID = Depends(canonical_facility_id),

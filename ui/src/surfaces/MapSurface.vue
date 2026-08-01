@@ -52,6 +52,7 @@ import {
   fetchFacilityPromotions,
   reviewVendor,
   reportVendor,
+  recordServiceCall,
 } from "../core/api.js";
 
 defineOptions({ name: "MapSurface" });
@@ -656,6 +657,18 @@ async function loadHandoffs() {
 }
 onMounted(loadHandoffs);
 
+// A5: the driver is already dialling — this records that it happened so v2.0 §2's
+// "observable in the database" can be answered. Failure is swallowed on purpose: a
+// dropped analytics event must never surface as an error to someone standing beside a
+// broken truck, and queuedPost has already stored it if the network was the problem.
+async function callTapped(pin) {
+  try {
+    await recordServiceCall(pin.facility_id);
+  } catch {
+    /* the tap still dials; the observation is best-effort */
+  }
+}
+
 function handoff(pin) {
   // M10-FR2: broadcast "leaving soon" from this free lot (backend proves presence)
   selected.value = null;
@@ -907,6 +920,8 @@ async function submitPrice(cents) {
         @book="book"
         @fuel="fuel"
         @handoff="handoff"
+        @call-tapped="callTapped"
+        @save-for-stop="saveAhead"
       />
     </BottomSheet>
 

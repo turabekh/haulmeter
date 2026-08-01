@@ -6,14 +6,20 @@
 // there is no number is worse than no button: a driver taps it while broken down and
 // nothing happens. 28 of the 45 repair facilities in the registry have no phone, so
 // the absent case is the COMMON one, not the edge.
-import { describe, it, expect, afterEach } from "vitest";
-import { mount } from "@vue/test-utils";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import PresetChips from "../src/core/components/PresetChips.vue";
 import FacilityCard from "../src/core/components/FacilityCard.vue";
+import MapSurface from "../src/surfaces/MapSurface.vue";
 import { routes } from "../src/router.js";
 import en from "../src/core/i18n/en.json";
+import { setToken, logout } from "../src/core/api.js";
 import { observeMotion, __resetStateForTests, DRIVING_SUSTAIN_MS } from "../src/core/state.js";
+
+function jsonOk(body) {
+  return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+}
 
 function router() {
   return createRouter({ history: createMemoryHistory(), routes });
@@ -100,6 +106,14 @@ describe("Facility card — reaching the shop (A5 req 3)", () => {
     expect(card({ opening_hours: null }).find(".fac__hours").exists()).toBe(false);
   });
 
+  it("records the tap, so the requirement can be validated at all", async () => {
+    // v2.0 §2: done is an observation in the database. A bare tel: link leaves none,
+    // and A5 would have shipped complete and unvalidatable.
+    const w = card();
+    await w.find(".fac__call").trigger("click");
+    expect(w.emitted()["call-tapped"][0][0].facility_id).toBe("f-1");
+  });
+
   it("never offers to dial while the truck is moving", () => {
     // §21.11 forbids interactive prompts while DRIVING and §11.4 makes corridor taps
     // deferred-safe. Placing a call at 65 mph is the most interactive thing on this
@@ -108,5 +122,63 @@ describe("Facility card — reaching the shop (A5 req 3)", () => {
     const w = card();
     expect(w.find(".fac__call").exists()).toBe(false);
     expect(w.find(".fac__call-later").exists()).toBe(true);
+  });
+});
+
+// AI-CONTEXT: the surface-level wiring, and it exists because the unit tests above
+// were ALL GREEN while `recordServiceCall` was used in MapSurface and never imported.
+// A missing import in a .vue file is a runtime ReferenceError that fires the first
+// time a driver taps Call — and nothing in this project would have caught it: there
+// is no ESLint on the UI at all, so `make lint` is Python-only.
+//
+// A component test proves the card EMITS. Only a surface test proves anything listens.
+describe("MapSurface — the tap reaches the server (A5 validation)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    logout();
+  });
+
+  it("posts the call tap for the facility whose card is open", async () => {
+    setToken("tok-a05");
+    const stub = vi.fn((url) => {
+      const u = String(url);
+      if (u.includes("/map/overlay")) {
+        return jsonOk({
+          clustered: false,
+          total: 1,
+          clusters: [],
+          pins: [
+            {
+              facility_id: "f-shop",
+              name: "Portage Diesel Repair",
+              facility_type: "repair",
+              shape: "circle",
+              lat: 43.5,
+              lon: -89.4,
+              status: null,
+              services: ["truck_repair"],
+              phone: "+1-608-742-3039",
+              opening_hours: null,
+              badges: [],
+              freshness: null,
+            },
+          ],
+        });
+      }
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", stub);
+
+    const w = mount(MapSurface, { global: { plugins: [router()] } });
+    await flushPromises();
+    await w.find(".pin").trigger("click");
+    await flushPromises();
+    await w.find(".fac__call").trigger("click");
+    await flushPromises();
+
+    const post = stub.mock.calls.find(
+      (c) => String(c[0]).includes("/map/facility/f-shop/called") && c[1]?.method === "POST",
+    );
+    expect(post).toBeTruthy();
   });
 });
