@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import canonical_facility_id, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f13_flags import public as flags
@@ -1370,10 +1370,15 @@ def create_facility(
     return _facility_out(db, fac)
 
 
+# AI-CONTEXT: `canonical_facility_id` resolves a merged id to the site it was merged
+# INTO. It has been on every driver-facing route since §23's merged-id fix and was never
+# carried across to these three — so an admin editing a merged id edited the SHADOW: the
+# patch recorded, the audit log saying it happened, and the map showing the old value
+# forever, because the row they edited is one nothing renders.
 @router.patch("/facilities/{facility_id}")
 def edit_facility(
-    facility_id: uuid.UUID,
     body: FacilityPatchIn,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     actor: identity.Account = Depends(current_admin),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -1419,8 +1424,8 @@ def edit_facility(
 
 @router.post("/facilities/{facility_id}/merge")
 def merge_facility(
-    facility_id: uuid.UUID,
     body: MergeIn,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     actor: identity.Account = Depends(current_admin),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -1432,9 +1437,12 @@ def merge_facility(
     duplicate = facility.get_facility(db, body.duplicate_id)
     if canonical is None or duplicate is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "facility not found")
-    if canonical.id == duplicate.id:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "cannot merge into itself")
-    facility.merge_facilities(db, canonical, duplicate)
+    try:
+        # the rule lives in `merge_facilities` so all four callers share it: a merge
+        # always lands on the canonical row, and a cycle is refused rather than written
+        canonical = facility.merge_facilities(db, canonical, duplicate)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     admin.record_action(
         db,
         "facility_merge",
@@ -1451,7 +1459,7 @@ def merge_facility(
 
 @router.get("/facilities/{facility_id}/duplicates")
 def facility_duplicates(
-    facility_id: uuid.UUID,
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
     _admin: identity.Account = Depends(current_admin),
     db: Session = Depends(get_db),
 ) -> list[dict]:

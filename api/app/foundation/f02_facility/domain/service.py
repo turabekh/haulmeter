@@ -336,12 +336,50 @@ def host_should_adopt_name(host: Facility, incoming_name: str) -> bool:
 
 
 def merge_facilities(db: Session, canonical: Facility, duplicate: Facility) -> Facility:
+    """AI-CONTEXT: a merge always lands on the CANONICAL row, never on a shadow.
+
+    Measured before this guard existed: 146 rows locally and 149 on the box pointed at
+    a facility that was itself merged. Reads survived because `resolve_canonical` walks
+    the chain — and the fact that it carries a `seen` set means somebody already knew a
+    CYCLE was reachable from here. Nothing prevented either; this function wrote
+    whatever it was handed.
+
+    A chain is a tax: every read of one of those ids walks it, and A9 makes more merges,
+    not fewer. A cycle is worse than a tax — `resolve_canonical` would answer with
+    whichever row its guard broke on, which is a wrong answer delivered confidently.
+
+    Enforced HERE rather than in the callers, because there are four of them (the ingest
+    pipeline, `/admin/facilities/{id}/merge`, and two repair scripts) and a rule kept in
+    three places out of four is the defect this project keeps paying for.
+    """
+    target = resolve_canonical(db, canonical.id) or canonical
+    if target.id == duplicate.id:
+        # either merging a row into itself, or closing a cycle (A into B, then B into A)
+        raise ValueError("a facility cannot be merged into itself")
     for source in list(duplicate.sources):
-        source.facility_id = canonical.id
+        source.facility_id = target.id
     duplicate.status = FacilityStatus.merged
-    duplicate.merged_into_id = canonical.id
+    duplicate.merged_into_id = target.id
     db.flush()
-    return canonical
+    return target
+
+
+def flatten_merge_chains(db: Session) -> int:
+    """Point every merged row directly at its ultimate canonical. Returns how many were
+    re-pointed; idempotent, so a second run returns 0.
+
+    For the rows written before the guard above existed. Nothing about the map changes —
+    `resolve_canonical` already answered correctly by walking — but the walk stops being
+    paid on every read, and a chain is one accidental merge away from being a cycle.
+    """
+    flattened = 0
+    for row in db.scalars(select(Facility).where(Facility.merged_into_id.isnot(None))):
+        canonical = resolve_canonical(db, row.id)
+        if canonical is not None and canonical.id != row.merged_into_id:
+            row.merged_into_id = canonical.id
+            flattened += 1
+    db.flush()
+    return flattened
 
 
 def resolve_canonical(db: Session, facility_id) -> Facility | None:

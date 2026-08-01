@@ -35,7 +35,9 @@ from app.foundation.f02_facility.domain.models import Facility  # noqa: E402
 from app.foundation.f02_facility.domain.service import (  # noqa: E402
     coordinates,
     find_duplicate_candidates,
+    flatten_merge_chains,
     merge_facilities,
+    resolve_canonical,  # noqa: E402
 )
 
 
@@ -51,7 +53,7 @@ def _live(db):
 
 
 def repair(db, dry_run: bool = True) -> dict:
-    stats = {"scanned": 0, "merged": 0}
+    stats = {"scanned": 0, "merged": 0, "chains_flattened": 0}
     seen: set = set()
     for facility in _live(db):
         stats["scanned"] += 1
@@ -80,7 +82,20 @@ def repair(db, dry_run: bool = True) -> dict:
                 merge_facilities(db, keeper, loser)
             seen.add(loser.id)
             stats["merged"] += 1
+    # a merge whose target was itself merged used to chain; 146 rows locally and 149 on
+    # the box carry one. Reads survived by walking, which is a tax paid on every read and
+    # one accidental merge away from a cycle.
+    stats["chains_flattened"] = flatten_merge_chains(db) if not dry_run else _chain_count(db)
     return stats
+
+
+def _chain_count(db) -> int:
+    return sum(
+        1
+        for row in db.scalars(select(Facility).where(Facility.merged_into_id.isnot(None)))
+        if (canonical := resolve_canonical(db, row.id)) is not None
+        and canonical.id != row.merged_into_id
+    )
 
 
 def main() -> None:
