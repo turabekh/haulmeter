@@ -4,9 +4,14 @@
 > of **A1 — requirement 1, the capture checklist** — and the finding underneath it is
 > that the requirement's own last clause was the hard part.
 >
-> **Stack UP · everything committed locally · NOTHING PUSHED, NOTHING DEPLOYED.**
-> Two migrations (`0058`, `0059`) are applied to the **dev** database only. Production is
-> still at `0057_a01_stop_packet` and does not have this work.
+> **Stack UP · everything pushed and deployed · haulmeter.online CURRENT.**
+> Verified against the artifact, not the deploy script's output: production head is
+> `0059_f13_config_decl`, `f06.doc_type` carries `seal` and `damage`, the declaration row
+> exists and is UNSET, both checklists resolve with a real capture path for every item,
+> and the served bundle carries `checklist__snap`, `load.doc.*` and `admin.cfg.bad_json`.
+> A fresh backup was taken at the new schema and the **restore performed and verified**
+> from the bucket (A12 §7 item 7): head matches, 18,322 facilities / 174 accounts / 60
+> beliefs / 196 events all match, PostGIS geometry intact.
 
 ---
 
@@ -14,11 +19,11 @@
 
 | | |
 |---|---|
-| Branch | `main`, 2 commits ahead of `origin/main` — **not pushed** |
+| Branch | `main`, pushed to `origin/main` at `f1ed43d` |
 | Gates | **pytest 1345 · vitest 632 · layout 209 · import-linter 30/30** |
-| Migrations | dev head `0059_f13_config_decl`; **production head `0057_a01_stop_packet`** |
+| Migrations | dev **and production** head `0059_f13_config_decl` |
 | Working tree | clean apart from untracked `collect_files.py` (pre-existing, not mine) |
-| Deploy | **not run.** The owner's "deploy only when it is ready" was given for the previous task; this is a new one, and rule 3 says the call is theirs each time |
+| Deploy | run at the owner's word, then verified against the box (see the banner) |
 
 ## 2. A1 requirement 1 — what it actually asked for
 
@@ -156,9 +161,10 @@ the single-row fallback, and `load-checklist-capture` opens the sheet from a row
 
 ## 9. What I did NOT verify
 
-- **Nothing was pushed or deployed.** Production does not have any of this. Two
-  migrations are pending there (`0058` additive enum values, `0059` a new table); both
-  are additive and neither rewrites data, but neither has run outside dev.
+- **Deployed, but no traffic has exercised it.** Both migrations ran clean on production
+  and the restore was re-verified at the new head, so the SCHEMA is proven. What is not
+  proven is the path: no request has hit `/load/{stop}/meter` on production since, and
+  the checklist rows have never been rendered by a browser pointed at haulmeter.online.
 - **No human has used the checklist.** No driver, and not the owner, has walked a real
   stop from capture to tick on a handset. A push on a real handset is now **seven**
   sessions old.
