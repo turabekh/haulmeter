@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.foundation.f02_facility import public as facility
 from app.foundation.f10_crowd import public as crowd
+from app.foundation.f14_admin import public as admin
 from app.modules.m07_fuel import public as m7
 
 from . import sources
@@ -18,6 +19,61 @@ from . import sources
 
 def _batch(name: str) -> str:
     return f"{name}-{int(datetime.now(UTC).timestamp())}"
+
+
+# AI-CONTEXT: A12 requirement 3 — "every data load records a snapshot identifier, so
+# what the box is running is answerable". It was not answerable: `run_osm` recorded no
+# JobRun at all, and an ingest left nothing behind but a `batch_id` string.
+#
+# The digest is the identifier, not the filename and not the date. Two boxes both
+# holding "wisconsin.geojson" prove nothing about running the same data — and this
+# session is the argument: the old filter and the corrected one produce a file of the
+# same name that differ by 65 repair shops. "When did the box get the good one" is a
+# question only content can answer.
+def _snapshot(path: str) -> dict:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    stat = os.stat(path)
+    return {
+        "name": os.path.basename(path),
+        "path": path,
+        "bytes": stat.st_size,
+        "sha256": digest.hexdigest(),
+        "modified_at": datetime.fromtimestamp(stat.st_mtime, UTC).isoformat(),
+    }
+
+
+def _record_load(db: Session, job_name: str, source, work):
+    """One row per ATTEMPT, following the JobRun rule the worker already uses: a load
+    that dies leaves a row saying so, or the newest healthy-looking row is from the run
+    BEFORE the broken one and the box reports data it is not running."""
+    run = admin.start_job_run(db, job_name, datetime.now(UTC))
+    try:
+        snapshot = source() if callable(source) else source
+        stats = work()
+    except Exception as exc:
+        admin.finish_job_run(db, run, datetime.now(UTC), ok=False, error=str(exc)[:500])
+        db.flush()
+        raise
+    admin.finish_job_run(
+        db,
+        run,
+        datetime.now(UTC),
+        ok=True,
+        summary={
+            "snapshot": snapshot,
+            "staged": stats.staged,
+            "created": stats.created,
+            "matched": stats.matched,
+            "skipped": stats.skipped,
+            "facilities": len(stats.facility_ids),
+        },
+    )
+    return stats
 
 
 def _merge(total: facility.IngestStats, part: facility.IngestStats) -> None:
@@ -91,8 +147,11 @@ def run_tpims_dynamic(db: Session, now: datetime | None = None, commit: bool = T
 
 
 def run_osm(db: Session, geojson_path: str, commit: bool = True) -> facility.IngestStats:
-    geojson = facility.ingest.read_geojson_file(geojson_path)
-    stats = facility.ingest_records(db, facility.parse_osm(geojson), batch_id=_batch("osm"))
+    def load():
+        geojson = facility.ingest.read_geojson_file(geojson_path)
+        return facility.ingest_records(db, facility.parse_osm(geojson), batch_id=_batch("osm"))
+
+    stats = _record_load(db, "ingest_osm", lambda: _snapshot(geojson_path), load)
     if commit:
         db.commit()
     return stats

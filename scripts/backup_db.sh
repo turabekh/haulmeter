@@ -45,8 +45,13 @@ if [ "$SIZE" -lt 100000 ]; then
 fi
 
 echo "==> uploading to $BUCKET"
-gsutil -q cp "$LOCAL_DIR/$NAME" "$BUCKET/$NAME"
-gsutil -q stat "$BUCKET/$NAME"   # readback: the upload is not done until it is THERE
+# `gcloud storage`, not `gsutil`: on this box gsutil reports "Provided scope(s) are not
+# authorized" even with devstorage.read_write on the instance and objectAdmin on the
+# bucket. gcloud storage takes the metadata credentials correctly. Both halves are
+# needed, and the scope error message hides the IAM one — the first 403 here was
+# scopes, the second was a missing role, and they read identically.
+gcloud storage cp "$LOCAL_DIR/$NAME" "$BUCKET/$NAME" >/dev/null
+gcloud storage ls "$BUCKET/$NAME" >/dev/null  # readback: not uploaded until it is THERE
 echo "    $BUCKET/$NAME"
 
 echo "==> pruning local copies (keeping $KEEP_LOCAL)"

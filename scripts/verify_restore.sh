@@ -26,13 +26,13 @@ USER=$(grep '^POSTGRES_USER=' .env | cut -d= -f2)
 PORT=$(grep '^POSTGRES_PORT=' .env | cut -d= -f2)
 PSQL="$COMPOSE exec -T postgres psql -U $USER -p $PORT"
 
-LATEST=$(gsutil ls "$BUCKET/haulmeter-*.dump" | sort | tail -1)
+LATEST=$(gcloud storage ls "$BUCKET/haulmeter-*.dump" 2>/dev/null | sort | tail -1)
 [ -n "$LATEST" ] || { echo "FAIL: no backup in $BUCKET" >&2; exit 1; }
 echo "==> verifying $LATEST"
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"; $PSQL -d postgres -c "DROP DATABASE IF EXISTS $SCRATCH;" >/dev/null 2>&1 || true' EXIT
-gsutil -q cp "$LATEST" "$TMP/backup.dump"
+gcloud storage cp "$LATEST" "$TMP/backup.dump" >/dev/null
 
 echo "==> restoring into $SCRATCH"
 $PSQL -d postgres -c "DROP DATABASE IF EXISTS $SCRATCH;" >/dev/null
