@@ -222,11 +222,20 @@ def run_document_expiry(db: Session, commit: bool = True) -> dict:
     from app.foundation.f08_notifications import public as notify
     from app.modules.m05_protection import public as m5
 
-    gateway = notify.RecordingNotificationGateway()
-    sent = m5.dispatch_expiry_reminders(db, gateway)
+    # AI-CONTEXT: the per-ACCOUNT factory, not one shared recorder (§23 entry 111).
+    #
+    # This walked every driver's due credentials through a single
+    # `RecordingNotificationGateway()`, which records and never pushes — so on a box with
+    # a VAPID keypair the reminders reached the inbox and no phone. `run_detention_clock`
+    # below was given `gateway_for` when entry 111 shipped; this was missed, and it is
+    # the job whose whole purpose is reaching a driver who is NOT looking at the app.
+    sent = m5.dispatch_expiry_reminders(db, notify.gateway_for)
     if commit:
         db.commit()
-    return {"considered": len(sent), "delivered": len(gateway.sent)}
+    # `delivered` can no longer be counted off one recorder — each account gets its own
+    # gateway. F8 records every dispatch, suppressed or not, so the inbox is the honest
+    # source; a dispatch that F8 held for quiet hours was never "delivered" anyway.
+    return {"considered": len(sent), "delivered": sum(1 for n in sent if n is not None)}
 
 
 def run_detention_clock(db: Session, commit: bool = True) -> dict:

@@ -20,7 +20,7 @@
      the archive sheet. -->
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { ShieldCheck, Plus, Archive, RotateCcw, ChevronRight } from "lucide-vue-next";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
@@ -35,9 +35,10 @@ import {
 } from "../core/api.js";
 import { SAMPLE_WALLET } from "../core/fixtures.js";
 
-const { t } = useI18n();
+const { t, has } = useI18n();
 const { isDriving } = useDriverState();
 const router = useRouter();
+const route = useRoute();
 const data = ref(SAMPLE_WALLET);
 const inspecting = ref(false);
 const capturing = ref(false);
@@ -156,12 +157,39 @@ async function restore(row) {
   }
 }
 
+// AI-CONTEXT: §13.5 — "every notification deep-links to the exact screen AND STATE it
+// describes. No landing on tab roots."
+//
+// The 30/14/3 expiry reminder deep-linked to `/docs`, which is a tab root, so a driver
+// told their med card expires in three days arrived at a wallet holding every credential
+// and every BOL they had ever filed and had to work out which one was meant. That is the
+// same failure the Load tab's review card was built to end, on a different screen.
+//
+// The id rides in the QUERY on the existing route rather than in a route of its own:
+// navigation structure is §22.2 never-improvise, and the query is the precedent this
+// codebase already set for the incident pack. An id that no longer matches anything —
+// a document renewed and superseded before the driver tapped the notification — simply
+// lands them on the wallet, which is where they wanted to be anyway.
+const highlighted = ref(null);
+function honourDeepLink() {
+  // the surface is mounted without a router in several tests and in inspection mode
+  const wanted = route?.query?.doc;
+  if (!wanted) return;
+  const match = (data.value.documents ?? []).find((d) => d.id === wanted);
+  if (!match) return;
+  highlighted.value = match.id;
+  // the grid is collapsed by default (§23 entry 80), so the section holding it opens —
+  // a deep link that lands on a closed accordion has not arrived anywhere.
+  open_.value = new Set([...open_.value, "mine"]);
+}
+
 onMounted(async () => {
   try {
     data.value = await fetchWallet();
   } catch {
     data.value = SAMPLE_WALLET;
   }
+  honourDeepLink();
   try {
     archived.value = (await fetchArchivedDocuments()).documents;
   } catch {
@@ -177,8 +205,7 @@ const INSPECTION_TYPES = ["cdl", "med_card", "insurance", "permit"];
 // stay English inside the catalogue itself, which is where §12.3 wants that decision.
 function docLabel(type) {
   const key = `docs.type.${type}`;
-  const label = t(key);
-  return label === key ? type.replace(/_/g, " ") : label;
+  return has(key) ? t(key) : type.replace(/_/g, " ");
 }
 const inspectionDocs = computed(() =>
   data.value.documents.filter((d) => INSPECTION_TYPES.includes(d.doc_type)),
@@ -272,7 +299,16 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
           <h3 class="group__sub">{{ g.label }}</h3>
           <ul class="grid">
             <li v-for="d in g.docs" :key="d.id">
-              <button class="doc" type="button" @click="open(d)">
+              <!-- §13.5's landing state: the document the reminder was ABOUT, marked.
+                   C-1 — colour is never the sole signal, so the mark is a border plus
+                   `aria-current`, which is also what a screen reader announces. -->
+              <button
+                class="doc"
+                :class="{ 'doc--marked': highlighted === d.id }"
+                :aria-current="highlighted === d.id ? 'true' : undefined"
+                type="button"
+                @click="open(d)"
+              >
                 <span class="doc__type">{{ g.label }}</span>
                 <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
               </button>
@@ -487,6 +523,11 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
   background: var(--ink-1);
   border: 1px solid var(--line-1);
   border-radius: var(--r-card);
+}
+/* the document a reminder deep-linked to. `marker` is §6.1's attention token and the
+   same one the expiring pills already use, so the mark agrees with the strip above it. */
+.doc--marked {
+  border-color: var(--marker-500);
 }
 .doc__type {
   font-size: var(--type-body-size);

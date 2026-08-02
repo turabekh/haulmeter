@@ -93,5 +93,16 @@ export function useI18n() {
       }
     }
   };
-  return { locale, t, setLocale };
+  // AI-CONTEXT: for keys that are legitimately OPTIONAL, which is a real case.
+  //
+  // A document type or an evidence prompt the catalogue does not know should still
+  // render readably ("med_card" -> "med card") rather than blank. Three surfaces did
+  // that by asking `t()` and comparing the answer to the key — using the silent echo as
+  // a "missing" signal. That works only while the echo is silent, and it stops being
+  // silent under test now, so the intent has to be SAID instead of inferred. An
+  // accidental miss still fails loudly; a deliberate optional lookup asks first.
+  const has = (key) =>
+    Object.hasOwn(messages[locale.value] ?? {}, key) ||
+    Object.hasOwn(messages[DEFAULT_LOCALE], key);
+  return { locale, t, has, setLocale };
 }

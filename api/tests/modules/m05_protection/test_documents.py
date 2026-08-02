@@ -379,3 +379,56 @@ def test_you_cannot_remove_a_document_that_is_not_yours(db):
     assert m5.archive_own_document(db, theirs.id, doc.id) is None
     assert m5.restore_own_document(db, theirs.id, doc.id) is None
     assert db.get(documents.Document, doc.id).archived_at is None
+
+
+# AI-CONTEXT: the two things about an expiry reminder that are not about WHEN it fires.
+#
+# The 30/14/3 ladder was correct and tested from the day it shipped. What was not tested
+# is whether the reminder reaches a phone and whether it lands anywhere useful — and both
+# were wrong: the worker walked every driver through ONE `RecordingNotificationGateway`,
+# which records and never pushes, and the deep link was `/docs`, a tab root.
+def test_each_driver_gets_their_OWN_gateway(db):
+    """Web Push is addressed to one driver's browsers, and this scan crosses accounts.
+    A single shared instance could only ever push to one of them — so the worker passes
+    the FACTORY, exactly as `m3.dispatch_clock_alerts` has since §23 entry 111."""
+    a = identity.register_account(db, "a-expiry@example.com", "pw-123456")
+    b = identity.register_account(db, "b-expiry@example.com", "pw-123456")
+    soon = date.today() + timedelta(days=3)
+    for account in (a, b):
+        m5.capture_document(
+            db, account.id, "cdl", b"x", filename="cdl.png", expires_on=soon
+        )
+
+    asked = []
+
+    def factory(_db, account_id):
+        asked.append(account_id)
+        return notify.RecordingNotificationGateway()
+
+    m5.dispatch_expiry_reminders(db, factory, as_of=date.today())
+
+    assert set(asked) == {a.id, b.id}, (
+        "one gateway was shared across drivers; only one of them could be pushed to"
+    )
+
+
+def test_the_reminder_lands_on_the_DOCUMENT_not_the_tab_root(db):
+    """§13.5: "every notification deep-links to the exact screen AND STATE it describes.
+    No landing on tab roots." A driver told their med card expires in three days arrived
+    at a wallet holding every credential and every BOL they had ever filed."""
+    account = identity.register_account(db, "deeplink@example.com", "pw-123456")
+    doc = m5.capture_document(
+        db,
+        account.id,
+        "med_card",
+        b"x",
+        filename="med.png",
+        expires_on=date.today() + timedelta(days=3),
+    )
+
+    gateway = notify.RecordingNotificationGateway()
+    sent = [n for n in m5.dispatch_expiry_reminders(db, gateway, as_of=date.today()) if n]
+
+    assert sent, "nothing was dispatched"
+    assert sent[0].deep_link != "/docs", "the reminder landed on a tab root"
+    assert str(doc.id) in sent[0].deep_link

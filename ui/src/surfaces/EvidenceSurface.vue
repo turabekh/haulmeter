@@ -55,14 +55,13 @@ const exportFailed = ref(false);
 const packKind = () => (route.query.kind === "incident" ? "incident" : "stop");
 
 const router = useRouter();
-const { t } = useI18n();
+const { t, has } = useI18n();
 
 // acronyms stay English inside the locale catalogue, which is where §12.3 wants that
 // decision — not derived here from the enum
 function docLabel(type) {
   const key = `docs.type.${type}`;
-  const label = t(key);
-  return label === key ? type.replace(/_/g, " ") : label;
+  return has(key) ? t(key) : type.replace(/_/g, " ");
 }
 const data = ref(null);
 const missing = ref(false);
@@ -166,8 +165,7 @@ async function doShare() {
 function photoLabel(prompt) {
   if (!prompt) return t("claim.ev_photo");
   const key = `cond.step.${prompt}`;
-  const label = t(key);
-  return label === key ? prompt : label;
+  return has(key) ? t(key) : prompt;
 }
 </script>
 

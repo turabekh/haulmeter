@@ -3028,6 +3028,54 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
   // opened it while stopped and then pulled away kept a live camera-capture UI on
   // screen at speed — the control that opens a flow and the flow itself are two
   // different things to guard, and only one of them was.
+  // AI-CONTEXT: §13.5 — "every notification deep-links to the exact screen AND STATE it
+  // describes. No landing on tab roots."
+  //
+  // The 30/14/3 expiry reminder deep-linked to `/docs`. A driver told their med card
+  // expires in three days arrived at a wallet holding every credential and every BOL they
+  // had ever filed, and had to work out which one was meant — the same "it was done and I
+  // could not find it" failure the Load tab's review card was built to end.
+  it("marks the document a reminder was about, and opens the section holding it", async () => {
+    stubWallet();
+    const router = createRouter({ history: createMemoryHistory(), routes });
+    router.push("/docs?doc=d-2");
+    await router.isReady();
+    const w = mount(DocsSurface, { global: { plugins: [router] } });
+    await flushPromises();
+
+    // the grid is collapsed by default (§23 entry 80) — a deep link that lands on a
+    // closed accordion has not arrived anywhere
+    const marked = w.findAll(".doc--marked");
+    expect(marked.length).toBe(1);
+    expect(marked[0].attributes("aria-current")).toBe("true"); // C-1: never colour alone
+  });
+
+  it("marks nothing when no reminder sent the driver here", async () => {
+    stubWallet();
+    const router = createRouter({ history: createMemoryHistory(), routes });
+    router.push("/docs");
+    await router.isReady();
+    const w = mount(DocsSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    await openSection(w);
+    expect(w.findAll(".doc--marked").length).toBe(0);
+  });
+
+  it("a renewed document whose id no longer exists still lands on the wallet", async () => {
+    // the reminder is durable and the wallet moves on. A driver who renews before tapping
+    // the notification should get their wallet, not an error and not an empty screen.
+    stubWallet();
+    const router = createRouter({ history: createMemoryHistory(), routes });
+    router.push("/docs?doc=gone-forever");
+    await router.isReady();
+    const w = mount(DocsSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    await openSection(w);
+
+    expect(w.findAll(".doc--marked").length).toBe(0);
+    expect(w.findAll(".doc").length).toBeGreaterThan(0);
+  });
+
   it("names a PDF instead of rendering a broken image (\u00a723 entry 77)", async () => {
     // this input accepts application/pdf and the preview was always an <img> on a blob
     // URL, which cannot decode one -- so choosing a rate con showed the browser's

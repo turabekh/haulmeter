@@ -1258,6 +1258,17 @@ def dispatch_expiry_reminders(db: Session, gateway, as_of: date | None = None, n
     sent = []
     for document, offset in expiry_reminders_due(db, as_of):
         label = document.doc_type.value.replace("_", " ")
+        # AI-CONTEXT: `gateway` may be a gateway or a FACTORY taking (db, account_id),
+        # exactly as `m3.dispatch_clock_alerts` takes one (§23 entry 111).
+        #
+        # This scan crosses ACCOUNTS — it walks every driver's due credentials — and Web
+        # Push is addressed to one driver's own browsers. A single shared instance could
+        # therefore only ever push to one of them. The worker passed a bare
+        # `RecordingNotificationGateway()`, so on a deployment with a VAPID keypair
+        # configured these reminders reached the inbox and NO phone: the one job whose
+        # entire purpose is to reach a driver who is not looking at the app. `m3`'s
+        # clock alerts were given the factory when entry 111 shipped and this was missed.
+        gw = gateway(db, document.account_id) if callable(gateway) else gateway
         sent.append(
             notify.dispatch(
                 db,
@@ -1266,8 +1277,16 @@ def dispatch_expiry_reminders(db: Session, gateway, as_of: date | None = None, n
                 "document_expiry",
                 f"{label} expires in {offset} days",
                 f"Renew it before {document.expires_on:%d %b} to stay road-legal.",
-                "/docs",
-                gateway,
+                # §13.5: "every notification deep-links to the exact screen AND STATE it
+                # describes. No landing on tab roots." This was `/docs` — the tab root —
+                # so a driver told their med card expires in three days arrived at a
+                # wallet and had to work out which of their credentials was meant. The id
+                # rides in the QUERY on the existing route rather than in a new one:
+                # navigation structure is §22.2 never-improvise, and carrying the target
+                # in the query is the precedent this codebase already set for the
+                # incident pack on the Load tab.
+                f"/docs?doc={document.id}",
+                gw,
                 now=now,
                 subject_ref=str(document.id),
             )

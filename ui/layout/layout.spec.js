@@ -501,6 +501,14 @@ const SURFACES = [
   // disclosure. Every state that reaches a document opens its section first —
   // otherwise the harness would measure three headings and report the surface covered.
   ["docs", "/docs", { mocks: WALLET_MOCKS, open: [".group__head"], ready: ".doc" }],
+  // AI-CONTEXT: §13.5's landing state for the 30/14/3 expiry reminder. The deep link
+  // opens the grid section and marks one document, so the marked row is measured at 360
+  // dp under +40% — the mark is a border, which must not push the 88 dp tile's contents
+  // into a reflow the unmarked tiles do not have.
+  ["docs-reminder", "/docs?doc=00000000-0000-0000-0000-00000000000b", {
+    mocks: WALLET_MOCKS,
+    ready: ".doc--marked",
+  }],
   // the two sections the wallet grew, measured in their own right
   ["docs-paperwork", "/docs", {
     mocks: WALLET_MOCKS,
