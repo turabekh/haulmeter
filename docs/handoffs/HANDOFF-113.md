@@ -3,8 +3,9 @@
 > One session under **PRD v2.0**, building **A6 — service-center vendors**, the only
 > Group-2 requirement with no owner decision in front of it.
 >
-> **Stack UP · nothing pushed, nothing deployed — three commits sit on local `main`
-> awaiting the owner's word.** haulmeter.online is untouched and serving 112's code.
+> **Stack UP · PUSHED, not deployed.** haulmeter.online is still serving 112's code.
+> The session's tail found something bigger than A6: **`m13_vendor` is ENABLED in
+> production and everything behind it is demo data** — see §12/§13.
 >
 > The requirement asked for one thing (split the flag). Two more were underneath it:
 > **the shared endpoints made the split a label rather than a gate**, and **claiming
@@ -16,12 +17,12 @@
 
 | | |
 |---|---|
-| Branch | `main`, **3 commits ahead of `origin/main`** — `f722d51`, `9cf9775`, `fe31171` |
+| Branch | `main`, **pushed** — `f722d51`, `9cf9775`, `fe31171`, plus the doc commits |
 | Gates | **pytest 1364 · vitest 636 · layout 213 checks / 210 states · import-linter 30/30** |
 | Migrations | unchanged — dev and production both `0059_f13_config_decl`. **A6 needed no migration** |
 | Working tree | clean apart from untracked `collect_files.py` (pre-existing, not mine) |
 | Local stack | **UP** |
-| Deploy | **not run.** Nothing has left this machine |
+| Deploy | **not run.** A6 is not on the box; `m13_service_center` does not exist there |
 
 **`m13_service_center` is OFF in dev**, deliberately — it was switched on to drive the
 probe in §5 and switched back. Production has never seen the flag.
