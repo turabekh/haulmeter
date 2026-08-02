@@ -2,7 +2,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci vapid-keys \
-        seed seed-wallet purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
+        seed seed-where seed-wallet purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
         repair-fuel repair-contact repair-duplicates osm-publish ingest-remote ui-layout ui-layout-only
 
 STATE ?= wisconsin
@@ -104,9 +104,22 @@ ci: env preflight lint test ui-layout
 
 # --- Real POI data (PRD §12) — live pulls only, never in CI ---
 # Dev seed is OFF by default; this forces it on for local field-testing.
-# Optional: DEV_SEED_ORIGIN=lat,lon plants a few "DEV —" facilities around a point.
+# Plants three "DEV —" facilities (shipper, truck stop, bookable yard) around a point:
+#   make seed ORIGIN=27.9506,-82.4572
+# ORIGIN is a short alias for DEV_SEED_ORIGIN, which still works. The alias exists
+# because this is typed beside a browser's spoofed coordinates, and the long name was
+# long enough that the documented invocation was the raw `docker compose run` form.
+ORIGIN ?= $(DEV_SEED_ORIGIN)
 seed:
-	$(COMPOSE) exec -e DEV_SEED=1 -e DEV_SEED_ORIGIN="$(DEV_SEED_ORIGIN)" api python -m scripts.seed_demo
+	$(COMPOSE) exec -e DEV_SEED=1 -e DEV_SEED_ORIGIN="$(ORIGIN)" api python -m scripts.seed_demo
+
+# WHERE did I seed? The env was not self-describing, and that made the whole stop
+# auto-pilot unwalkable: a browser spoofed to Tampa against pins seeded around Madison
+# shows an empty map, with both halves working exactly as built. Prints the ORIGIN to
+# paste into DevTools Sensors, each DEV facility's distance from it, and the geofence
+# radius an EXIT has to clear.
+seed-where:
+	$(COMPOSE) exec api python -m scripts.seed_where
 
 # put a realistic document wallet on an account so the Docs tab has something to
 # show. Defaults to the most recently registered account: `make seed-wallet`, or

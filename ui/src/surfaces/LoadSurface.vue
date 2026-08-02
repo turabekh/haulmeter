@@ -117,9 +117,24 @@ const reviewRecipient = ref("");
 const reviewError = ref("");
 const sending = ref(false);
 
-// oldest first, as the API orders them: a packet from this morning should not be
-// buried under one from an hour ago.
-const nextPacket = computed(() => waitingPackets.value[0] ?? null);
+// AI-CONTEXT: the NEWEST draft, and the difference is not cosmetic.
+//
+// The API orders the queue oldest-first, which is right for the ARCHIVE — a packet from
+// this morning should not be buried under one from an hour ago. It is wrong for this
+// card, because the card is not a queue: it says "You left <facility>. Your paperwork is
+// ready", which is a claim about the stop the driver just walked away from.
+//
+// Found by walking it (HANDOFF-116). With two drafts waiting, the card announced the
+// EXIT the driver had just made and then opened the sheet for the OLDER stop — whose
+// contents line read "Nothing was captured at this stop" while the BOL they had
+// photographed minutes earlier sat in the newer packet. Both stops were the same
+// facility, so the headline was word-for-word identical and there was nothing on screen
+// to tell them apart. A driver would have sent the wrong, empty document and had no way
+// to notice.
+//
+// The rest of the queue is not lost: sending the newest reveals the next, and
+// /protection/packets still lists them all oldest-first as history.
+const nextPacket = computed(() => waitingPackets.value[waitingPackets.value.length - 1] ?? null);
 const packetHeadline = computed(() => {
   const facility = nextPacket.value?.facility_name;
   return facility ? t("packet.ready", { place: facility }) : t("packet.ready_nowhere");

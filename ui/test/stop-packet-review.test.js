@@ -190,6 +190,33 @@ describe("Load tab — the paperwork ARRIVES (A1 req 5, the rework)", () => {
     expect(w.find(".packet-card").exists()).toBe(true);
   });
 
+  // AI-CONTEXT: found by WALKING it (HANDOFF-116), not by the suite.
+  //
+  // The queue arrives oldest-first, which is right for the archive and wrong for this
+  // card: the card claims "You left <facility>", which is about the stop just departed.
+  // With two drafts waiting the card announced the new EXIT and opened the sheet for the
+  // OLDER stop — whose contents read "Nothing was captured at this stop" while the BOL
+  // photographed minutes earlier sat in the newer packet. Same facility, so the headline
+  // was identical and nothing on screen distinguished them.
+  it("names the stop just LEFT, not the oldest one still waiting", async () => {
+    setToken("tok");
+    const older = { ...PACKET, id: "p-old", facility_name: "Yesterday Dock", contents: [] };
+    const newer = {
+      ...PACKET, id: "p-new", facility_name: "Today Dock",
+      reference: "BL-99", contents: ["bol"],
+    };
+    const w = mountLoad(packetsOnly([older, newer])); // API order: oldest first
+    await flushPromises();
+
+    const card = w.find(".packet-card");
+    expect(card.text()).toContain("Today Dock");
+    expect(card.text()).not.toContain("Yesterday Dock");
+
+    await w.find(".packet-card__cta").trigger("click");
+    await flushPromises();
+    expect(w.find(".review").text()).toContain(en["load.doc.bol"]);
+  });
+
   it("withdraws the Send at speed and says why (Forbidden #11, SM-3)", async () => {
     setToken("tok");
     const w = mountLoad(packetsOnly([PACKET]));

@@ -24,20 +24,29 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
 1. `make env` (first run only) → `infra/.env` from example. Ports LOCKED: API **8008** ·
    frontend **9008** (fallback 3008) · Postgres 5438 · Mailpit UI **8038** · MinIO console 9019.
 2. `make up` → preflight passes (or names the conflicting PID), stack starts.
-3. Seed demo data. **For the auto-pilot journeys, seed a WISCONSIN origin** so you can arm a fake
-   stop and leave it from your desk (WI is real ingested data, but the `DEV —` fakes are what you
-   freely arm/leave):
-   `docker compose -f infra/docker-compose.yml run --rm -e DEV_SEED=1 -e DEV_SEED_ORIGIN=43.0731,-89.4012 api python scripts/seed_demo.py`
-   (Madison WI. `make seed` works if it passes the env through — verify once.)
-   → Plants the Dallas demo set **plus** three **"DEV —"** facilities (shipper, truck stop,
-   bookable yard) around Madison.
+3. Seed demo data **at the coordinates your browser is spoofed to** — this is the step that made
+   the auto-pilot unwalkable when it was skipped. You cannot arm a stop against a facility that is
+   not near you.
+   `make seed ORIGIN=27.9506,-82.4572`
+   (`ORIGIN` is an alias for `DEV_SEED_ORIGIN`; both work. `make seed` does pass the env through —
+   verified 2026-08-02.) → Plants the Dallas demo set **plus** three **"DEV —"** facilities
+   (shipper, truck stop, bookable yard) within ~125 m of that point.
+   **Forgotten where you seeded?** `make seed-where` prints the ORIGIN to paste into DevTools
+   Sensors, each DEV facility's distance from it, and the geofence radius. Run it whenever the map
+   looks empty — an empty map is almost always this, not a broken feature.
 4. Admin sign-in needed later and `/admin` refuses? Run `scripts/seed_admin.py` the same compose-run
    way (the /dev button can only *register* a plain account, not mint an admin).
 5. Browser: `http://localhost:9008/dev` — the dev directory. Two sign-in buttons (driver / admin),
    link cards for `/map /load /money /docs /more /load/calc /money/audit /protection/condition
    /fleet /owner /admin /scorecard /login`.
 6. DevTools: device mode 360×800 · **Sensors → Location → Other** · grant location permission.
-7. Second tab: `http://localhost:8038` (Mailpit — every outbound email lands here).
+7. ~~Second tab: `http://localhost:8038` (Mailpit — every outbound email lands here).~~
+   ❌ **NOTHING LANDS IN MAILPIT, AND NOTHING EVER HAS.** There is no SMTP gateway in the codebase:
+   the only notification gateways are the recording one (an in-memory list) and Web Push.
+   `smtp_host`/`smtp_port` exist in `api/app/core/config.py` and **are read by nothing**. Measured
+   2026-08-02 — Mailpit total: 0. Every step below that says "check Mailpit" is **blocked**, not
+   failing; see HANDOFF-116. Verify counterparty documents through the **share link** instead
+   (J7-AP step 8).
 8. Convention: **always enter surfaces from `/dev`** — you never guess a URL.
 
 ---
@@ -52,7 +61,18 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
 4. Tab bar: 5 tabs, icons **with labels**, on every root. No hamburger anywhere.
 
 ## J2 — Map read: presets, pins, honesty `[M1-FR1..5, §11]`
-1. `/dev` → driver → **Map**. GPS at Madison → the three **DEV —** pins render.
+1. `/dev` → driver → **Map**. GPS at your seed ORIGIN.
+   ⚠️ **The three DEV pins never render together, and this doc used to claim they did.** They are
+   three different facility types, so each belongs to a different preset (measured 2026-08-02):
+   | preset | DEV pins visible |
+   |---|---|
+   | **Drive** (the default) | Test Truck Stop only |
+   | **Tonight** | Test Truck Stop + Test Yard |
+   | **Work** | **Test Shipper** — the one J7-AP arms |
+   | Fuel / Service | none |
+   So opening the map on Drive and seeing one pin is CORRECT. **To find the shipper, switch to
+   Work.** One pin on Drive is not a defect; zero pins on every preset means you seeded elsewhere —
+   run `make seed-where`.
 2. Chip row: **five icon chips** — Drive, Tonight, Work, Fuel, Service. **No Food chip**
    (`m13_vendor` OFF — this absence is the test).
 3. Long-press a chip → translated name (aria/title). Selected chip changes **fill/weight**, not
@@ -75,20 +95,23 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
    claim.
 
 ## J4 — Arm, arrive, The Meter `[M3-FR1..2, F3, §9]`
-1. On the load: **Arm stop** for the **DEV — shipper** (Madison trio). Sensors = Madison origin.
+1. On the load: **Arm stop** for the **DEV — shipper**. Sensors = your seed ORIGIN (`make
+   seed-where`). Creating the load at that facility arms its first stop for you.
 2. Pre-arrival shows **"I've arrived"** CTA (§15.5). Preferred: nudge Sensors onto the shipper pin
    and wait ≤ ~1 min for geofence ENTER. Fallback: tap **I've arrived**.
 3. → **The Meter** foregrounds: mono, fixed-width, counting **free time down**. No layout shift.
 4. Boundary colours: free-time turns **amber** in the last 30 min; detention counts **money up** in
-   green. (If there's no quick way to compress free-time to watch this, that's a **dev-tooling gap**
-   — log it; it blocks testing the signature element.)
+   green. **There is no dev-tooling gap here** — this doc used to guess there was. The load form has
+   a **Free time (min)** field beside Rate $/hr; set it to **2** when you create the load and the
+   whole free-time → amber → accruing chain is watchable in about two minutes.
 5. `docker compose stop api` → Meter **keeps ticking** from local state; calm offline strip.
    Restart → silent recovery.
 
 ## J5 — Notice → exit → claim pack → invoice `[M3-FR3..6, F4, §17]`
 1. Detention accruing → **Send notice**. Confirmation reuses the verb ("Notice sent"); checklist
    flips that row.
-2. **Mailpit**: notice email — plain, professional English, one link, no images, load ref in subject.
+2. ❌ **Mailpit shows nothing — no email is sent by this product** (J0 step 7). The notice is
+   RECORDED (F8 thread + message rows) but never transmitted. Blocked, not failing.
 3. Move Sensors away (or **End load**) → EXIT closes the stop.
 4. Generate claim → **PDF**: header Meter figures, parties & refs, mono timeline w/ hairlines, map
    trace, artifact thumbnails, hash block. AP-clerk-readable in 30s.
@@ -100,10 +123,27 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
 > card*, not as a link to a separate screen. Run it after J4 (you need an armed, arrived stop with
 > at least one captured document).
 
-**Setup:** driver signed in, load active, armed at the **DEV — shipper** (Madison), Sensors on it
-so you're ENTERed, at least one BOL/seal captured via the checklist.
+**Setup:** driver signed in, load active, armed at the **DEV — shipper**, Sensors on it so you're
+ENTERed, at least one BOL captured via the checklist.
 
-1. **Leave the dock.** Move Sensors well away from the shipper. Within a moment the EXIT fires and
+> **WALKED END TO END on 2026-08-02 (HANDOFF-116) and it works** — the card fires ~10 s after the
+> EXIT and the driver's BOL is in the sent PDF. Three things had to be fixed first and are baked
+> into the steps below: seed at your own coordinates, set `PUBLIC_BASE_URL`, and arm a **fresh**
+> stop.
+>
+> **Arm a FRESH stop.** Documents captured before commit `a4e282c` are not in any stop's hash
+> chain, so a stop armed in an earlier session renders half-fixed and makes this journey lie. Old
+> stops predate the fix; start a new load.
+>
+> **`PUBLIC_BASE_URL` must be set** (`infra/.env` — now set in `.env.example`). Without it Send is
+> refused with a plain "Not sent", correctly: for a handoff the link IS the document. If you copied
+> `.env` before 2026-08-02, add `PUBLIC_BASE_URL=http://localhost:8008` and restart the api.
+
+1. **Leave the dock.** Move Sensors **more than 150 m from the shipper** — the geofence radius. From
+   the seed ORIGIN that means about **0.0022 of latitude (~240 m)**; a smaller nudge keeps you
+   inside and nothing happens. Then **wait up to 60 s**: while a stop is armed the client pings on
+   movement ≥50 m or once a minute, so the EXIT is not instant. The measured walk saw the card ~10 s
+   after moving. Within a moment the EXIT fires and
    the packet drafts server-side. **Or leave by hand** — More → **Leave this stop** / **End load** —
    which now drafts the packet too (§15.5: build for auto, degrade to one-tap, never to nothing).
    Both paths are worth running: the hand path is the one that works when the background sensor
@@ -116,6 +156,12 @@ so you're ENTERed, at least one BOL/seal captured via the checklist.
      the rework has not landed** — that is the exact v1 defect this journey exists to close.
    - ❌ **If the card only appears after you switch tabs and come back**, the EXIT watcher is not
      firing — log it. The card is supposed to arrive while you are looking at the Meter.
+   - ⚠️ **With more than one packet waiting, the card names the stop you JUST LEFT** — the newest,
+     not the oldest in the queue. Walking it on 2026-08-02 found the opposite: two drafts at the
+     same facility produced a word-for-word identical headline while the sheet opened the OLDER,
+     empty stop, so a driver would have sent the wrong document with nothing in it and no way to
+     notice. Fixed; if the sheet ever says "Nothing was captured at this stop" right after you
+     photographed a BOL, it has regressed.
    - *(Changed from the plan: the card has ONE action, not a Primary plus a preview expander. §8
      gives a card one action max, and the preview lives in the sheet, which is where you are
      reviewing anyway — design-prd §23 entry 120.)*
@@ -132,28 +178,45 @@ so you're ENTERed, at least one BOL/seal captured via the checklist.
 5. **Recipients are pre-filled** from the load's counterparty and are **editable** — change the
    address and it goes where you typed (A1 req 6).
 6. **Nothing sent silently before this** — you are seeing the packet *before* it goes (A1 req 5).
-7. **Send.** **Mailpit**: the packet email to the counterparty, **load reference in the subject
-   line**, neutral tone (a handoff, not a claim). **Open the PDF behind the link** — this is the
-   step that matters most this pass:
-   - It must be titled **"Stop paperwork packet"** (not "Stop record").
-   - It must **name the broker, the load reference, the facility and the appointment**.
-   - **Your BOL photo and cargo photos must be IN it.** Until HANDOFF-115 the document held zero
-     artifacts and one row — a blank page with a hash block. If it is empty again, that is a
-     blocks-money defect, not cosmetic.
-   - It must carry **no detention figure** — the packet is explicitly not a claim.
-8. **Idempotency:** tap Send again (or double-tap) → **no second document** in Mailpit.
-9. **Notification: N/A this pass.** The EXIT push needs a new `f08` notification class and the
+7. **Send.** ❌ **Do not look in Mailpit — no email is sent by this product at all** (see J0 step 7;
+   there is no SMTP gateway). The document itself is still produced and reachable, so verify it
+   directly, which is the step that matters most:
+8. **Open the actual PDF.** The share link is only in the email that is never sent, so read it
+   straight out of the box:
+   ```
+   docker compose -f infra/docker-compose.yml exec api python -c "
+   import db_registry; db_registry.import_all_models()
+   from app.core.db import SessionLocal; from sqlalchemy import select
+   from app.foundation.f04_evidence import public as ev
+   from app.modules.m05_protection.domain.models import StopPacket
+   db=SessionLocal()
+   p=[x for x in db.scalars(select(StopPacket)) if x.state.value=='sent'][-1]
+   print(ev.share_link(db.get(ev.SharedPack, p.shared_pack_ref)))"
+   ```
+   Open that URL in the browser — it renders from pinned bytes with no session, exactly as a
+   broker's would. Measured on the walk of 2026-08-02 it was **99,747 bytes, `application/pdf`,
+   HTTP 200**, containing:
+   - titled **"Stop paperwork packet"** (not "Stop record") ✅
+   - **naming the broker and the dock** ✅
+   - **2 embedded image XObjects — the driver's BOL photo is IN it** ✅ (until HANDOFF-115 the
+     document held zero artifacts and one row: a blank page with a hash block)
+   - **no "Detention" anywhere** ✅ — the packet is explicitly not a claim
+   If any of those flips, it is a blocks-money defect, not cosmetic.
+9. **Idempotency:** tap Send again (or double-tap) → the packet leaves the queue on the first Send,
+   so there is nothing to double-send from the card. (The archive at `/protection/packets` is where
+   a second tap would be possible; the send route is idempotent by state.)
+10. **Notification: N/A this pass.** The EXIT push needs a new `f08` notification class and the
    owner chose **Option A — no new class this session** (design-prd §23 entry 121). There is
    deliberately no push; the card is the surfacing. Do not log its absence as a defect.
-10. **Offline variant:** with the card showing, go **Network → Offline** and reload. The card
+11. **Offline variant:** with the card showing, go **Network → Offline** and reload. The card
     **still renders from cache** (§15.1). **Send does NOT queue** — by design: a queued send would
     report success from a dead dock and leave you believing your paperwork went out (§12.4). You
     should see a plain *"No signal. Send this when you're back online."* and the packet still
     waiting. A silent success here is the defect.
-11. **DRIVING variant:** with the app in a DRIVING state, the card must **not** offer Send — it
+12. **DRIVING variant:** with the app in a DRIVING state, the card must **not** offer Send — it
     shows *"Paperwork ready — review it when you stop."* and no button (Forbidden #11). (Hard to
     trigger on desktop — approximate or defer to handset; don't log as a defect.)
-12. **The archive still works:** `/protection/packets` still lists drafted packets as history.
+13. **The archive still works:** `/protection/packets` still lists drafted packets as history.
     The rework *added* the inline card; it did not remove the archive door.
 
 ## J6 — Money lifecycle `[M4-FR5, M9-FR4]`
