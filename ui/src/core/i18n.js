@@ -45,9 +45,41 @@ function fill(raw, params) {
   );
 }
 
+// AI-CONTEXT: the key-fallback is SILENT in production and LOUD under test.
+//
+// `t()` returns the key itself when a string is missing, which is the right behaviour in
+// front of a driver — a raw `load.doc.cargo_condition` is ugly and a blank line is worse.
+// But it is also why a missing string can ship: nothing anywhere fails.
+//
+// `cargo_condition` is a capture-checklist row for EVERY stop type and its label existed
+// in NONE of the six locales, so drivers read the raw key on the Load tab. The
+// completeness test could not see it: it compares the six catalogues AGAINST EACH OTHER,
+// so six identical holes look complete. That is the same shape as the defects the
+// handoffs keep recording — a label asserted against the same table it rendered from.
+//
+// So under test the fallback THROWS. Every existing test that renders a surface becomes
+// a detector for a missing string, which is worth more than any list of expected keys:
+// a list rots, and there are ~45 dynamic `t(`ns.${...}`)` families whose vocabularies
+// live in Python. The static half is checked directly in locale-completeness.test.js.
+const UNDER_TEST =
+  typeof import.meta !== "undefined" && import.meta.env && import.meta.env.MODE === "test";
+
+function resolve(key, catalog) {
+  if (Object.hasOwn(catalog, key)) return catalog[key];
+  const fallback = messages[DEFAULT_LOCALE];
+  if (Object.hasOwn(fallback, key)) return fallback[key];
+  if (UNDER_TEST) {
+    throw new Error(
+      `i18n: no string for "${key}" in any locale. A driver would read the raw key ` +
+        `(design-prd §12.5 / Forbidden #7). Add it to all six catalogues.`,
+    );
+  }
+  return key;
+}
+
 export function useI18n() {
   const t = (key, params) =>
-    fill(messages[locale.value]?.[key] ?? messages[DEFAULT_LOCALE][key] ?? key, params);
+    fill(resolve(key, messages[locale.value] ?? messages[DEFAULT_LOCALE]), params);
   const setLocale = (next) => {
     if (LAUNCH_LOCALES.includes(next)) {
       locale.value = next;

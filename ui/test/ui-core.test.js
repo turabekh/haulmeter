@@ -108,13 +108,27 @@ describe("The Meter logic (design-prd §9)", () => {
 });
 
 describe("i18n (F15)", () => {
-  it("resolves the user locale, falls back to English, echoes unknown keys", () => {
+  it("resolves the user locale and falls back to English", () => {
     const { t, setLocale } = useI18n();
     expect(t("nav.map")).toBe("Map");
     setLocale("es");
     expect(t("nav.map")).toBe("Mapa");
     setLocale("en");
-    expect(t("does.not.exist")).toBe("does.not.exist");
+  });
+
+  it("REFUSES an unknown key under test, rather than echoing it at a driver", () => {
+    // In front of a driver `t` still returns the key — a raw `load.doc.cargo_condition`
+    // is ugly and a blank line is worse. That silence is also why a missing string could
+    // ship: `cargo_condition` was a checklist row for every stop type and had a label in
+    // NONE of the six locales, and nothing failed. The completeness test could not see
+    // it either, because it compares the six catalogues AGAINST EACH OTHER and six
+    // identical holes look complete.
+    //
+    // So under test the fallback throws, which turns every test that renders a surface
+    // into a detector. It found two on the day it was added — both mocks whose shape had
+    // drifted from their endpoint, each rendering a raw key into a measured screen.
+    const { t } = useI18n();
+    expect(() => t("does.not.exist")).toThrow(/no string for "does\.not\.exist"/);
   });
 
   it("substitutes {placeholders} (\u00a723 entry 74)", () => {

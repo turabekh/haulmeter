@@ -878,7 +878,7 @@ describe("MoreSurface — operating-authority verification (F1 / FMCSA)", () => 
   it("hides the section entirely when the F13 flag is off", async () => {
     setToken("tok-authoff");
     vi.stubGlobal("fetch", routedFetch({
-      "/community/points": { balance: 0, level: "new" },
+      "/community/points": { balance: 0, level: "rookie" },
       "/auth/me": { verification_enabled: false, verified: false, authority: "own_mc" },
     }));
     try {
@@ -895,7 +895,7 @@ describe("MoreSurface — operating-authority verification (F1 / FMCSA)", () => 
   it("shows the verify form when enabled, then the verified name after a lookup", async () => {
     setToken("tok-authon");
     vi.stubGlobal("fetch", routedFetch({
-      "/community/points": { balance: 0, level: "new" },
+      "/community/points": { balance: 0, level: "rookie" },
       "/auth/me": { verification_enabled: true, verified: false, authority: "own_mc", mc_number: null },
       "/auth/verify-authority": {
         verified: true,

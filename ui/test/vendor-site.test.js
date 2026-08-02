@@ -51,7 +51,14 @@ function stub(routeMap) {
   });
 }
 
-const SERVICE_VENDOR = { name: "Gateway Truck Service", vendor_type: "service_center" };
+// shape-matched to the endpoint (api/vendor_portal.py::profile), which ALWAYS returns
+// `verify_status` — the shell renders it in its header, so a mock without it measured a
+// portal saying "vendor.undefined" out loud. §23 entries 84/85, again.
+const SERVICE_VENDOR = {
+  name: "Gateway Truck Service",
+  vendor_type: "service_center",
+  verify_status: "unverified",
+};
 const KINDS = ["tire", "wash", "truck_repair", "mobile_repair", "towing", "parts"];
 
 function claim(overrides = {}) {
@@ -261,7 +268,7 @@ describe("claiming a site (M13-FR7)", () => {
   });
 
   it("tells a food vendor there is nothing here rather than showing a dead search", async () => {
-    stub({ "/vendor/profile": { name: "Osh Express", vendor_type: "food_mobile" } });
+    stub({ "/vendor/profile": { name: "Osh Express", vendor_type: "food_mobile", verify_status: "unverified" } });
     const w = withRouter(VendorSite);
     await flushPromises();
 
