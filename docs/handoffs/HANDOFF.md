@@ -24,8 +24,8 @@ results, exact next task, and blockers always live in the latest numbered handof
 > as a card at the top of the Load tab** with one Send over a bottom sheet — no hunting,
 > no separate screen. **No new notification class** (owner's Option A, §23 entry 121).
 >
-> **Stack UP · six commits UNPUSHED · nothing deployed** (114 IS pushed; the box still
-> serves 112). Phase DoD item 1 was
+> **Stack UP · everything from `a4e282c` onward UNPUSHED · nothing deployed** (114 IS
+> pushed; the box still serves 112). Phase DoD item 1 was
 > *unreachable by construction* and is now merely unmet. **The next task is the handset
 > background-sensor test** — everything here rides on a sensor no one has watched work.
 >

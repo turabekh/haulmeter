@@ -1,7 +1,7 @@
 # HANDOFF-115 — the paperwork arrives on the Load tab, and the paperwork was empty
 
-> **Stack UP · six commits UNPUSHED · nothing deployed.** haulmeter.online still serves
-> 112's code.
+> **Stack UP · everything from `a4e282c` onward is UNPUSHED · nothing deployed.**
+> haulmeter.online still serves 112's code.
 >
 > The session was scoped as a **surfacing rework**: the automation is built and correct,
 > only the way its result reaches the driver is wrong. Re-grepping the seams before
@@ -19,9 +19,9 @@
 
 | | |
 |---|---|
-| Branch | `main`, **6 commits ahead of `origin/main`** |
+| Branch | `main`, **ahead of `origin/main` by everything from `a4e282c`** — a count is not quoted here because writing it into this file changes it |
 | `origin/main` | `f81bdd6` — **verified with `git fetch`, not inherited.** 114 §1 recorded `76c44c6` and listed `f272c4a` as unpushed; both were pushed after that handoff was written, so the figure had rotted exactly the way §5's other findings did |
-| Commits | `a4e282c` · `6d2d311` · `8d6af0a` · `93f872f` · `4266dc4` · `81bdd1a` — all six are this session's |
+| Commits | `a4e282c` (packet contents) · `6d2d311` (the card + sheet) · `8d6af0a` (e2e) · `81bdd1a` (locale guard), plus this handoff's own — all of them this session's |
 | Gates | **pytest 1381 · vitest 654 · layout 217 checks over 54 states · import-linter 30/30** |
 | Migrations | none needed. dev and production both `0059_f13_config_decl` |
 | Working tree | clean apart from untracked `collect_files.py` (pre-existing) |
