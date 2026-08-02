@@ -3,7 +3,31 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — read this first, every session.
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — read this first, every session.
+
+> **116** walked the stop auto-pilot end to end in a real browser, which is what two
+> sessions of building had never been subjected to. **It works.** A human adds a load,
+> arms a stop, photographs a BOL and drives away; the review card arrives on the Load tab
+> about ten seconds later, the sheet opens over it, Send works, and **the driver's BOL is
+> in the PDF** — 99,747 bytes, titled "Stop paperwork packet", two embedded images, naming
+> the broker and the dock, with the word "Detention" nowhere in it.
+>
+> **And nothing this product writes has ever been sent.** There is no SMTP gateway in the
+> codebase — only the recording gateway and Web Push — and `smtp_host`/`smtp_port` sit in
+> config read by nothing. Mailpit has been in compose since session 0 and has received
+> **zero** messages. So Phase DoD item 1 is unreachable, the detention wedge's notice has
+> never left the box, and every "check Mailpit" step in DRIVE.md was always unpassable.
+> That is 116 §6 and it is the next task.
+>
+> Walking it also found the card showing the **oldest** waiting draft rather than the stop
+> just left — two drafts at one dock gave an identical headline while the sheet opened the
+> older, empty one. A driver would have sent the wrong document. Fixed. DRIVE.md's claim
+> that "the three DEV pins render" was also false: they are three facility types across
+> three presets, and the shipper J7-AP arms is invisible until you switch to **Work**.
+>
+> **Stack UP · everything from `a4e282c` onward UNPUSHED · nothing deployed.**
+
+➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — the session before.
 
 > **115** was scoped as a **surfacing rework** — the A1 automation is built and correct,
 > only the way its result reaches the driver is wrong. Re-grepping the seams before
