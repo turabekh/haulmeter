@@ -47,7 +47,15 @@ from .enums import (
 from .models import Appearance, Offering, Vendor, VendorDocument, VendorMember
 
 FLAG_KEY = "m13_vendor"
+SERVICE_CENTER_FLAG_KEY = "m13_service_center"
 MODULE = "m13"
+
+# the split, in one place. A vendor type with no flag here is a type nothing gates,
+# so the mapping is exhaustive over `VendorType` and a test holds it that way.
+_TYPE_FLAGS = {
+    VendorType.food_mobile: FLAG_KEY,
+    VendorType.service_center: SERVICE_CENTER_FLAG_KEY,
+}
 
 # --- §E1.9 quality-law constants (F13-tunable where the number is a judgement call) ---
 # Q-6 driver-side noise budget: food enriches pins, it never decorates the canvas
@@ -111,13 +119,50 @@ class PublishSuspended(Exception):
     """Q-2: repeated no-shows suspended this vendor pending F14 review."""
 
 
+# AI-CONTEXT: A6 req 1 — ONE module, TWO halves, and why the gate is per vendor TYPE
+# rather than per route.
+#
+# v2.0 §4 defers the food half indefinitely (drivers said no) while §3's A6 says the
+# service-center half "is exactly what drivers asked for". Both halves are the same
+# endpoints, the same portal and the same tables, so a single `m13_vendor` flag could
+# only ever turn both off together — and turning it off to honour §4 would have taken
+# the repair shops with it.
+#
+# The type is therefore what the flag answers about. `is_active_for` is the predicate
+# every capability check goes through; `is_active` survives as "is this module
+# reachable AT ALL", which is the only question the router-level gate can ask before
+# it knows which vendor is involved. Anything narrower than the router asks about a
+# type, because a caller that does not name one is a caller that can leak the other
+# half — the failure this split exists to prevent.
 def register_module(db: Session) -> None:
-    flags.register_flag(db, FLAG_KEY, description="M13 Vendor Network (discovery only, Phase A)")
+    flags.register_flag(db, FLAG_KEY, description="M13 Vendor Network — food vendors (Phase A)")
+    flags.register_flag(
+        db,
+        SERVICE_CENTER_FLAG_KEY,
+        description="M13 Vendor Network — service centers: claiming + vendor portal (A6)",
+    )
     admin.register_admin_view(db, "m13.vendors", MODULE, "Vendors", "/admin/m13/vendors")
 
 
+def flag_for_type(vendor_type: VendorType) -> str:
+    return _TYPE_FLAGS[vendor_type]
+
+
+def is_active_for(db: Session, vendor_type: VendorType) -> bool:
+    """May this HALF of the module run? The only capability predicate."""
+    return flags.is_enabled(db, _TYPE_FLAGS[vendor_type])
+
+
+def enabled_vendor_types(db: Session) -> list[VendorType]:
+    """The halves that are on, for the mixed reads (a facility's promotions) that must
+    show one half's rows while the other is dark."""
+    return [t for t in VendorType if is_active_for(db, t)]
+
+
 def is_active(db: Session) -> bool:
-    return flags.is_enabled(db, FLAG_KEY)
+    """Is the module reachable at all — EITHER half. Deliberately not a capability
+    check: a route that knows which vendor it is serving must ask `is_active_for`."""
+    return any(is_active_for(db, t) for t in VendorType)
 
 
 # --- Q-5: one canonical vendor ---

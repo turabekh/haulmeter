@@ -190,6 +190,15 @@ def decide_claim(
     return claim
 
 
+class UnknownService(Exception):
+    """A curated service outside the claimable vocabulary. Carries the offenders so
+    the portal can name them rather than reporting a bare refusal."""
+
+    def __init__(self, unknown: list[str]):
+        super().__init__(", ".join(unknown))
+        self.unknown = unknown
+
+
 def curate_claim(
     db: Session,
     claim: FacilityClaim,
@@ -199,8 +208,18 @@ def curate_claim(
 ) -> FacilityClaim:
     """Curation is ADDITIVE for services by construction: the list is stored
     separately from the ingested one and unioned on read, so nothing a claimant does
-    can drop a fact ingestion established (E3.2)."""
+    can drop a fact ingestion established (E3.2).
+
+    AI-CONTEXT (A6 req 3): `towing` reaches a facility exactly HERE. It is the one
+    service with no dependable OSM tag, which the amendment names as the argument for
+    claiming over more ingestion — so this path is the towing feature, not a detail of
+    it. The vocabulary is closed for the same reason: the driver's card renders
+    `facility.service.<kind>`, so an unvalidated string ships as a visible missing i18n
+    key on the one card a broken-down driver is reading."""
     if services_added is not None:
+        unknown = sorted({s for s in services_added if s not in CLAIMABLE_SERVICES})
+        if unknown:
+            raise UnknownService(unknown)
         claim.services_added = sorted({*(claim.services_added or []), *services_added})
     if hours is not None:
         claim.hours = hours
@@ -268,6 +287,7 @@ __all__ = [
     "NameMismatch",
     "NotAServiceCenter",
     "NotAServiceFacility",
+    "UnknownService",
     "approved_claim",
     "claimed_facility_view",
     "claimable_services",

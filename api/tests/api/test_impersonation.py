@@ -50,6 +50,9 @@ def client(db):
 def live(db):
     m13.register_module(db)
     flags.enable(db, m13.FLAG_KEY)
+    # these tests predate the A6 half-split and mean "M13 is on", so they turn
+    # on both halves. The split itself is asserted in test_vendor_flag_split.py.
+    flags.enable(db, m13.SERVICE_CENTER_FLAG_KEY)
     return True
 
 

@@ -108,19 +108,40 @@ def _require_active(db: Session) -> None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor network not enabled")
 
 
+def _require_type(db: Session, vendor_type: m13.VendorType) -> None:
+    if not m13.is_active_for(db, vendor_type):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor network not enabled")
+
+
+def _require_food(db: Session) -> None:
+    """For the food-SHAPED routes. `_my_vendor` has already gated on the acting
+    vendor's own half; this refuses a food mechanism while the food half is deferred,
+    whoever is asking — a service centre must not be able to publish an appearance
+    into a half that is switched off."""
+    _require_type(db, m13.VendorType.food_mobile)
+
+
 def _my_vendor(db: Session, who: PortalActor) -> m13.Vendor:
     """The single tenancy gate. Every endpoint below goes through it, so there is one
     place to be right about who owns what rather than one per route.
 
     Scoping uses the SUBJECT, so an impersonating admin sees exactly the vendor's own
     screen — that is the point of "view as vendor". Attribution uses the ACTOR, so
-    the writes are still the admin's."""
+    the writes are still the admin's.
+
+    AI-CONTEXT (A6 req 1): it is also where the FLAG half is checked, for the same
+    reason — every route goes through here, so a portal endpoint added later cannot be
+    left ungated by forgetting one. A vendor whose half is switched off meets the same
+    404 as a vendor who does not exist; the routes whose SHAPE belongs to one half
+    (appearances, menu, claims) assert that half on top of this.
+    """
     membership = db.scalar(
         select(m13.VendorMember).where(m13.VendorMember.account_id == who.subject.id)
     )
     vendor = m13.resolve_vendor(db, membership.vendor_id) if membership is not None else None
     if vendor is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no vendor profile")
+    _require_type(db, vendor.vendor_type)
     return vendor
 
 
@@ -222,11 +243,17 @@ def update_profile(
         vendor.name = body.name.strip()
     if body.vendor_type is not None:
         try:
-            vendor.vendor_type = m13.VendorType(body.vendor_type)
+            wanted_type = m13.VendorType(body.vendor_type)
         except ValueError as exc:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown vendor type"
             ) from exc
+        # A6 req 1: switching type is switching HALF, and it is the one write that can
+        # move a vendor from a live half into a dark one — or out of a dark one, which
+        # is how a deferred cook would let themselves back in. Gated on the DESTINATION
+        # as well as the origin `_my_vendor` already checked.
+        _require_type(db, wanted_type)
+        vendor.vendor_type = wanted_type
     if body.metro is not None:
         vendor.metro = body.metro.strip()
     if body.categories is not None:
@@ -298,6 +325,7 @@ def list_appearances(
     db: Session = Depends(get_db),
 ) -> list[dict]:
     _require_active(db)
+    _require_food(db)
     vendor = _my_vendor(db, who)
     rows = list(
         db.scalars(
@@ -339,6 +367,7 @@ def create_appearance(
     db: Session = Depends(get_db),
 ) -> dict:
     _require_active(db)
+    _require_food(db)
     vendor = _my_vendor(db, who)
     # the menu is a convenience for the cook, not a second source of truth: it is
     # resolved to VALUES here and snapshotted by publish_appearance below, so a price
@@ -396,6 +425,7 @@ def cancel_appearance(
     db: Session = Depends(get_db),
 ) -> dict:
     _require_active(db)
+    _require_food(db)
     vendor = _my_vendor(db, who)
     appearance = db.get(m13.Appearance, appearance_id)
     if appearance is None or appearance.vendor_id != vendor.id:
@@ -606,7 +636,15 @@ def curate_claim(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "claim not found")
     if claim.status != m13.ClaimStatus.approved:
         raise HTTPException(status.HTTP_409_CONFLICT, "claim not approved yet")
-    m13.curate_claim(db, claim, body.services_added, body.hours, body.phone)
+    try:
+        m13.curate_claim(db, claim, body.services_added, body.hours, body.phone)
+    except m13.UnknownService as exc:
+        # names the offenders, like Q-4's publish floor does: a refusal a claimant
+        # cannot act on is a refusal they will retry unchanged
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            {"error": "unknown_service", "unknown": exc.unknown},
+        ) from exc
     # the union is echoed back so a claimant SEES that their edit added to the
     # ingested facts rather than replacing them (E3.2)
     return _claim_row(db, claim)
@@ -668,6 +706,7 @@ def list_menu(
     db: Session = Depends(get_db),
 ) -> list[dict]:
     _require_active(db)
+    _require_food(db)
     vendor = _my_vendor(db, who)
     return [_menu_row(i) for i in m13.list_menu(db, vendor.id, include_inactive=include_inactive)]
 
@@ -679,6 +718,7 @@ def add_menu_item(
     db: Session = Depends(get_db),
 ) -> dict:
     _require_active(db)
+    _require_food(db)
     vendor = _my_vendor(db, who)
     try:
         item = m13.add_menu_item(
@@ -698,6 +738,7 @@ def edit_menu_item(
     db: Session = Depends(get_db),
 ) -> dict:
     _require_active(db)
+    _require_food(db)
     vendor = _my_vendor(db, who)
     try:
         before = _menu_row(
@@ -732,6 +773,7 @@ def retire_menu_item(
     """Retires rather than deletes. Past appearances hold their own snapshots either
     way, but a seasonal dish comes back and its price should come back with it."""
     _require_active(db)
+    _require_food(db)
     vendor = _my_vendor(db, who)
     try:
         item = m13.remove_menu_item(db, vendor, item_id)

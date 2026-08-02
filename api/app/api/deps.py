@@ -121,3 +121,26 @@ def require_module(flag_key: str):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "not enabled")
 
     return _gate
+
+
+def require_any_module(*flag_keys: str):
+    """AI-CONTEXT: the same gate for a module built in HALVES (A6 / M13).
+
+    A router whose flags are per-capability cannot ask one flag whether it is there:
+    M13 serves food vendors and service centers from one prefix, and v2.0 §4 turns the
+    first off while §3's A6 turns the second on. Refusing the router when `m13_vendor`
+    is off would take the repair shops with it.
+
+    So the ROUTER asks the weakest honest question — is any half live — and the routes
+    inside it ask about a type. That division is the point: this gate is never
+    sufficient on its own, and every route behind it names its own half.
+
+    `is_switched_off` for the same fail-open reason `require_module` uses it: a
+    bootstrap that never registered the flags must not take the module dark.
+    """
+
+    def _gate(db: Session = Depends(get_db)) -> None:
+        if all(flags.is_switched_off(db, key) for key in flag_keys):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "not enabled")
+
+    return _gate

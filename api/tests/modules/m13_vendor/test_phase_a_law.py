@@ -120,4 +120,7 @@ def test_the_module_flag_is_registered_and_defaults_off(db):
     m13.register_module(db)
     assert m13.is_active(db) is False
     flags.enable(db, m13.FLAG_KEY)
+    # these tests predate the A6 half-split and mean "M13 is on", so they turn
+    # on both halves. The split itself is asserted in test_vendor_flag_split.py.
+    flags.enable(db, m13.SERVICE_CENTER_FLAG_KEY)
     assert m13.is_active(db) is True

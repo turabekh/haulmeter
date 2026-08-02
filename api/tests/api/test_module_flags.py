@@ -62,7 +62,9 @@ def test_every_module_router_carries_its_own_gate():
     missing = []
     for path in sorted(api_dir.glob("m[01][0-9]_*.py")):
         source = path.read_text()
-        if "require_module(" not in source:
+        # `require_any_module` is the same gate for a module built in halves (A6/M13).
+        # Both forms count; anything else is a router nobody can switch off.
+        if "require_module(" not in source and "require_any_module(" not in source:
             missing.append(path.name)
     assert missing == [], f"module routers with no flag gate: {missing}"
 

@@ -39,6 +39,9 @@ def client(db):
 def live(db):
     m13.register_module(db)
     flags.enable(db, m13.FLAG_KEY)
+    # these tests predate the A6 half-split and mean "M13 is on", so they turn
+    # on both halves. The split itself is asserted in test_vendor_flag_split.py.
+    flags.enable(db, m13.SERVICE_CENTER_FLAG_KEY)
     return True
 
 
@@ -257,3 +260,82 @@ def test_a_site_with_a_real_service_alongside_a_scale_is_claimable(client, db, l
     assert len(rows) == 1
     # and the scale is not presented as something they speak for
     assert rows[0]["services"] == ["tire"]
+
+
+# --- A6 req 3: towing, the service ingestion cannot see ---
+def _approved_claim(client, db, headers, facility_name="Gateway Truck Service"):
+    import uuid as _uuid
+
+    fac = _service_facility(db, facility_name)
+    claim_id = client.post(
+        "/vendor/claims",
+        json={"facility_id": str(fac.id), "claimed_name": facility_name},
+        headers=headers,
+    ).json()["claim_id"]
+    m13.decide_claim(db, db.get(m13.FacilityClaim, _uuid.UUID(claim_id)), approve=True)
+    return fac, claim_id
+
+
+def test_towing_reaches_a_facility_only_through_a_claim(client, db, live):
+    """v2.0 A6 req 3: `SERVICE_TOWING` has no dependable OSM tag by design, and the
+    amendment calls that the argument for claiming over more ingestion. So this path
+    IS the towing feature — a driver who needs a tow finds one because a shop said so,
+    or not at all.
+
+    The ingested list is asserted first: without that line the test would pass on a
+    facility OSM had already tagged, and prove nothing about the claim."""
+    headers = _headers(client, "shop-tow@example.com")
+    _vendor(client, headers, "Gateway Truck Service")
+    fac, claim_id = _approved_claim(client, db, headers)
+    assert "towing" not in m13.facility_services(db, fac.id)
+
+    resp = client.patch(
+        f"/vendor/claims/{claim_id}",
+        json={"services_added": ["towing"], "phone": "4175551212"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+
+    driver = _headers(client, "driver-tow@example.com")
+    view = client.get(f"/vendors/service-center/{fac.id}", headers=driver).json()
+    assert "towing" in view["services"]
+    # the ingested facts are still there — curation is additive (E3.2)
+    assert "tire" in view["services"]
+    assert view["phone"] == "4175551212"
+
+
+def test_a_service_outside_the_vocabulary_is_refused_by_name(client, db, live):
+    """The driver's card renders `facility.service.<kind>`, so an unvalidated string
+    ships as a visible missing i18n key on the one card a broken-down driver reads.
+    Refused, and the offender is NAMED so the claimant can fix it in one pass."""
+    headers = _headers(client, "shop-bad@example.com")
+    _vendor(client, headers, "Gateway Truck Service")
+    fac, claim_id = _approved_claim(client, db, headers)
+
+    resp = client.patch(
+        f"/vendor/claims/{claim_id}",
+        json={"services_added": ["towing", "helicopter_rescue"]},
+        headers=headers,
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"]["unknown"] == ["helicopter_rescue"]
+
+    # and nothing was written — a partial apply would leave the vendor guessing
+    driver = _headers(client, "driver-bad@example.com")
+    view = client.get(f"/vendors/service-center/{fac.id}", headers=driver).json()
+    assert "towing" not in view["services"]
+
+
+def test_a_scale_cannot_be_curated_in_through_the_back_door(client, db, live):
+    """`CLAIMABLE_SERVICES` excludes `scale` because a weighbridge is public
+    infrastructure feeding the M1 layer. The picker already refuses it; so must the
+    edit, or the exclusion is only a UI preference."""
+    headers = _headers(client, "shop-scale@example.com")
+    _vendor(client, headers, "Gateway Truck Service")
+    _fac, claim_id = _approved_claim(client, db, headers)
+
+    resp = client.patch(
+        f"/vendor/claims/{claim_id}", json={"services_added": ["scale"]}, headers=headers
+    )
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["unknown"] == ["scale"]

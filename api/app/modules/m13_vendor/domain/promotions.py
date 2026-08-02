@@ -110,10 +110,19 @@ def active_promotions(db: Session, vendor_id, now: datetime | None = None) -> li
     )
 
 
-def promotions_for_facility(db: Session, facility_id, now: datetime | None = None) -> list[dict]:
+def promotions_for_facility(
+    db: Session, facility_id, now: datetime | None = None, vendor_types=None
+) -> list[dict]:
     """The labelled slot's contents for one facility. Separate from discovery on
     purpose — a caller cannot accidentally fold this into the ranked list, because
-    the ranked list is produced by a different function that never sees it."""
+    the ranked list is produced by a different function that never sees it.
+
+    AI-CONTEXT (A6 req 1): this is the ONE read that mixes the halves. A truck stop can
+    carry both a cook's promotion and a claimed repair shop's, so a facility-scoped
+    query is the place a deferred half leaks back onto the map. `vendor_types` is the
+    caller's list of live halves; None means no filtering, which is correct for the
+    admin/console readers that must see what exists regardless of what is switched on.
+    """
     now = now or datetime.now(UTC)
     vendor_ids: set = set()
 
@@ -147,6 +156,8 @@ def promotions_for_facility(db: Session, facility_id, now: datetime | None = Non
         vendor = db.get(Vendor, promotion.vendor_id)
         if vendor is None or not is_presentable(vendor):
             continue  # a suspended vendor promotes nothing, by either route
+        if vendor_types is not None and vendor.vendor_type not in vendor_types:
+            continue  # a half that is switched off promotes nothing either
         if promotion.scope == PromotionScope.claimed_facility and (
             claim is None or claim.vendor_id != vendor.id
         ):

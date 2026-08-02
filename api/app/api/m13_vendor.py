@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import canonical_facility_id, current_account, get_db, require_module
+from app.api.deps import canonical_facility_id, current_account, get_db, require_any_module
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f08_notifications import public as notify
@@ -27,8 +27,9 @@ from app.foundation.f14_admin import public as admin
 from app.modules.m13_vendor import public as m13
 
 router = APIRouter(prefix="/vendors", tags=["vendors"],
-    # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
-    dependencies=[Depends(require_module("m13_vendor"))],
+    # PRD §6 / A6 req 1: the module's flags, plural. The router admits if EITHER half
+    # is live and every route below names the half it belongs to (§23 entry 105).
+    dependencies=[Depends(require_any_module(m13.FLAG_KEY, m13.SERVICE_CENTER_FLAG_KEY))],
 )
 
 # how many reviews ride on the sheet payload; the rest are a paging concern for a
@@ -134,9 +135,48 @@ def _entry_out(entry: m13.VendorEntry, facility=None, coords=None) -> dict:
     }
 
 
+# AI-CONTEXT: A6 req 1 — three gates, and the reason there is more than one.
+#
+# `_require_food` / `_require_service` are for routes whose SHAPE names a half: an
+# appearance is a food mechanism, a facility claim is a service one. `_require_half`
+# is for the shared routes (a sheet, a review, a report) where the half is a property
+# of the vendor being acted on, not of the endpoint.
+#
+# The shared case is the one that matters. With food off, a food vendor's sheet must
+# 404 exactly as it would with the whole module off — otherwise the deferred half
+# stays readable through every endpoint that happens to take a `vendor_id`, and the
+# split would be a label rather than a gate.
 def _require_active(db: Session) -> None:
     if not m13.is_active(db):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor network not enabled")
+
+
+def _require_type(db: Session, vendor_type: m13.VendorType) -> None:
+    if not m13.is_active_for(db, vendor_type):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor network not enabled")
+
+
+def _require_food(db: Session) -> None:
+    _require_type(db, m13.VendorType.food_mobile)
+
+
+def _require_service(db: Session) -> None:
+    _require_type(db, m13.VendorType.service_center)
+
+
+def _require_half(db: Session, vendor: m13.Vendor) -> None:
+    """Gate on the half the VENDOR belongs to."""
+    _require_type(db, vendor.vendor_type)
+
+
+def _require_reportable(db: Session, vendor_id) -> None:
+    """A review or promotion belongs to the half its VENDOR is in. Resolved through
+    the vendor rather than assumed, so a merged vendor answers about the surviving
+    row (§23 entry 73's scoping lesson) instead of about a tombstone."""
+    vendor = m13.resolve_vendor(db, vendor_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    _require_half(db, vendor)
 
 
 def _my_vendor(db: Session, account) -> m13.Vendor:
@@ -144,6 +184,7 @@ def _my_vendor(db: Session, account) -> m13.Vendor:
     resolved = m13.resolve_vendor(db, vendor.id) if vendor is not None else None
     if resolved is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no vendor profile")
+    _require_half(db, resolved)
     return resolved
 
 
@@ -166,7 +207,7 @@ def appearances(
     _account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> list[dict]:
-    _require_active(db)
+    _require_food(db)
     entries = m13.appearances_in_bbox(
         db,
         min_lat,
@@ -196,7 +237,7 @@ def corridor(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> list[dict]:
-    _require_active(db)
+    _require_food(db)
     ahead = m13.corridor_vendors(
         db, account.id, lat, lon, heading_deg, max_distance_m, q=q, language=language, halal=halal
     )
@@ -211,7 +252,7 @@ def at_facility(
     db: Session = Depends(get_db),
 ) -> list[dict]:
     # Q-6: two by default (the card); `all_vendors` is the sheet's "all vendors"
-    _require_active(db)
+    _require_food(db)
     limit = 0 if all_vendors else m13.MAX_VENDORS_PER_CARD
     return _entries_out(m13.vendors_at_facility(db, facility_id, limit=limit), db)
 
@@ -227,6 +268,9 @@ def vendor_sheet(
     if detail is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
     vendor = detail["vendor"]
+    # the sheet is shared, so the half is the VENDOR's. Checked before the analytics
+    # emit below: a view of a dark half is not a view anyone should be credited with.
+    _require_half(db, vendor)
     score = detail["reliability"]
     summary = m13.review_summary(db, vendor.id)
     # FR8 analytics: a sheet view is the vendor's "someone looked at me" number
@@ -290,6 +334,10 @@ def confirm(
     # geofence presence proof, distinct-driver counting and the anti-farming
     # cooldown are all enforced inside F10 — this endpoint adds no trust of its own
     _require_active(db)
+    vendor = m13.resolve_vendor(db, vendor_id)
+    if vendor is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    _require_half(db, vendor)
     now = datetime.now(UTC)
     if body.sold_out:
         m13.report_sold_out(db, account.id, vendor_id, body.facility_id, now=now)
@@ -315,7 +363,7 @@ def suggest_a_cook(
     # It records where drivers want food, which is the demand half of the vendor
     # recruitment loop — the F14 console reads it to target outreach. No vendor is
     # created and nothing is promised to the driver beyond "noted".
-    _require_active(db)
+    _require_food(db)
     admin.emit(
         db,
         "vendor_suggested",
@@ -359,8 +407,10 @@ def follow_vendor(
     db: Session = Depends(get_db),
 ) -> dict:
     _require_active(db)
-    if m13.resolve_vendor(db, vendor_id) is None:
+    vendor = m13.resolve_vendor(db, vendor_id)
+    if vendor is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    _require_half(db, vendor)
     m13.follow_vendor(db, account.id, vendor_id)
     return {"following": True, "alerts_on": True}
 
@@ -371,6 +421,10 @@ def unfollow_vendor(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
+    # deliberately NOT gated on the vendor's half: a driver who followed a cook before
+    # the food half was deferred must still be able to stop following. §21.8 makes off
+    # exactly as easy as on, and a flag is not a reason to lock someone into a
+    # subscription — the same reasoning that leaves `mute` open above.
     _require_active(db)
     m13.unfollow_vendor(db, account.id, vendor_id)
     # unfollowing one cook never switches the whole class off — that is a separate,
@@ -390,11 +444,19 @@ def register(
 ) -> dict:
     _require_active(db)
     try:
+        vendor_type = m13.VendorType(body.vendor_type)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown vendor type") from exc
+    # registration is where a half acquires new members, so it is gated on the half
+    # being ASKED FOR rather than on the module: with food deferred, no new cook signs
+    # up, while a repair shop still can.
+    _require_type(db, vendor_type)
+    try:
         vendor = m13.register_vendor(
             db,
             account.id,
             body.name,
-            m13.VendorType(body.vendor_type),
+            vendor_type,
             metro=body.metro,
             contact_phone=body.contact_phone,
             categories=body.categories,
@@ -419,7 +481,7 @@ def publish(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
-    _require_active(db)
+    _require_food(db)
     vendor = _my_vendor(db, account)
     gateway = notify.RecordingNotificationGateway()
     try:
@@ -452,7 +514,7 @@ def cancel(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
-    _require_active(db)
+    _require_food(db)
     appearance = db.get(m13.Appearance, appearance_id)
     if appearance is None or not m13.is_member(db, appearance.vendor_id, account.id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "appearance not found")
@@ -469,7 +531,7 @@ def self_report(
 ) -> dict:
     # the vendor's own "I've arrived" / "sold out" — recorded as an authoritative
     # submission attributed to the vendor, never counted as a driver (§11.7)
-    _require_active(db)
+    _require_food(db)
     vendor = _my_vendor(db, account)
     m13.vendor_self_report(
         db, vendor, body.facility_id, arrived=body.present, sold_out=body.sold_out
@@ -503,6 +565,7 @@ def review_vendor(
     vendor = m13.resolve_vendor(db, vendor_id)
     if vendor is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    _require_half(db, vendor)
     try:
         review = m13.submit_review(db, vendor, account.id, body.rating, body.text)
     except m13.InvalidRating as exc:
@@ -547,8 +610,10 @@ def report_vendor(
     db: Session = Depends(get_db),
 ) -> dict:
     _require_active(db)
-    if m13.resolve_vendor(db, vendor_id) is None:
+    vendor = m13.resolve_vendor(db, vendor_id)
+    if vendor is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "vendor not found")
+    _require_half(db, vendor)
     return _report(db, m13.CONTENT_VENDOR, vendor_id, vendor_id, account.id, body)
 
 
@@ -563,6 +628,7 @@ def report_review(
     review = db.get(m13.VendorReview, review_id)
     if review is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "review not found")
+    _require_reportable(db, review.vendor_id)
     return _report(db, m13.CONTENT_REVIEW, review.id, review.vendor_id, account.id, body)
 
 
@@ -577,6 +643,7 @@ def report_promotion(
     promotion = db.get(m13.Promotion, promotion_id)
     if promotion is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "promotion not found")
+    _require_reportable(db, promotion.vendor_id)
     return _report(db, m13.CONTENT_PROMOTION, promotion.id, promotion.vendor_id, account.id, body)
 
 
@@ -599,7 +666,9 @@ def facility_promotions(
             "ends_at": p["ends_at"].isoformat(),
             "promoted": True,
         }
-        for p in m13.promotions_for_facility(db, facility_id)
+        for p in m13.promotions_for_facility(
+            db, facility_id, vendor_types=m13.enabled_vendor_types(db)
+        )
     ]
 
 
@@ -610,7 +679,7 @@ def service_center(
     _account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
-    _require_active(db)
+    _require_service(db)
     view = m13.claimed_facility_view(db, facility_id)
     if view is None:
         # unclaimed facilities stay plain POIs — there is nothing extra to say
