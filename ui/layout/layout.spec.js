@@ -182,6 +182,12 @@ function mapMocks(pin, extra = {}) {
   return {
     ...NO_LOAD_MOCKS,
     "/map/overlay": { clustered: false, total: 1, clusters: [], pins: [pin] },
+    // the chip row asks the server what is live (§21.3). Unmocked, this 404s and the
+    // row falls back to four chips — which is HANDOFF-105 §9's warning exactly: the
+    // harness would go green having measured a row that is not the one shipping. All
+    // six are returned so the row is measured at its WIDEST, which is what 360 dp and
+    // the +40% pseudo-locale need to survive.
+    "/map/presets": { presets: ["drive", "tonight", "work", "fuel", "food", "service"] },
     "/community/handoff/nearby": [],
     ...extra,
   };

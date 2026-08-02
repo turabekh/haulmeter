@@ -63,7 +63,7 @@ describe("Service preset chip (A5, §11.3)", () => {
   it("joins the row as a sixth filter chip, not a sixth tab", () => {
     // NAV-1 fixes FIVE TABS and is untouched here — §23's Food-chip precedent
     // established that a preset chip is a filter row. The row already scrolls.
-    const w = mount(PresetChips, { props: { modelValue: "drive" } });
+    const w = mount(PresetChips, { props: { modelValue: "drive", available: ["drive", "tonight", "work", "fuel", "food", "service"] } });
     const chips = w.findAll(".chip");
     expect(chips).toHaveLength(6);
   });
@@ -71,14 +71,14 @@ describe("Service preset chip (A5, §11.3)", () => {
   it("keeps its translated name reachable for a screen reader", () => {
     // §23 entry 89: the glyphs are anonymous to assistive tech unless the name moves
     // to aria-label. Six locales keep working because the icon needs no translation.
-    const w = mount(PresetChips, { props: { modelValue: "service" } });
+    const w = mount(PresetChips, { props: { modelValue: "service", available: ["drive", "tonight", "work", "fuel", "food", "service"] } });
     const chip = w.findAll(".chip")[5];
     expect(chip.attributes("aria-label")).toBe(en["map.preset.service"]);
     expect(chip.attributes("aria-selected")).toBe("true");
   });
 
   it("emits the preset key when tapped", async () => {
-    const w = mount(PresetChips, { props: { modelValue: "drive" } });
+    const w = mount(PresetChips, { props: { modelValue: "drive", available: ["drive", "tonight", "work", "fuel", "food", "service"] } });
     await w.findAll(".chip")[5].trigger("click");
     expect(w.emitted()["update:modelValue"][0]).toEqual(["service"]);
   });
@@ -226,5 +226,52 @@ describe("A6 — a claimed service centre on the card", () => {
       expect(catalog["facility.claimed_by"], `${loc} missing facility.claimed_by`).toBeTruthy();
       expect(catalog["facility.claimed_by"]).toContain("{name}");
     }
+  });
+});
+
+// AI-CONTEXT: a chip is only on the row when its feature is LIVE.
+//
+// The row was a hardcoded array, so it offered Food after v2.0 §4 deferred it — and
+// `preset=food` answered 500, which MapSurface's own catch absorbed into the offline
+// path. It looked empty rather than broken, for weeks, on the owner's own screen.
+//
+// §21.3: a control that leads nowhere is decoration. §23 entry 415 made a vendor-portal
+// rail item conditional on the same reasoning.
+describe("preset chips follow their feature (v2.0 §4 / §21.3)", () => {
+  const keyOf = (w) => w.findAll(".chip").map((c) => c.attributes("aria-label"));
+
+  it("drops the Food chip when the food half is switched off", () => {
+    const w = mount(PresetChips, {
+      props: { modelValue: "drive", available: ["drive", "tonight", "work", "fuel", "service"] },
+    });
+    expect(keyOf(w)).not.toContain(en["map.preset.food"]);
+    expect(keyOf(w)).toContain(en["map.preset.service"]);
+    expect(w.findAll(".chip")).toHaveLength(5);
+  });
+
+  it("drops the Service chip when A5's flag is off, by the same rule", () => {
+    // the mechanism is not a special case for food — it is per capability
+    const w = mount(PresetChips, {
+      props: { modelValue: "drive", available: ["drive", "tonight", "work", "fuel"] },
+    });
+    expect(keyOf(w)).not.toContain(en["map.preset.service"]);
+    expect(w.findAll(".chip")).toHaveLength(4);
+  });
+
+  it("shows only the four that cannot be wrong while the answer is unknown", () => {
+    // offline, or the first paint before /map/presets lands. Absent beats a chip that
+    // answers nothing — the failure mode that produced this whole defect.
+    const w = mount(PresetChips, { props: { modelValue: "drive" } });
+    expect(w.findAll(".chip")).toHaveLength(4);
+    expect(keyOf(w)).not.toContain(en["map.preset.food"]);
+  });
+
+  it("never drops a chip the four §11.3 originals depend on", () => {
+    // no map, no chip row — so these are never in question and must never be filtered
+    const w = mount(PresetChips, { props: { modelValue: "drive", available: [] } });
+    expect(keyOf(w)).toEqual([
+      en["map.preset.drive"], en["map.preset.tonight"],
+      en["map.preset.work"], en["map.preset.fuel"],
+    ]);
   });
 });

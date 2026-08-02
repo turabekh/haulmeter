@@ -620,6 +620,16 @@ export async function fetchOverlay({ bbox, lat, lon, radiusM = 8000, preset = "d
   return resp.json();
 }
 
+// AI-CONTEXT: which preset chips this driver may actually use. The row was a
+// hardcoded array, so it offered Food whatever the flags said — and `preset=food` was
+// a 500, absorbed by the overlay's own catch. The server is the only thing that knows
+// what is live, so the row asks it (§21.3: a control that leads nowhere is decoration).
+export async function fetchPresets() {
+  const resp = await fetch(`${API_BASE}/map/presets`, { headers: headers() });
+  if (!resp.ok) throw new Error(`presets failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function report(facilityId, signalType, value) {
   // F12: a status report in a dead zone queues to the phone and syncs later
   return queuedPost("/map/report", { facility_id: facilityId, signal_type: signalType, value });

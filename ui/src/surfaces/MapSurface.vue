@@ -53,6 +53,7 @@ import {
   reviewVendor,
   reportVendor,
   recordServiceCall,
+  fetchPresets,
 } from "../core/api.js";
 
 defineOptions({ name: "MapSurface" });
@@ -79,6 +80,28 @@ watch(driverState, (next) => {
   const remembered = presetFor(next);
   if (remembered !== preset.value) preset.value = remembered;
 });
+
+// AI-CONTEXT: which chips are live, from the server (`GET /map/presets`).
+//
+// The row was a hardcoded array, so it offered Food after v2.0 §4 deferred it — and
+// `preset=food` answered 500, which this file's own `catch` absorbed into the offline
+// path. That is why it looked empty rather than broken.
+//
+// PERSISTENCE IS THE TRAP HERE. The preset above is remembered per driver state, so a
+// driver whose last choice was Food comes back INTO a preset that no longer exists and
+// no chip can get them out of — the row would have no Food chip to un-press. So a
+// remembered preset that is no longer live falls back to Drive, and the fallback writes
+// itself to memory, or the same dead state returns on the next visit.
+const livePresets = ref(null);
+async function loadPresets() {
+  try {
+    const { presets: live } = await fetchPresets();
+    livePresets.value = live;
+    if (!live.includes(preset.value)) preset.value = "drive";
+  } catch {
+    // unknown stays unknown: PresetChips renders only the four that cannot be wrong
+  }
+}
 
 const PRESET_TYPES = {
   // E3.1: scales ride the Drive preset, which is the preset for moving forward —
@@ -279,6 +302,8 @@ onMounted(() => {
   // ~0.8 s round trip for a screen the driver was never going to see.
   if (!canvas.value?.hasRememberedView?.()) loadOverlay();
   loadVendors();
+  // before anything is offered: a chip whose feature is dark must not be on the row
+  loadPresets();
   // which dock is the driver's own, so the Work preset can mark it and its card can
   // lead with §10.1's "Arm stop" rung. Never persisted — see api.js.
   fetchActiveLoad().catch(() => {
@@ -797,7 +822,7 @@ async function submitPrice(cents) {
       />
     </template>
     <template v-else>
-      <PresetChips v-model="preset" />
+      <PresetChips v-model="preset" :available="livePresets" />
       <!-- M8-FR3: the "where do I sleep tonight" solver, surfaced in Tonight -->
       <button v-if="preset === 'tonight'" class="sleep-cta" type="button" @click="solving = true">
         {{ t("sleep.title") }}

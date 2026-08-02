@@ -21,11 +21,15 @@
      Density is the point: five 48 dp squares instead of five text pills, in a row
      56 dp tall rather than 64. -->
 <script setup>
+import { computed } from "vue";
 import { Navigation, Moon, Warehouse, Fuel, UtensilsCrossed, Wrench } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 
 const props = defineProps({
   modelValue: { type: String, default: "drive" },
+  // AI-CONTEXT: what the SERVER says is live (`GET /map/presets`). `null` means the
+  // answer has not arrived — offline, or the first paint before the fetch lands.
+  available: { type: Array, default: null },
 });
 const emit = defineEmits(["update:modelValue"]);
 const { t } = useI18n();
@@ -45,12 +49,28 @@ const presets = [
   // reveals say the same thing (the shared-vocabulary rule above).
   { key: "service", label: "map.preset.service", icon: Wrench },
 ];
+
+// AI-CONTEXT: the chips whose feature can be switched off underneath them. The four
+// §11.3 originals ride M1 itself — no map, no chip row at all — so they are never in
+// question. Food and Service each have a flag, and a chip whose feature is dark answers
+// nothing when tapped: §21.3's rule that a control leading nowhere is decoration, and
+// the reasoning §23 entry 415 used to make a vendor-portal rail item conditional.
+//
+// UNKNOWN RESOLVES TO ABSENT, deliberately. While the answer is missing the row shows
+// only the four that cannot be wrong. A chip that briefly is not there costs a driver
+// one tap on the row once it appears; a chip that is there and answers nothing costs
+// them trust in the row — and 500s absorbed into an offline path are exactly how Food
+// looked merely empty for weeks instead of broken.
+const GATED = new Set(["food", "service"]);
+const visible = computed(() =>
+  presets.filter((p) => (GATED.has(p.key) ? (props.available || []).includes(p.key) : true)),
+);
 </script>
 
 <template>
   <div class="chips" role="tablist" aria-label="Map presets">
     <button
-      v-for="p in presets"
+      v-for="p in visible"
       :key="p.key"
       type="button"
       class="chip"

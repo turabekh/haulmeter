@@ -17,6 +17,7 @@ from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f10_crowd import public as crowd
+from app.foundation.f13_flags import public as flags
 from app.modules.m01_map import public as m1
 from app.modules.m03_detention import public as m3
 from app.modules.m06_parking import public as m6
@@ -88,7 +89,20 @@ def overlay(
     # SECONDARY: point + radius (corridor / nearby). Sparse -> pins; dense or huge
     # area -> server-side clusters (bounded payload, §11.5/§20).
     required = [a for a in amenities.split(",") if a] or None
-    preset_enum = m1.Preset(preset)
+    # AI-CONTEXT: an unknown preset is the CLIENT's mistake, so it answers 422 rather
+    # than 500. It reached production as a 500 because `Preset(preset)` was called bare:
+    # the Food chip sends `preset=food`, `food` has never been a member of this enum,
+    # and the surface's own catch swallowed the error into its offline path — so every
+    # tap on Food fell back to FIXTURES and looked merely empty rather than broken.
+    # A 500 that a client silently absorbs is the hardest kind of defect to see.
+    try:
+        preset_enum = m1.Preset(preset)
+    except ValueError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            {"error": "unknown_preset", "preset": preset,
+             "known": [p.value for p in m1.Preset]},
+        ) from exc
     if None not in (min_lat, min_lon, max_lat, max_lon):
         view = m1.map_overlay_view_bbox(
             db,
@@ -117,6 +131,35 @@ def overlay(
         "pins": pins,
         "clusters": [_serialize_cluster(c) for c in view["clusters"]],
     }
+
+
+@router.get("/presets")
+def presets(
+    _account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """AI-CONTEXT: which preset chips a driver may actually use, from the server.
+
+    The chip row was a hardcoded array, so it rendered Food whatever the flags said. A
+    flag that hides the DATA but not the CONTROL leaves a driver tapping a chip that
+    answers nothing — the §21.3 rule that a control leading nowhere is decoration, and
+    the same reasoning §23 entry 415 used to make a rail item type-conditional.
+
+    Food is the case that forced this: v2.0 §4 defers it indefinitely, and it is not a
+    member of `Preset` at all — it is a client-side mode over the M13 endpoints, which
+    is why `preset=food` was a 500. So its liveness is M13's flag, resolved here at the
+    composition layer because M1 may not import a later module.
+
+    Returned as a LIST rather than per-preset booleans so a preset added later rides
+    along without another field, the same shape the vendor portal uses for
+    `halal_claims_available` — the client offers only what the server will honour.
+    """
+    live = [p.value for p in m1.Preset if p != m1.Preset.service]
+    if not flags.is_switched_off(db, m1.SERVICE_PRESET_FLAG):
+        live.append(m1.Preset.service.value)
+    if m13.is_active_for(db, m13.VendorType.food_mobile):
+        live.append("food")
+    return {"presets": live}
 
 
 def _apply_claims(db: Session, pins: list[dict]) -> None:

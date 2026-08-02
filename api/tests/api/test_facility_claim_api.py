@@ -413,3 +413,34 @@ def test_the_card_overlay_is_silent_while_the_service_half_is_off(client, db, li
     pin = _overlay_pin(client, driver, fac)
     assert pin.get("phone") is None
     assert "claimed_by" not in pin
+
+
+# --- the preset row's server-side truth (v2.0 §4 / §21.3) ---
+def test_food_is_offered_only_while_the_food_half_is_live(client, db, live):
+    """The chip row was a hardcoded array, so it offered Food after §4 deferred it.
+    The server is the only thing that knows, so it is asked."""
+    headers = _headers(client, "presets-a@example.com")
+    assert "food" in client.get("/map/presets", headers=headers).json()["presets"]
+
+    flags.disable(db, m13.FLAG_KEY)
+    body = client.get("/map/presets", headers=headers).json()["presets"]
+    assert "food" not in body
+    # and the halves are independent — A6's whole point
+    assert "service" in body
+    assert {"drive", "tonight", "work", "fuel"} <= set(body)
+
+
+def test_an_unknown_preset_is_a_422_naming_what_is_known(client, db, live):
+    """`preset=food` was a 500 — `food` has never been a member of `Preset`, it is a
+    client-side mode over the M13 endpoints. MapSurface's own catch absorbed the 500
+    into its offline path, so every tap on Food fell back to fixtures and looked merely
+    empty. A 500 a client silently swallows is the hardest defect to see."""
+    headers = _headers(client, "presets-b@example.com")
+    resp = client.get(
+        "/map/overlay?preset=food&min_lat=36&min_lon=-95&max_lat=38&max_lon=-93",
+        headers=headers,
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"]["preset"] == "food"
+    assert "drive" in resp.json()["detail"]["known"]
+    assert "food" not in resp.json()["detail"]["known"]

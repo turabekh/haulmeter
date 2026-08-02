@@ -274,14 +274,14 @@ describe("CorridorStack food lines (§11.4 / Q-6)", () => {
 // --- the preset chip ---
 describe("Food preset chip (§23 E-D2)", () => {
   it("joins the preset row and emits its key", async () => {
-    const w = mount(PresetChips, { props: { modelValue: "drive" } });
+    const w = mount(PresetChips, { props: { modelValue: "drive", available: ["drive", "tonight", "work", "fuel", "food", "service"] } });
     const chips = w.findAll(".chip");
     await chips[4].trigger("click");
     expect(w.emitted()["update:modelValue"][0]).toEqual(["food"]);
   });
 
   it("reuses the existing chip class — no new visual pattern", () => {
-    const w = mount(PresetChips, { props: { modelValue: "food" } });
+    const w = mount(PresetChips, { props: { modelValue: "food", available: ["drive", "tonight", "work", "fuel", "food", "service"] } });
     const food = w.findAll(".chip")[4];
     expect(food.classes()).toContain("chip");
     expect(food.classes()).toContain("chip--active");

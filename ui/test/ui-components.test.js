@@ -82,7 +82,7 @@ describe("PresetChips (design-prd §11.3)", () => {
     // four §11.3 presets + Food (M13 / §23 E-D2) + Service (A5, same precedent).
     // NAV-1's five-tab law is about TABS and is asserted separately — this row is a
     // filter, and it scrolls.
-    const w = mount(PresetChips, { props: { modelValue: "drive" } });
+    const w = mount(PresetChips, { props: { modelValue: "drive", available: ["drive", "tonight", "work", "fuel", "food", "service"] } });
     const chips = w.findAll(".chip");
     expect(chips).toHaveLength(6);
     await chips[1].trigger("click");
@@ -95,7 +95,7 @@ describe("PresetChips (design-prd §11.3)", () => {
   // worth holding. An icon row whose glyphs are anonymous to assistive tech would be
   // a worse screen than the text row it replaced, in the one way nobody screenshots.
   it("keeps every preset's translated name reachable without rendering it", () => {
-    const w = mount(PresetChips, { props: { modelValue: "drive" } });
+    const w = mount(PresetChips, { props: { modelValue: "drive", available: ["drive", "tonight", "work", "fuel", "food", "service"] } });
     const chips = w.findAll(".chip");
     expect(chips.map((c) => c.attributes("aria-label"))).toEqual([
       en["map.preset.drive"],
@@ -114,7 +114,7 @@ describe("PresetChips (design-prd §11.3)", () => {
   it("marks the selected preset by more than colour (C-1)", () => {
     // a text chip could lean on hue because the LABEL carried the meaning; an icon
     // chip cannot, so selection is a fill plus aria-selected
-    const w = mount(PresetChips, { props: { modelValue: "work" } });
+    const w = mount(PresetChips, { props: { modelValue: "work", available: ["drive", "tonight", "work", "fuel", "food", "service"] } });
     const chips = w.findAll(".chip");
     expect(chips[2].classes()).toContain("chip--active");
     expect(chips[2].attributes("aria-selected")).toBe("true");
