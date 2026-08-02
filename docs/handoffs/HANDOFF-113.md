@@ -26,6 +26,16 @@
 **`m13_service_center` is OFF in dev**, deliberately — it was switched on to drive the
 probe in §5 and switched back. Production has never seen the flag.
 
+**`m13_vendor` is now OFF in dev too, and HANDOFF-077 §197 is corrected by this line.**
+077 recorded the flag as "enabled in the dev DB" and it stayed that way for thirty-odd
+sessions, so the half v2.0 §4 defers was live locally the whole time. The owner confirmed
+on 2026-08-02 that food is not returning soon, and chose the flag rather than deletion —
+§4's "do not delete the code" stands, and the A6 split is what makes the choice cost
+nothing. **Production's `m13_vendor` state has NOT been checked from this session**
+(§9); no handoff records it ever being enabled there, and 073 §115 still lists "enable
+`m13_vendor`" as outstanding operational work, so it is almost certainly OFF by default —
+but almost certainly is not the same as looked.
+
 ## 2. A6 was three requirements, and only the first was written down
 
 v2.0 §3 A6 says: split the flag, FR1's ladder applies unchanged, `SERVICE_TOWING`
@@ -171,6 +181,11 @@ three commits that touches a foundation everything else uses.**
   `UnknownService` returns a named 422 the portal does not yet render specially; a
   claimant currently sees a generic failure. Stated rather than fixed.
 - **`m13_service_center` has never been enabled anywhere but this laptop**, for minutes.
+- **Production's flag states were never read.** Everything in §1 about flags describes
+  the DEV database. Checking the box is one ssh away and was not done, because reading
+  production was not asked for. If `m13_vendor` is somehow ON there, the food half is
+  live for real drivers right now and §4 has been violated in production since M13
+  shipped — worth thirty seconds before the next deploy.
 - **The A5→A6 overlap on `/facility/<id>` is untouched.** The profile renders its own FR7
   card and the map card now renders claimed data too; both are correct, neither knows
   about the other. No duplication today because they are different surfaces, but nothing
