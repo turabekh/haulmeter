@@ -12,12 +12,15 @@ results, exact next task, and blockers always live in the latest numbered handof
 > in the PDF** — 99,747 bytes, titled "Stop paperwork packet", two embedded images, naming
 > the broker and the dock, with the word "Detention" nowhere in it.
 >
-> **And nothing this product writes has ever been sent.** There is no SMTP gateway in the
-> codebase — only the recording gateway and Web Push — and `smtp_host`/`smtp_port` sit in
-> config read by nothing. Mailpit has been in compose since session 0 and has received
-> **zero** messages. So Phase DoD item 1 is unreachable, the detention wedge's notice has
-> never left the box, and every "check Mailpit" step in DRIVE.md was always unpassable.
-> That is 116 §6 and it is the next task.
+> **Walking it also found that this product had never sent an email.** There was no SMTP
+> gateway in the codebase — only the recording gateway and Web Push — and
+> `smtp_host`/`smtp_port` sat in config read by nothing, while Mailpit had been in compose
+> since session 0 holding **zero** messages. So Phase DoD item 1 was unreachable and the
+> detention wedge's notice had never left the box. **Fixed in the same session:** Mailpit
+> 0 → 1, and the link in that email returns the paperwork with the BOL in it. The whole A1
+> chain now closes. That is 116 §6 and §23 entry 122 — the FOURTH built-and-inert engine,
+> all four sharing one shape: *a deferral that cannot fail is indistinguishable from a
+> finished feature.*
 >
 > Walking it also found the card showing the **oldest** waiting draft rather than the stop
 > just left — two drafts at one dock gave an identical headline while the sheet opened the

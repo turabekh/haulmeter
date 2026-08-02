@@ -1,4 +1,4 @@
-# HANDOFF-116 — the walk works, and nothing this product writes has ever been sent
+# HANDOFF-116 — the walk works, and the product sent its first email
 
 > **Stack UP · everything from `a4e282c` onward UNPUSHED · nothing deployed.**
 >
@@ -61,7 +61,8 @@ BOL content hash in pack  True
 ```
 
 **Phase DoD item 1 is now blocked only on a person, not on the code.** The document a
-recipient could use exists and is correct. It cannot yet *reach* them — §6.
+recipient could use exists, is correct, and — since §6 — actually reaches them. What
+remains is a driver who is not the owner doing it for real.
 
 ## 3. Three fixes the walk forced (all in `6019945`)
 
@@ -134,15 +135,15 @@ product passes `RecordingNotificationGateway()`, whose `send_email` appends to a
 The F8 thread and message rows are written faithfully, so the database says the message
 was sent. **Nothing leaves the box.**
 
-What this costs, in order of severity:
+What that cost, in order of severity — all past tense as of `9c96896`:
 
 1. **v2.0 Phase DoD item 1** — "a driver who is not the owner has sent a Stop Packet that
-   a real recipient could use" — is **unreachable**. The document is right; it cannot
-   arrive.
+   a real recipient could use" — was **unreachable**. The document was right and could
+   not arrive.
 2. **The detention wedge (DoD item 3, actual payment)** rides on M3's notice reaching a
-   broker. It never has.
-3. **Every "check Mailpit" step in DRIVE.md** — J0.7, J5.2, J7-AP, J12 — has always been
-   unpassable. Marked blocked, not failing.
+   broker. It never had.
+3. **Every "check Mailpit" step in DRIVE.md** — J0.7, J5.2, J7-AP, J12 — had always been
+   unpassable. All unblocked now, with what the walk measured.
 4. `smtp_port` defaults to **1038**, the *host-published* port; Mailpit inside the network
    listens on `MAILPIT_SMTP_PORT`. So even the unused setting is probably wrong, which is
    itself evidence nothing ever connected.
