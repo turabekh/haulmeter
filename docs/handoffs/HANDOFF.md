@@ -3,8 +3,31 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-114.md](HANDOFF-114.md)** — read this first, every session.
+➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — read this first, every session.
 
+> **115** was scoped as a **surfacing rework** — the A1 automation is built and correct,
+> only the way its result reaches the driver is wrong. Re-grepping the seams before
+> planning found the first half of that sentence was false. **The Stop Packet a
+> dispatcher received contained zero artifacts and one row**: the driver's BOL and cargo
+> photos were in the database and not in the document. Measured on the running stack
+> before anything changed. Four mechanisms had to be wrong at once, and the suite was
+> green over all of them — it asserted the subject line and three *absences*, never that
+> the document contained anything.
+>
+> Also found: **the one-tap fallback drafted nothing.** Only the geofence EXIT created a
+> packet, so a driver whose background sensor never fired — the mechanism v2.0 DoD #8
+> records as unproven — tapped "Leave this stop" and got no paperwork, unrecoverably.
+> And **`load.doc.cargo_condition` is missing from all six locales**, so drivers have
+> been reading a raw translation key on the Load tab.
+>
+> Both halves shipped: the packet contains the paperwork now, and the paperwork **arrives
+> as a card at the top of the Load tab** with one Send over a bottom sheet — no hunting,
+> no separate screen. **No new notification class** (owner's Option A, §23 entry 121).
+>
+> **Stack UP · four commits UNPUSHED · nothing deployed.** Phase DoD item 1 was
+> *unreachable by construction* and is now merely unmet. **The next task is the handset
+> background-sensor test** — everything here rides on a sensor no one has watched work.
+>
 > **114** is the second half of 113's session. The owner asked for the food half to go;
 > executing that decision found, in order: **`m13_vendor` was ON in production over DEMO
 > DATA** — 13 seed/probe vendors, 18 appearances still live, so a driver could see
