@@ -22,7 +22,7 @@
 | Branch | `main`, **ahead of `origin/main` by everything from `a4e282c`** — a count is not quoted here because writing it into this file changes it |
 | `origin/main` | `f81bdd6` — **verified with `git fetch`, not inherited.** 114 §1 recorded `76c44c6` and listed `f272c4a` as unpushed; both were pushed after that handoff was written, so the figure had rotted exactly the way §5's other findings did |
 | Commits | `a4e282c` (packet contents) · `6d2d311` (the card + sheet) · `8d6af0a` (e2e) · `81bdd1a` (locale guard), plus this handoff's own — all of them this session's |
-| Gates | **pytest 1381 · vitest 654 · layout 217 checks over 54 states · import-linter 30/30** |
+| Gates | **pytest 1383 · vitest 657 · layout 221 checks over 55 states · import-linter 30/30** |
 | Migrations | none needed. dev and production both `0059_f13_config_decl` |
 | Working tree | clean apart from untracked `collect_files.py` (pre-existing) |
 | Local stack | **UP** |
@@ -145,6 +145,31 @@ than ~7 characters can never reach +40%. Every existing placeholder is ≤5; my
 `{facility}` was 8 and failed the guard. Renamed to `{place}`, and the constraint is now
 written down in `pseudo.js`, because the failure names the string and not the reason.
 
+## 5b. Doc-expiry — the same shape, found by going looking for it
+
+The deferred half of this session's scope, built after the handoff was first written
+(`7300ab2`). The 30/14/3 ladder was correct, tested and scheduled daily; **what came out
+of it went nowhere useful**, exactly as A1's did.
+
+- **The reminder reached no phone.** `run_document_expiry` walked every driver through one
+  `RecordingNotificationGateway()` — which records and never pushes — so on a box with a
+  VAPID keypair these landed in the inbox and on no device. It is the one job whose whole
+  purpose is reaching a driver who is *not* looking at the app. `run_detention_clock`, six
+  lines below it, was given `gateway_for` when §23 entry 111 shipped; this was missed.
+  Now takes the same per-account factory, because the scan crosses drivers and Web Push is
+  addressed to one driver's browsers.
+- **It landed on a tab root.** The deep link was `/docs`. §13.5 forbids exactly that, and a
+  driver told their med card expires in three days arrived at a wallet holding every
+  credential and every BOL they had ever filed. Now `/docs?doc=<id>` — the id in the query
+  on the existing route, not a new one (§22.2, and the incident pack's precedent) — and
+  DocsSurface marks it and opens the collapsed section holding it.
+
+**A consequence of §5's own fix, worth knowing.** Three surfaces used the SILENT key echo
+as a "this string is optional" signal, for doc types and evidence prompts the catalogue may
+legitimately not know. Making `t()` loud under test broke that inference, so `useI18n` now
+exposes `has(key)` and those sites ask rather than infer. A change that makes a silence
+loud will find the code that was listening to the silence — worth expecting next time.
+
 ## 6. Every new assertion was proved RED
 
 18 new tests (11 vitest, 7 pytest) plus the e2e leg, each run against reverted code
@@ -177,9 +202,8 @@ document the recipient receives.
    work is specifying interruption laws for an event we cannot cause.
 3. **Run J7-AP in DRIVE.md**, and on step 7 **open the PDF**. The whole session is a bet
    that the document is now usable; nothing in CI can tell you whether an AP clerk agrees.
-4. **Claim-on-EXIT one-tap and doc-expiry reminders** — the deferred half of this
-   session's scope. Claim-on-EXIT needs an owner decision first: it is a money act behind
-   a Send, and §12.2 governs.
+4. **Claim-on-EXIT one-tap** — the remaining deferred half. It needs an owner decision
+   first: it is a money act behind a Send, and §12.2 governs. *(Doc-expiry is done — §5b.)*
 5. **`register_flag`'s gate bypass is still OPEN** (114 §7) — F13's central promise going
    unenforced, untouched for three sessions now. **It needs an owner decision before it
    can be fixed, which is why it is still here:** the hole is that `register_flag(...,
@@ -214,15 +238,16 @@ real one.
   item 5. Investigated to the point of knowing exactly what the decision is.
 - **No human has seen any of this on a screen.** The harness measures it at 360 dp under
   `pa` and `xx-XL`, vitest asserts it, and a push on a real handset is now **nine**
-  sessions old.
+  sessions old. §5b's "the reminder reaches the phone" is a claim about code, not an
+  observation — it is the same unproven push path as v2.0 DoD #4.
 
 ## 9. Restarting
 
 ```
 make up          # already up; idempotent
-make test        # 1381 pytest + 654 vitest — do NOT pipe it
+make test        # 1383 pytest + 657 vitest — do NOT pipe it
 make lint        # ruff + import-linter (30 contracts)
-make ui-layout   # 217 checks over 54 states, ~3–4 min
+make ui-layout   # 221 checks over 55 states, ~3–4 min
 ```
 
 To see the card without a phone: arm a stop, capture a BOL from the checklist, then
