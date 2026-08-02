@@ -40,13 +40,11 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
    link cards for `/map /load /money /docs /more /load/calc /money/audit /protection/condition
    /fleet /owner /admin /scorecard /login`.
 6. DevTools: device mode 360×800 · **Sensors → Location → Other** · grant location permission.
-7. ~~Second tab: `http://localhost:8038` (Mailpit — every outbound email lands here).~~
-   ❌ **NOTHING LANDS IN MAILPIT, AND NOTHING EVER HAS.** There is no SMTP gateway in the codebase:
-   the only notification gateways are the recording one (an in-memory list) and Web Push.
-   `smtp_host`/`smtp_port` exist in `api/app/core/config.py` and **are read by nothing**. Measured
-   2026-08-02 — Mailpit total: 0. Every step below that says "check Mailpit" is **blocked**, not
-   failing; see HANDOFF-116. Verify counterparty documents through the **share link** instead
-   (J7-AP step 8).
+7. Second tab: `http://localhost:8038` (Mailpit — every outbound email lands here).
+   ✅ **This works as of 2026-08-02 and did not before.** There had been no SMTP gateway in the
+   codebase for the life of the project: every send site passed a recording gateway, so the F8 rows
+   said a notice was sent and Mailpit had received **zero** messages. Fixed (§23 entry 122).
+   If Mailpit stays empty, check `SMTP_HOST` in `infra/.env` — blank switches email off by design.
 8. Convention: **always enter surfaces from `/dev`** — you never guess a URL.
 
 ---
@@ -110,8 +108,8 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
 ## J5 — Notice → exit → claim pack → invoice `[M3-FR3..6, F4, §17]`
 1. Detention accruing → **Send notice**. Confirmation reuses the verb ("Notice sent"); checklist
    flips that row.
-2. ❌ **Mailpit shows nothing — no email is sent by this product** (J0 step 7). The notice is
-   RECORDED (F8 thread + message rows) but never transmitted. Blocked, not failing.
+2. **Mailpit**: notice email — plain, professional English, one link, no images, load ref in
+   subject. (Unblocked 2026-08-02; before that nothing was ever transmitted.)
 3. Move Sensors away (or **End load**) → EXIT closes the stop.
 4. Generate claim → **PDF**: header Meter figures, parties & refs, mono timeline w/ hairlines, map
    trace, artifact thumbnails, hash block. AP-clerk-readable in 30s.
@@ -178,24 +176,14 @@ ENTERed, at least one BOL captured via the checklist.
 5. **Recipients are pre-filled** from the load's counterparty and are **editable** — change the
    address and it goes where you typed (A1 req 6).
 6. **Nothing sent silently before this** — you are seeing the packet *before* it goes (A1 req 5).
-7. **Send.** ❌ **Do not look in Mailpit — no email is sent by this product at all** (see J0 step 7;
-   there is no SMTP gateway). The document itself is still produced and reachable, so verify it
-   directly, which is the step that matters most:
-8. **Open the actual PDF.** The share link is only in the email that is never sent, so read it
-   straight out of the box:
-   ```
-   docker compose -f infra/docker-compose.yml exec api python -c "
-   import db_registry; db_registry.import_all_models()
-   from app.core.db import SessionLocal; from sqlalchemy import select
-   from app.foundation.f04_evidence import public as ev
-   from app.modules.m05_protection.domain.models import StopPacket
-   db=SessionLocal()
-   p=[x for x in db.scalars(select(StopPacket)) if x.state.value=='sent'][-1]
-   print(ev.share_link(db.get(ev.SharedPack, p.shared_pack_ref)))"
-   ```
-   Open that URL in the browser — it renders from pinned bytes with no session, exactly as a
-   broker's would. Measured on the walk of 2026-08-02 it was **99,747 bytes, `application/pdf`,
-   HTTP 200**, containing:
+7. **Send.** **Mailpit** now receives it: `From: paperwork@haulmeter.online`, the counterparty on
+   `To:`, subject **"Stop paperwork · <load ref>"** (just "Stop paperwork" when the load has no
+   reference — the manual fallback form does not collect one), body one plain line with one link.
+   Neutral tone: a handoff, not a claim.
+8. **Open the actual PDF — click the link in the Mailpit message**, which is exactly what a broker
+   does. It renders from pinned bytes with no session. Measured on the walk of 2026-08-02:
+   **HTTP 200, `application/pdf`, 100,042 bytes**, containing:
+
    - titled **"Stop paperwork packet"** (not "Stop record") ✅
    - **naming the broker and the dock** ✅
    - **2 embedded image XObjects — the driver's BOL photo is IN it** ✅ (until HANDOFF-115 the

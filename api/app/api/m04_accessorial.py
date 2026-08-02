@@ -22,7 +22,12 @@ router = APIRouter(prefix="/accessorial", tags=["accessorial"],
     dependencies=[Depends(require_module("m04_accessorial"))],
 )
 
-_GATEWAY = notify.RecordingNotificationGateway()  # F8 seam (dev)
+# AI-CONTEXT: the REAL counterparty transport (§23 entry 122). This was a recording
+# gateway — an in-memory list — at every one of the seven send sites, so the F8 rows
+# said the notice was sent and nothing ever left the box. Resolves SMTP-or-recording
+# at send time, so the suite (SMTP_HOST blanked in conftest) and the app differ by
+# configuration alone.
+_GATEWAY = notify.counterparty_gateway()
 _PROVIDER = ai.resolve_provider()  # F9: real Claude when ANTHROPIC_API_KEY set, else Fake
 
 

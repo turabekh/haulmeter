@@ -7,6 +7,11 @@ import os
 os.environ.pop("ANTHROPIC_API_KEY", None)
 os.environ.pop("FMCSA_WEBKEY", None)  # -> deterministic FakeAuthorityVerifier
 os.environ.pop("VOYAGE_API_KEY", None)  # -> deterministic Fake embeddings
+# ...and never send REAL email from the suite. Blanking the host makes
+# `counterparty_gateway()` resolve to the recording gateway, so the threading,
+# provider-ref and tiering logic are all exercised and nothing reaches an SMTP server.
+# A test run that filled Mailpit would be slow AND a lie about what was actually sent.
+os.environ["SMTP_HOST"] = ""
 
 import pytest  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402

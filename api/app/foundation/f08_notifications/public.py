@@ -19,8 +19,10 @@ from .domain.gateway import (
     NotificationGateway,
     RecordingNotificationGateway,
     SentMessage,
+    SmtpNotificationGateway,
     StubNotificationGateway,
     WebPushNotificationGateway,
+    counterparty_gateway,
     gateway_for,
 )
 from .domain.models import (
@@ -112,6 +114,7 @@ __all__ = [
     "TemplateAudience",
     "NotificationGateway",
     "RecordingNotificationGateway",
+    "SmtpNotificationGateway",
     "SentMessage",
     "StubNotificationGateway",
     "drop_subscription_by_endpoint",
@@ -119,6 +122,7 @@ __all__ = [
     "subscriptions_for",
     "save_subscription",
     "PushSubscription",
+    "counterparty_gateway",
     "gateway_for",
     "WebPushNotificationGateway",
     "Notification",

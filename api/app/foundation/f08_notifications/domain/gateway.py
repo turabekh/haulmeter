@@ -188,6 +188,132 @@ class WebPushNotificationGateway:
         raise NotImplementedError("transactional email adapter is a seam; wired at activation")
 
 
+class SmtpNotificationGateway:
+    """The counterparty transport, and until 2026-08-02 it did not exist.
+
+    AI-CONTEXT: F8 has always MODELLED outbound counterparty mail correctly — threads,
+    messages, provider refs, per-thread tracking — and every caller passed
+    `RecordingNotificationGateway`, whose `send_email` appends to a list. So the database
+    said the notice was sent and nothing left the box: no Stop Packet reached a
+    dispatcher, no detention notice reached a broker, and Mailpit (wired into compose
+    since session 0) had received zero messages in the life of the project. That is why
+    v2.0 Phase DoD item 1 was unreachable — the document was right and could not arrive.
+
+    Shaped like every other provider seam here: configuration present activates real
+    delivery, absent falls back to recording. Unlike VAPID or the AI gateway the switch
+    is the HOST rather than a key, because the dev provider (Mailpit) needs no
+    credentials — and a dev box that silently stopped sending would put us straight back
+    where this started.
+
+    THE RULE IT INHERITS FROM WebPushNotificationGateway: a gateway may never make the
+    caller fail. The F8 message row is the record that we decided to send; an SMTP server
+    having a bad minute is a transport fact, not a reason to lose the row or to 500 a
+    driver who just tapped Send. Failures are counted and swallowed, and the returned
+    provider ref SAYS which happened — `smtp-failed-…` is greppable, and a row claiming
+    delivery it did not get is the lie this whole class exists to end.
+
+    Plain text, deliberately. §17 and §12.1: the artifact is the PDF behind the link, the
+    email is a covering note, and an AP clerk's filter is kinder to text than to HTML.
+    """
+
+    def __init__(self, settings=None):
+        # AI-CONTEXT: settings are resolved LAZILY, at send time. The API modules build
+        # this once at import, and reading configuration then would freeze whatever the
+        # process happened to start with — which is exactly how a test that clears the
+        # settings cache ends up asserting against a gateway that cannot see it.
+        self._explicit = settings
+        self.delivered = 0
+        self.failed = 0
+
+    @property
+    def _s(self):
+        if self._explicit is not None:
+            return self._explicit
+        from app.core.config import get_settings
+
+        return get_settings()
+
+    @property
+    def configured(self) -> bool:
+        return bool(self._s.smtp_host and self._s.smtp_port)
+
+    def send_push(
+        self,
+        to_ref: str,
+        title: str,
+        body: str,
+        deep_link: str | None = None,
+        actions: list[dict] | None = None,
+    ) -> str:
+        raise NotImplementedError("SMTP is the counterparty seam; driver push is WebPush")
+
+    def send_sms(self, to_ref: str, body: str) -> str:
+        raise NotImplementedError("Twilio adapter is a seam; wired at activation")
+
+    def send_email(self, to_ref: str, subject: str, body: str) -> str:
+        import smtplib
+        from email.message import EmailMessage
+
+        if not self.configured:
+            return "email-unconfigured"
+        msg = EmailMessage()
+        msg["From"] = self._s.smtp_from
+        msg["To"] = to_ref
+        msg["Subject"] = subject
+        msg.set_content(body)
+        try:
+            with smtplib.SMTP(
+                self._s.smtp_host, self._s.smtp_port, timeout=10
+            ) as smtp:
+                if self._s.smtp_starttls:
+                    smtp.starttls()
+                if self._s.smtp_username:
+                    smtp.login(self._s.smtp_username, self._s.smtp_password)
+                smtp.send_message(msg)
+            self.delivered += 1
+            return f"smtp-{self.delivered}"
+        except Exception as exc:
+            # never fail the caller: the F8 row and the driver's confirmation both stand,
+            # and the ref records that this one did not go out.
+            self.failed += 1
+            return f"smtp-failed-{type(exc).__name__}"
+
+
+class _LazyCounterpartyGateway:
+    """Chooses SMTP-or-recording at SEND time, not at import.
+
+    The API modules hold one of these at module scope. Deciding at import would bake in
+    whatever configuration the process started with, and the suite deliberately runs with
+    SMTP off (conftest) while the app runs with it on — one frozen choice cannot serve
+    both, and freezing the wrong one is silent."""
+
+    def __init__(self, settings=None):
+        self._explicit = settings
+
+    def _pick(self):
+        smtp = SmtpNotificationGateway(self._explicit)
+        return smtp if smtp.configured else RecordingNotificationGateway()
+
+    def send_push(self, *a, **k):
+        return self._pick().send_push(*a, **k)
+
+    def send_sms(self, *a, **k):
+        return self._pick().send_sms(*a, **k)
+
+    def send_email(self, *a, **k):
+        return self._pick().send_email(*a, **k)
+
+
+def counterparty_gateway(settings=None):
+    """The gateway a COUNTERPARTY-facing send should use.
+
+    Separate from `gateway_for` because the two answer different questions: that one
+    picks a channel to reach the DRIVER's own browsers, this one reaches a broker's
+    inbox. Sharing a resolver would have to guess which, and the callers already know.
+    """
+    return _LazyCounterpartyGateway(settings)
+
+
 def gateway_for(db, account_id):
     """The gateway a dispatch site should use (§23 entry 111).
 

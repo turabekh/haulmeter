@@ -40,8 +40,24 @@ class Settings(BaseSettings):
     # is available on request rather than printing a link that goes nowhere.
     public_base_url: str = Field(default="")
 
+    # AI-CONTEXT: the counterparty email transport. These two existed from session 0 and
+    # were READ BY NOTHING until 2026-08-02 — there was no SMTP gateway in the codebase at
+    # all, so no Stop Packet, detention notice, on-time proof or invoice has ever left the
+    # box. Mailpit sat in compose the entire time and received zero messages.
+    #
+    # The dev defaults ARE the compose service: Mailpit binds MAILPIT_SMTP_PORT (1038)
+    # inside the network as well as on the host, so `mailpit:1038` resolves as written.
     smtp_host: str = Field(default="mailpit")
     smtp_port: int = Field(default=1038)
+    # who a broker sees the paperwork came from. §12.3: counterparty-facing text is always
+    # English, and this is the first thing they read.
+    smtp_from: str = Field(default="paperwork@haulmeter.online")
+    # a provider that needs credentials gets them here; Mailpit needs none, which is why
+    # `configured` turns on HOST rather than on a key (unlike VAPID or the AI gateway).
+    smtp_username: str = Field(default="")
+    smtp_password: str = Field(default="")
+    # STARTTLS. Off for Mailpit, on for every real provider.
+    smtp_starttls: bool = Field(default=False)
 
     # F9 AI gateway — real Claude provider activates when a key is present; empty
     # -> the deterministic FakeModelProvider (canned output). Key lives in .env only.
