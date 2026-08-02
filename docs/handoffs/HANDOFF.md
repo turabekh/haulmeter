@@ -3,8 +3,24 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-113.md](HANDOFF-113.md)** — read this first, every session.
+➡️ **[HANDOFF-114.md](HANDOFF-114.md)** — read this first, every session.
 
+> **114** is the second half of 113's session. The owner asked for the food half to go;
+> executing that decision found, in order: **`m13_vendor` was ON in production over DEMO
+> DATA** — 13 seed/probe vendors, 18 appearances still live, so a driver could see
+> `Ana Tamales 46eef8` selling invented food wrapped in the §11.7 honesty apparatus;
+> **`preset=food` had answered 500 since the chip shipped**, absorbed by MapSurface's own
+> catch into the offline path so it looked merely empty; **the chip row never consulted a
+> flag**; and **A5's validation gate has never gated anything** (`register_flag(enabled=True)`
+> bypasses `can_activate`, in dev and production alike).
+>
+> Food is switched off in dev **and production** (audited, with an F14 audit row, verified
+> from outside the box). The preset row now follows its features. **The gate bypass is
+> OPEN — 114 §7**, and it is F13's central promise going unenforced.
+>
+> **Stack UP · one commit UNPUSHED (`f272c4a`) · nothing deployed** — so the production map
+> still renders a Food chip whose feature is dark until a deploy.
+>
 > **113** builds **A6 — service-center vendors**, the only Group-2 requirement with no
 > owner decision in front of it. The requirement asked for one thing (split `m13_vendor`
 > so the food half can be deferred while repair shops run); two more were underneath it.
@@ -16,8 +32,8 @@ results, exact next task, and blockers always live in the latest numbered handof
 > its site, enter the number it answers, and a driver tapping that pin still saw the OSM
 > number — or, for 28 of 45 repair facilities, no call action at all.
 >
-> **Stack UP · three commits on local `main`, NOTHING pushed and NOTHING deployed.**
-> haulmeter.online is still serving 112's code. **A6's validation is unmet by design** —
+> A6 is **pushed, not deployed** — haulmeter.online still serves 112's code, and
+> `m13_service_center` does not exist on the box. **A6's validation is unmet by design** —
 > it needs a real repair shop to claim a facility and take a call.
 >
 > 113 also carries an F13 fix with nothing to do with A6: **a flag's description was
