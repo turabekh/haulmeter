@@ -265,9 +265,7 @@ the separate question of purging the demo rows, are §13.
 
 Ahead of everything in §10:
 
-1. **Switch `m13_vendor` OFF in production.** One config write, immediately reversible,
-   and the direct execution of the owner's 2026-08-02 decision. It ends the demo-data
-   exposure in one step without touching a row.
+1. ~~Switch `m13_vendor` OFF in production.~~ **DONE 2026-08-02 02:26 UTC** — see §14.
 2. **Then decide about the 13 demo vendors, 31 appearances, 2 claims and 1 review.**
    Turning the flag off hides them; it does not remove them. They are indistinguishable
    from real vendor data to any future query, and A6's own validation ("one real repair
@@ -276,3 +274,44 @@ Ahead of everything in §10:
    and was not taken here.
 3. **Ask how demo data reached production at all**, because the same path is open to
    every other module. This is a process gap, not an M13 bug.
+
+## 14. The flag was switched off in production, and it is verified from outside
+
+Owner authorised the flip after reading §12. Done through the product's own mechanism
+rather than a bare `UPDATE`, and **an audit row was written**, because a production flag
+change with no record of who or why is exactly how §12 happened in the first place:
+
+```
+f13.feature_flag   m13_vendor  enabled=f  kill_switch=f
+f14.admin_action   flag_disable  m13_vendor
+                   before={"enabled": true}  after={"enabled": false}
+                   2026-08-02 02:26:47+00
+```
+
+**Verified from OUTSIDE the box**, against haulmeter.online rather than against the
+database that was just written:
+
+```
+/api/map/overlay        401   ← m01_map ENABLED: the route exists and wants a session
+/api/vendors/appearances 404  ← m13_vendor OFF: the gate fires BEFORE auth
+```
+
+That contrast is the proof. A 404 alone could be a routing artifact; a 401 from a live
+module beside it makes the 404 the module gate doing what §23 entry 105 designed it to do
+— a disabled module is not forbidden, it is NOT THERE.
+
+**One thing to know about production's current code**: A6 is not deployed, so `/vendors`
+is still behind the SINGLE `require_module("m13_vendor")` gate. Switching that flag off
+therefore darkens the service-center half too. That costs nothing today — both production
+claims are demo rows — but it means **the box has no repair-shop claiming until A6
+deploys**, at which point `m13_service_center` becomes independently switchable and this
+sentence stops being true.
+
+**A first attempt failed and committed nothing.** `record_action` raised
+`NoReferencedTableError` because a bare `python -c` does not register F1's model metadata;
+the transaction rolled back and the flag was verified still `true` before retrying with
+`import app.main`. Recorded because the next person doing surgery on the box from a
+one-liner will hit the same wall.
+
+**The demo rows are still there** — 13 vendors, 31 appearances, 2 claims, 1 review. The
+flag hides them; nothing has been deleted. §13 items 2 and 3 stand untouched.
