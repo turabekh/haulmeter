@@ -103,33 +103,57 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
 **Setup:** driver signed in, load active, armed at the **DEV — shipper** (Madison), Sensors on it
 so you're ENTERed, at least one BOL/seal captured via the checklist.
 
-1. **Leave the dock.** Move Sensors well away from the shipper (or use **End load**). Within a
-   moment the EXIT fires and the packet drafts server-side.
-2. **The review card arrives at the top of the Load tab.** *(the rework)* — NOT a "N waiting" text
-   link that navigates away. Meter-grade type, plain language: *"You left [facility]. Your
-   paperwork is ready."* Primary action **Review & send**; a quiet expand to preview contents.
+1. **Leave the dock.** Move Sensors well away from the shipper. Within a moment the EXIT fires and
+   the packet drafts server-side. **Or leave by hand** — More → **Leave this stop** / **End load** —
+   which now drafts the packet too (§15.5: build for auto, degrade to one-tap, never to nothing).
+   Both paths are worth running: the hand path is the one that works when the background sensor
+   does not, and until HANDOFF-115 it produced no paperwork at all.
+2. **The review card arrives at the top of the Load tab**, without you leaving the tab or
+   re-entering it. *(the rework)* — NOT a "N waiting" text link. Plain language: *"You left
+   [facility]. Your paperwork is ready."* with the load reference beneath, and **one** action,
+   **Review & send**.
    - ❌ **If instead you see only a small "N waiting" link that routes you to `/protection/packets`,
      the rework has not landed** — that is the exact v1 defect this journey exists to close.
+   - ❌ **If the card only appears after you switch tabs and come back**, the EXIT watcher is not
+     firing — log it. The card is supposed to arrive while you are looking at the Meter.
+   - *(Changed from the plan: the card has ONE action, not a Primary plus a preview expander. §8
+     gives a card one action max, and the preview lives in the sheet, which is where you are
+     reviewing anyway — design-prd §23 entry 120.)*
 3. **Tap Review & send.** A **bottom sheet opens over the Load tab** (does NOT navigate you to
-   another page — NAV-3). If detention accrued at this stop, the sheet shows **two labelled
-   sections — the paperwork packet AND the claim — with one Send** (bundle-with-sections). No
-   detention → packet only.
-4. **Recipients are pre-filled** from the load's counterparty (dispatcher / broker), editable.
-5. **Nothing sent silently before this** — you are seeing the packet *before* it goes (A1 req 5).
-6. **Send.** **Mailpit**: the `stop_packet` email to the counterparty, **load reference in the
-   subject line**, neutral tone (a handoff, not a claim). If a claim rode along, its invoice/pack is
-   there too.
-7. **Idempotency:** tap Send again (or double-tap) → **no second document** in Mailpit.
-8. **Notification (may bounce to owner — see kickoff):** if the EXIT push shipped this session, an
-   in-app/inbox line reads *"Left [facility] · paperwork ready"* and **deep-links to the card**, not
-   a tab root (§13.5). If the class decision was deferred, this step is N/A this pass — note it.
-9. **Offline variant:** repeat steps 1–6 with **Network → Offline**. The card still renders (drafted
-   offline via F12), and **Send queues** (subtle pending glyph); back online → drains, one document
-   only.
-10. **DRIVING variant:** with the app in a DRIVING state, the card must **not** offer an interactive
-    Send — it defers to a one-line glance / voice (Forbidden #11). (Hard to trigger on desktop —
-    approximate or defer to handset; don't log as a defect.)
-11. **The archive still works:** `/protection/packets` still lists sent/drafted packets as history.
+   another page — NAV-3). Two labelled sections when a claim rides along: **Paperwork** and
+   **Detention claim**, with one Send.
+   - **The claim section shows a claim you ALREADY FILED** (from the CTA ladder's *Generate claim*).
+     Detention accruing but nothing filed → **packet only**, and that is correct: filing opens a
+     receivable, increments the broker's claim history and freezes the Meter, and §12.2 forbids a
+     button labelled about paperwork doing that on your behalf. Claim-on-EXIT one-tap is next
+     session's decision, not this one's.
+4. **The Paperwork section lists what is actually in the packet** — BOL captured, Cargo
+   photographed, and so on. Nothing captured → it says so rather than showing an empty list.
+5. **Recipients are pre-filled** from the load's counterparty and are **editable** — change the
+   address and it goes where you typed (A1 req 6).
+6. **Nothing sent silently before this** — you are seeing the packet *before* it goes (A1 req 5).
+7. **Send.** **Mailpit**: the packet email to the counterparty, **load reference in the subject
+   line**, neutral tone (a handoff, not a claim). **Open the PDF behind the link** — this is the
+   step that matters most this pass:
+   - It must be titled **"Stop paperwork packet"** (not "Stop record").
+   - It must **name the broker, the load reference, the facility and the appointment**.
+   - **Your BOL photo and cargo photos must be IN it.** Until HANDOFF-115 the document held zero
+     artifacts and one row — a blank page with a hash block. If it is empty again, that is a
+     blocks-money defect, not cosmetic.
+   - It must carry **no detention figure** — the packet is explicitly not a claim.
+8. **Idempotency:** tap Send again (or double-tap) → **no second document** in Mailpit.
+9. **Notification: N/A this pass.** The EXIT push needs a new `f08` notification class and the
+   owner chose **Option A — no new class this session** (design-prd §23 entry 121). There is
+   deliberately no push; the card is the surfacing. Do not log its absence as a defect.
+10. **Offline variant:** with the card showing, go **Network → Offline** and reload. The card
+    **still renders from cache** (§15.1). **Send does NOT queue** — by design: a queued send would
+    report success from a dead dock and leave you believing your paperwork went out (§12.4). You
+    should see a plain *"No signal. Send this when you're back online."* and the packet still
+    waiting. A silent success here is the defect.
+11. **DRIVING variant:** with the app in a DRIVING state, the card must **not** offer Send — it
+    shows *"Paperwork ready — review it when you stop."* and no button (Forbidden #11). (Hard to
+    trigger on desktop — approximate or defer to handset; don't log as a defect.)
+12. **The archive still works:** `/protection/packets` still lists drafted packets as history.
     The rework *added* the inline card; it did not remove the archive door.
 
 ## J6 — Money lifecycle `[M4-FR5, M9-FR4]`

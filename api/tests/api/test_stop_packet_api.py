@@ -183,3 +183,105 @@ def test_the_geofence_and_the_hand_do_not_produce_two_packets(db, client):
     client.post(f"/load/{stop.id}/end", headers=headers)
 
     assert len(client.get("/protection/stop-packets", headers=headers).json()) == 1
+
+
+# AI-CONTEXT: what the review CARD and its sheet read. A1 req 5 is "the driver reviews
+# before it sends", and a review of a document whose contents are not stated is a
+# confirmation dialog with extra words.
+def test_the_queue_says_WHAT_is_in_each_packet(db, client):
+    from datetime import UTC, datetime
+
+    PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+    stop = loads.get_stop(db, packet.stop_ref)
+    m5.capture_document(db, account_id, "bol", PNG, filename="bol.png", stop_ref=stop.id)
+
+    row = client.get("/protection/stop-packets", headers=headers).json()[0]
+
+    assert "bol" in row["contents"], "the driver cannot see what they are about to send"
+    assert "pod" not in row["contents"], "an uncaptured item was reported as captured"
+
+
+def test_a_packet_with_no_claim_at_all_says_so(db, client):
+    """`None` means nothing is FILED — never that nothing is owed."""
+    from datetime import UTC, datetime
+
+    account_id, headers = _auth(client)
+    _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+
+    row = client.get("/protection/stop-packets", headers=headers).json()[0]
+
+    assert row["claim"] is None
+
+
+def test_a_FILED_claim_rides_along_as_its_own_section(db, client):
+    """The bundle (owner decision, 2026-08-02): the review moment shows the paperwork
+    AND the claim, two labelled sections, one Send."""
+    from datetime import UTC, datetime
+
+    from app.foundation.f08_notifications import public as notify
+    from app.modules.m03_detention import public as m3
+
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+    stop = loads.get_stop(db, packet.stop_ref)
+    loads.record_stop_event(db, stop, "arrived")  # the chain a pack is composed from
+    claim = m3.start_claim(db, stop)
+    m3.generate_pack(
+        db, claim, now=datetime(2026, 8, 1, 18, tzinfo=UTC),
+        gateway=notify.RecordingNotificationGateway(),
+    )
+
+    row = client.get("/protection/stop-packets", headers=headers).json()[0]
+
+    assert row["claim"] is not None, "a filed claim did not reach the review sheet"
+    assert row["claim"]["state"] != "open"
+
+
+def test_a_claim_still_RUNNING_is_not_offered_as_one_to_send(db, client):
+    """An `open` claim is a clock, not a document. Reporting it as a section would put
+    a Send beside money the driver has not filed — §12.2: the button says what it does."""
+    from datetime import UTC, datetime
+
+    from app.modules.m03_detention import public as m3
+
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+    m3.start_claim(db, loads.get_stop(db, packet.stop_ref))  # started, never filed
+
+    row = client.get("/protection/stop-packets", headers=headers).json()[0]
+
+    assert row["claim"] is None
+
+
+def test_the_driver_can_correct_the_address_it_goes_to(db, client):
+    """A1 requirement 6: recipients come from the F5 registry and are DRIVER-EDITABLE.
+    The address on file is a default, not a verdict."""
+    from datetime import UTC, datetime
+
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+
+    resp = client.post(
+        f"/protection/stop-packets/{packet.id}/send",
+        headers=headers,
+        json={"recipient": "night.desk@bolt.example"},
+    )
+
+    assert resp.status_code == 200
+    from app.foundation.f04_evidence import public as evidence
+
+    shared = db.get(evidence.SharedPack, packet.shared_pack_ref)
+    assert shared.recipient == "night.desk@bolt.example"
+
+
+def test_omitting_the_address_still_uses_the_one_on_file(db, client):
+    from datetime import UTC, datetime
+
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+
+    assert client.post(
+        f"/protection/stop-packets/{packet.id}/send", headers=headers
+    ).status_code == 200

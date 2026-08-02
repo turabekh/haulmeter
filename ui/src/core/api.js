@@ -641,21 +641,27 @@ export async function report(facilityId, signalType, value) {
 // there is no signal. The one event we most need to see is the one most likely to
 // happen offline.
 // A1 requirement 5: the queue a driver reviews before anything reaches a dispatcher.
+//
+// AI-CONTEXT: CACHED, because the review card on the Load tab renders from this and a
+// dock is where signal dies. The packet is drafted SERVER-side on EXIT, so a driver who
+// leaves a shipper and loses signal in the same minute would otherwise arrive at a Load
+// tab with no card on it and no way to know paperwork was waiting. §15.1: offline is a
+// mode, not an error. The bare `fetch` this replaced threw, and the card fell away.
 export async function fetchStopPackets() {
-  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
-  const resp = await fetch(`${API_BASE}/protection/stop-packets`, { headers: headers() });
-  if (!resp.ok) throw new Error(`stop packets ${resp.status}`);
-  return resp.json();
+  return apiGet("/protection/stop-packets", "stop_packets");
 }
 
 // NOT queued through F12, deliberately. A queued send would report success from a dead
 // dock and leave the driver believing their paperwork went out — and §12.4 forbids
 // exactly that. The draft is already durable server-side; the driver can tap again.
-export async function sendStopPacket(packetId) {
+//
+// `recipient` is A1 req 6's editable address: omitted means "use the F5 counterparty".
+export async function sendStopPacket(packetId, recipient = null) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const resp = await fetch(`${API_BASE}/protection/stop-packets/${packetId}/send`, {
     method: "POST",
     headers: postHeaders(newOpId()),
+    body: JSON.stringify({ recipient }),
   });
   if (!resp.ok) throw new Error(`send packet ${resp.status}`);
   return resp.json();

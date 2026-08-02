@@ -28,9 +28,9 @@
      "2026-07-27T04:10:50.993277+00:00 · TQL" — for every driver, in the one row §10.2
      specifies. A fixture whose shape does not match its endpoint hides the endpoint. -->
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { Check, Camera, Send, Clock, TriangleAlert, ChevronDown } from "lucide-vue-next";
-import { RouterLink, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import IncidentSheet from "../core/components/IncidentSheet.vue";
@@ -38,7 +38,11 @@ import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
 import RateConImportSheet from "../core/components/RateConImportSheet.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
-import { permission as locationPermission, retryLocationPermission } from "../core/location.js";
+import {
+  permission as locationPermission,
+  retryLocationPermission,
+  lastEvents,
+} from "../core/location.js";
 import { computeDetentionState, meterVariant, formatClock, formatMoney } from "../core/meter.js";
 import {
   activeStopId,
@@ -47,6 +51,8 @@ import {
   fetchMeter,
   fetchActiveLoad,
   fetchStopPackets,
+  sendStopPacket,
+  online,
   fetchLoadHistory,
   endActiveLoad,
   sendDetentionNotice,
@@ -102,6 +108,65 @@ const importing = ref(false);
 // dense already, and a permanent "0 waiting" line is noise on the screen a driver reads
 // at a dock.
 const waitingPackets = ref([]);
+// the packet under review, its editable recipient, and the send's own state. Held
+// separately from `waitingPackets` so closing the sheet cannot leave a half-edited
+// address written back into the list.
+const reviewing = ref(false);
+const reviewPacket = ref(null);
+const reviewRecipient = ref("");
+const reviewError = ref("");
+const sending = ref(false);
+
+// oldest first, as the API orders them: a packet from this morning should not be
+// buried under one from an hour ago.
+const nextPacket = computed(() => waitingPackets.value[0] ?? null);
+const packetHeadline = computed(() => {
+  const facility = nextPacket.value?.facility_name;
+  return facility ? t("packet.ready", { place: facility }) : t("packet.ready_nowhere");
+});
+const packetReference = computed(() => nextPacket.value?.reference ?? "");
+const reviewContents = computed(() => reviewPacket.value?.contents ?? []);
+const reviewClaim = computed(() => reviewPacket.value?.claim ?? null);
+
+function openReview() {
+  const packet = nextPacket.value;
+  if (!packet) return;
+  reviewPacket.value = packet;
+  reviewRecipient.value = packet.recipient || "";
+  reviewError.value = "";
+  reviewing.value = true;
+}
+
+async function loadPackets() {
+  if (!isAuthenticated.value) return;
+  try {
+    waitingPackets.value = await fetchStopPackets();
+  } catch {
+    // §15.1: offline is a mode, not an error. `fetchStopPackets` serves its cache on a
+    // network failure, so reaching here means there is genuinely nothing to show.
+    waitingPackets.value = [];
+  }
+}
+
+async function onSendPacket() {
+  const packet = reviewPacket.value;
+  if (!packet || sending.value) return;
+  sending.value = true;
+  reviewError.value = "";
+  try {
+    await sendStopPacket(packet.id, reviewRecipient.value.trim() || null);
+    waitingPackets.value = waitingPackets.value.filter((p) => p.id !== packet.id);
+    reviewing.value = false;
+  } catch {
+    // §12.4: what happened and what to do. The two cases a driver actually meets are a
+    // dead dock and a deployment that cannot address itself (the 503), and both must
+    // say so — a tap that appears to work and does nothing is the worse outcome,
+    // because the driver would believe their paperwork went out.
+    reviewError.value = online.value ? t("packet.send_failed") : t("packet.offline");
+  } finally {
+    sending.value = false;
+  }
+}
 // §10.2's single-CTA rule, honoured without stranding capability: the rungs the
 // ladder passes over and this stop's other actions live one tap away in a sheet.
 const more = ref(false);
@@ -237,13 +302,7 @@ onMounted(async () => {
   // A1: what is waiting for this driver to look at. Failure is silent on purpose — the
   // Load tab's job is the meter, and a paperwork fetch that 500s must not take the
   // detention clock down with it.
-  if (isAuthenticated.value) {
-    try {
-      waitingPackets.value = await fetchStopPackets();
-    } catch {
-      waitingPackets.value = [];
-    }
-  }
+  await loadPackets();
   // no locally-remembered stop? ask the server if this driver has one armed
   // (fresh-device resume) before settling on the resting Meter.
   if (!activeStopId.value && isAuthenticated.value) {
@@ -258,6 +317,20 @@ onMounted(async () => {
   timer = setInterval(() => (now.value = Date.now()), 1000);
 });
 onUnmounted(() => timer && clearInterval(timer));
+
+// AI-CONTEXT: the card has to ARRIVE, and until this watcher it could not.
+//
+// The packet is drafted when the server sees the EXIT, and this tab read the queue
+// once on mount — so a driver watching the Meter as they pull off the dock saw
+// nothing, and the paperwork appeared only if they happened to leave the tab and come
+// back. That is the same "it was done and I could not find it" failure the card exists
+// to fix, one layer down.
+//
+// `lastEvents` is F3's own seam for exactly this ("a surface can watch this to react
+// to an EXIT without polling the meter"), so no new polling and no new endpoint.
+watch(lastEvents, (events) => {
+  if ((events || []).some((e) => e.event_type === "EXIT")) loadPackets();
+});
 
 const freeMin = computed(() => live.value?.free_time_minutes ?? 0);
 const rateCents = computed(() => live.value?.rate_cents_per_hour ?? 0);
@@ -500,6 +573,9 @@ async function endLoad() {
   // durable: departs the stop server-side, and hands back the next one if the route
   // has further to run (§23 entry 69). Only the last stop empties this tab.
   const next = await endActiveLoad(stopId);
+  // leaving by HAND drafts the packet too (api/load.py) — §15.5's "degrade to one-tap,
+  // never to nothing". Re-read so the card arrives on the tap, not on the next mount.
+  await loadPackets();
   if (next) await loadMeter();
   else clearLoad();
 }
@@ -509,11 +585,38 @@ async function endLoad() {
   <div class="load">
     <p v-if="incidentToast" class="toast" role="status">{{ incidentToast }}</p>
 
-    <!-- A1 req 5: the driver's way into the review queue. A verb, and a count, because
-         "2 waiting" is a different decision from "1". -->
-    <RouterLink v-if="waitingPackets.length" class="load__packets" to="/protection/packets">
-      {{ t("packet.waiting", { n: waitingPackets.length }) }}
-    </RouterLink>
+    <!-- AI-CONTEXT: A1 req 5's RESULT, arriving where the driver already is.
+         (v2 of this surfacing; the first was a text link and is described below.)
+
+         The automation was correct and invisible. EXIT drafted the packet server-side,
+         and the only thing that ever said so on this tab was a `packet.waiting` text
+         link — "2 waiting" — that NAVIGATED the driver to /protection/packets to hunt
+         for their own paperwork. For a driver who is not comfortable with phones, that
+         hunt is the whole failure: the work was done and they could not find it.
+
+         So the finished paperwork ARRIVES as a card at the top of the tab, and Review &
+         send opens a sheet OVER this screen (NAV-3). The archive at
+         /protection/packets stays as history — this added an inline door, it did not
+         remove one.
+
+         ONE action on the card, not two. §8 gives a card "title + figure/status + one
+         action max", and §22.2's heuristics are "remove rather than add" and "one
+         action rather than two" — so the preview of what is inside lives in the SHEET,
+         which is where the driver is reviewing anyway, rather than as a second control
+         competing with the Primary. §23 entry 120.
+
+         DRIVING (SM-3): a one-line glance and NO interactive Send. Forbidden #11 bans
+         interactive prompts at speed, and a document going to a broker under the
+         driver's name is the least appropriate decision to put in front of someone at
+         65 mph. The packet is durable; it waits. -->
+    <section v-if="waitingPackets.length" class="card packet-card">
+      <h2 class="packet-card__title">{{ packetHeadline }}</h2>
+      <p v-if="packetReference" class="packet-card__ref">{{ packetReference }}</p>
+      <p v-if="isDriving" class="packet-card__driving">{{ t("packet.ready_driving") }}</p>
+      <button v-else class="cta packet-card__cta" type="button" @click="openReview">
+        {{ t("packet.review") }}
+      </button>
+    </section>
 
     <section class="card meter-card">
       <TheMeter :label="meterLabel" :figure="meterFigure" :variant="variant" :status="meterStatus" />
@@ -752,6 +855,70 @@ async function endLoad() {
         {{ t("load.history") }}
       </button>
 
+      <!-- AI-CONTEXT: the review sheet — A1 req 5 and req 6, over the Load tab.
+           Two labelled SECTIONS under ONE Send (owner decision, 2026-08-02): the
+           paperwork always, the claim when the driver has already filed one. The
+           claim section REPORTS; it never files. Filing opens a receivable, increments
+           the broker's claim history and freezes the Meter (§9) — §12.2 requires the
+           button to say exactly what it does, and a Send read as being about paperwork
+           must not do that on the driver's behalf. The Send label changes with the
+           bundle for the same reason. -->
+      <BottomSheet
+        :open="reviewing"
+        :title="t('packet.review_title')"
+        @close="reviewing = false"
+      >
+        <div v-if="reviewPacket" class="review">
+          <p class="review__note">{{ t("packet.note") }}</p>
+
+          <section class="review__section">
+            <h3 class="review__label">{{ t("packet.section_paperwork") }}</h3>
+            <p class="review__where">
+              {{ reviewPacket.facility_name || t("load.facility") }}
+              <span class="review__ref">{{ reviewPacket.reference || t("packet.no_reference") }}</span>
+            </p>
+            <!-- §11.7 applied to a document: what a driver is vouching for, named. An
+                 empty stop says so rather than showing an empty list. -->
+            <ul v-if="reviewContents.length" class="review__items">
+              <li v-for="item in reviewContents" :key="item" class="review__item">
+                <Check :size="16" :stroke-width="2" class="ok" aria-hidden="true" />
+                {{ t(`load.doc.${item}`) }}
+              </li>
+            </ul>
+            <p v-else class="review__empty">{{ t("packet.contents_none") }}</p>
+          </section>
+
+          <section v-if="reviewClaim" class="review__section">
+            <h3 class="review__label">{{ t("claim.title") }}</h3>
+            <p class="review__figure">{{ formatMoney(reviewClaim.amount_cents) }}</p>
+          </section>
+
+          <!-- A1 req 6: from the F5 registry, and EDITABLE. The address on file is a
+               default, not a verdict — paperwork often goes to a different desk than
+               the one the load was booked through. -->
+          <label class="review__to">
+            <span class="review__label">{{ t("packet.recipient_label") }}</span>
+            <input
+              v-model="reviewRecipient"
+              class="review__input"
+              type="email"
+              inputmode="email"
+              :placeholder="t('packet.no_recipient')"
+            />
+          </label>
+
+          <p v-if="reviewError" class="review__error" role="status">{{ reviewError }}</p>
+          <button
+            class="cta review__send"
+            type="button"
+            :disabled="sending"
+            @click="onSendPacket"
+          >
+            {{ reviewClaim ? t("packet.send_with_claim") : t("packet.send") }}
+          </button>
+        </div>
+      </BottomSheet>
+
       <BottomSheet :open="reporting" :title="t('incident.title')" @close="reporting = false">
         <IncidentSheet @filed="onIncidentFiled" />
       </BottomSheet>
@@ -897,17 +1064,101 @@ async function endLoad() {
 <style scoped>
 /* the cross-link reads as an action, not a banner: hairline card, thumb-height, and it
    is absent entirely when nothing waits (§10.2 keeps this tab dense with WORK) */
-.load__packets {
-  display: block;
-  min-height: 56px;
-  padding: var(--s-3);
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-card);
-  background: var(--ink-1);
+/* A1's review card. §8: title + status + ONE action, and no card scrolls internally. */
+.packet-card__title {
+  margin: 0;
   color: var(--text-1);
-  font-size: var(--type-label-size);
+  font-size: var(--type-title-size);
   line-height: var(--type-body-line);
-  text-decoration: none;
+}
+.packet-card__ref {
+  margin: var(--s-1) 0 0;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+}
+/* Forbidden #11: at speed this is a line of text, never a control. */
+.packet-card__driving {
+  margin: var(--s-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+}
+.packet-card__cta {
+  margin-top: var(--s-3);
+}
+
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.review__note,
+.review__empty,
+.review__where {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+}
+.review__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.review__label {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+}
+.review__ref {
+  display: block;
+  color: var(--text-3);
+}
+.review__items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.review__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+/* §9/§6.2: money is Mono and tabular, and never truncated (Forbidden #5). */
+.review__figure {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--type-title-size);
+  color: var(--ledger-500);
+}
+.review__to {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.review__input {
+  min-height: 56px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+  background: var(--ink-0);
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+}
+.review__error {
+  margin: 0;
+  color: var(--flare-500);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
 }
 
 .load {

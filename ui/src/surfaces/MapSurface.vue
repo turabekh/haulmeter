@@ -2,7 +2,13 @@
      360 dp: full-bleed canvas → preset chips (top) → floating report chip
      (bottom-right, thumb zone) → facility card as a bottom sheet on pin tap.
      DRIVING (§5/§11.4): Corridor mode replaces free-pan; taps deferred-safe.
-     Data is fixture-backed pending the M1 HTTP API (see core/fixtures.js). -->
+
+     Data is LIVE — `GET /map/overlay`, with `core/fixtures.js` as the OFFLINE
+     fallback only (§15.1). This line read "fixture-backed pending the M1 HTTP API"
+     for long after that API shipped, which is worse than no comment: the surface's own
+     `catch` falls back to those fixtures, so a reader told the screen was fixture-fed
+     had no reason to look at what a swallowed failure was hiding. It was hiding
+     `preset=food` answering 500 on every tap since the chip shipped (HANDOFF-114 §4). -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch } from "vue";
 import { useRouter } from "vue-router";

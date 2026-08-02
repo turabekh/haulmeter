@@ -106,23 +106,78 @@ def stop_packets(
                 "recipient": getattr(cp, "contact_email", None),
                 "counterparty_name": getattr(cp, "name", None),
                 "facility_name": getattr(fac, "name", None),
+                # AI-CONTEXT: WHAT is in it. A1 req 5 is "the driver reviews before it
+                # sends", and a review of a document whose contents are not stated is a
+                # confirmation dialog with extra words. These are the checklist items
+                # actually captured — the same source the Load tab's checklist reads, so
+                # the two can never disagree about what the driver photographed.
+                "contents": _packet_contents(db, stop),
+                # the claim at this stop, when the driver has already filed one. The
+                # review sheet shows it as its own labelled section beside the paperwork;
+                # `None` means there is nothing filed, NOT that nothing is owed.
+                "claim": _packet_claim(db, stop),
             }
         )
     return out
 
 
+def _packet_contents(db: Session, stop) -> list[str]:
+    if stop is None:
+        return []
+    return [row["item"] for row in m5.stop_checklist(db, stop) if row.get("captured")]
+
+
+def _packet_claim(db: Session, stop) -> dict | None:
+    """AI-CONTEXT: an ALREADY-FILED claim, never a new one.
+
+    The review sheet bundles the paperwork and the claim under one Send (owner
+    decision, 2026-08-02), and the boundary matters: filing is a money act — it opens a
+    receivable, increments the counterparty's claim history and FREEZES the Meter at
+    the filed amount (§9). §12.2 requires a button to say exactly what it does, and a
+    Send the driver read as being about paperwork must never do that on their behalf.
+    So this REPORTS what the driver already filed from the CTA ladder; it never files.
+    """
+    if stop is None:
+        return None
+    claim = m3.claim_for_stop(db, stop.id)
+    if claim is None or claim.state.value == "open":
+        return None
+    return {
+        "id": str(claim.id),
+        "state": claim.state.value,
+        "amount_cents": claim.amount_cents,
+        "detention_seconds": claim.detention_seconds,
+    }
+
+
+class SendPacketIn(BaseModel):
+    # A1 requirement 6: "recipients: dispatcher and/or broker, from the F5 counterparty
+    # registry, DRIVER-EDITABLE". The registry supplies the default; a driver who knows
+    # the paperwork goes to a different desk than the one on file must be able to say
+    # so, and until now the address was whatever F5 held with no way to correct it.
+    recipient: str | None = None
+
+
 @router.post("/stop-packets/{packet_id}/send")
 def send_stop_packet_route(
     packet_id: uuid.UUID,
+    body: SendPacketIn | None = None,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
     packet = m5.get_stop_packet(db, packet_id, account.id)
     if packet is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "packet not found")
+    recipient = (body.recipient or "").strip() if body is not None else ""
     try:
         # idempotent by design: a retried tap must not put a second document in an inbox
-        packet = m5.send_drafted_packet(db, packet, gateway=_GATEWAY, now=datetime.now(UTC))
+        packet = m5.send_drafted_packet(
+            db,
+            packet,
+            gateway=_GATEWAY,
+            now=datetime.now(UTC),
+            recipient=recipient or None,
+        )
     except ValueError as exc:
         # A deployment with no PUBLIC_BASE_URL cannot put the paperwork anywhere the
         # dispatcher can reach. For a CLAIM the notice still carries meaning without the

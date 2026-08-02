@@ -732,9 +732,21 @@ def get_stop_packet(db: Session, packet_id, account_id):
     return packet if packet is not None and packet.account_id == account_id else None
 
 
-def send_drafted_packet(db: Session, packet, gateway, now=None, base_url_required: bool = True):
+def send_drafted_packet(
+    db: Session,
+    packet,
+    gateway,
+    now=None,
+    base_url_required: bool = True,
+    recipient: str | None = None,
+):
     """The driver's act. Idempotent: a retried tap must not put a second document in a
-    dispatcher's inbox."""
+    dispatcher's inbox.
+
+    `recipient` is A1 requirement 6's editable address: the F5 counterparty is the
+    default and the driver may correct it at the moment of sending. None means "use
+    what the registry holds", which is what every caller before this one meant.
+    """
     if packet.state is StopPacketState.sent:
         return packet
     result = send_stop_packet(
@@ -744,6 +756,7 @@ def send_drafted_packet(db: Session, packet, gateway, now=None, base_url_require
         counterparty_ref=packet.counterparty_ref,
         gateway=gateway,
         now=now,
+        recipient=recipient,
         base_url_required=base_url_required,
     )
     packet.state = StopPacketState.sent

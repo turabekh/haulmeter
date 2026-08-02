@@ -461,6 +461,23 @@ const WALLET_MOCKS = {
   [`/protection/documents/${DOC_ID}`]: binary("image/png", PNG_1PX),
 };
 
+// AI-CONTEXT: shape-matched to the endpoint (api/m05_protection.py::stop_packets).
+// `contents` and `claim` were added the day the review card shipped; a mock missing
+// them renders the sheet with no contents list and no claim section — measuring the
+// screen without the thing it was added to measure, which is §23 entry 84's defect and
+// HANDOFF-105 §9's warning in one.
+const PACKET_ROW = {
+  id: "11111111-1111-1111-1111-111111111111",
+  state: "draft",
+  drafted_at: "2026-08-01T12:00:00+00:00",
+  reference: "BL-77421",
+  recipient: "accountspayable@boltlogistics.example",
+  counterparty_name: "Bolt Logistics",
+  facility_name: "Midwest Distribution Center — Dock 4",
+  contents: ["bol", "pod", "cargo_condition", "lumper_receipt"],
+  claim: null,
+};
+
 const SURFACES = [
   ["map", "/"],
   ["load", "/load"],
@@ -714,26 +731,34 @@ const SURFACES = [
   ["map-preset-service", "/", {
     mocks: mapMocks(REPAIR_PIN), open: [{ click: ".chip", nth: 5 }], ready: ".chip[aria-selected='true']",
   }],
-  // A1's cross-link on the Load tab, measured because it lands on the densest driver
-  // screen in the product — §10.2 is the Meter plus the stop context plus the evidence
-  // checklist, and a new row there has to earn its 56 dp at 360.
-  ["load-packet-waiting", "/load", {
+  // AI-CONTEXT: A1's review CARD on the Load tab, and the sheet it opens.
+  //
+  // Measured because this lands on the densest driver screen in the product — §10.2 is
+  // the Meter plus the stop context plus the evidence checklist — and because the card
+  // is now a CARD rather than the one-line link it replaced, so it has real height to
+  // earn at 360 dp before anything else on the tab gets its space back.
+  //
+  // The mock carries the worst realistic strings on purpose: a long facility name, a
+  // long AP address, and the full contents list. At +40% under xx-XL that headline is
+  // what wraps, and a review sheet is the last place a driver should meet clipped text.
+  ["load-packet-ready", "/load", {
+    mocks: { ...LIVE_MOCKS, "/protection/stop-packets": [PACKET_ROW] },
+    stop: LIVE_STOP,
+    ready: ".packet-card__cta",
+  }],
+  // the sheet, bundled: two labelled sections and one Send (owner decision 2026-08-02).
+  // The CLAIM section is the taller of the two shapes — it adds a Mono figure — so the
+  // bundled state is the one measured rather than the packet-only one.
+  ["load-packet-review", "/load", {
     mocks: {
       ...LIVE_MOCKS,
       "/protection/stop-packets": [
-        {
-          id: "11111111-1111-1111-1111-111111111111",
-          state: "draft",
-          drafted_at: "2026-08-01T12:00:00+00:00",
-          reference: "BL-77421",
-          recipient: "accountspayable@boltlogistics.example",
-          counterparty_name: "Bolt Logistics",
-          facility_name: "Midwest Distribution Center — Dock 4",
-        },
+        { ...PACKET_ROW, claim: { id: "c-1", state: "filed", amount_cents: 128750 } },
       ],
     },
     stop: LIVE_STOP,
-    ready: ".load__packets",
+    open: [".packet-card__cta"],
+    ready: ".review__send",
   }],
   // A1 req 1: the capture sheet reached from a checklist ROW rather than the Snap BOL
   // CTA. The row is a 48 dp target inside §10.2's densest card, and the sheet it opens
