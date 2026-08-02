@@ -31,10 +31,12 @@ probe in §5 and switched back. Production has never seen the flag.
 sessions, so the half v2.0 §4 defers was live locally the whole time. The owner confirmed
 on 2026-08-02 that food is not returning soon, and chose the flag rather than deletion —
 §4's "do not delete the code" stands, and the A6 split is what makes the choice cost
-nothing. **Production's `m13_vendor` state has NOT been checked from this session**
-(§9); no handoff records it ever being enabled there, and 073 §115 still lists "enable
-`m13_vendor`" as outstanding operational work, so it is almost certainly OFF by default —
-but almost certainly is not the same as looked.
+nothing.
+
+**Production's `m13_vendor` is ENABLED, and that is the finding of this session's tail.**
+I wrote "almost certainly OFF" here on the reasoning that no handoff records enabling it
+and 073 §115 still lists doing so as outstanding work. The owner asked me to look. It is
+ON — see §12.
 
 ## 2. A6 was three requirements, and only the first was written down
 
@@ -181,11 +183,8 @@ three commits that touches a foundation everything else uses.**
   `UnknownService` returns a named 422 the portal does not yet render specially; a
   claimant currently sees a generic failure. Stated rather than fixed.
 - **`m13_service_center` has never been enabled anywhere but this laptop**, for minutes.
-- **Production's flag states were never read.** Everything in §1 about flags describes
-  the DEV database. Checking the box is one ssh away and was not done, because reading
-  production was not asked for. If `m13_vendor` is somehow ON there, the food half is
-  live for real drivers right now and §4 has been violated in production since M13
-  shipped — worth thirty seconds before the next deploy.
+- **Production's flag states WERE read, at the owner's request — see §12.** The rest of
+  §1's flag figures still describe the DEV database.
 - **The A5→A6 overlap on `/facility/<id>` is untouched.** The profile renders its own FR7
   card and the map card now renders claimed data too; both are correct, neither knows
   about the other. No duplication today because they are different surfaces, but nothing
@@ -219,3 +218,60 @@ To see A6 at all, the flag has to be on: it is OFF in dev and unregistered in pr
 until these commits deploy.
 
 Nothing is waiting on a background job, an ingest, or a queue.
+
+---
+
+## 12. The box was read, and `m13_vendor` is ON in production
+
+Added after §1–§11 were written, when the owner asked for the check §9 said had not been
+done. **My inference was wrong, and this is the entry that records it.**
+
+```
+m13_vendor          enabled=t   kill_switch=f
+m13_service_center  (absent — A6 is not deployed)
+```
+
+**v2.0 §4 has been violated in production since M13 shipped.** The food half drivers said
+they did not want has been switched on the whole time, and nothing in twelve handoffs
+records the moment it happened.
+
+**What is behind the flag is worse than nothing — it is DEMO DATA.** All 13 production
+vendors are seed or probe residue, none of them a real business:
+
+```
+Osh Express (demo)              food_mobile     2026-07-25
+Anas Tamales / Florida Food / Yusuf Kitchen / Gurpreet Dhaba    2026-07-25
+Gateway Truck Service 7a0397a3 / 17aaf63d / 2301839d            2026-07-26
+Wingfoot Tire Service 8f0ffbb3                                  2026-07-26
+Ana Tamales 5bc0fa / 46eef8 / 705c6b / d8d6e5                   2026-07-26
+```
+
+The hex suffixes are test-run artifacts from sessions 071/072 that were never cleaned up
+— the discipline 112 §5 and 113 §5 both applied to dev ("dev carries no leftover state")
+was never applied to the box.
+
+**31 appearances exist and 18 are still live** (`ends_at > now()`, latest 2026-08-22). So
+a driver opening the map near those facilities has been able to see a cook called
+`Ana Tamales 46eef8` advertising invented menu items at invented prices, complete with
+the §11.7 honesty furniture — verification rung, halal rung, show-up ratio — rendered
+around fabricated content. **PRD §5.5's neutral-tone rule and §11.7's whole honesty
+apparatus assume the DATA is real; none of it defends against a demo row in a live box.**
+
+**Nothing was changed on the box.** Reading was what was asked for. The flag flip, and
+the separate question of purging the demo rows, are §13.
+
+## 13. Exact next task — production, and it is now first
+
+Ahead of everything in §10:
+
+1. **Switch `m13_vendor` OFF in production.** One config write, immediately reversible,
+   and the direct execution of the owner's 2026-08-02 decision. It ends the demo-data
+   exposure in one step without touching a row.
+2. **Then decide about the 13 demo vendors, 31 appearances, 2 claims and 1 review.**
+   Turning the flag off hides them; it does not remove them. They are indistinguishable
+   from real vendor data to any future query, and A6's own validation ("one real repair
+   shop claims its facility") becomes unmeasurable while four fake `Gateway Truck
+   Service` claims sit in the same table. Deleting production rows is an owner decision
+   and was not taken here.
+3. **Ask how demo data reached production at all**, because the same path is open to
+   every other module. This is a process gap, not an M13 bug.
