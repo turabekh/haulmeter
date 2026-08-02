@@ -268,6 +268,59 @@ def claimed_facility_view(db: Session, facility_id) -> ClaimedFacility | None:
     )
 
 
+def claimed_facility_views(db: Session, facility_ids) -> dict:
+    """AI-CONTEXT (A6): the same view for MANY facilities.
+
+    The map overlay needs this for a whole viewport, and A9 §4 is explicit that a
+    per-pin read is what binds at national density — `_enrich` already costs 191
+    queries for 263 pins. Calling `claimed_facility_view` in a loop would have added
+    three more per pin on the one screen a driver opens most.
+
+    Cost is two queries plus one per CLAIMED facility, and the difference is the
+    point: claims are rare and pins are not, so this scales with how many shops have
+    actually claimed rather than with how much map is on screen.
+
+    Returns {facility_id: ClaimedFacility} with unclaimed ids simply absent, so a
+    caller writes `.get(id)` and an unclaimed facility stays a plain POI by default
+    rather than by remembering to check."""
+    facility_ids = [fid for fid in facility_ids if fid is not None]
+    if not facility_ids:
+        return {}
+    from .service import is_presentable
+
+    claims = list(
+        db.scalars(
+            select(FacilityClaim).where(
+                FacilityClaim.facility_id.in_(facility_ids),
+                FacilityClaim.status == ClaimStatus.approved,
+            )
+        )
+    )
+    if not claims:
+        return {}
+    vendors = {
+        v.id: v
+        for v in db.scalars(select(Vendor).where(Vendor.id.in_({c.vendor_id for c in claims})))
+    }
+    out = {}
+    for claim in claims:
+        vendor = vendors.get(claim.vendor_id)
+        if vendor is None or not is_presentable(vendor):
+            continue
+        ingested = facility_services(db, claim.facility_id)
+        out[claim.facility_id] = ClaimedFacility(
+            facility_id=claim.facility_id,
+            name=claim.claimed_name,
+            vendor_id=vendor.id,
+            vendor_name=vendor.name,
+            verify_status=vendor.verify_status.value,
+            services=sorted({*ingested, *(claim.services_added or [])}),
+            hours=claim.hours,
+            phone=claim.phone,
+        )
+    return out
+
+
 def claims_for_vendor(db: Session, vendor_id) -> list[FacilityClaim]:
     return list(
         db.scalars(

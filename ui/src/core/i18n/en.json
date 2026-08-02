@@ -325,6 +325,7 @@
   "evidence.title": "Evidence",
   "evidence.view_all": "View all evidence →",
   "facility.book": "Book spot",
+  "facility.claimed_by": "From {name} — the business's own details.",
   "facility.call": "Call",
   "facility.call_at_stop": "Call at next stop",
   "facility.dwell_risk": "Runs long",

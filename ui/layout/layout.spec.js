@@ -235,6 +235,19 @@ const REPAIR_PIN_NO_CONTACT = {
   phone: null,
   opening_hours: null,
 };
+const REPAIR_PIN_CLAIMED = {
+  ...REPAIR_PIN,
+  facility_id: "00000000-0000-0000-0000-0000000000a7",
+  name: "Gateway Truck Service",
+  // A6: what a CLAIM changes on this card. The shop's own number and hours win over
+  // the ingested ones, it added the towing OSM could not tell us about, and the
+  // attribution line names who is speaking — a fourth caption row on a card that was
+  // already the densest thing the Service preset renders.
+  services: ["truck_repair", "tire", "towing", "parts"],
+  phone: "+1-417-555-1212",
+  opening_hours: "24/7 roadside callout",
+  claimed_by: { name: "Gateway Truck Service", verify_status: "verified" },
+};
 const FUEL_PIN = {
   ...TRUCK_STOP_PIN,
   facility_id: "00000000-0000-0000-0000-0000000000a3",
@@ -681,6 +694,14 @@ const SURFACES = [
     mocks: mapMocks(REPAIR_PIN_NO_CONTACT),
     open: [pinOf(REPAIR_PIN_NO_CONTACT)],
     ready: ".fac__services",
+  }],
+  // A6: the claimed card carries one more row than the A5 states above, and the name
+  // it renders is a business's, not a token we chose — a long one is the realistic
+  // case, so the pseudo-locale sweep measures the row that names it.
+  ["sheet-facility-service-claimed", "/", {
+    mocks: mapMocks(REPAIR_PIN_CLAIMED),
+    open: [pinOf(REPAIR_PIN_CLAIMED)],
+    ready: ".fac__claimed",
   }],
   // the sixth chip has to survive the +40% pseudo-locale in a row that already holds
   // five — the chips are icons, but the row's geometry is what this measures

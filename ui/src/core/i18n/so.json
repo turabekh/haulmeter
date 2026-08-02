@@ -325,6 +325,7 @@
   "evidence.title": "Caddaynta",
   "evidence.view_all": "Eeg dhammaan caddaynta →",
   "facility.book": "Ballan qabso goobta",
+  "facility.claimed_by": "Waxaa ka yimid {name} — faahfaahinta ganacsiga laftiisa.",
   "facility.call": "Wac",
   "facility.call_at_stop": "Wac joogsiga xiga",
   "facility.dwell_risk": "Badanaa way daahdaa",

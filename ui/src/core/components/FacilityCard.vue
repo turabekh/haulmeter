@@ -77,6 +77,11 @@ const { isDriving } = useDriverState();
 // truck at night.
 const phone = computed(() => props.pin.phone || null);
 const openingHours = computed(() => props.pin.opening_hours || null);
+// A6: a claimed site's own words. The server has already preferred the claimed phone,
+// hours and services over the ingested ones, so the rows above need no change — what
+// changes is that the driver is told WHOSE words they are (§11.7). Only rendered when
+// there is something attributable: an unclaimed facility says nothing extra.
+const claimedBy = computed(() => props.pin.claimed_by || null);
 // only the services a driver in trouble is looking for. `fuel` and `scale` are
 // services too and belong to their own preset and layer — listing them here would
 // turn "what can this place do for me" into a description of every truck stop.
@@ -237,6 +242,13 @@ function vendorLine(entry) {
            for a roadside callout is exactly the case a computed "Closed" would get
            wrong when it matters most. -->
       <span>{{ openingHours }}</span>
+    </p>
+    <!-- A6 / §11.7: who is telling the driver. The rows above are the BUSINESS's own
+         words once it has claimed the site, and presenting them as the platform's
+         finding is the same overreach as counting a vendor's claim as "N drivers".
+         Reuses the caption row the A5 rows already use — no new pattern (§22.2). -->
+    <p v-if="claimedBy" class="fac__claimed">
+      {{ t("facility.claimed_by", { name: claimedBy.name }) }}
     </p>
 
     <!-- M6: a fully-booked lot says so (no silent missing button) -->
@@ -468,6 +480,14 @@ function vendorLine(entry) {
   align-items: center;
   gap: var(--s-2);
   margin: var(--s-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+}
+/* A6: the attribution line. Same caption treatment as the rows it speaks for, with
+   no icon — it is a note ABOUT those rows, not another fact beside them. */
+.fac__claimed {
+  margin: var(--s-1) 0 0;
   color: var(--text-2);
   font-size: var(--type-caption-size);
   line-height: var(--type-body-line);

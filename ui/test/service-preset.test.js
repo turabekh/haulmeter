@@ -14,6 +14,13 @@ import FacilityCard from "../src/core/components/FacilityCard.vue";
 import MapSurface from "../src/surfaces/MapSurface.vue";
 import { routes } from "../src/router.js";
 import en from "../src/core/i18n/en.json";
+import es from "../src/core/i18n/es.json";
+import ru from "../src/core/i18n/ru.json";
+import uz from "../src/core/i18n/uz.json";
+import pa from "../src/core/i18n/pa.json";
+import so from "../src/core/i18n/so.json";
+
+const LOCALES = { en, es, ru, uz, pa, so };
 import { setToken, logout } from "../src/core/api.js";
 import { observeMotion, __resetStateForTests, DRIVING_SUSTAIN_MS } from "../src/core/state.js";
 
@@ -180,5 +187,44 @@ describe("MapSurface — the tap reaches the server (A5 validation)", () => {
       (c) => String(c[0]).includes("/map/facility/f-shop/called") && c[1]?.method === "POST",
     );
     expect(post).toBeTruthy();
+  });
+});
+
+// AI-CONTEXT: A6 — a CLAIMED shop's own details, and saying so.
+//
+// The server prefers the claimed phone/hours/services over the ingested ones, so the
+// rows themselves need no new logic. What the card owes the driver is attribution:
+// §11.7 forbids rendering a business's own claim as the platform's finding, which is
+// the same rule that stops a vendor's word being counted as "N drivers".
+describe("A6 — a claimed service centre on the card", () => {
+  it("names the business whose details these are", () => {
+    const w = card({ claimed_by: { name: "Portage Diesel Repair", verify_status: "verified" } });
+    const line = w.find(".fac__claimed");
+    expect(line.exists()).toBe(true);
+    expect(line.text()).toContain("Portage Diesel Repair");
+  });
+
+  it("says nothing at all for an unclaimed facility", () => {
+    // absent, not empty (§15.3): most facilities are unclaimed and a dangling
+    // "claimed by —" would be noise on every card a driver opens
+    expect(card().find(".fac__claimed").exists()).toBe(false);
+  });
+
+  it("still renders the call action for a claimed shop", () => {
+    // the attribution line must not displace the one action the card exists for
+    const w = card({
+      phone: "+1-417-555-1212",
+      claimed_by: { name: "Gateway Truck Service", verify_status: "documents_on_file" },
+    });
+    expect(w.find(".fac__call").attributes("href")).toBe("tel:+1-417-555-1212");
+  });
+
+  it("carries no untranslated key in any launch locale", () => {
+    // §12: six locales, no English fallback reaching a driver
+    for (const loc of ["en", "es", "ru", "uz", "pa", "so"]) {
+      const catalog = LOCALES[loc];
+      expect(catalog["facility.claimed_by"], `${loc} missing facility.claimed_by`).toBeTruthy();
+      expect(catalog["facility.claimed_by"]).toContain("{name}");
+    }
   });
 });

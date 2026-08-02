@@ -339,3 +339,77 @@ def test_a_scale_cannot_be_curated_in_through_the_back_door(client, db, live):
     )
     assert resp.status_code == 422
     assert resp.json()["detail"]["unknown"] == ["scale"]
+
+
+# --- A6: the claim reaching the card a driver actually calls from ---
+def _overlay_pin(client, headers, fac):
+    resp = client.get(
+        "/map/overlay?preset=service&min_lat=36.5&min_lon=-95.5&max_lat=37.5&max_lon=-93.5",
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    pins = [p for p in resp.json()["pins"] if p.get("facility_id") == str(fac.id)]
+    assert pins, resp.json()
+    return pins[0]
+
+
+def test_a_claimed_shops_own_phone_reaches_the_map_card(client, db, live):
+    """A6's validation is a driver CALLING a shop, and the call button is on the map
+    card — not the profile FR7 has always improved. Without this the shop's own number
+    stops at `/facility/<id>` and the card still offers the OSM one, or nothing."""
+    headers = _headers(client, "shop-card@example.com")
+    _vendor(client, headers, "Gateway Truck Service")
+    fac, claim_id = _approved_claim(client, db, headers)
+    fac.attributes = {**(fac.attributes or {}), "phone": "4170000000"}
+    db.flush()
+
+    driver = _headers(client, "driver-card@example.com")
+    assert _overlay_pin(client, driver, fac)["phone"] == "4170000000"  # OSM, before
+
+    client.patch(
+        f"/vendor/claims/{claim_id}",
+        json={"phone": "4175551212", "hours": "24/7 roadside", "services_added": ["towing"]},
+        headers=headers,
+    )
+
+    pin = _overlay_pin(client, driver, fac)
+    assert pin["phone"] == "4175551212"  # the number the shop actually answers
+    assert pin["opening_hours"] == "24/7 roadside"
+    assert "towing" in pin["services"]
+    # §11.7: the driver is told whose words these are
+    assert pin["claimed_by"]["name"] == "Gateway Truck Service"
+
+
+def test_an_unclaimed_facility_says_nothing_extra(client, db, live):
+    """The overlay must be absent, not empty — an unclaimed shop stays a plain POI and
+    its OSM phone is still the honest answer."""
+    _service_facility(db, "Range Line Tire", coords=(37.085, -94.514)).attributes = {
+        "services": ["tire"],
+        "phone": "4179999999",
+    }
+    db.flush()
+    driver = _headers(client, "driver-plain@example.com")
+    resp = client.get(
+        "/map/overlay?preset=service&min_lat=36.5&min_lon=-95.5&max_lat=37.5&max_lon=-93.5",
+        headers=driver,
+    )
+    pin = next(p for p in resp.json()["pins"] if p.get("name") == "Range Line Tire")
+    assert pin["phone"] == "4179999999"
+    assert "claimed_by" not in pin
+
+
+def test_the_card_overlay_is_silent_while_the_service_half_is_off(client, db, live):
+    """The overlay reads M13 from the composition layer, so it has to consult the flag
+    itself — a dark half must not keep editing the map."""
+    headers = _headers(client, "shop-off@example.com")
+    _vendor(client, headers, "Gateway Truck Service")
+    fac, claim_id = _approved_claim(client, db, headers)
+    client.patch(f"/vendor/claims/{claim_id}", json={"phone": "4175551212"}, headers=headers)
+
+    driver = _headers(client, "driver-off@example.com")
+    assert _overlay_pin(client, driver, fac)["phone"] == "4175551212"
+
+    flags.disable(db, m13.SERVICE_CENTER_FLAG_KEY)
+    pin = _overlay_pin(client, driver, fac)
+    assert pin.get("phone") is None
+    assert "claimed_by" not in pin

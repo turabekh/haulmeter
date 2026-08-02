@@ -325,6 +325,7 @@
   "evidence.title": "Evidencia",
   "evidence.view_all": "Ver toda la evidencia →",
   "facility.book": "Reservar lugar",
+  "facility.claimed_by": "De {name}: los datos del propio negocio.",
   "facility.call": "Llamar",
   "facility.call_at_stop": "Llamar en la próxima parada",
   "facility.dwell_risk": "Suele demorarse",

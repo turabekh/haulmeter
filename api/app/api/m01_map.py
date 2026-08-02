@@ -21,6 +21,7 @@ from app.modules.m01_map import public as m1
 from app.modules.m03_detention import public as m3
 from app.modules.m06_parking import public as m6
 from app.modules.m07_fuel import public as m7
+from app.modules.m13_vendor import public as m13
 
 router = APIRouter(prefix="/map", tags=["map"],
     # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
@@ -108,12 +109,53 @@ def overlay(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "provide a bbox (min_lat,min_lon,max_lat,max_lon) or a point (lat,lon)",
         )
+    pins = [_enrich(db, p) for p in view["pins"]]
+    _apply_claims(db, pins)
     return {
         "clustered": view["clustered"],
         "total": view["total"],
-        "pins": [_enrich(db, p) for p in view["pins"]],
+        "pins": pins,
         "clusters": [_serialize_cluster(c) for c in view["clusters"]],
     }
+
+
+def _apply_claims(db: Session, pins: list[dict]) -> None:
+    """AI-CONTEXT: A6 — where CLAIMING finally reaches the card a driver calls from.
+
+    FR7 has always improved `/facility/<id>`, the full profile. But A5 put tap-to-call
+    on the map CARD, and A6's validation is "one real repair shop claims its facility
+    and receives one call through the app" — so a shop could claim its site, add the
+    number it actually answers, and the driver tapping that pin would still see the
+    OSM phone, or for 28 of 45 repair facilities no call action at all. The feature
+    was improving the surface nobody in a breakdown is looking at.
+
+    Claimed values WIN over ingested ones here, which is the opposite of the E3.2 rule
+    for services and deliberately so: `services` is a union because ingestion recorded
+    a fact and the shop is adding to it, while `phone` and `opening_hours` are single
+    values where the business is simply the better authority about itself. Nothing is
+    overwritten in the registry — this is a read-time overlay, so an unclaimed or
+    un-curated field falls straight back to what OSM said.
+
+    Attribution rides along in `claimed_by` because §11.7 forbids presenting a
+    business's own claim as the platform's finding. The card names who is telling the
+    driver, exactly as the profile card already does.
+    """
+    if not m13.is_active_for(db, m13.VendorType.service_center):
+        return
+    claimed = m13.claimed_facility_views(db, [uuid.UUID(p["facility_id"]) for p in pins])
+    if not claimed:
+        return
+    for pin in pins:
+        view = claimed.get(uuid.UUID(pin["facility_id"]))
+        if view is None:
+            continue
+        if view.phone:
+            pin["phone"] = view.phone
+        if view.hours:
+            pin["opening_hours"] = view.hours
+        if view.services:
+            pin["services"] = view.services
+        pin["claimed_by"] = {"name": view.vendor_name, "verify_status": view.verify_status}
 
 
 def _fuel_badge(db: Session, facility_id, lat: float, lon: float) -> dict | None:

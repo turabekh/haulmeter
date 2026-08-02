@@ -325,6 +325,7 @@
   "evidence.title": "Dalillar",
   "evidence.view_all": "Barcha dalillar →",
   "facility.book": "Joyni band qilish",
+  "facility.claimed_by": "{name} tomonidan — biznesning o'z ma'lumotlari.",
   "facility.call": "Qo'ng'iroq",
   "facility.call_at_stop": "Keyingi to'xtashda qo'ng'iroq qiling",
   "facility.dwell_risk": "Ko'pincha kechiktiradi",
