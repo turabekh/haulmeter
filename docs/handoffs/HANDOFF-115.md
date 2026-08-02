@@ -19,10 +19,10 @@
 
 | | |
 |---|---|
-| Branch | `main`, **4 commits ahead of `origin/main`** |
+| Branch | `main`, **6 commits ahead of `origin/main`** |
 | `origin/main` | `f81bdd6` — **verified with `git fetch`, not inherited.** 114 §1 recorded `76c44c6` and listed `f272c4a` as unpushed; both were pushed after that handoff was written, so the figure had rotted exactly the way §5's other findings did |
-| Commits | `a4e282c` · `6d2d311` · `8d6af0a` · `93f872f` — all four are this session's |
-| Gates | **pytest 1381 · vitest 651 · layout 217 checks over 54 states · import-linter 30/30** |
+| Commits | `a4e282c` · `6d2d311` · `8d6af0a` · `93f872f` · `4266dc4` · `81bdd1a` — all six are this session's |
+| Gates | **pytest 1381 · vitest 654 · layout 217 checks over 54 states · import-linter 30/30** |
 | Migrations | none needed. dev and production both `0059_f13_config_decl` |
 | Working tree | clean apart from untracked `collect_files.py` (pre-existing) |
 | Local stack | **UP** |
@@ -126,10 +126,18 @@ is a checklist row for *every* stop type. `t()` falls back to the key, so **driv
 been reading the literal string `load.doc.cargo_condition`** on the Load tab. Added in all
 six.
 
-**`locale-completeness.test.js` cannot catch that class of defect** — it compares the six
-catalogues *against each other*, so six identical gaps look complete. The missing check is
-against the keys the app actually uses. Not fixed here; it is a test-design change and
-this session already carried two findings. **Worth a session's opening task.**
+**`locale-completeness.test.js` could not catch that class of defect** — it compares the
+six catalogues *against each other*, so six identical gaps look complete. **Fixed after
+the handoff was first written** (`81bdd1a`), in two halves: every static `t("literal")` in
+`ui/src` is now checked against EN by scanning the source, and `t()` **throws on an
+unknown key under test**, so every test that renders a surface is a detector for the
+dynamic families whose vocabularies live in Python.
+
+It found two on its first run, both mock drift of the §23 entry 84/85 kind, both rendering
+a raw key into a screen a test was measuring: `level: "new"` (the server's `_REP_LEVELS`
+can only answer rookie/regular/pro/elite) and a `/vendor/profile` mock missing
+`verify_status`, which the portal shell renders in its header — "vendor.undefined", out
+loud. Neither is a production defect; both were tests agreeing with themselves.
 
 **`pseudoInflate` under-inflates any string with a placeholder** — it pads by 40% of the
 *visible* text while the test measures 40% of the whole string, so a placeholder longer
@@ -172,9 +180,17 @@ document the recipient receives.
 4. **Claim-on-EXIT one-tap and doc-expiry reminders** — the deferred half of this
    session's scope. Claim-on-EXIT needs an owner decision first: it is a money act behind
    a Send, and §12.2 governs.
-5. **`locale-completeness` should assert against used keys** (§5), and
-   **`register_flag`'s gate bypass is still OPEN** (114 §7) — F13's central promise going
-   unenforced, untouched for two sessions now.
+5. **`register_flag`'s gate bypass is still OPEN** (114 §7) — F13's central promise going
+   unenforced, untouched for three sessions now. **It needs an owner decision before it
+   can be fixed, which is why it is still here:** the hole is that `register_flag(...,
+   enabled=True)` creates the row ON and `add_gate` attaches the gate *afterwards*, so the
+   gate is never consulted. Enforcing the invariant at `add_gate` would switch
+   `a05_service_preset` OFF in production at the next boot — the Service chip disappears
+   from a driver's map — because production's gate is unsatisfied as bookkeeping (111 did
+   re-ingest nationally; nobody ticked the gate on the box). Raising instead would take
+   the registry down at startup, which is the §23 entries 92/93/100 outage. So the fix is
+   a real decision, not a refactor. *(`locale-completeness` — the other half of this item
+   — is done, §5.)*
 
 Then the v2.0 board, which has not moved: **A2←D5 · A4←D3 · A7←D1 · A8←D7 · A10←D4**, A11
 gated on A2, all seven decisions D1–D7 open.
@@ -194,7 +210,8 @@ real one.
   so a packet for an old stop still carries only its condition photos. No production
   packets exist, so nothing real is affected — but a dev stop armed before today will look
   half-fixed.
-- **`locale-completeness`'s blind spot was left open** (§5).
+- **`register_flag`'s gate bypass was not fixed** — it needs an owner decision, see §7
+  item 5. Investigated to the point of knowing exactly what the decision is.
 - **No human has seen any of this on a screen.** The harness measures it at 360 dp under
   `pa` and `xx-XL`, vitest asserts it, and a push on a real handset is now **nine**
   sessions old.
@@ -203,7 +220,7 @@ real one.
 
 ```
 make up          # already up; idempotent
-make test        # 1381 pytest + 651 vitest — do NOT pipe it
+make test        # 1381 pytest + 654 vitest — do NOT pipe it
 make lint        # ruff + import-linter (30 contracts)
 make ui-layout   # 217 checks over 54 states, ~3–4 min
 ```
