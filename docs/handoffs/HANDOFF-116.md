@@ -8,10 +8,12 @@
 > driver's BOL is in the PDF.** Walked in a real browser against the running stack with
 > real geolocation, the real API and the real database. Two sessions of work function.
 >
-> **The second headline is worse than the first is good. There is no SMTP gateway in this
-> codebase.** No email has ever been sent — not a Stop Packet, not a detention notice, not
-> an on-time proof, not an invoice. Mailpit has been wired into compose since session 0
-> and has received **zero** messages. That is §6, and it is the fourth inert engine.
+> **The second headline was worse than the first was good: there was no SMTP gateway in
+> this codebase.** No email had ever been sent — not a Stop Packet, not a detention
+> notice, not an on-time proof, not an invoice — and Mailpit, in compose since session 0,
+> had received **zero** messages. That was the fourth inert engine. **It is fixed in the
+> same session** (`9c96896`, §6): Mailpit 0 → 1, and following the link in that email
+> returns the paperwork with the BOL in it. The whole A1 chain now closes.
 
 ---
 
@@ -21,8 +23,8 @@
 |---|---|
 | Branch | `main`, ahead of `origin/main` by everything from `a4e282c` |
 | `origin/main` | `f81bdd6` |
-| This session | `6019945` + this handoff |
-| Gates | **pytest 1383 · vitest 658 · layout 221 checks over 55 states · import-linter 30/30** |
+| This session | `6019945` (the walk) · `9c96896` (the SMTP gateway) + this handoff |
+| Gates | **pytest 1389 · vitest 658 · layout 221 checks over 55 states · import-linter 30/30** |
 | Migrations | none. dev and production both `0059_f13_config_decl` |
 | Local stack | **UP**, seeded at Tampa (27.9506,-82.4572) |
 | Deploy | **not run.** The box still serves 112's code |
@@ -116,7 +118,7 @@ a secure context. The layout harness's own AI-CONTEXT explains its denied geoloc
 mechanism. Its coverage of §15.5's degraded card is real but survives for a different
 reason than recorded, and granting permissions would not have broken it.
 
-## 6. OPEN, AND IT IS THE BIGGEST ONE YET — nothing is ever emailed
+## 6. FIXED IN THIS SESSION — nothing was ever emailed, and now it is
 
 ```
 gateways that exist:  RecordingNotificationGateway   (an in-memory list)
@@ -145,26 +147,67 @@ What this costs, in order of severity:
    listens on `MAILPIT_SMTP_PORT`. So even the unused setting is probably wrong, which is
    itself evidence nothing ever connected.
 
-**Not built here, deliberately.** It is a new provider seam plus a production decision
-(which real email provider, what deliverability story, what happens to the queue when it
-is down) and this was a verification session. It is the next task.
+### Built, after the finding (`9c96896`)
+
+`SmtpNotificationGateway` + `counterparty_gateway()`, wired into all seven send sites.
+Three shape decisions worth carrying forward, recorded as **§23 entry 122**:
+
+- **The switch is the HOST, not a key.** Mailpit needs no credentials, and a dev box that
+  silently stopped sending would put us straight back here. Blank `SMTP_HOST` to turn
+  email off — which is exactly what `conftest` does, so the suite neither fills Mailpit
+  nor lies about what was sent.
+- **The choice is made at SEND time, not at import.** The API modules hold one gateway at
+  module scope; deciding at construction bakes in whatever configuration the process
+  started with, and the suite runs with email off while the app runs with it on.
+- **A gateway may never fail its caller** (inherited from WebPush). An unreachable server
+  is a transport fact, not a reason to lose the F8 row or 500 a driver who just tapped
+  Send. The provider ref records `smtp-failed-<type>`, because a row claiming delivery it
+  did not get is the lie the class exists to end.
+
+**Measured, not asserted:**
+
+```
+Mailpit total   0 -> 1
+From            paperwork@haulmeter.online
+To              ap@bolt.example
+Subject         Stop paperwork
+body            one plain line, one link
+following it    HTTP 200 · application/pdf · 100,042 bytes
+                2 embedded images (the BOL) · "Stop paperwork packet" · no "Detention"
+```
+
+**One correction to what this handoff first said:** `smtp_port=1038` is **right**, not
+"probably wrong". Mailpit binds `MAILPIT_SMTP_PORT` inside the compose network as well as
+on the host, verified with `netstat` in the container. The setting was correct all along
+and simply had no reader.
+
+**Still not decided, deliberately:** which real provider serves production, and what
+happens to the queue when it is down. Dev is Mailpit, production is `.env`, and that is
+as far as this goes without an owner.
+
+**The pattern, because this is the fourth one.** All four — the empty packet, the inert
+expiry reminder, the reminder that reached no phone, and this — share a shape: *the seam
+was modelled honestly, the adapter was deferred with a comment saying so, and nothing
+ever failed to remind anyone.* `gateway.py`'s own docstring said "the concrete
+FCM/Twilio/email adapters plug in at activation" — accurate, and read by nobody for
+months. **A deferral that cannot fail is indistinguishable from a finished feature.**
 
 ## 7. Exact next task
 
-1. **Build the SMTP gateway** (§6). The dev end is Mailpit and already in compose; the
-   production end is an owner decision. Until this exists, no amount of correct document
-   generation reaches anybody.
-2. **Then the handset background-sensor test** (v2.0 DoD #8). Unchanged in importance —
+1. **The handset background-sensor test** (v2.0 DoD #8). Unchanged in importance —
    this session proved the chain works *given positions*; whether positions arrive
    unprompted on a real phone is still unanswered and untested, nine sessions old.
-3. **Push**, then decide on deploying.
-4. Still awaiting an owner decision, untouched by design: **claim-on-EXIT** (§12.2 money
+2. **Push**, then decide on deploying. A deploy now also needs the production SMTP
+   settings decided (§6) — the box will otherwise run with `SMTP_HOST` unset and fall
+   back to recording, which is the state this session just ended.
+3. Still awaiting an owner decision, untouched by design: **claim-on-EXIT** (§12.2 money
    act) and **`register_flag`'s gate bypass** (fixing it switches the Service chip off in
    production; raising takes the registry down at boot).
 
 ## 8. What I did NOT do
 
-- **No SMTP gateway** (§6) — the finding, not the fix.
+- **No production email provider chosen** (§6) — dev is Mailpit; production is an
+  owner decision and a `.env` change, not code.
 - **Nothing pushed or deployed.**
 - **No `/dev` seed-origin panel** — owner chose the CLI target.
 - **The idempotency step was not walked to completion.** The card clears on the first
@@ -182,7 +225,7 @@ is down) and this was a verification session. It is the next task.
 make up
 make seed ORIGIN=27.9506,-82.4572   # or wherever your browser is spoofed
 make seed-where                     # ...and this tells you where that was
-make test        # 1383 pytest + 658 vitest — do NOT pipe it
+make test        # 1389 pytest + 658 vitest — do NOT pipe it
 make lint        # 30 contracts
 make ui-layout   # 221 checks over 55 states
 ```
