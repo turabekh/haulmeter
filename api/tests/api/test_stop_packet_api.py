@@ -136,3 +136,50 @@ def test_a_deployment_that_cannot_address_itself_REFUSES(db, client, monkeypatch
 
     assert resp.status_code == 503
     assert len(client.get("/protection/stop-packets", headers=headers).json()) == 1
+
+
+# AI-CONTEXT: the fallback path, which is the one that had to work and did not.
+#
+# Only the F3 geofence EXIT drafted a packet. §15.5's rule is "build for auto, degrade
+# to one-tap, never to nothing", and the background sensor everything here rides on is
+# the mechanism v2.0 DoD #8 records as UNPROVEN — so a driver whose phone never fired
+# an EXIT tapped "Leave this stop" and got no paperwork at all, with no way to recover
+# it afterwards: departing ends the stop's armed life, and the draft finds the stop
+# through `active_stop_for_account`.
+def _armed_stop(db, account_id):
+    broker = loads.create_counterparty(
+        db, "Bolt Logistics", loads.CounterpartyKind.broker, contact_email="ap@bolt.example"
+    )
+    load = loads.create_load(db, account_id, counterparty_id=broker.id, reference_number="BL-88")
+    fac = facility.create_facility(db, facility.FacilityType.shipper_receiver, "Dock 9", *DOCK)
+    stop = loads.add_stop(db, load, fac.id, loads.StopType.delivery)
+    loads.arm_stop(db, stop)
+    return stop
+
+
+def test_leaving_the_stop_BY_HAND_drafts_the_packet(db, client):
+    account_id, headers = _auth(client)
+    stop = _armed_stop(db, account_id)
+
+    assert client.get("/protection/stop-packets", headers=headers).json() == []
+    assert client.post(f"/load/{stop.id}/end", headers=headers).status_code == 201
+
+    rows = client.get("/protection/stop-packets", headers=headers).json()
+    assert len(rows) == 1, "the one-tap fallback produced no paperwork"
+    assert rows[0]["facility_name"] == "Dock 9"
+
+
+def test_the_geofence_and_the_hand_do_not_produce_two_packets(db, client):
+    """One stop is one document. A driver whose EXIT fired and who then taps the
+    control anyway must not send their broker the same paperwork twice."""
+    from datetime import UTC, datetime
+
+    account_id, headers = _auth(client)
+    stop = _armed_stop(db, account_id)
+    m5.draft_stop_packet_on_exit(
+        db, account_id, stop.facility_id, datetime(2026, 8, 1, 12, tzinfo=UTC)
+    )
+
+    client.post(f"/load/{stop.id}/end", headers=headers)
+
+    assert len(client.get("/protection/stop-packets", headers=headers).json()) == 1

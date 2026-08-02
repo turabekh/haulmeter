@@ -545,7 +545,22 @@ def end_load(
     # durable "end this load": mark the stop departed so /load/active stops
     # resurfacing it (ownership-checked — a driver only ends their own stop)
     stop = _owned_stop(db, stop_id, account)
-    loads.depart_stop(db, stop, occurred_at=datetime.now(UTC))
+    now = datetime.now(UTC)
+    # AI-CONTEXT: A1 — leaving by HAND drafts the packet, exactly as leaving by
+    # geofence does (location.py's EXIT carve-out).
+    #
+    # Only the F3 EXIT drafted it before this. §15.5's rule is "build for auto, degrade
+    # to one-tap, never to nothing", and the background sensor this rides on is the one
+    # mechanism v2.0 DoD #8 records as UNPROVEN — so the fallback path was the one that
+    # had to work, and it produced no paperwork at all. Worse, it could not be recovered
+    # afterwards: `depart_stop` below ends the stop's armed life, and
+    # `draft_stop_packet_on_exit` finds the driver's stop through
+    # `active_stop_for_account`, so a later ping had nothing left to draft against.
+    #
+    # BEFORE the departure, for that reason. Idempotent either way — one stop is one
+    # document, so a driver whose geofence already fired gets no second packet.
+    m5.draft_stop_packet_on_exit(db, account.id, stop.facility_id, now)
+    loads.depart_stop(db, stop, occurred_at=now)
     load = loads.get_load(db, stop.load_id)
 
     # AI-CONTEXT: THE ROUTE ADVANCES (§23 entry 69).

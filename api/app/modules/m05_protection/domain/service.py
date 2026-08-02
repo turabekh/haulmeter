@@ -754,6 +754,71 @@ def send_drafted_packet(db: Session, packet, gateway, now=None, base_url_require
 
 
 # --- A1: the Stop Packet, a routine handoff (v2.0 §3 A1) ---
+def _stop_chain(db: Session, account_id, stop):
+    """The stop's own evidence log, or a new one when the stop was never armed."""
+    if stop is not None and stop.evidence_log_id is not None:
+        log = db.get(evidence.EvidenceLog, stop.evidence_log_id)
+        if log is not None:
+            return log
+    return evidence.create_log(
+        db, account_id, stop_ref=stop.id if stop is not None else None, label="stop-packet"
+    )
+
+
+def _packet_appointment(stop) -> str | None:
+    if stop is None or stop.appointment_start is None:
+        return None
+    start = stop.appointment_start.strftime("%Y-%m-%d %H:%M UTC")
+    if stop.appointment_end is None:
+        return start
+    return f"{start} – {stop.appointment_end.strftime('%H:%M UTC')}"
+
+
+def packet_context(db: Session, stop, load):
+    """AI-CONTEXT: §17 — the PDF is a screen, and this one was blank.
+
+    `render_pack` was called with NO context, so the handoff carried no parties, no
+    load reference, no facility and no appointment: an AP clerk received a hash block
+    and was expected to file it. A1 requirement 4 puts the reference in the SUBJECT so
+    they need not open it; that is not a reason for the document itself to be silent.
+
+    NO METER, deliberately, and it is the one field this differs from the claim pack
+    on. A1: the Stop Packet is "explicitly not a claim and not a dispute". A detention
+    figure on the face of a routine handoff makes it one — the same reasoning that
+    keeps `open_receivable` and `record_claim` out of this path.
+    """
+    if stop is None:
+        return evidence.PackContext()
+    fac = facility.get_facility(db, stop.facility_id)
+    references = []
+    if getattr(load, "reference_number", None):
+        references.append(("Load", load.reference_number))
+    siblings = loads.list_stops(db, load) if load is not None else []
+    if siblings:
+        references.append(
+            ("Stop", f"{stop.stop_type.value.title()} · {stop.sequence + 1} of {len(siblings)}")
+        )
+    if fac is not None:
+        references.append(("Facility", fac.name))
+    appointment = _packet_appointment(stop)
+    if appointment:
+        references.append(("Appointment", appointment))
+    parties = []
+    if load is not None and load.counterparty_id:
+        cp = loads.get_counterparty(db, load.counterparty_id)
+        if cp is not None:
+            parties.append((cp.kind.value.title(), cp.name))
+            if cp.mc_number:
+                parties.append(("MC", cp.mc_number))
+    if fac is not None:
+        parties.append(("Facility", fac.name))
+    return evidence.PackContext(
+        parties=parties,
+        references=references,
+        facility_name=fac.name if fac is not None else None,
+    )
+
+
 def send_stop_packet(
     db: Session,
     account_id,
@@ -787,7 +852,13 @@ def send_stop_packet(
     stop = loads.get_stop(db, stop_ref)
     load = loads.get_load(db, stop.load_id) if stop is not None else None
 
-    log = evidence.create_log(db, account_id, stop_ref=stop_ref, label="stop-packet")
+    # AI-CONTEXT: the send is recorded on the STOP's own chain, not on a private log
+    # of its own. Measured before this changed: a fresh log was created here, one
+    # SYSTEM record appended, and the pack composed from THAT log — so the document a
+    # dispatcher received held 0 artifacts and 1 row. The driver's BOL, seal and cargo
+    # photos were all on the stop's other logs and none of them was in it. A1 is
+    # "photograph documents and send them"; the send had no documents in it.
+    log = _stop_chain(db, account_id, stop)
     evidence.append_record(
         db,
         log,
@@ -796,9 +867,21 @@ def send_stop_packet(
         occurred_at=now,
     )
     evidence.anchor_chain(db, log)
-    pack = evidence.compose_pack(db, log, evidence.PackTemplate.stop_record)
+    # every log tied to the stop, as one document — the arrival, the condition photos,
+    # the on-time proof and now the paperwork. Composed AFTER the record above so the
+    # send is inside the chain it announces.
+    pack = evidence.compose_stop_pack(db, stop_ref, evidence.PackTemplate.stop_packet)
+    if pack is None:
+        # a stop with no chain at all: the packet still goes, saying honestly little
+        pack = evidence.compose_pack(db, log, evidence.PackTemplate.stop_packet)
     shared = evidence.share_pack(
-        db, log, pack.template, render_pack(db, pack), account_id, recipient=recipient, now=now
+        db,
+        log,
+        pack.template,
+        render_pack(db, pack, packet_context(db, stop, load)),
+        account_id,
+        recipient=recipient,
+        now=now,
     )
 
     # A1 requirement 4: the reference an accounts-payable clerk files by, in the SUBJECT,
@@ -958,7 +1041,62 @@ def capture_document(
         # archived, never deleted (§17 Q16): the old card is still the answer to
         # "what were you carrying at that inspection in March"
         documents.supersede_document(db, previous, document)
+    _chain_stop_document(db, document, stop_ref)
     return document
+
+
+def _artifact_type_for(content_type: str | None):
+    """A BOL is usually a photograph and sometimes a PDF. The type decides how the
+    renderer treats it, so guessing `document` for an image would cost the thumbnail."""
+    kind = (content_type or "").lower()
+    if kind.startswith("image/"):
+        return evidence.ArtifactType.photo
+    if kind == "application/pdf":
+        return evidence.ArtifactType.pdf
+    return evidence.ArtifactType.document
+
+
+def _chain_stop_document(db: Session, document, stop_ref) -> None:
+    """AI-CONTEXT: the driver's stop paperwork joins the stop's HASH CHAIN.
+
+    Measured before this existed: a BOL photographed at a dock reached no evidence
+    pack anywhere in the product. F6 held it as a document with `subject_kind="stop"`,
+    and every pack composes from F4 records and artifacts — `compose_pack` reads
+    artifacts by `log_id` and `documents_for_subject` is called by no composition path
+    at all. So the Stop Packet (A1), the detention claim pack and the load record each
+    carried the condition photos and never the paperwork, which for A1 is the entire
+    payload: "photograph documents and send them to a dispatcher" is the burden the
+    requirement exists to remove.
+
+    Only STOP-scoped documents are chained. `capture_document` files a credential
+    against the ACCOUNT, and a CDL is not part of what a broker receives — that
+    distinction is load-bearing and is the same one the evidence surface makes when it
+    lists a stop's documents (api/load.py). Attaching account-scoped documents here
+    would put the driver's licence in a pack shared with a counterparty.
+
+    The bytes are not copied: F6 already stored them and the artifact carries the same
+    `storage_key` and `content_hash`, so the chain records the document rather than a
+    second copy of it. Silent when the stop has no log yet — the same rule
+    `record_stop_event` follows, because losing the link is better than refusing the
+    capture that produced it.
+    """
+    if stop_ref is None:
+        return
+    stop = loads.get_stop(db, stop_ref)
+    if stop is None or stop.evidence_log_id is None:
+        return
+    log = db.get(evidence.EvidenceLog, stop.evidence_log_id)
+    if log is None:
+        return
+    evidence.attach_artifact(
+        db,
+        log,
+        _artifact_type_for(document.content_type),
+        content_hash=document.content_hash,
+        storage_key=document.storage_key,
+        exif={"prompt": document.doc_type.value},
+        captured_at=document.uploaded_at,
+    )
 
 
 class RestoreBlocked(Exception):
