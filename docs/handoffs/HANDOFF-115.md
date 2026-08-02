@@ -20,8 +20,8 @@
 | | |
 |---|---|
 | Branch | `main`, **4 commits ahead of `origin/main`** |
-| `origin/main` | `76c44c6` |
-| Commits | `f272c4a` (114's preset fix, still unpushed) · `a4e282c` · `6d2d311` · `8d6af0a` |
+| `origin/main` | `f81bdd6` — **verified with `git fetch`, not inherited.** 114 §1 recorded `76c44c6` and listed `f272c4a` as unpushed; both were pushed after that handoff was written, so the figure had rotted exactly the way §5's other findings did |
+| Commits | `a4e282c` · `6d2d311` · `8d6af0a` · `93f872f` — all four are this session's |
 | Gates | **pytest 1381 · vitest 651 · layout 217 checks over 54 states · import-linter 30/30** |
 | Migrations | none needed. dev and production both `0059_f13_config_decl` |
 | Working tree | clean apart from untracked `collect_files.py` (pre-existing) |
@@ -158,8 +158,10 @@ document the recipient receives.
 
 ## 7. Exact next task
 
-1. **Push the four commits**, then decide on deploying. 114 §9 item 1 still stands: until
-   a deploy, the production map renders a Food chip whose feature is dark.
+1. **Push the four commits**, then decide on deploying. 114's own work (`f272c4a`,
+   `f81bdd6`) **is already pushed** — 114 §9 item 1 is done to that extent. What remains
+   is the deploy: the box still serves 112's code, so the production map renders a Food
+   chip whose feature is dark, and A6 is still absent from it.
 2. **The handset background-sensor test.** Everything in this session rides on
    `/location/ping` firing unprompted while the app is backgrounded. **No one has ever
    watched it do that.** v2.0 DoD #8. It is now also the gate on the notification
