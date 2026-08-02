@@ -36,6 +36,23 @@ def register_flag(
         flag = FeatureFlag(key=key, description=description, enabled=enabled)
         db.add(flag)
         db.flush()
+    elif description is not None and flag.description != description:
+        # AI-CONTEXT: the description REFRESHES; `enabled` never does.
+        #
+        # `register_config` has always done this for declarations — "a code default
+        # that changed is what the console shows afterwards" — and flags did not, so a
+        # description written once was frozen on every box that had already booted.
+        # A6 is what surfaced it: `m13_vendor` became the FOOD half and every existing
+        # box, production included, still called it "M13 Vendor Network", which is now
+        # the name of both halves together. An operator reading that would switch off
+        # what they believed was the whole vendor network and actually leave the
+        # service centres running.
+        #
+        # A stale label on a switch is worse than none: it answers the question wrongly
+        # and so stops anyone asking. `enabled` is deliberately untouched — that is the
+        # operator's state, and a redeploy must never silently flip a flag back.
+        flag.description = description
+        db.flush()
     return flag
 
 
