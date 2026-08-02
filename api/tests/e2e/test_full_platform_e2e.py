@@ -15,8 +15,11 @@ import pytest
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
+from app.foundation.f04_evidence import public as evidence
 from app.foundation.f05_load import public as loads
+from app.foundation.f06_documents import public as documents
 from app.foundation.f07_ledger import public as ledger
+from app.foundation.f08_notifications import public as notify
 from app.foundation.f09_ai_gateway import public as ai
 from app.foundation.f13_flags import public as flags
 from app.modules.m01_map import public as m1
@@ -39,6 +42,13 @@ FUEL = (32.82, -96.7970)
 AWAY = (32.90, -96.8000)
 T0 = datetime(2026, 7, 21, 8, 0, tzinfo=UTC)
 MONTH = date(2026, 7, 1)
+# a real 1x1 PNG: the packet carries the BYTES the driver captured, so a stub string
+# would not exercise the storage round-trip the thumbnail render depends on.
+BOL_PHOTO = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
 
 
 def test_full_platform_synthetic_end_to_end(db):
@@ -106,9 +116,40 @@ def test_full_platform_synthetic_end_to_end(db):
     )
     loads.arm_stop(db, stop)
     location.evaluate_ping(db, driver.id, *RECEIVER, occurred_at=T0)  # ENTER = arrival
+    # the paperwork the driver photographs at the dock — A1's whole subject
+    m5.capture_document(db, driver.id, "bol", BOL_PHOTO, filename="bol.png", stop_ref=stop.id)
     location.evaluate_ping(
         db, driver.id, *AWAY, occurred_at=T0 + timedelta(hours=3)
     )  # EXIT = departure
+
+    # --- A1: leaving the dock drafts the packet; the driver reviews, then sends ---
+    # The EXIT carve-out lives in the HTTP composition layer (api/location.py), because a
+    # foundation must not reach up into a module — so the day models it the same way.
+    packet = m5.draft_stop_packet_on_exit(db, driver.id, receiver.id, T0 + timedelta(hours=3))
+    assert packet is not None, "leaving a dock left the driver with no paperwork to send"
+    assert packet.state is m5.StopPacketState.draft, "a packet left without the driver"
+    # what the review card on the Load tab reads
+    assert [row["item"] for row in m5.stop_checklist(db, stop) if row["captured"]] == ["bol"]
+
+    sent = m5.send_drafted_packet(
+        db,
+        packet,
+        gateway=notify.RecordingNotificationGateway(),
+        now=T0 + timedelta(hours=3, minutes=5),
+        base_url_required=False,
+        recipient="ap@shipper.example",
+    )
+    assert sent.state is m5.StopPacketState.sent
+    # the record a recipient could actually use (v2.0 §7 item 1). It held ZERO artifacts
+    # and one row until HANDOFF-115 — a blank page with a hash block.
+    shared = db.get(evidence.SharedPack, sent.shared_pack_ref)
+    assert shared.recipient == "ap@shipper.example"
+    handoff = evidence.compose_stop_pack(db, stop.id, evidence.PackTemplate.stop_packet)
+    bol = documents.documents_for_subject(db, "stop", stop.id, doc_type=documents.DocType.bol)[0]
+    assert bol.content_hash in {a["content_hash"] for a in handoff.artifacts}, (
+        "the driver's BOL did not travel with the paperwork it IS"
+    )
+
     location.disarm_geofence(db, driver.id, receiver.id, occurred_at=T0 + timedelta(hours=3))
     claim = m3.start_claim(db, stop, started_at=T0)
     m3.generate_pack(db, claim, now=T0 + timedelta(hours=4))
