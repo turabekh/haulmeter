@@ -40,6 +40,8 @@ import HandoffSheet from "../src/core/components/HandoffSheet.vue";
 import { routes, installAuthGuard } from "../src/router.js";
 import { setToken, logout, isAuthenticated, setActiveStop, setActiveFleet } from "../src/core/api.js";
 import en from "../src/core/i18n/en.json";
+import { messages, LAUNCH_LOCALES } from "../src/core/i18n/index.js";
+import { useI18n } from "../src/core/i18n.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
 import { SAMPLE_OWED, SAMPLE_EARNINGS } from "../src/core/fixtures.js";
 
@@ -198,7 +200,9 @@ describe("FacilityCard (design-prd §10.1)", () => {
     const router = testRouter();
     const w = mount(FacilityCard, { props: { pin }, global: { plugins: [router] } });
     expect(w.text()).toContain("Navigate");
-    expect(w.text()).toContain("View facility");
+    // the scorecard cross-link is the eye in the title now; the VERB is its
+    // accessible name, which is the only place a screen reader can find it
+    expect(w.find(".fac__view").attributes("aria-label")).toBe("View facility");
     expect(w.text()).toContain("$4.19");
     await w.find(".cta").trigger("click");
     expect(w.emitted().navigate).toBeTruthy();
@@ -338,7 +342,50 @@ describe("FacilityCard — fuel-network station (M7, §11.2 / §12.2)", () => {
     const w = mount(FacilityCard, { props: { pin }, global: { plugins: [router] } });
     expect(w.find(".cta").text()).toContain("Navigate"); // leads with Navigate
     expect(w.find(".report__opt").exists()).toBe(false); // no parking-fullness on a dock
-    expect(w.text()).toContain("View facility"); // dock-time intel is one tap deeper
+    // dock-time intel is still one tap deeper, from the eye on the name
+    expect(w.find(".fac__view").exists()).toBe(true);
+  });
+});
+
+// AI-CONTEXT: §23 entry 124 — the scorecard cross-link is an eye in the title. NAV-5
+// calls cross-links VERBS, so what these defend is that the verb did not disappear
+// with the words: it has to survive as the accessible name, in every locale, or the
+// control is unreachable by anyone not looking at it.
+describe("FacilityCard — the scorecard link is on the name (§23 entry 124)", () => {
+  const pin = {
+    facility_id: "f-eye",
+    name: "Highway 13 & 21 Wayside",
+    facility_type: "rest_area",
+    status: "some",
+    badges: [],
+    freshness: { reported_at: new Date().toISOString(), sample_size: 1 },
+  };
+
+  it("opens the facility scorecard, the same NAV-5 deep link as before", async () => {
+    const router = testRouter();
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [router] } });
+    await w.find(".fac__view").trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/facility/f-eye");
+  });
+
+  it("carries the verb as its accessible name in all six locales (§16 / §12.5)", () => {
+    const { setLocale } = useI18n();
+    for (const loc of LAUNCH_LOCALES) {
+      setLocale(loc);
+      const w = mount(FacilityCard, { props: { pin }, global: { plugins: [testRouter()] } });
+      const label = w.find(".fac__view").attributes("aria-label");
+      expect(label).toBe(messages[loc]["facility.view"]);
+      expect(label).toBeTruthy();
+    }
+    setLocale("en");
+  });
+
+  it("no longer spends a full-width row on it at the bottom of the card", () => {
+    const w = mount(FacilityCard, { props: { pin }, global: { plugins: [testRouter()] } });
+    expect(w.findAll(".cta--tertiary").map((b) => b.text())).not.toContain("View facility");
+    // the glyph is inside the title, not floating in the action stack
+    expect(w.find(".fac__name .fac__view").exists()).toBe(true);
   });
 });
 

@@ -21,6 +21,7 @@ import {
   Clock,
   Phone,
   Wrench,
+  Eye,
 } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import StatusPill from "./StatusPill.vue";
@@ -212,7 +213,21 @@ function vendorLine(entry) {
 
 <template>
   <div class="fac">
-    <h3 class="fac__name">{{ pin.name }}</h3>
+    <!-- AI-CONTEXT: the scorecard cross-link lives IN the title, on the name it opens
+         (§23 entry 124). It was a tertiary text button at the bottom of the card,
+         below every action, and it grew a card that now asks a question as well.
+         NAV-5 calls cross-links verbs, and the verb survives as the accessible name —
+         `aria-label` carries "View facility" in all six locales, so a screen reader
+         and the keyboard get the word while the eye is what a thumb aims at. It sits
+         INLINE after the name rather than at the row's end deliberately: right-aligned
+         it would stack under the sheet's close X, and two icon buttons 50 dp apart,
+         one of which throws the card away, is the confusion worth designing out. -->
+    <h3 class="fac__name">
+      {{ pin.name }}
+      <button class="fac__view" type="button" :aria-label="t('facility.view')" @click="viewFacility">
+        <Eye :size="20" :stroke-width="2" aria-hidden="true" />
+      </button>
+    </h3>
     <div class="fac__row">
       <StatusPill v-if="pin.status" :status="pin.status" :hollow="stale" />
       <span v-if="availability" class="fac__avail">{{ availability }}</span>
@@ -437,9 +452,6 @@ function vendorLine(entry) {
       <Phone :size="18" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.call_at_stop") }}
     </button>
-    <button class="cta cta--tertiary" type="button" @click="viewFacility">
-      {{ t("facility.view") }}
-    </button>
     <!-- M10-FR2: at a free lot you're leaving, hand your spot to a nearby driver -->
     <button v-if="freeLot" class="cta cta--tertiary" type="button" @click="emit('handoff', pin)">
       {{ t("handoff.leaving") }}
@@ -453,6 +465,27 @@ function vendorLine(entry) {
   font-size: var(--type-title-size);
   line-height: var(--type-title-line);
   font-weight: var(--type-title-weight);
+}
+/* AI-CONTEXT: INLINE, not a flex child. As a flex item the glyph became a widow —
+   at 200% font scaling the name wraps and the eye dropped onto a line of its own,
+   orphaned under the title it belongs to (measured, T-5/T-6). In the text flow it
+   trails the last word wherever that word lands.
+   §6.5: the glyph is 20 dp and the TARGET is `--touch-min`; the negative vertical
+   margin pulls the inline box back to the title's line height, so the button pays
+   for its target in hit area and not in the height of a glanceable card (§8).
+   Colour is the tertiary text-button token it replaces — it still reads as the
+   cross-link it is (NAV-5). */
+.fac__view {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+  margin: calc(var(--s-3) * -1) 0 calc(var(--s-3) * -1) var(--s-1);
+  padding: 0;
+  background: transparent;
+  color: var(--shield-500);
 }
 .fac__row {
   display: flex;
