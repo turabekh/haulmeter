@@ -17,6 +17,7 @@
 import { computed, onMounted, ref } from "vue";
 import { TriangleAlert } from "lucide-vue-next";
 import { useI18n } from "../../core/i18n.js";
+import { verificationPresentation } from "../../core/vendors.js";
 import {
   impersonation,
   setImpersonation,
@@ -80,7 +81,7 @@ onMounted(async () => {
     <header class="portal__head">
       <h1 class="portal__title">{{ t("portal.vendor.title") }}</h1>
       <p v-if="profile" class="portal__who">
-        {{ profile.name }} · {{ t(`vendor.${profile.verify_status}`) }}
+        {{ profile.name }} · {{ t(verificationPresentation(profile.verify_status).labelKey) }}
       </p>
     </header>
 

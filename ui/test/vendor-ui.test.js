@@ -520,6 +520,19 @@ describe("Vendor portal shell (§18 fourth portal)", () => {
     expect(w.text()).toContain("Publishing is paused");
   });
 
+  // a profile that has never been through verification carries no verify_status, and
+  // the header interpolated it straight into a key — `vendor.undefined`, which i18n
+  // throws on (§12.5 / Forbidden #7). It threw on every suite run and passed unnoticed
+  // because an unhandled render error fails the RUN, not any single test.
+  it("labels a profile with no verification tier instead of throwing on a raw key", async () => {
+    mockPortal({ "/vendor/profile": { ...PROFILE, verify_status: undefined } });
+    const w = mountShell();
+    await flushPromises();
+    const who = w.find(".portal__who").text();
+    expect(who).toContain("Not verified");
+    expect(who).not.toContain("undefined");
+  });
+
   it("names exactly what still blocks publishing", async () => {
     mockPortal({
       "/vendor/profile": { ...PROFILE, profile_gaps: ["languages", "halal_disclosure"] },
