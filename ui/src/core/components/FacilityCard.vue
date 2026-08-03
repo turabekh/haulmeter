@@ -24,6 +24,7 @@ import {
 } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import StatusPill from "./StatusPill.vue";
+import ReportSheet from "./ReportSheet.vue";
 import { useDriverState } from "../state.js";
 import { formatMiles, freshnessLabel, isStale, SCALE_TYPES } from "../presentation.js";
 import { formatMoney } from "../meter.js";
@@ -161,6 +162,22 @@ const reportable = computed(() =>
   ["truck_stop", "rest_area", "parking_property"].includes(props.pin.facility_type) ||
   SCALE_TYPES.has(props.pin.facility_type),
 );
+// AI-CONTEXT: the report is ON the card, not behind it (§23 entry 123). It used to be
+// a secondary button that CLOSED this card and opened a second sheet, so telling the
+// map a lot was full cost three taps and the context the driver was reading. The same
+// ReportSheet component renders in both places, so the question, the options and the
+// signal posted to F10 cannot drift between the card and the floating chip.
+//
+// WHERE it renders is the one branch: §10.1 gives the card a single contextual CTA,
+// and when that CTA moves money (Book) or opens the driver's own stop, it keeps the
+// top — a status report never outranks a money act (§12.2). Otherwise the lead is
+// Navigate, which is worth nothing to a driver already standing in the lot, and the
+// report goes above it. The filled CTA stays the only primary either way: the options
+// are hairline-outlined, so the visual ladder is unchanged by the reorder.
+const moneyLead = computed(() => props.isActiveStop || bookable.value);
+function onReport(status) {
+  emit("report", props.pin, status);
+}
 // AI-CONTEXT: M2-FR3's indicator, on the card behind the §11.2 clock badge (§23
 // entry 87). The badge is a MARK — it says a dock is slow and nothing else; the rate
 // and the sample it was measured over belong here, because §11.7 does not let a
@@ -319,6 +336,16 @@ function vendorLine(entry) {
          NAV-5 cross-link into the Meter, exactly like Book and Fuel are cross-links
          into their own flows. It invents no way to create a load from a pin, because
          that would be a navigation structure and §22 makes those never-improvise. -->
+    <!-- M1-FR7 one tap: the lot's own status, asked and answered on the card. Above the
+         lead CTA whenever that lead is Navigate — a driver who can see the lot is the
+         only person whose answer is worth anything, and directions are what they need
+         least. -->
+    <ReportSheet
+      v-if="reportable && !moneyLead"
+      class="fac__report"
+      :facility-type="pin.facility_type"
+      @report="onReport"
+    />
     <button v-if="isActiveStop" class="cta cta--stop" type="button" @click="emit('open-stop', pin)">
       <Warehouse :size="20" :stroke-width="2" aria-hidden="true" />
       {{ t("facility.your_stop") }}
@@ -354,8 +381,16 @@ function vendorLine(entry) {
       {{ t("facility.navigate") }}
     </button>
 
-    <!-- secondary: Navigate whenever it isn't the lead; Report only where parking
-         is a thing (never a fuel station or a receiver dock) -->
+    <!-- the money act kept the top, so the report follows it — still one tap, still on
+         the card, just never above a price -->
+    <ReportSheet
+      v-if="reportable && moneyLead"
+      class="fac__report"
+      :facility-type="pin.facility_type"
+      @report="onReport"
+    />
+
+    <!-- secondary: Navigate whenever it isn't the lead -->
     <button
       v-if="isActiveStop || bookable || fuelable || fuelEstimateOnly"
       class="cta cta--secondary"
@@ -363,14 +398,6 @@ function vendorLine(entry) {
       @click="emit('navigate', pin)"
     >
       {{ t("facility.navigate") }}
-    </button>
-    <button
-      v-else-if="reportable"
-      class="cta cta--secondary"
-      type="button"
-      @click="emit('report', pin)"
-    >
-      {{ t("map.report") }}
     </button>
     <!-- M7-FR5: any driver at the pump can report the diesel price; 3 reports form a
          crowd consensus that displaces the regional baseline on this station's pin.
@@ -614,6 +641,11 @@ function vendorLine(entry) {
   color: var(--text-2);
   font-size: var(--type-caption-size);
   line-height: var(--type-body-line);
+}
+/* the report block is a QUESTION, not another action row: it gets the section gap the
+   vendor list uses, so it reads as its own thing rather than a fourth button */
+.fac__report {
+  margin-top: var(--s-4);
 }
 .cta {
   display: flex;

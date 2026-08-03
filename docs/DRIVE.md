@@ -217,10 +217,17 @@ ENTERed, at least one BOL captured via the checklist.
 # TIER P1 — the daily surface
 
 ## J8 — Report a lot status, with proof `[M1-FR7, F10, F7]`
-1. Map "at" the DEV truck stop → floating **report** chip → Empty/Some/Full, big targets.
-2. Submit **Full** → pin badge updates within a minute; `now · 1 driver`-shape freshness.
-3. Move 50 km away, retry → refused/gated (geofence presence proof).
-4. **More** → points moved for the accepted report; re-spamming hits the cooldown.
+1. Map "at" the DEV truck stop → **tap the pin** → the card asks "How's parking here right now?"
+   with Empty/Some/Full **on the card itself** (§23 entry 123). Two taps from the map, no second
+   sheet, and the card is not swapped out from under you mid-answer.
+2. Submit **Full** → the sheet closes, pin badge updates within a minute; `now · 1 driver`-shape
+   freshness. Measured 2026-08-03: the whole card fits at 360×800 with nothing scrolled.
+3. The floating **report** chip is still the from-anywhere path — it reports the NEAREST pin, and
+   its sheet header now **names that facility**. Check the name before you tap; that is what it is
+   there for.
+4. Move 50 km away, retry → accepted but recorded `presence_proven=false` — F10 weights it down and
+   pays no points. (It is not refused; verify in `f10.submission`, not by expecting an error.)
+5. **More** → points moved for the accepted report; re-spamming hits the cooldown.
 
 ## J9 — Service & repair `[A5, DoD#6]`
 1. Map → **Service** chip → repair/tire/wash/parts pins (Dallas is richer).
@@ -232,8 +239,9 @@ ENTERed, at least one BOL captured via the checklist.
    `register_flag` bypass twin — **log exactly what happened**.
 
 ## J10 — Weigh stations `[E3.1]`
-Map (Drive) around Dallas → weigh-station pins (small square) → report **open/closed** → status +
-freshness update; armed load → corridor surfaces **scales ahead**.
+Map (Drive) around Dallas → weigh-station pins (small square) → the card asks **"Is this scale open
+right now?"** with **open/closed** inline (never Empty/Some/Full — a scale's answer must not be filed
+as a parking reading) → status + freshness update; armed load → corridor surfaces **scales ahead**.
 
 ## J11 — Fuel `[M1-FR5, M7-FR5]`
 1. Map → **Fuel** → prices; EIA baseline where no crowd price, crowd confirms where present, each

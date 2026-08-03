@@ -722,10 +722,12 @@ function navigate(pin) {
 // which facility a parking report will land on (a tapped pin, or the nearest one
 // for the floating report chip). Kept so submitReport knows the target.
 const reportTarget = ref(null);
-function report(pin) {
-  reportTarget.value = pin; // from the facility card
+function report(pin, status) {
+  // the card now carries the options itself, so this arrives ALREADY answered — no
+  // second sheet, and the card the driver was reading is the last thing they saw.
+  reportTarget.value = pin;
   selected.value = null;
-  reporting.value = true;
+  submitReport(status);
 }
 function nearestPin() {
   if (!pins.value.length) return null;
@@ -989,7 +991,16 @@ async function submitPrice(cents) {
     </BottomSheet>
     <PlaceSheet :open="placing" @close="placing = false" @pick="showPlace" />
 
-    <BottomSheet :open="reporting" :title="t('map.report')" @close="reporting = false">
+    <!-- AI-CONTEXT: the chip reports the NEAREST pin, which the driver never chose and
+         could not see. Naming it in the sheet header is the difference between a
+         reading filed against the lot you are in and one filed against the lot across
+         the interstate — §11.7 does not let a fact travel without its subject. Reuses
+         the header the facility sheet already renders; no new string. -->
+    <BottomSheet
+      :open="reporting"
+      :title="reportTarget?.name || t('map.report')"
+      @close="reporting = false"
+    >
       <ReportSheet :facility-type="reportTarget?.facility_type" @report="submitReport" />
     </BottomSheet>
 

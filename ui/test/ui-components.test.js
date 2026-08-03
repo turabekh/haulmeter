@@ -320,10 +320,12 @@ describe("FacilityCard — fuel-network station (M7, §11.2 / §12.2)", () => {
     expect(w.emitted().fuel).toBeTruthy();
     expect(w.emitted().fuel[0][0].facility_id).toBe("f-5");
     expect(w.text()).toContain("Navigate"); // stays as secondary
-    expect(w.text()).not.toContain("Report status"); // parking report is nonsensical for fuel
+    // parking report is nonsensical for fuel — assert the OPTIONS are absent, not the
+    // old button label: the label no longer exists anywhere on any card
+    expect(w.find(".report__opt").exists()).toBe(false);
   });
 
-  it("a receiver dock offers no parking Report status either", () => {
+  it("a receiver dock offers no parking status question either", () => {
     const pin = {
       facility_id: "rcv-1",
       name: "Dallas Distribution Center",
@@ -335,8 +337,71 @@ describe("FacilityCard — fuel-network station (M7, §11.2 / §12.2)", () => {
     const router = testRouter();
     const w = mount(FacilityCard, { props: { pin }, global: { plugins: [router] } });
     expect(w.find(".cta").text()).toContain("Navigate"); // leads with Navigate
-    expect(w.text()).not.toContain("Report status"); // no parking-fullness on a dock
+    expect(w.find(".report__opt").exists()).toBe(false); // no parking-fullness on a dock
     expect(w.text()).toContain("View facility"); // dock-time intel is one tap deeper
+  });
+});
+
+// AI-CONTEXT: §23 entry 123 — the status report moved ONTO the card. What these
+// defend is the tap count and the ladder it had to fit into: the options must be
+// present and answerable in one tap, and they must never sit above a price.
+describe("FacilityCard — one-tap status report (M1-FR7 / §23 entry 123)", () => {
+  const lot = (over = {}) => ({
+    facility_id: "f-ts",
+    name: "TA Dallas",
+    facility_type: "truck_stop",
+    status: "some",
+    badges: [],
+    freshness: { reported_at: new Date().toISOString(), sample_size: 3 },
+    ...over,
+  });
+
+  it("asks the question on the card and answers it in ONE tap", async () => {
+    const w = mount(FacilityCard, { props: { pin: lot() }, global: { plugins: [testRouter()] } });
+    expect(w.find(".report__q").text()).toBe("How's parking here right now?");
+    const opts = w.findAll(".report__opt");
+    expect(opts.map((o) => o.text())).toEqual(["Empty", "Some", "Full"]);
+    await opts[2].trigger("click");
+    // the pin AND the answer travel together — the surface needs both to post
+    expect(w.emitted("report")[0][0].facility_id).toBe("f-ts");
+    expect(w.emitted("report")[0][1]).toBe("full");
+  });
+
+  it("leads the card, because Navigate is worth nothing to a driver already there", () => {
+    const w = mount(FacilityCard, { props: { pin: lot() }, global: { plugins: [testRouter()] } });
+    const html = w.html();
+    // both must be PRESENT before their order means anything — a missing selector
+    // makes indexOf -1, which is less than everything and proves nothing
+    expect(html).toContain("report__opt");
+    expect(html).toContain("cta--nav");
+    expect(html.indexOf("report__opt")).toBeLessThan(html.indexOf("cta--nav"));
+    // the filled CTA is still the only primary — the options are hairline outlines
+    expect(w.find(".cta").text()).toContain("Navigate");
+  });
+
+  it("never sits above a price: a bookable lot keeps Book on top (§12.2)", () => {
+    const w = mount(FacilityCard, {
+      props: {
+        pin: lot({
+          facility_type: "parking_property",
+          badges: [{ kind: "bookable", value: 2400, spot_id: "spot-1" }],
+        }),
+      },
+      global: { plugins: [testRouter()] },
+    });
+    const html = w.html();
+    expect(html.indexOf("cta--book")).toBeLessThan(html.indexOf("report__opt"));
+    expect(w.find(".cta").text()).toContain("Book spot"); // still the first action
+    expect(w.findAll(".report__opt")).toHaveLength(3); // and still one tap
+  });
+
+  it("keeps the driver's own dock leading with the stop, report underneath", () => {
+    const w = mount(FacilityCard, {
+      props: { pin: lot(), isActiveStop: true },
+      global: { plugins: [testRouter()] },
+    });
+    const html = w.html();
+    expect(html.indexOf("cta--stop")).toBeLessThan(html.indexOf("report__opt"));
   });
 });
 
@@ -3426,6 +3491,76 @@ describe("MapSurface (design-prd §10.1 / §11.4)", () => {
       expect(JSON.parse(post[1].body)).toMatchObject({ facility_id: "f-ta", signal_type: "parking_fullness", value: { status: "full" } });
       // overlay was refetched after the report (so the pin recolors)
       expect(fetchStub.mock.calls.filter((c) => String(c[0]).includes("/map/overlay")).length).toBeGreaterThanOrEqual(2);
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+
+  // §23 entry 123. The chip picks the nearest pin, which the driver never chose and
+  // cannot see; an unnamed sheet lets a reading land on the lot across the interstate.
+  it("names the lot the chip picked, so a wrong target is visible before the tap", async () => {
+    setToken("tok-map-name");
+    const fetchStub = vi.fn().mockImplementation((url) => {
+      if (String(url).includes("/map/overlay")) {
+        return jsonOk({
+          clustered: false,
+          total: 1,
+          clusters: [],
+          pins: [{ facility_id: "f-ta", name: "TA Dallas", facility_type: "truck_stop", lat: 32.78, lon: -96.82, status: "some", shape: "circle", freshness: null }],
+        });
+      }
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(MapSurface, { global: { plugins: [testRouter()] } });
+      await flushPromises();
+      await w.find(".report-chip").trigger("click");
+      await flushPromises();
+      expect(w.text()).toContain("TA Dallas");
+    } finally {
+      vi.unstubAllGlobals();
+      logout();
+    }
+  });
+
+  // the whole point of entry 123: pin -> status. Two taps, no second sheet, and the
+  // card the driver was reading is not swapped out from under them mid-answer.
+  it("posts a card's status in ONE tap on the card, opening no second sheet", async () => {
+    setToken("tok-map-card");
+    const fetchStub = vi.fn().mockImplementation((url, opts) => {
+      const u = String(url);
+      if (u.includes("/map/overlay")) {
+        return jsonOk({
+          clustered: false,
+          total: 1,
+          clusters: [],
+          pins: [{ facility_id: "f-ta", name: "TA Dallas", facility_type: "truck_stop", lat: 32.78, lon: -96.82, status: "empty", shape: "circle", freshness: null }],
+        });
+      }
+      if (u.endsWith("/map/report") && opts?.method === "POST") return jsonOk({ submission_id: "s2", presence_proven: true });
+      return jsonOk({});
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const w = mount(MapSurface, { global: { plugins: [testRouter()] } });
+      await flushPromises();
+      await w.find(".pin[data-facility='f-ta']").trigger("click");
+      await flushPromises();
+      expect(w.text()).toContain("TA Dallas"); // the card is open
+      const opts = w.findAll(".report__opt");
+      expect(opts).toHaveLength(3); // asked ON the card — no "Report status" detour
+      await opts[2].trigger("click");
+      await flushPromises();
+      const post = fetchStub.mock.calls.find((c) => String(c[0]).endsWith("/map/report") && c[1]?.method === "POST");
+      expect(JSON.parse(post[1].body)).toMatchObject({
+        facility_id: "f-ta",
+        signal_type: "parking_fullness",
+        value: { status: "full" },
+      });
+      // one tap answered it: the sheet closed rather than handing over to another one
+      expect(w.findAll(".report__opt")).toHaveLength(0);
     } finally {
       vi.unstubAllGlobals();
       logout();

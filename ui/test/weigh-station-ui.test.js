@@ -137,13 +137,18 @@ describe("the report vocabulary follows what the facility IS", () => {
 
 // --- the card ---
 describe("the facility card for a scale", () => {
-  it("offers the report affordance", () => {
+  it("asks its own question ON the card, with the scale's two options", async () => {
     const w = mount(FacilityCard, {
       props: { pin: scalePin() },
       global: { plugins: [router()] },
     });
-    const labels = w.findAll("button").map((b) => b.text());
-    expect(labels).toContain(en["map.report"]);
+    // the scale vocabulary reaches the card, not just the sheet: open/closed, never
+    // empty/some/full — a scale's answer must not be filed as a parking reading
+    expect(w.find(".report__q").text()).toBe(en["map.report.question_scale"]);
+    const opts = w.findAll(".report__opt");
+    expect(opts.map((o) => o.text())).toEqual([en["map.status.closed"], en["map.status.open"]]);
+    await opts[1].trigger("click");
+    expect(w.emitted("report")[0][1]).toBe("open");
   });
 
   it("says nobody has reported rather than showing nothing (§11.7)", () => {
