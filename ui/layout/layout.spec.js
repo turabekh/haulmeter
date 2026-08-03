@@ -564,7 +564,15 @@ const SURFACES = [
     // exactly how both shipped unmeasured in entry 114.
     ready: ".notif:has(.prompt-class):has(.quiet)",
   }],
-  ["login", "/login"],
+  // `anon` because the door is only a door to someone who has no key — signed in, the
+  // guard sends this state to the map and it measured the map (see prepare()).
+  ["login", "/login", { anon: true, ready: ".auth__brand" }],
+  // §23 entry 125 — the language chooser at the door. A new sheet, so it is measured
+  // at 360 dp with the rest rather than shipping unseen, and this is the one list in
+  // the product whose rows are NOT translated: ਪੰਜਾਬੀ and Русский render in their own
+  // scripts whatever locale the sweep is running, which is exactly the row height and
+  // glyph coverage that has to survive the +40% pseudo-locale.
+  ["sheet-login-language", "/login", { anon: true, open: [".lang-btn"], ready: ".lang" }],
   ["evidence", "/load/00000000-0000-0000-0000-0000000000aa/evidence"],
   ["condition", "/protection/condition"],
   ["facility", "/facility/00000000-0000-0000-0000-0000000000bb"],
@@ -848,7 +856,7 @@ async function prepare(page, { theme, pseudo, live }) {
   if (live) {
     await page.route(`${API_BASE}/**`, (route) => {
       const path = new URL(route.request().url()).pathname;
-      const body = live.mocks[path];
+      const body = live.mocks?.[path];
       if (!body) return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
       if (body.__binary) {
         return route.fulfill({
@@ -864,8 +872,19 @@ async function prepare(page, { theme, pseudo, live }) {
       });
     });
   }
+  // AI-CONTEXT: ...and the session the note above plants is why `login` was never
+  // measured (§23 entry 125). The guard sends a SIGNED-IN visitor away from /login —
+  // `to.name === "login" && isAuthenticated` returns `{name: "map"}` — so the state
+  // called "login" loaded the MAP and reported it under the login screen's name, in
+  // all three locales, for the life of this harness. Measured, not deduced: with the
+  // planted session `/login` resolves to `/map`, `.auth__brand` count 0, map canvas
+  // count 1; without it, `.auth__brand` count 1.
+  //
+  // The same shape as the note above it, one turn later: that fix made five surfaces
+  // reachable and made this one unreachable, and nothing failed either way. A state
+  // may now opt OUT of the session, which is the only way to measure the door.
   await page.addInitScript(
-    ([t, p, stop, storage]) => {
+    ([t, p, stop, storage, anon]) => {
       try {
         localStorage.setItem("longhaul.theme", t);
         if (stop) localStorage.setItem("longhaul.active_stop", stop);
@@ -877,19 +896,21 @@ async function prepare(page, { theme, pseudo, live }) {
         // not be OPENED by the harness, and a sheet the harness cannot open is a sheet
         // that ships unmeasured at 360 dp.
         for (const [k, v] of Object.entries(storage || {})) localStorage.setItem(k, v);
-        localStorage.setItem(
-          "longhaul.session",
-          JSON.stringify({
-            token: "layout-harness",
-            account_id: "00000000-0000-0000-0000-000000000001",
-            email: "harness@example.com",
-          }),
-        );
+        if (anon) localStorage.removeItem("longhaul.session");
+        else
+          localStorage.setItem(
+            "longhaul.session",
+            JSON.stringify({
+              token: "layout-harness",
+              account_id: "00000000-0000-0000-0000-000000000001",
+              email: "harness@example.com",
+            }),
+          );
       } catch {
         /* storage unavailable */
       }
     },
-    [theme, pseudo, live ? live.stop : null, live ? live.storage : null],
+    [theme, pseudo, live ? live.stop : null, live ? live.storage : null, live ? !!live.anon : false],
   );
 }
 

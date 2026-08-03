@@ -57,6 +57,11 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
 3. Walk all five tabs. Each empty state = one sentence of purpose + one action (§15.3). No fixture
    money, no fake meter (the Load meter **rests** — em dash, no status).
 4. Tab bar: 5 tabs, icons **with labels**, on every root. No hamburger anywhere.
+5. **Language, before signing in** (§23 entry 125): the login screen carries a chooser above the
+   wordmark naming the CURRENT language in its own words ("English", "ਪੰਜਾਬੀ"). Tap → sheet with
+   all six in their own names → pick one and the whole screen, including the CTA, re-renders in it
+   and the choice persists to the next cold start. It is the same `LocalePicker` More opens, so a
+   driver never meets two controls for one setting.
 
 ## J2 — Map read: presets, pins, honesty `[M1-FR1..5, §11]`
 1. `/dev` → driver → **Map**. GPS at your seed ORIGIN.

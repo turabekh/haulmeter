@@ -817,6 +817,67 @@ describe("FacilityProfileSurface — M8 intel (FR6 risk + FR2 fastest hour)", ()
   });
 });
 
+// AI-CONTEXT: §23 entry 125 — the language chooser reached the door. Six locales
+// have shipped since F15, and five of them were behind a login screen you had to
+// read English to get through: the driver who most needs the setting had to finish
+// onboarding in a language they don't read in order to change it. What these defend
+// is that the control is legible BEFORE the choice is made — the trigger names the
+// current language in its own words, and the list names all six in theirs.
+describe("AuthSurface — the language chooser at the door (F15 / §23 entry 125)", () => {
+  const mountAuth = async () => {
+    const router = testRouter();
+    router.push("/login");
+    await router.isReady();
+    return mount(AuthSurface, { global: { plugins: [router] } });
+  };
+
+  beforeEach(() => logout());
+  afterEach(() => {
+    useI18n().setLocale("en");
+    try { localStorage.removeItem("longhaul.locale"); } catch { /* no storage */ }
+  });
+
+  it("names the current language in its own words, not a flag or a bare glyph", async () => {
+    const w = await mountAuth();
+    const btn = w.find(".lang-btn");
+    expect(btn.exists()).toBe(true);
+    expect(btn.text()).toContain("English");
+    // the verb is the accessible name; the visible text is the language itself
+    expect(btn.attributes("aria-label")).toBe("Language");
+    w.unmount();
+  });
+
+  it("opens the six locales in a sheet and switches the whole screen", async () => {
+    const w = await mountAuth();
+    expect(w.findAll(".lang")).toHaveLength(0); // closed: no list stacked into the form
+    await w.find(".lang-btn").trigger("click");
+    await flushPromises();
+    const langs = w.findAll(".lang");
+    expect(langs).toHaveLength(6);
+    expect(langs.map((b) => b.text().trim())).toEqual(
+      expect.arrayContaining(["English", "Español", "ਪੰਜਾਬੀ", "Русский", "Oʻzbekcha", "Soomaali"]),
+    );
+
+    await langs.find((b) => b.text().includes("Español")).trigger("click");
+    await flushPromises();
+    // the choice lands on the login screen itself, not only after signing in
+    expect(w.text()).toContain(messages.es["auth.login"]);
+    expect(w.find(".lang-btn").text()).toContain("Español");
+    expect(w.findAll(".lang")).toHaveLength(0); // picking closes the sheet
+    w.unmount();
+  });
+
+  it("persists the choice, so the next cold start opens in it", async () => {
+    const w = await mountAuth();
+    await w.find(".lang-btn").trigger("click");
+    await flushPromises();
+    await w.findAll(".lang").find((b) => b.text().includes("Русский")).trigger("click");
+    await flushPromises();
+    expect(localStorage.getItem("longhaul.locale")).toBe("ru");
+    w.unmount();
+  });
+});
+
 describe("AuthSurface + auth guard (F1, PRD §7.1)", () => {
   beforeEach(() => logout());
 

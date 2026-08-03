@@ -15,3 +15,17 @@ export const DEFAULT_LOCALE = "en";
 export const PSEUDO_LOCALE = "xx-XL";
 
 export const messages = { en, es, pa, ru, uz, so };
+
+// AI-CONTEXT: each language in its OWN name, never translated, so a driver
+// recognizes it whatever the interface currently speaks — which is the entire
+// point on a login screen someone cannot read yet. These are ENDONYMS and belong
+// in no catalogue: putting "Spanish" in en.json and "Español" in es.json would
+// show a Spanish speaker the word "Spanish" while the app is still in English.
+export const LOCALE_NAMES = {
+  en: "English",
+  es: "Español",
+  pa: "ਪੰਜਾਬੀ",
+  ru: "Русский",
+  uz: "Oʻzbekcha",
+  so: "Soomaali",
+};

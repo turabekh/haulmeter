@@ -8,15 +8,15 @@ import { useRouter } from "vue-router";
 import { Check } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
 import { useTheme } from "../core/theme.js";
-import { LAUNCH_LOCALES } from "../core/i18n/index.js";
 import { email, logout, fetchPoints, fetchMe, verifyAuthority, saveEquipment, setFoodAlerts } from "../core/api.js";
 import { SAMPLE_POINTS } from "../core/fixtures.js";
 import BottomSheet from "../core/components/BottomSheet.vue";
+import LocalePicker from "../core/components/LocalePicker.vue";
 import NotificationsSheet from "../core/components/NotificationsSheet.vue";
 import { fetchNotifications, markNotificationRead } from "../core/api.js";
 
 const router = useRouter();
-const { t, locale, setLocale } = useI18n();
+const { t } = useI18n();
 
 // AI-CONTEXT: §23 entry 102 — F8's inbox, reached from the More list.
 //
@@ -133,17 +133,6 @@ async function toggleFoodAlerts() {
   });
 }
 
-// each language shown in its OWN name so a driver recognizes it regardless of the
-// current UI language (F15 launch locales)
-const LANG_NAMES = {
-  en: "English",
-  es: "Español",
-  pa: "ਪੰਜਾਬੀ",
-  ru: "Русский",
-  uz: "Oʻzbekcha",
-  so: "Soomaali",
-};
-
 onMounted(async () => {
   try {
     points.value = await fetchPoints();
@@ -181,23 +170,12 @@ function signOut() {
       </div>
     </section>
 
-    <!-- F15: pick your language; persists across sessions -->
+    <!-- F15: pick your language; persists across sessions. The list itself is
+         LocalePicker — the same component the login screen opens, so the choice a
+         driver makes at the door and the one they change here are one control. -->
     <section class="card">
       <h2 class="card__title">{{ t("more.language") }}</h2>
-      <ul class="langs">
-        <li v-for="code in LAUNCH_LOCALES" :key="code">
-          <button
-            class="lang"
-            :class="{ 'lang--on': locale === code }"
-            type="button"
-            :aria-pressed="locale === code"
-            @click="setLocale(code)"
-          >
-            <span class="lang__name">{{ LANG_NAMES[code] }}</span>
-            <Check v-if="locale === code" :size="18" :stroke-width="2.5" class="lang__tick" aria-hidden="true" />
-          </button>
-        </li>
-      </ul>
+      <LocalePicker />
     </section>
 
     <!-- AI-CONTEXT: §6.1 C-3 — "toggled by system setting + manual override". The
@@ -399,7 +377,6 @@ function signOut() {
   display: flex;
   flex-direction: column;
 }
-.lang,
 .theme-opt {
   display: flex;
   align-items: center;
@@ -414,7 +391,10 @@ function signOut() {
   text-align: left;
   cursor: pointer;
 }
-.langs li:first-child .lang,
+/* the theme rows carry no hairline between them — unchanged when the language list
+   moved out to LocalePicker, where the rule was `.langs li:first-child .lang,
+   .theme-opt`: the second selector was unqualified, so EVERY theme row lost its
+   border, and that is the appearance this keeps. */
 .theme-opt {
   border-top: none;
 }

@@ -4,14 +4,28 @@
      specific + unblaming (§12.4). Email/password only at launch. On success the
      session token persists (api.js) and the app's live APIs light up. -->
 <script setup>
-import { ref, reactive } from "vue";
+import { ref, reactive, computed } from "vue";
 import { useRouter } from "vue-router";
+import { Languages } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
+import { LOCALE_NAMES } from "../core/i18n/index.js";
 import { login, register } from "../core/api.js";
 import { BRAND } from "../core/brand.js";
+import BottomSheet from "../core/components/BottomSheet.vue";
+import LocalePicker from "../core/components/LocalePicker.vue";
 
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale } = useI18n();
+
+// AI-CONTEXT: the language chooser belongs on THIS screen, not only in More
+// (§23 entry 125). Every one of the six locales ships from day one, and until now
+// the only way to reach five of them was to read an English login screen, guess
+// the right words, sign up, find the More tab and scroll — the driver most in need
+// of the setting had to complete the flow in a language they don't read to get it.
+// The trigger names the CURRENT language in its own words, so it is legible before
+// anything else on the page is.
+const langOpen = ref(false);
+const langName = computed(() => LOCALE_NAMES[locale.value] ?? LOCALE_NAMES.en);
 const isDev = import.meta.env.DEV; // the dev-directory link ships only in dev builds
 
 const mode = ref("login"); // login | register
@@ -52,6 +66,16 @@ async function submit() {
 
 <template>
   <div class="auth">
+    <!-- above the brand, because a driver who cannot read the tagline needs this
+         before they need anything else on the screen. NAV-3: the list opens as a
+         sheet over the flow rather than a sixth control stacked into it. -->
+    <div class="auth__bar">
+      <button class="lang-btn" type="button" :aria-label="t('more.language')" @click="langOpen = true">
+        <Languages :size="20" :stroke-width="2" aria-hidden="true" />
+        <span class="lang-btn__name" :lang="locale">{{ langName }}</span>
+      </button>
+    </div>
+
     <div class="auth__head">
       <h1 class="auth__brand">{{ BRAND }}</h1>
       <p class="auth__tagline">{{ t("auth.tagline") }}</p>
@@ -115,6 +139,10 @@ async function submit() {
     <button v-if="isDev" class="auth__dev" type="button" @click="router.push('/dev')">
       Explore all screens (dev directory) →
     </button>
+
+    <BottomSheet :open="langOpen" :title="t('more.language')" @close="langOpen = false">
+      <LocalePicker @pick="langOpen = false" />
+    </BottomSheet>
   </div>
 </template>
 
@@ -144,8 +172,29 @@ async function submit() {
   min-height: 100%;
   padding: var(--s-6) var(--s-4) var(--s-4);
 }
+.auth__bar {
+  display: flex;
+  justify-content: flex-end;
+}
+/* a hairline secondary (§8), sized by --touch-min like everything tappable (§6.5).
+   The language's own name rides beside the glyph rather than behind it: an icon
+   alone would say "there is a setting here" without saying which way it is set,
+   and the whole value of this control is being readable to someone who cannot
+   read the rest of the screen. */
+.lang-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--touch-min);
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--type-label-size);
+}
 .auth__head {
-  margin-top: var(--s-6);
+  margin-top: var(--s-4);
   margin-bottom: var(--s-6);
   text-align: center;
 }
