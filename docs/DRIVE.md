@@ -40,11 +40,21 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
    link cards for `/map /load /money /docs /more /load/calc /money/audit /protection/condition
    /fleet /owner /admin /scorecard /login`.
 6. DevTools: device mode 360×800 · **Sensors → Location → Other** · grant location permission.
-7. Second tab: `http://localhost:8038` (Mailpit — every outbound email lands here).
-   ✅ **This works as of 2026-08-02 and did not before.** There had been no SMTP gateway in the
-   codebase for the life of the project: every send site passed a recording gateway, so the F8 rows
-   said a notice was sent and Mailpit had received **zero** messages. Fixed (§23 entry 122).
-   If Mailpit stays empty, check `SMTP_HOST` in `infra/.env` — blank switches email off by design.
+7. **Outbound email goes to real Gmail, not Mailpit** — owner decision 2026-08-04, dev *and*
+   production on one account. So the inbox to watch is the account in `SMTP_USERNAME` (`infra/.env`), and
+   `http://localhost:8038` stays empty by design; Mailpit is still in compose and still bound,
+   simply not addressed. To put dev back on it, set `SMTP_HOST=mailpit` / `SMTP_PORT=1038` /
+   `SMTP_STARTTLS=false` in `infra/.env` and recreate the api container.
+   ⚠️ **A send from dev is a real send.** Recipients are editable and pre-filled from the load, so
+   typing a live broker address into a test load emails an actual broker an actual detention
+   notice. The seeded `@bolt.example` counterparties are safe — the TLD does not resolve, and
+   Gmail bounces them back to the same inbox a minute later.
+   ✅ **Email works at all as of 2026-08-02 and did not before.** There had been no SMTP gateway in
+   the codebase for the life of the project: every send site passed a recording gateway, so the F8
+   rows said a notice was sent and Mailpit had received **zero** messages. Fixed (§23 entry 122).
+   If nothing arrives, check `SMTP_HOST` in `infra/.env` — blank switches email off by design, and
+   a wrong App Password fails as `smtp-failed-SMTPAuthenticationError` in the F8 provider ref while
+   the driver still sees "Sent".
 8. Convention: **always enter surfaces from `/dev`** — you never guess a URL.
 
 ---
@@ -113,7 +123,7 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
 ## J5 — Notice → exit → claim pack → invoice `[M3-FR3..6, F4, §17]`
 1. Detention accruing → **Send notice**. Confirmation reuses the verb ("Notice sent"); checklist
    flips that row.
-2. **Mailpit**: notice email — plain, professional English, one link, no images, load ref in
+2. **The Gmail inbox**: notice email — plain, professional English, one link, no images, load ref in
    subject. (Unblocked 2026-08-02; before that nothing was ever transmitted.)
 3. Move Sensors away (or **End load**) → EXIT closes the stop.
 4. Generate claim → **PDF**: header Meter figures, parties & refs, mono timeline w/ hairlines, map
@@ -181,11 +191,12 @@ ENTERed, at least one BOL captured via the checklist.
 5. **Recipients are pre-filled** from the load's counterparty and are **editable** — change the
    address and it goes where you typed (A1 req 6).
 6. **Nothing sent silently before this** — you are seeing the packet *before* it goes (A1 req 5).
-7. **Send.** **Mailpit** now receives it: `From: paperwork@haulmeter.online`, the counterparty on
+7. **Send.** The **Gmail inbox** now receives it: `From:` the account in `SMTP_FROM` (Gmail rewrites
+   any From it has not verified, so `SMTP_FROM` matches the account), the counterparty on
    `To:`, subject **"Stop paperwork · <load ref>"** (just "Stop paperwork" when the load has no
    reference — the manual fallback form does not collect one), body one plain line with one link.
    Neutral tone: a handoff, not a claim.
-8. **Open the actual PDF — click the link in the Mailpit message**, which is exactly what a broker
+8. **Open the actual PDF — click the link in the emailed message**, which is exactly what a broker
    does. It renders from pinned bytes with no session. Measured on the walk of 2026-08-02:
    **HTTP 200, `application/pdf`, 100,042 bytes**, containing:
 
@@ -259,7 +270,7 @@ as a parking reading) → status + freshness update; armed load → corridor sur
 1. Map at Madison → **DEV — bookable yard** (square) → card with price + **Book**.
 2. Book a night → one transparent price, confirmation; ledger records it (test-mode).
 3. `/owner` (desktop fine — §18): the yard's calendar shows the booking; payout reflects the split.
-4. Cancel per policy → both sides update; cancellation email in Mailpit.
+4. Cancel per policy → both sides update; cancellation email in the Gmail inbox.
 
 ## J13 — Docs wallet `[M5-FR3, §17 Q16]`
 1. **Docs** → capture a "CDL" → typed, gridded **by type**, localized label.
