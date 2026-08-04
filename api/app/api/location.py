@@ -179,9 +179,16 @@ def ping(
 
     # the events go back so the client can react to its own movement without polling —
     # an EXIT is what tells the Load tab the driver has left the dock.
+    # AI-CONTEXT: the STEADY STATE beside the edges, and §5 needs both. `events` fires
+    # once, on the crossing; a client that only ever hears edges knows it is on site
+    # until the tab reloads and then never again, because the ENTER it depended on has
+    # already been and gone. That is how every ON_SITE behaviour in the product came to
+    # be unreachable while looking correct. Cheap to answer — one indexed row — and it
+    # is asked on a ping the client was already making.
     return {
         "recorded_at": now.isoformat(),
         "client_skew_ms": skew_ms,
+        "present": location.is_present_anywhere(db, account.id),
         "events": [
             {
                 "event_type": e.event_type.value,

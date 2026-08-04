@@ -89,6 +89,26 @@ export function observeMotion({ speedMps = null, present = null, now = Date.now(
   return state.value;
 }
 
+/** Feed the CURRENT presence fact — "inside an armed geofence, yes or no".
+ *
+ * AI-CONTEXT: separate from `observeMotion` because presence and motion arrive from
+ * different places on different schedules, and presence used to arrive ONLY as an
+ * ENTER edge. `onSite` is module state: a reload set it back to false with no edge
+ * left to restore it, and the "I've arrived" fallback never produced an edge at all,
+ * so ON_SITE was reachable in tests and effectively unreachable in a truck. Every
+ * ping now carries the steady state (`/location/ping` -> `present`).
+ *
+ * DRIVING still outranks it — SM-1's calm transitions mean a truck rolling through a
+ * large yard geofence does not flip to ON_SITE mid-manoeuvre; the next settled motion
+ * sample picks the presence up.
+ */
+export function observePresence(present) {
+  onSite = present === true;
+  if (state.value === DriverState.DRIVING) return state.value;
+  settled(null);
+  return state.value;
+}
+
 // RESTING is deliberately NOT derived here. §5 triggers it on "stationary >20 min at a
 // PARKING-TYPE facility, evening window", and the client has no facility type for the
 // place it is sitting in — the ping response names a facility id, not what it is.

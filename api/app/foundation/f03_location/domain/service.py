@@ -288,6 +288,29 @@ def is_present(db: Session, account_id, facility_id) -> bool:
     return _active_presence(db, account_id, facility_id) is not None
 
 
+def is_present_anywhere(db: Session, account_id) -> bool:
+    """Is this account inside ANY armed geofence right now (§5's ON_SITE input).
+
+    AI-CONTEXT: the steady state, as opposed to the ENTER/EXIT edges `evaluate_ping`
+    returns. F3 has recorded it as a row since the Foundation and never answered the
+    question, so the client could only ever learn presence by catching an edge as it
+    happened — which made design-prd §5's ON_SITE unreachable in normal use. A driver
+    who reloaded the tab, or who arrived by tapping "I've arrived" instead of tripping
+    the geofence, was ON_SITE nowhere but in the database, and every ON_SITE behaviour
+    in the product stayed dark. An edge is a fact about a moment; a state has to be
+    askable at any moment, including the first render after a cold start.
+    """
+    return (
+        db.scalar(
+            select(GeofencePresence).where(
+                GeofencePresence.account_id == account_id,
+                GeofencePresence.active.is_(True),
+            )
+        )
+        is not None
+    )
+
+
 def dwell_samples(db: Session, facility_id) -> list[dict]:
     # AI-CONTEXT: pair ENTER->EXIT per account at a facility into dwell samples
     # (seconds + arrival hour). The objective, evidence-grade dwell data M2/M8

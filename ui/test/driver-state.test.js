@@ -12,6 +12,7 @@ import {
   DriverState,
   useDriverState,
   observeMotion,
+  observePresence,
   WALKING_SPEED_MPS,
   DRIVING_SUSTAIN_MS,
   STOPPED_SUSTAIN_MS,
@@ -117,5 +118,61 @@ describe("§5 driver state machine — the deriver", () => {
     observeMotion({ speedMps: 0, now: stopped });
     observeMotion({ speedMps: 0, now: stopped + STOPPED_SUSTAIN_MS });
     expect(document.documentElement.getAttribute("data-state")).toBe(null);
+  });
+});
+
+// AI-CONTEXT: ON_SITE was reachable in these tests and effectively unreachable in a
+// truck, which is the gap this block exists to close.
+//
+// Presence arrived ONLY as an ENTER edge in a ping response. `onSite` is module state,
+// so a reload set it back to false with no edge left to restore it, and the "I've
+// arrived" fallback — the path a driver takes precisely when the background sensor did
+// NOT fire — produced no edge at all. Every ON_SITE behaviour in the product was
+// therefore dark in normal use while looking correct here. `/location/ping` now
+// answers presence as a STATE on every ping.
+describe("§5 ON_SITE — presence as a state, not only an edge", () => {
+  beforeEach(() => __resetStateForTests());
+
+  it("goes ON_SITE from a plain presence fact, with no ENTER edge in sight", () => {
+    expect(state.value).toBe(DriverState.IDLE);
+    observePresence(true);
+    expect(state.value).toBe(DriverState.ON_SITE);
+  });
+
+  it("survives what a reload used to destroy — the next ping restores it", () => {
+    observePresence(true);
+    __resetStateForTests(); // a cold start: module state is gone, the ENTER is history
+    expect(state.value).toBe(DriverState.IDLE);
+
+    observePresence(true); // the very next ping carries the steady state
+    expect(state.value).toBe(DriverState.ON_SITE);
+  });
+
+  it("leaves ON_SITE when the fact stops being true", () => {
+    observePresence(true);
+    observePresence(false);
+    expect(state.value).toBe(DriverState.IDLE);
+  });
+
+  it("does not interrupt DRIVING — a truck rolling through a yard is driving (SM-1)", () => {
+    observeMotion({ speedMps: 25, now: T0 });
+    observeMotion({ speedMps: 25, now: T0 + DRIVING_SUSTAIN_MS });
+    expect(state.value).toBe(DriverState.DRIVING);
+
+    observePresence(true);
+
+    expect(state.value).toBe(DriverState.DRIVING);
+  });
+
+  it("and the presence it was handed mid-drive settles in once the truck stops", () => {
+    observeMotion({ speedMps: 25, now: T0 });
+    observeMotion({ speedMps: 25, now: T0 + DRIVING_SUSTAIN_MS });
+    observePresence(true);
+
+    const stopped = T0 + DRIVING_SUSTAIN_MS + 1000;
+    observeMotion({ speedMps: 0, now: stopped });
+    observeMotion({ speedMps: 0, now: stopped + STOPPED_SUSTAIN_MS });
+
+    expect(state.value).toBe(DriverState.ON_SITE);
   });
 });

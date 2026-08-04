@@ -18,7 +18,7 @@
 // while a stop is armed, which is exactly when a wrong boundary crossing costs money.
 import { ref } from "vue";
 import { sendLocationPing, isAuthenticated, activeStopId } from "./api.js";
-import { observeMotion } from "./state.js";
+import { observeMotion, observePresence } from "./state.js";
 
 // how far and how often a fix has to move before it is worth a request. The armed
 // numbers are tighter because that is when ±3 minutes of arrival detection (PRD §7.3)
@@ -167,10 +167,16 @@ async function onFix(position) {
   lastSentAt_lon = fix.lon;
   try {
     const res = await sendLocationPing({ ...fix, mode: samplingMode() });
+    // §5's ON_SITE is "inside an armed stop's geofence", and the server is the only
+    // thing that knows: geofence radii live in F2 and the evaluation in F3. Every
+    // ping now answers it as a STATE rather than only as a crossing — the edges below
+    // fire once and are gone, so a client that listened only for them lost ON_SITE on
+    // the next reload and could never get it back.
+    if (res && typeof res.present === "boolean") observePresence(res.present);
     if (res && res.events && res.events.length) {
       lastEvents.value = res.events;
-      // §5's ON_SITE is "inside an armed stop's geofence", and the server is the only
-      // thing that knows: geofence radii live in F2 and the evaluation in F3.
+      // the edges still run: they are what an EXIT-driven surface reacts to, and they
+      // arrive in the same response that just settled the state above.
       for (const event of res.events) {
         if (event.event_type === "ENTER") observeMotion({ present: true });
         if (event.event_type === "EXIT") observeMotion({ present: false });

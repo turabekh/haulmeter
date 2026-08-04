@@ -119,6 +119,50 @@ def test_leaving_emits_exit_which_production_could_never_do(client, db):
     assert location.dwell_samples(db, fac.id) != []
 
 
+def test_every_ping_reports_presence_as_a_state_not_only_an_edge(client, db):
+    """§5's ON_SITE input, which the client could never hold onto.
+
+    `events` fires once, on the crossing. A client that learns presence only from an
+    edge knows it is on site until the tab reloads and then never again, because the
+    ENTER it depended on has already been and gone — which is how every ON_SITE
+    behaviour in the product came to be unreachable while looking correct. The second
+    ping below carries NO events and must still say the truck is at the dock.
+    """
+    account, headers = _driver(client, db)
+    _armed_facility(db, account)
+
+    first = client.post(
+        "/location/ping", json={"lat": DALLAS[0], "lon": DALLAS[1]}, headers=headers
+    ).json()
+    assert [e["event_type"] for e in first["events"]] == ["ENTER"]
+    assert first["present"] is True
+
+    # the driver has not moved: no crossing, nothing in `events`, still at the dock
+    second = client.post(
+        "/location/ping", json={"lat": DALLAS[0], "lon": DALLAS[1]}, headers=headers
+    ).json()
+    assert second["events"] == []
+    assert second["present"] is True, "presence must outlive the edge that announced it"
+
+    left = client.post(
+        "/location/ping", json={"lat": FAR[0], "lon": FAR[1]}, headers=headers
+    ).json()
+    assert left["present"] is False
+
+
+def test_presence_is_answered_for_a_driver_who_never_crossed_a_geofence(client, db):
+    """A driver parked outside every armed facility is not on site, and the honest
+    answer is False rather than the absence of a field."""
+    account, headers = _driver(client, db)
+    _armed_facility(db, account)
+
+    body = client.post(
+        "/location/ping", json={"lat": FAR[0], "lon": FAR[1]}, headers=headers
+    ).json()
+
+    assert body["present"] is False
+
+
 def test_server_time_is_authoritative_and_client_skew_is_recorded(client, db):
     """PRD §7.3: server time is authoritative; the client's clock is measured, not
     trusted. A device ten minutes behind does not get to backdate its arrival."""

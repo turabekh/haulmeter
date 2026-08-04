@@ -167,6 +167,31 @@ describe("F3 location reporting (PRD §7.3)", () => {
     expect(lastFix.value.lat).toBeCloseTo(DALLAS.lat);
   });
 
+  // AI-CONTEXT: the seam that made §5's ON_SITE unreachable. The client used to learn
+  // presence ONLY from an ENTER edge, so a ping carrying no events left the state
+  // machine believing the truck was nowhere — which is what every reload produced,
+  // and what the "I've arrived" fallback produced always.
+  it("takes ON_SITE from a ping that carries no events at all", async () => {
+    const { DriverState, useDriverState, __resetStateForTests } = await import(
+      "../src/core/state.js"
+    );
+    __resetStateForTests();
+    const { state } = useDriverState();
+    setToken("tok");
+    const fetchStub = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ recorded_at: "x", present: true, events: [] }),
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    startLocationReporting();
+
+    geo.emit({ latitude: DALLAS.lat, longitude: DALLAS.lon, accuracy: 6, speed: 0 });
+    await settle();
+
+    expect(state.value).toBe(DriverState.ON_SITE);
+    __resetStateForTests();
+  });
+
   // AI-CONTEXT: this is the one that keeps the evidence chain honest. Every other
   // write in the app queues through F12 when the signal drops; a POSITION must not,
   // because the server evaluates it against the geofence at SERVER time, so a
