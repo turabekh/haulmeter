@@ -29,14 +29,22 @@
      specifies. A fixture whose shape does not match its endpoint hides the endpoint. -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
-import { Check, Camera, Send, Clock, TriangleAlert, ChevronDown } from "lucide-vue-next";
+import {
+  Check,
+  Camera,
+  Send,
+  Clock,
+  TriangleAlert,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import IncidentSheet from "../core/components/IncidentSheet.vue";
 import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
 import RateConImportSheet from "../core/components/RateConImportSheet.vue";
-import { useDriverState } from "../core/state.js";
+import { useDriverState, observePresence } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import {
   permission as locationPermission,
@@ -542,13 +550,37 @@ const rung = computed(() => {
   if (!bolCaptured.value) return "bol";
   if (accruing.value && !noticeSent.value) return "notice";
   if (claimable.value) return "claim";
-  return null; // arrived, BOL filed, and nothing owed yet
+  // AI-CONTEXT: §23 entry 127 — the ladder's missing middle. Arrived, BOL filed and
+  // free time still running produced NO primary action at all, which is most of a
+  // stop: the driver's remaining job was rendered only as body-sized checklist rows
+  // while §10.2 promises a state-dependent single CTA. Cargo photos are the one task
+  // that can only be done while the truck is parked at that dock, and they are what a
+  // damage dispute rests on later.
+  //
+  // It sits BELOW notice and claim deliberately. Once the clock is accruing, money is
+  // the more urgent act, and a photo taken then is still takeable from the row and the
+  // More sheet — this rung fills the gap, it does not outrank the wedge.
+  //
+  // `photosRequired > 0` is load-bearing, not defensive: `photosDone` is false when
+  // NOTHING is required, so without this the Primary would demand a photo set the
+  // stop's own checklist never asked for — inventing a task and then grading the
+  // driver against it. A stop that wants no photos leaves the rung empty and keeps
+  // capture on the secondary row, which is where voluntary photographs belong.
+  if (isOnSite.value && photosRequired.value > 0 && !photosDone.value) return "photos";
+  return null; // arrived, BOL filed, off the geofence, and nothing owed yet
 });
 
 async function onArrive() {
   if (!activeStopId.value) return;
   try {
     await arriveAtStop(activeStopId.value);
+    // the server writes a real geofence ENTER for this tap (api/load.py: arrive), so
+    // the driver IS on site by F3's own reckoning. Saying so here rather than waiting
+    // up to a minute for the next ping is what makes the dock actions appear at the
+    // moment the driver says they are at the dock — the fallback path is exactly the
+    // one whose background sensor never fired, so it is the last path that should
+    // have to wait for one.
+    observePresence(true);
     await loadMeter();
   } catch {
     /* offline / queued in a later F12 pass */
@@ -722,15 +754,34 @@ async function endLoad() {
             <button v-else class="checklist__snap" type="button" @click="openCapture(row)">
               <Camera :size="20" :stroke-width="2" aria-hidden="true" />
               {{ docLabel(row) }}
+              <ChevronRight :size="18" :stroke-width="2" class="checklist__go" aria-hidden="true" />
             </button>
           </li>
+          <!-- AI-CONTEXT: this row was a plain <li> with no handler while every row
+               above it was a button — so "Photos 0/4", the line that reads most like a
+               job to do, was the one line on the card that did nothing when tapped.
+               Reported by the owner as "tapping on photos not working"; there was
+               nothing to break, because nothing was ever wired. The destination is the
+               same one the More sheet and the on-site shortcut already use. -->
           <li class="checklist__item">
-            <Check v-if="photosDone" :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
-            <Camera v-else :size="20" :stroke-width="2" aria-hidden="true" />
-            {{ t("load.photos") }}
-            <span v-if="photosRequired" class="checklist__count">
-              {{ photosCaptured }}/{{ photosRequired }}
-            </span>
+            <template v-if="photosDone">
+              <Check :size="20" :stroke-width="2" class="ok" aria-hidden="true" />
+              {{ t("load.photos") }}
+              <span class="checklist__count">{{ photosCaptured }}/{{ photosRequired }}</span>
+            </template>
+            <button
+              v-else
+              class="checklist__snap"
+              type="button"
+              @click="router.push('/protection/condition')"
+            >
+              <Camera :size="20" :stroke-width="2" aria-hidden="true" />
+              {{ t("load.photos") }}
+              <span v-if="photosRequired" class="checklist__count">
+                {{ photosCaptured }}/{{ photosRequired }}
+              </span>
+              <ChevronRight :size="18" :stroke-width="2" class="checklist__go" aria-hidden="true" />
+            </button>
           </li>
           <li class="checklist__item">
             <Send :size="20" :stroke-width="2" :class="{ ok: noticeSent }" aria-hidden="true" />
@@ -785,6 +836,17 @@ async function endLoad() {
       <button v-else-if="rung === 'claim'" class="cta" type="button" @click="onGenerateClaim">
         {{ t("load.cta.claim") }}
       </button>
+      <button
+        v-else-if="rung === 'photos'"
+        class="cta"
+        type="button"
+        @click="router.push('/protection/condition')"
+      >
+        {{ t("load.cta.photos") }}
+        <!-- the denominator travels with the CTA for the same reason §10.2 puts it on
+             the row: "photos" is a task with no end, "0/4" is a task with an end. -->
+        <span v-if="photosRequired" class="cta__count">{{ photosCaptured }}/{{ photosRequired }}</span>
+      </button>
 
       <!-- AI-CONTEXT: passed-over rungs, and why they are a ROW rather than a stack.
            §8 allows exactly one Primary per screen and grades the rest Secondary
@@ -832,8 +894,11 @@ async function endLoad() {
              the rest of the time (More -> Capture) and one while the truck is parked
              at the dock, which is the only place those photographs can be taken. It
              stays in the More sheet as well: this is a shortcut, not a move. -->
+        <!-- `rung !== 'photos'` for the same reason every other rung carries that
+             guard: when the ladder has already promoted this action to the Primary,
+             repeating it here gives one job two controls. -->
         <button
-          v-if="isOnSite"
+          v-if="isOnSite && rung !== 'photos'"
           class="rungs__item"
           type="button"
           @click="router.push('/protection/condition')"
@@ -1291,13 +1356,21 @@ async function endLoad() {
   font-variant-numeric: tabular-nums;
   color: var(--text-1);
 }
+/* §23 entry 129: three accent controls of identical weight competed on this screen —
+   "Correct the appointment", "View all evidence" and "More for this stop" all rendered
+   in shield-500 at label size and weight 500, so nothing said which one a driver at a
+   dock actually wants. Accent is reserved for the forward path; correcting an
+   appointment is a rare repair, so it steps down to `--text-2` and keeps an underline
+   (the affordance AuthSurface already uses) rather than becoming unreadable-as-a-
+   control. Still 48 dp, still first in the tab order it always had. */
 .context__fix {
   align-self: flex-start;
   min-height: 48px;
   padding: 0 var(--s-2);
   margin-left: calc(var(--s-2) * -1);
   background: transparent;
-  color: var(--shield-500);
+  color: var(--text-2);
+  text-decoration: underline;
   font-size: var(--type-label-size);
   font-weight: 500;
 }
@@ -1341,6 +1414,22 @@ async function endLoad() {
 /* §6.5's glove spec: a checklist row a driver can act on is a real target, 48 dp tall.
    It inherits the row's type and colour rather than becoming a second kind of button —
    the affordance is that it is tappable, not that it looks like a CTA. */
+/* §23 entry 128: a row that DOES something ends in a chevron; a row that states a
+   fact does not. The card mixed both kinds at identical weight — "Late 15:40" and
+   "Photos 0/4" were the same size, colour and alignment — so the only way to find out
+   which lines were controls was to tap them and see. The chevron is `--text-3`, the
+   quietest text step: this has to be findable without competing with the status icon
+   that carries the row's meaning. */
+.checklist__go {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+/* when the row already ends in a figure, the figure keeps the auto margin and the
+   chevron rides the flex gap behind it */
+.checklist__count + .checklist__go {
+  margin-left: 0;
+}
 .checklist__snap {
   display: flex;
   align-items: center;
@@ -1396,6 +1485,15 @@ async function endLoad() {
   color: var(--on-accent);
   font-size: var(--type-label-size);
   font-weight: 500;
+}
+/* the CTA's own figure — Mono and tabular like every other figure in the product
+   (T-2), and one type step quieter than the label it follows so the button still
+   reads as one action rather than two things competing inside a box. */
+.cta__count {
+  margin-left: var(--s-2);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
 }
 .cta--outline {
   margin-top: var(--s-2);

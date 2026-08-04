@@ -119,6 +119,20 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
    whole free-time → amber → accruing chain is watchable in about two minutes.
 5. `docker compose stop api` → Meter **keeps ticking** from local state; calm offline strip.
    Restart → silent recovery.
+6. **At the dock, the screen has a job on it** (§23 entry 127, 2026-08-05). Arrived with the BOL
+   filed and free time still running used to render **no primary button at all** — the state that
+   covers most of a stop. It now reads **"Take cargo photos 0/4"**, and once detention accrues the
+   money rung (**Send notice**) takes the Primary back. A stop whose checklist asks for no photos
+   keeps no primary here, which is correct rather than missing.
+7. **Every checklist row that does something ends in a chevron** (§23 entry 128); rows that only
+   state a fact ("Late 15:40", "Notice not sent") do not. **Tap "Photos 0/4" → condition capture.**
+   That row was an inert `<li>` until 2026-08-05 — the one line on the card that looked most like a
+   job and did nothing.
+8. **ON_SITE now survives a reload** (§5). Presence used to reach the client only as an ENTER edge,
+   so refreshing the tab — or arriving via the **I've arrived** fallback, which trips no edge — left
+   the app believing the truck was nowhere, and every ON_SITE behaviour went dark. `/location/ping`
+   answers `present` on every ping. To check it: at the dock, reload the tab; the cargo-photo
+   Primary must come back within one ping (≤60 s while armed).
 
 ## J5 — Notice → exit → claim pack → invoice `[M3-FR3..6, F4, §17]`
 1. Detention accruing → **Send notice**. Confirmation reuses the verb ("Notice sent"); checklist
