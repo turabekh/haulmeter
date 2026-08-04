@@ -3,7 +3,35 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — read this first, every session.
+➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — read this first, every session.
+
+> **117** did two things the owner asked for, and both turned up something under them.
+>
+> **Email has a real provider.** Gmail SMTP, dev and production on one account, closing
+> the question 116 §9 left open — and **verified by a real send the owner confirmed
+> receiving**, which is the first time this product has reached a person outside the
+> box. No code changed; the gateway already did STARTTLS and `login()`. What the owner
+> had saved (`GMAIL`, `GMAIL_APP_PASSWORD`) was **read by nothing** — settings bind
+> `SMTP_*` — so it would have looked configured while every send fell back to recording.
+> §23 entry 126.
+>
+> **The Load tab, from a screenshot of a real stop.** "Tapping on photos not working"
+> was real: the row was a plain `<li>` while every row above it was a button. Nothing
+> failed, because nothing was wired. Under it were two larger things — §10.2's ladder
+> **rendered no primary action at all** in the state covering most of a stop, and the
+> card mixed facts with actions at identical weight, which is *why* it arrived as a bug
+> report. §23 entries 127–129.
+>
+> **And the fifth built-and-inert engine: §5's ON_SITE has been unreachable in a truck
+> since the deriver was written.** Presence reached the client only as an ENTER edge; a
+> reload wiped it and the "I've arrived" fallback never set it — the path a driver takes
+> precisely when the background sensor did not fire. The fact was in the database the
+> whole time. *An edge is a fact about a moment; a state has to be askable at any moment.*
+>
+> **Stack DOWN · four commits UNPUSHED · nothing deployed.** The next task is still the
+> handset background-sensor test.
+
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — the session before.
 
 > **116** walked the stop auto-pilot end to end in a real browser, which is what two
 > sessions of building had never been subjected to. **It works.** A human adds a load,
@@ -28,7 +56,9 @@ results, exact next task, and blockers always live in the latest numbered handof
 > that "the three DEV pins render" was also false: they are three facility types across
 > three presets, and the shipper J7-AP arms is invisible until you switch to **Work**.
 >
-> **Stack UP · everything from `a4e282c` onward UNPUSHED · nothing deployed.**
+> **Stack DOWN at 116's end · nothing deployed.** (This line read "Stack UP", which
+> HANDOFF-116.md's own header contradicted, and its "everything from `a4e282c` onward
+> UNPUSHED" was overtaken by the 2026-08-03 push. Corrected in 117.)
 
 ➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — the session before.
 
