@@ -89,3 +89,13 @@ make test        # full suite (api pytest + ui vitest) in compose
 make lint        # ruff + import-linter in the api container
 make ci          # preflight + lint + test (CI parity)
 ```
+
+
+## Current work queue
+An audit was completed 2026-08-07: 45 findings, 8 critical.
+- `docs/audits/AUDIT-INDEX.md` — start here, includes suggested order
+- `docs/audits/OPEN-FINDINGS.md` — the live defect queue; update status when you close one
+- `docs/kickoffs/` — session briefs, plan-first, use them verbatim
+
+Findings marked OBSERVED were read from a dump, not a running system.
+Re-grep before acting. Findings marked INFERRED need a command on the box first.
