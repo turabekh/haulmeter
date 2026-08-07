@@ -3,7 +3,28 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — read this first, every session.
+➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — read this first, every session.
+
+> **118** is a short session with **no source changes**: the owner asked for the stack to be
+> restarted, then for a handoff and a shutdown.
+>
+> The stack came up clean and was verified from outside the containers — `/health` 200,
+> UI 200, `0059_f13_config_decl (head)`, the Tampa origin still seeded. The four gates were
+> **re-measured rather than carried forward** and hold identically to 117: **pytest 1391 ·
+> vitest 689 · layout 225 · import-linter 30/30 · ruff clean.**
+>
+> One thing turned up, and it is neither a leak nor a defect: **`collect_files.py` is tracked
+> and pushed.** Handoffs 089, 098, 099 and 117 all describe it as untracked and deliberately
+> left alone — *"not ours to commit or delete."* It was swept into session 113's A6 commit
+> (`9cf9775`, 2026-08-02) and has been in the public repo since. Read in full: 79 lines, no
+> network, no credentials, nothing references it. **Left in place** — half that rule was
+> broken by accident, which is not a licence to break the other half on purpose. 118 §4.
+>
+> **Stack DOWN · six commits UNPUSHED · nothing deployed.** `git fetch` could not run this
+> session (no credential), so the ahead-count is arithmetic, not observation — **re-fetch
+> before pushing.** The next task is still the handset background-sensor test.
+
+➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — the session before.
 
 > **117** did two things the owner asked for, and both turned up something under them.
 >
@@ -31,7 +52,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · four commits UNPUSHED · nothing deployed.** The next task is still the
 > handset background-sensor test.
 
-➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — the session before.
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — two sessions before.
 
 > **116** walked the stop auto-pilot end to end in a real browser, which is what two
 > sessions of building had never been subjected to. **It works.** A human adds a load,
