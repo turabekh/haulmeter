@@ -10,7 +10,9 @@ from sqlalchemy import (
     Integer,
     String,
     func,
+    text,
 )
+from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -56,8 +58,25 @@ class ParkingSpot(Base):
 
 
 class Booking(Base):
+    """AI-CONTEXT: the no-overlap rule lives in Postgres, not in service.book(). A Python
+    pre-check reads rows that a concurrent transaction has not committed yet, so two
+    requests for the same spot and window both pass it and both insert — and each posts
+    its own balanced journal entry, crediting the owner twice for one night. An EXCLUDE
+    constraint makes that impossible rather than unlikely, and unlike _overlaps it still
+    holds with a second API replica. Canceled and refunded bookings are excluded: they
+    free the window. Requires the btree_gist extension for the `spot_id WITH =` operand."""
+
     __tablename__ = "booking"
-    __table_args__ = {"schema": SCHEMA}
+    __table_args__ = (
+        ExcludeConstraint(
+            ("spot_id", "="),
+            (text("tstzrange(start_at, end_at)"), "&&"),
+            name="ex_booking_no_overlap",
+            using="gist",
+            where=text("state IN ('booked', 'checked_in', 'checked_out')"),
+        ),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     spot_id: Mapped[uuid.UUID] = mapped_column(

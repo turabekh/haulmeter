@@ -23,4 +23,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # AI-CONTEXT: deliberately empty, not unfinished (audit F-31). This migration adds
+    # values to a Postgres enum type, and Postgres cannot drop one. The reversal would be
+    # rebuild-the-type-and-rewrite-every-column, which is worse than the irreversibility.
+    # A12's restore story depends on knowing where the chain genuinely cannot reverse.
     pass

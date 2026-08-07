@@ -13,8 +13,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.db import violates_constraint
 from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f03_location import public as location
 from app.foundation.f07_ledger import public as ledger
@@ -32,6 +34,7 @@ FULL_REFUND_HOURS = 24
 GATES = ["refund_policy", "damage_liability_posture"]
 
 _ACTIVE_STATES = {BookingState.booked, BookingState.checked_in, BookingState.checked_out}
+OVERLAP_CONSTRAINT = "ex_booking_no_overlap"
 
 
 class SpotUnavailable(Exception):
@@ -183,18 +186,11 @@ def book(
     owner_payout = price - take
 
     prop = db.get(ParkingProperty, spot.property_id)
-    if gateway is not None:  # Stripe seam (deferred); ledger is the source of truth
-        gateway.create_payment_intent(price, f"booking:{spot.id}")
-    cash, owner_acct, platform = _ledger_accounts(db, prop.owner_account_id)
-    entry = ledger.post_entry(
-        db,
-        ledger.EntryType.booking_payment,
-        [
-            ledger.Posting(cash.id, ledger.Direction.debit, price),
-            ledger.Posting(owner_acct.id, ledger.Direction.credit, owner_payout),
-            ledger.Posting(platform.id, ledger.Direction.credit, take),
-        ],
-    )
+    # AI-CONTEXT: the booking row is claimed BEFORE any money moves. ex_booking_no_overlap
+    # is the only thing that can stop a concurrent second booking, and it can only fire on
+    # the insert — posting the entry first meant the loser of the race had already credited
+    # the owner. The entry now carries external_ref=booking:<id>, which is what lets F7's
+    # uq_journal_entry_type_ref catch a replayed payment for the same booking.
     booking = Booking(
         spot_id=spot.id,
         driver_account_id=driver_account_id,
@@ -205,9 +201,30 @@ def book(
         take_cents=take,
         owner_payout_cents=owner_payout,
         state=BookingState.booked,
-        entry_ref=entry.id,
     )
-    db.add(booking)
+    try:
+        with db.begin_nested():
+            db.add(booking)
+            db.flush()
+    except IntegrityError as exc:
+        if violates_constraint(exc, OVERLAP_CONSTRAINT):
+            raise SpotUnavailable(str(spot.id)) from exc
+        raise
+
+    if gateway is not None:  # Stripe seam (deferred); ledger is the source of truth
+        gateway.create_payment_intent(price, f"booking:{booking.id}")
+    cash, owner_acct, platform = _ledger_accounts(db, prop.owner_account_id)
+    entry = ledger.post_entry(
+        db,
+        ledger.EntryType.booking_payment,
+        [
+            ledger.Posting(cash.id, ledger.Direction.debit, price),
+            ledger.Posting(owner_acct.id, ledger.Direction.credit, owner_payout),
+            ledger.Posting(platform.id, ledger.Direction.credit, take),
+        ],
+        external_ref=f"booking:{booking.id}",
+    )
+    booking.entry_ref = entry.id
     db.flush()
     return booking
 

@@ -85,15 +85,18 @@ def register_module(db: Session) -> None:
 
 
 # --- Points economy (M10-FR1) ---
-def points_balance(db: Session, account_id) -> int:
-    account = ledger.get_or_create_account(
+def _points_account(db: Session, account_id):
+    return ledger.get_or_create_account(
         db,
         ledger.LedgerAccountKind.points_balance,
         f"points:{account_id}",
         currency=ledger.Currency.points,
         owner_ref=account_id,
     )
-    return int(ledger.balance(db, account))  # plain int (points are whole)
+
+
+def points_balance(db: Session, account_id) -> int:
+    return int(ledger.balance(db, _points_account(db, account_id)))  # plain int
 
 
 def _rate_limited(db: Session, account_id, now: datetime) -> bool:
@@ -115,28 +118,33 @@ def _earn_points(db: Session, kind: str) -> int:
 
 
 def award_contribution(db: Session, account_id, kind: str, now: datetime) -> int:
+    # AI-CONTEXT: the log row is written for EVERY contribution, paid or not. It is
+    # what _rate_limited counts, so writing it only when points > 0 made the anti-abuse
+    # cap and the pricing knob the same lever: an admin setting m10_earn_<kind> to 0 in
+    # the F14 console would have removed the daily cap for that kind entirely, not just
+    # stopped paying for it. points > 0 gates the ledger issue and nothing else.
     if _rate_limited(db, account_id, now):
         raise RateLimited(str(account_id))
     points = _earn_points(db, kind)
     if points > 0:
         crowd.issue_points(db, account_id, points)  # F7 points_earn via F10
-        db.add(ContributionLog(account_id=account_id, kind=kind, points=points))
-        db.flush()
+    db.add(ContributionLog(account_id=account_id, kind=kind, points=points))
+    db.flush()
     return points
 
 
 def redeem_points(db: Session, account_id, points: int, now: datetime | None = None) -> int:
+    # AI-CONTEXT: the lock is taken BEFORE the balance is read, and that ordering is the
+    # whole fix. Read-then-write on a summed balance let two concurrent redemptions both
+    # pass the sufficiency check and both post, driving the account negative — and nothing
+    # in F7 forbids a negative points account, so it stayed negative. Points redeem against
+    # real M6 bookings at REDEEM_CENTS_PER_POINT, so this is money, not a scoreboard.
     if points <= 0:
         return 0
-    if points_balance(db, account_id) < points:
+    balance = _points_account(db, account_id)
+    ledger.lock_account(db, balance)
+    if int(ledger.balance(db, balance)) < points:
         raise InsufficientPoints(str(account_id))
-    balance = ledger.get_or_create_account(
-        db,
-        ledger.LedgerAccountKind.points_balance,
-        f"points:{account_id}",
-        currency=ledger.Currency.points,
-        owner_ref=account_id,
-    )
     pool = ledger.get_or_create_account(
         db, ledger.LedgerAccountKind.points_pool, "points:pool", currency=ledger.Currency.points
     )
@@ -155,8 +163,14 @@ def redeem_points(db: Session, account_id, points: int, now: datetime | None = N
 def book_with_points(db: Session, spot, driver_account_id, start_at, end_at, points, now=None):
     # AI-CONTEXT: redemption is ONLY against M6 bookings (PRD §8.10). The discount
     # is funded from the M6 take (platform_revenue) — partially circular economy.
-    discount_cents = redeem_points(db, driver_account_id, points, now)
+    #
+    # Book FIRST, redeem second. Redeeming first meant a spot that had just been taken
+    # raised SpotUnavailable with the points already spent, and the driver got them back
+    # only because get_session() happens to roll the request back — correct by ambient
+    # transaction semantics rather than by construction. Any caller that committed between
+    # the two steps ate the points. This ordering does not depend on the caller.
     booking = m6.book(db, spot, driver_account_id, start_at, end_at)
+    discount_cents = redeem_points(db, driver_account_id, points, now)
     if discount_cents > 0:
         cash = ledger.get_or_create_account(
             db, ledger.LedgerAccountKind.cash_clearing, "cash:parking", currency=ledger.Currency.usd

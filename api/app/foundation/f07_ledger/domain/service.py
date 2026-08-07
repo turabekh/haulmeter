@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
+from app.core.db import violates_constraint
 
 from .enums import (
     Currency,
@@ -24,6 +27,13 @@ class CurrencyMismatch(Exception):
 
 class InvalidTransition(Exception):
     pass
+
+
+class DuplicateEntry(Exception):
+    pass
+
+
+DUPLICATE_REF_CONSTRAINT = "uq_journal_entry_type_ref"
 
 
 ALLOWED_TRANSITIONS: dict[ReceivableState, set[ReceivableState]] = {
@@ -129,8 +139,19 @@ def post_entry(
         description=description,
         external_ref=external_ref,
     )
-    db.add(entry)
-    db.flush()
+    # AI-CONTEXT: the SAVEPOINT is what makes DuplicateEntry a condition a caller can
+    # catch. Without it the IntegrityError poisons the enclosing transaction and the
+    # whole request dies, which is indistinguishable from a crash to everyone upstream.
+    # The add() belongs INSIDE the block — a pending object added outside it survives the
+    # savepoint rollback and gets re-flushed into the next statement.
+    try:
+        with db.begin_nested():
+            db.add(entry)
+            db.flush()
+    except IntegrityError as exc:
+        if violates_constraint(exc, DUPLICATE_REF_CONSTRAINT):
+            raise DuplicateEntry(f"{entry_type.value}/{external_ref}") from exc
+        raise
     for posting in postings:
         db.add(
             LedgerPosting(
@@ -142,6 +163,15 @@ def post_entry(
         )
     db.flush()
     return entry
+
+
+def lock_account(db: Session, account: LedgerAccount) -> None:
+    # AI-CONTEXT: a balance is a SUM over postings, so it cannot carry a CHECK constraint —
+    # the only way to make read-then-write on it safe is to serialise writers on the account
+    # ROW. Concurrent redemptions of the same points account now queue here, and the second
+    # one reads a balance that already includes the first. Callers must hold a transaction;
+    # the lock is released with it. M10's redeem_points is the reason this exists.
+    db.execute(select(LedgerAccount.id).where(LedgerAccount.id == account.id).with_for_update())
 
 
 def balance(db: Session, account: LedgerAccount) -> int:

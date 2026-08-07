@@ -83,6 +83,10 @@ def engine():
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        # btree_gist backs m06.booking's ex_booking_no_overlap (the `spot_id WITH =`
+        # operand). Migration 0060 installs it on a real database; this schema is built
+        # by create_all, so without it every m06 test fails at CREATE TABLE.
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
         for schema in SCHEMAS:
             conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
     Base.metadata.drop_all(eng)

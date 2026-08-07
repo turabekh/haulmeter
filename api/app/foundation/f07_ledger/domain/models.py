@@ -6,8 +6,10 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     String,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,8 +45,23 @@ class LedgerAccount(Base):
 
 
 class JournalEntry(Base):
+    """AI-CONTEXT: `external_ref` is the idempotency key for a real-world event, and it
+    is unique per entry_type where present — F2's `uq_source_record_kind_ref` is the same
+    pattern for the same reason. A duplicate entry still balances, so the double-entry
+    invariant holds while a driver's payable is doubled; the constraint is the only thing
+    that can catch it. Partial, because most entries legitimately carry no ref at all."""
+
     __tablename__ = "journal_entry"
-    __table_args__ = {"schema": SCHEMA}
+    __table_args__ = (
+        Index(
+            "uq_journal_entry_type_ref",
+            "entry_type",
+            "external_ref",
+            unique=True,
+            postgresql_where=text("external_ref IS NOT NULL"),
+        ),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     entry_type: Mapped[EntryType] = mapped_column(Enum(EntryType, name="entry_type", schema=SCHEMA))
