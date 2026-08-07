@@ -563,10 +563,10 @@ function stale(pin) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--pin-color);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  border: 2px solid var(--on-accent);
+  box-shadow: var(--shadow-pin);
   transition: transform 0.12s ease;
 }
 .pin:hover .pin__puck,
@@ -632,8 +632,14 @@ function stale(pin) {
   white-space: nowrap;
   pointer-events: none;
 }
+/* the hollow ring is the §11.7 affordance for "this reading is old", so its fill is
+   deliberately theme-INVARIANT — a fill that darkened with the theme would make a stale
+   pin read as a filled one at a glance, which is the honesty law failing silently.
+   --on-accent is the system's theme-invariant white; it is named for a label on an
+   accent fill, and this is the inverse use of the same value. Logged as composition
+   (§23 entry 130) rather than inventing a --pin-hollow holding the same white twice. */
 .pin--stale .pin__puck {
-  background: #fff;
+  background: var(--on-accent);
   color: var(--pin-color);
   border-color: var(--pin-color);
 }
@@ -646,9 +652,9 @@ function stale(pin) {
   padding: 0 var(--s-2);
   border-radius: var(--r-pill);
   background: var(--pin-color);
-  color: #fff;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  color: var(--on-accent);
+  border: 2px solid var(--on-accent);
+  box-shadow: var(--shadow-pin);
   display: flex;
   align-items: center;
   justify-content: center;

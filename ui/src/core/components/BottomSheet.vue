@@ -42,7 +42,7 @@ const emit = defineEmits(["close"]);
 .scrim {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--scrim);
 }
 .sheet {
   position: absolute;

@@ -1160,11 +1160,20 @@ async function submitPrice(cents) {
   min-height: 240px;
 }
 /* the same pill the preset row uses — no new component pattern (§22.2) */
+/* AI-CONTEXT: 48, because §6.5's floor is 48 and this chip's own comment already said
+   it was "the same pill the preset row uses". It was not — PresetChips' `.chip` is
+   48 dp in both axes with §6.5 cited in its rules, and `.saved-chip` and `.place-chip`
+   in this very file are both 48. This was the one 40 dp control in the row, so raising
+   it converges on the shared pattern rather than forking one (§22.2).
+
+   The harness could not have caught it: this button renders only under
+   `preset === 'food'`, and the food half has been flag-dark since HANDOFF-114 — so a
+   surface state that never renders is a surface state nothing measures. */
 .filters-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
-  min-height: 40px;
+  min-height: 48px;
   margin: 0 var(--s-4) var(--s-2);
   padding: 0 var(--s-3);
   border: 1px solid var(--line-1);

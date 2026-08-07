@@ -171,6 +171,14 @@ export function logout() {
   persist();
   clearCache(); // a new driver never sees the last one's cached reads
   saveQueue([]); // ...nor inherits their unsynced writes
+  // AI-CONTEXT: clearing storage is only half of it. `signOut()` routes to /login
+  // without reloading the page, so these module-scope refs outlive the logout that
+  // emptied their keys — the Load tab would render the previous driver's stop from
+  // memory and never consult localStorage to find it gone. The keys being swept is
+  // what a storage-level test sees; this is what the DRIVER sees.
+  activeStopId.value = null;
+  activeStopFacilityId.value = null;
+  activeFleetId.value = null;
 }
 
 function _adopt(data, userEmail) {
@@ -340,7 +348,13 @@ export async function flushQueue() {
 
 // AI-CONTEXT: the driver's active stop (behind The Meter) persists across
 // reloads so the Load tab reopens on the running clock.
-const ACTIVE_STOP_KEY = "longhaul.active_stop";
+//
+// It lives UNDER `CACHE_PREFIX` because that prefix is what `clearCache()` sweeps at
+// logout, and this key sat outside it — so a phone passed between team drivers, which
+// is the normal case in this product, handed the next driver the previous one's active
+// stop. The fix is the prefix rather than a `removeItem` beside it: the convention is
+// what failed, and an exception list leaves the next key exposed the same way.
+const ACTIVE_STOP_KEY = `${CACHE_PREFIX}active_stop`;
 function loadActiveStop() {
   try {
     return localStorage.getItem(ACTIVE_STOP_KEY);
@@ -768,8 +782,10 @@ export async function fetchFuelCorridor({ lat, lon, headingDeg = 0, maxDistanceM
   return resp.json();
 }
 
-// AI-CONTEXT: the fleet-portal's selected fleet persists across reloads.
-const ACTIVE_FLEET_KEY = "longhaul.active_fleet";
+// AI-CONTEXT: the fleet-portal's selected fleet persists across reloads. Under
+// CACHE_PREFIX for the same reason as ACTIVE_STOP_KEY — it is per-driver state and
+// clearCache() only sweeps the prefix.
+const ACTIVE_FLEET_KEY = `${CACHE_PREFIX}active_fleet`;
 export const activeFleetId = ref((() => {
   try {
     return localStorage.getItem(ACTIVE_FLEET_KEY);
@@ -1125,7 +1141,11 @@ export async function submitReview(facilityId, ratings, text) {
 // renders in a dead zone (§15.1 — offline is a mode, not an error). The cache is
 // scoped to the day it was written: stale food data is exactly the "dead content"
 // Q-1 exists to prevent, so an old cache is dropped rather than shown.
-const VENDOR_CACHE_KEY = "longhaul.vendor_appearances";
+// U-02's third instance, found by sweeping rather than by the audit: this is a
+// per-driver READ CACHE, which is the exact thing CACHE_PREFIX exists to sweep, and it
+// sat outside the prefix like active_stop and active_fleet did. Day-scoped, so moving
+// the key costs one day's cache once and nothing after that.
+const VENDOR_CACHE_KEY = `${CACHE_PREFIX}vendor_appearances`;
 
 function cacheAppearances(entries) {
   try {

@@ -10,6 +10,23 @@ import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { BRAND } from "../core/brand.js";
 import { isAuthenticated, email, logout, login, register } from "../core/api.js";
+import { fallbackReport, resetFallbacksForTests } from "../core/i18n.js";
+
+// AI-CONTEXT: U-03's counter. Every string that resolved to English because the
+// driver's own locale did not have it, since this tab was opened. A dev tool is the
+// right home for it — the number is a measurement for us, never a driver-facing one —
+// and /dev is the one page that is always reachable without a session.
+//
+// It counts what has been RENDERED, so it only knows about screens someone has walked.
+// A zero here means nobody has looked yet; it does not mean the catalogues are complete.
+const i18nGaps = ref(fallbackReport());
+function refreshGaps() {
+  i18nGaps.value = fallbackReport();
+}
+function clearGaps() {
+  resetFallbacksForTests();
+  refreshGaps();
+}
 
 const router = useRouter();
 const busy = ref(false);
@@ -112,6 +129,34 @@ function go(to) {
       <p v-if="note" class="session__note">{{ note }}</p>
     </section>
 
+    <section class="session i18n-gaps">
+      <div class="session__state">
+        <span class="dot" :class="{ 'dot--on': i18nGaps.total === 0 }" aria-hidden="true" />
+        <span>
+          English reaching a non-English driver:
+          <strong>{{ i18nGaps.total }}</strong> string(s) since this tab opened
+        </span>
+      </div>
+      <p class="session__note">
+        Walk the tabs in each locale, then Refresh. A zero means nobody has looked yet —
+        it is not a claim that the catalogues are complete.
+      </p>
+      <ul v-if="i18nGaps.total" class="gaps">
+        <li v-for="(n, loc) in i18nGaps.byLocale" :key="loc" class="gaps__row">
+          <strong>{{ loc }}</strong> — {{ n }} missing
+        </li>
+      </ul>
+      <ul v-if="i18nGaps.total" class="gaps">
+        <li v-for="e in i18nGaps.entries" :key="`${e.locale}|${e.key}`" class="gaps__key">
+          {{ e.locale }} · {{ e.key }}
+        </li>
+      </ul>
+      <div class="session__actions">
+        <button class="btn" type="button" @click="refreshGaps">Refresh</button>
+        <button class="btn" type="button" @click="clearGaps">Reset</button>
+      </div>
+    </section>
+
     <section v-for="g in GROUPS" :key="g.title" class="group">
       <h2 class="group__title">{{ g.title }}</h2>
       <p class="group__hint">{{ g.hint }}</p>
@@ -201,6 +246,17 @@ function go(to) {
   margin: var(--s-3) 0 0;
   color: var(--text-2);
   font-size: var(--type-caption-size);
+}
+.gaps {
+  margin: var(--s-3) 0 0;
+  padding-left: var(--s-4);
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.gaps__key {
+  font-family: var(--font-mono);
 }
 .group {
   margin-bottom: var(--s-5);

@@ -130,8 +130,21 @@ $r-card: 12px;
 $r-control: 10px;
 $r-sheet: 16px;
 $r-pill: 999px;
-// AI-CONTEXT: §6.3 Elevation — surface-step + hairline; this is the ONLY shadow
+// AI-CONTEXT: §6.3 Elevation — surface-step + hairline. `$shadow-float` was the ONLY
+// shadow, and that sentence was true of this file rather than of the product: map pins
+// and clusters carried `0 1px 4px rgba(0,0,0,0.35)` inline, outside the token system
+// entirely (audit U-01). `$shadow-pin` records the value that already ships rather than
+// inventing one — pins render byte-identical — so the system now describes the product.
+//
+// It is a SECOND elevation and therefore an owner call, taken 2026-08-08 (§23 entry
+// 130). The alternative was folding pins into $shadow-float, which is 4px/16px against
+// their 1px/4px and would have visibly re-weighted every pin on the map — a restyle,
+// which is not what a tokenisation pass is for.
 $shadow-float: 0 4px 16px rgba(0, 0, 0, 0.35);
+$shadow-pin: 0 1px 4px rgba(0, 0, 0, 0.35);
+// §8: "dim scrim 40%". The value was already written law; only the token was missing,
+// so this records a decision rather than making one.
+$scrim: rgba(0, 0, 0, 0.4);
 
 // AI-CONTEXT: §6.4 Motion — durations + standard easing
 $t-fast: 120ms;
@@ -210,6 +223,8 @@ $icon-lg: 28px;
   --r-sheet: #{$r-sheet};
   --r-pill: #{$r-pill};
   --shadow-float: #{$shadow-float};
+  --shadow-pin: #{$shadow-pin};
+  --scrim: #{$scrim};
 
   --t-fast: #{$t-fast};
   --t-base: #{$t-base};

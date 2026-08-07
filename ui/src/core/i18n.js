@@ -64,10 +64,58 @@ function fill(raw, params) {
 const UNDER_TEST =
   typeof import.meta !== "undefined" && import.meta.env && import.meta.env.MODE === "test";
 
-function resolve(key, catalog) {
+// AI-CONTEXT: the CROSS-LOCALE fallback, which was the silent one (audit U-03).
+//
+// The throw below fires only when a key is missing from EVERY locale. Present-in-English
+// and missing-in-Somali returned English text with no signal anywhere — so PRD v2.0 §8
+// criterion 5, "no English fallback reaches a driver", had nothing that could observe it
+// being broken. `locale-completeness.test.js` cannot see it either: it compares the six
+// catalogues against each other, and the ~45 dynamic `t(`ns.${...}`)` families whose
+// vocabularies live in Python are not enumerable from JS at all.
+//
+// So the fallback is recorded rather than removed. Removing it would put a raw key in
+// front of a driver, which §12.5 / Forbidden #7 rates as worse than an English word.
+// This makes an invisible gap a MEASURABLE one, which is the whole fix at this stage.
+//
+// Counted always (a test can then assert it); warned once per key+locale in dev only,
+// because a re-render must not turn one missing string into a hundred lines of console.
+const fallbacks = ref([]);
+const seen = new Set();
+const IS_DEV =
+  typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV === true;
+
+function recordFallback(key, loc) {
+  const signature = `${loc}|${key}`;
+  if (seen.has(signature)) return;
+  seen.add(signature);
+  fallbacks.value = [...fallbacks.value, { key, locale: loc }];
+  if (IS_DEV && typeof console !== "undefined") {
+    console.warn(
+      `i18n: "${key}" is missing from "${loc}" — a driver reading ${loc} just got ` +
+        `English (PRD v2.0 §8 criterion 5).`,
+    );
+  }
+}
+
+// the per-locale counts this session was asked to measure. Read by /dev.
+export function fallbackReport() {
+  const byLocale = {};
+  for (const { locale: loc } of fallbacks.value) byLocale[loc] = (byLocale[loc] ?? 0) + 1;
+  return { total: fallbacks.value.length, byLocale, entries: [...fallbacks.value] };
+}
+
+export function resetFallbacksForTests() {
+  seen.clear();
+  fallbacks.value = [];
+}
+
+function resolve(key, catalog, loc = DEFAULT_LOCALE) {
   if (Object.hasOwn(catalog, key)) return catalog[key];
   const fallback = messages[DEFAULT_LOCALE];
-  if (Object.hasOwn(fallback, key)) return fallback[key];
+  if (Object.hasOwn(fallback, key)) {
+    if (loc !== DEFAULT_LOCALE) recordFallback(key, loc);
+    return fallback[key];
+  }
   if (UNDER_TEST) {
     throw new Error(
       `i18n: no string for "${key}" in any locale. A driver would read the raw key ` +
@@ -79,7 +127,10 @@ function resolve(key, catalog) {
 
 export function useI18n() {
   const t = (key, params) =>
-    fill(resolve(key, messages[locale.value] ?? messages[DEFAULT_LOCALE]), params);
+    fill(
+      resolve(key, messages[locale.value] ?? messages[DEFAULT_LOCALE], locale.value),
+      params,
+    );
   const setLocale = (next) => {
     if (LAUNCH_LOCALES.includes(next)) {
       locale.value = next;

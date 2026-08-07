@@ -85,3 +85,60 @@ describe("token contrast (design-prd §16, both themes)", () => {
     });
   }
 });
+
+// AI-CONTEXT: the map pin's glyph, which CI could not see until U-01 was fixed.
+//
+// A pin is a white glyph and a white ring on `--pin-color`, and --pin-color resolves to
+// one of the three status tokens (presentation.js). While those whites were `#fff`
+// literals inside MapCanvas.vue, no contrast check could reach them — §23 entry 45
+// closed light theme on the argument that "contrast is verified from tokens in CI
+// across both themes", and this was the surface that argument did not cover. They are
+// tokens now, so it does.
+//
+// A pin glyph is a non-text UI component: WCAG 1.4.11 / §16 set the floor at 3:1.
+const PIN_FILLS = ["ledger-500", "marker-500", "flare-500"];
+const PIN_MIN = 3;
+
+// MEASURED, NOT ASPIRATIONAL. One pin fill is below the floor today and changing a
+// palette colour is a §22.2 never-improvise category, so it is pinned here at the value
+// it actually has rather than quietly excluded or silently fixed. The test still bites:
+// if the ratio DROPS the assertion fails, if the token is repaired the exact-match fails
+// and tells you to delete the row, and a second failing fill fails the roster check.
+const KNOWN_BELOW_FLOOR = {
+  "dark/marker-500": 2.04,
+};
+
+describe("map pin glyph contrast (§16 / WCAG 1.4.11 — non-text 3:1)", () => {
+  for (const theme of ["dark", "light"]) {
+    const read = theme === "dark" ? darkVar : lightVar;
+    for (const fill of PIN_FILLS) {
+      const key = `${theme}/${fill}`;
+      const known = KNOWN_BELOW_FLOOR[key];
+      if (known === undefined) {
+        it(`${theme}: white pin glyph on ${fill} ≥${PIN_MIN}:1`, () => {
+          expect(ratio("#FFFFFF", read(fill))).toBeGreaterThanOrEqual(PIN_MIN);
+        });
+      } else {
+        it(`${theme}: ${fill} is a KNOWN violation, held at its measured ratio`, () => {
+          const actual = ratio("#FFFFFF", read(fill));
+          expect(actual).toBeCloseTo(known, 2);
+          expect(
+            actual,
+            "if this now passes the floor, delete the KNOWN_BELOW_FLOOR row",
+          ).toBeLessThan(PIN_MIN);
+        });
+      }
+    }
+  }
+
+  it("no pin fill has quietly joined the known-violation list", () => {
+    const failing = [];
+    for (const theme of ["dark", "light"]) {
+      const read = theme === "dark" ? darkVar : lightVar;
+      for (const fill of PIN_FILLS) {
+        if (ratio("#FFFFFF", read(fill)) < PIN_MIN) failing.push(`${theme}/${fill}`);
+      }
+    }
+    expect(failing.sort()).toEqual(Object.keys(KNOWN_BELOW_FLOOR).sort());
+  });
+});

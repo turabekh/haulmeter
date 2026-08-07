@@ -776,6 +776,34 @@ const SURFACES = [
     open: [".packet-card__cta"],
     ready: ".review__send",
   }],
+  // AI-CONTEXT: the WORST-CASE Load stack, which is the densest screen this product can
+  // put in front of a driver (audit U-04-adjacent, PRD v2.0 §8 criterion 3).
+  //
+  // `LoadSurface` renders up to six independent blocks, each behind its own `v-if`:
+  // the packet card, the degraded-location banner, the hint, the context row, the Meter
+  // card and the evidence checklist. The states above register those SEPARATELY, and a
+  // surface measured one block at a time is not the same as a surface measured with
+  // every block on at once — a driver with an active stop, waiting paperwork and denied
+  // location gets all of them, stacked above the Meter, on a 360 dp screen.
+  //
+  // TWO THINGS THIS FOUND, both worth more than the state itself:
+  //
+  // 1. The combination was ALREADY being rendered, by `load-packet-ready` — because
+  //    Playwright denies geolocation, so `locationDenied` is true in every Load state
+  //    (see the note at the top of this file). The coverage was real and ACCIDENTAL:
+  //    nothing in that state's name, definition or `ready` selector said the degraded
+  //    banner was on screen, so the day someone grants geolocation in a context option
+  //    the stack silently loses a card and every assertion still passes. That is the
+  //    exact evaporation this file's own comment predicted.
+  //
+  // 2. Which is why this `ready` proves ALL THREE cards with one `:has()` chain rather
+  //    than waiting on any single one. A state that can go green having rendered two of
+  //    the three is a second copy of `load-packet-ready` wearing a different name.
+  ["load-worst-case", "/load", {
+    mocks: { ...LIVE_MOCKS, "/protection/stop-packets": [PACKET_ROW] },
+    stop: LIVE_STOP,
+    ready: ".load:has(.packet-card):has(.degraded):has(.meter-card):has(.checklist__snap)",
+  }],
   // A1 req 1: the capture sheet reached from a checklist ROW rather than the Snap BOL
   // CTA. The row is a 48 dp target inside §10.2's densest card, and the sheet it opens
   // is type-fixed — the state exists to measure both at 360 with the glove spec.
@@ -887,7 +915,12 @@ async function prepare(page, { theme, pseudo, live }) {
     ([t, p, stop, storage, anon]) => {
       try {
         localStorage.setItem("longhaul.theme", t);
-        if (stop) localStorage.setItem("longhaul.active_stop", stop);
+        // U-02: this key moved under `longhaul.cache.` so that logout's clearCache()
+        // sweeps it — a phone passed between team drivers was handing the next one the
+        // previous driver's active stop. The harness plants it directly, so it has to
+        // move with api.js or every `stop:` state below quietly measures the EMPTY Load
+        // tab again, which is the four-session failure this file was written to end.
+        if (stop) localStorage.setItem("longhaul.cache.active_stop", stop);
         if (p === "xx-XL") localStorage.setItem("longhaul.locale", "xx-XL");
         else if (p) localStorage.setItem("longhaul.locale", p);
         // AI-CONTEXT: some states live in storage rather than behind an endpoint —
