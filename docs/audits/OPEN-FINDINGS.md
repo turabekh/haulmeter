@@ -21,6 +21,7 @@ in `docs/kickoffs/` do exist.
 | **CLOSED** | Fixed, with a test that fails without the fix, and the gates green. |
 | **ACCEPTED** | The owner decided to live with it. Not a defect any more. |
 | **BLOCKED** | Needs an owner decision or a fact nobody has yet. The blocker is named. |
+| **PARTIAL** | The measurable half is done and the remainder is named. Never "mostly closed". |
 
 The audit's own evidence tags still apply and are not status: **OBSERVED** was read from a
 dump, **INFERRED** needs a command on the box, **ABSENT** means the thing is missing rather
@@ -28,21 +29,27 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 
 ## Scoreboard
 
-| Severity | Open | Blocked | Closed | Accepted | Total |
-|---|---|---|---|---|---|
-| Critical | 3 | 4 | 1 | 0 | **8** |
-| High | 15 | 0 | 2 | 0 | **17** |
-| Medium | 11 | 0 | 1 | 0 | **12** |
-| Low | 5 | 0 | 2 | 0 | **7** |
-| Accepted | — | — | — | 1 | **1** |
-| **Total** | **34** | **4** | **6** | **1** | **45** |
+| Severity | Open | Blocked | Partial | Closed | Accepted | Total |
+|---|---|---|---|---|---|---|
+| Critical | 3 | 4 | 0 | 1 | 0 | **8** |
+| High | 12 | 0 | 1 | 4 | 0 | **17** |
+| Medium | 10 | 0 | 1 | 1 | 0 | **12** |
+| Low | 5 | 0 | 0 | 2 | 0 | **7** |
+| Accepted | — | — | — | — | 1 | **1** |
+| **Total** | **30** | **4** | **2** | **8** | **1** | **45** |
 
-**Session 119 closed five:** the four money races (F-05, F-13, F-28, F-29) and F-31's two
-downgrade comments. F-24 was already closed by F-31 inside the audit itself; it is counted
+**Session 119 closed seven** — the four money races (F-05, F-13, F-28, F-29), F-31's two
+downgrade comments, and U-01 and U-02 — and left **two partial** (U-03, U-05) with the
+remainder named. F-24 was already closed by F-31 inside the audit itself; it is counted
 here for completeness and is not this session's work.
 
 **One critical of the eight is closed (F-13). Four are blocked, three are open** — and of
 the three open, F-21 and U-07 need no decision from anybody.
+
+**Closing findings opened one.** U-01's fix made the map pin's foreground expressible in
+CI, and the first thing CI said was that white on `--marker-500` is **2.04:1** in dark
+theme against a 3:1 floor. That is not a regression — it shipped that way — but it was
+unobservable until the literal became a token. See §Blockers.
 
 ---
 
@@ -88,11 +95,11 @@ the three open, F-21 and U-07 need no decision from anybody.
 
 | ID | Severity | Status | One line |
 |---|---|---|---|
-| U-01 | High | OPEN | The map draws itself outside the token system. |
-| U-02 | High | OPEN | A new driver inherits the last one's active stop. |
-| U-03 | High | OPEN | English reaches drivers, and nothing detects it. |
-| U-04 | Medium | OPEN | Seven surfaces are not in the layout harness. |
-| U-05 | Medium | OPEN | Targets below the glove floor. |
+| U-01 | High | **CLOSED** | Map drew outside the token system → `--on-accent` composition plus new `--shadow-pin`/`--scrim` (§23 entry 130), and a `token-discipline` sweep that keeps literals out. **Opened a new finding:** white on `--marker-500` is 2.04:1 in dark theme — see §Blockers. Session 119. |
+| U-02 | High | **CLOSED** | Per-driver keys moved under `CACHE_PREFIX`, plus a third instance the audit missed (`vendor_appearances`) and the in-memory refs that outlived logout. Asserted on what driver B renders. Session 119. |
+| U-03 | High | **PARTIAL** | The fallback is now counted and warned in dev, with per-locale counts at `/dev` — kickoff steps 1–2 done. Measured **0** across es/pa/ru/uz/so on the five tab roots + Load-live, and the detector was proved by planting two missing keys. **The zero is narrow:** mocked/empty API data left most of the ~45 dynamic `t(\`ns.${...}\`)` families unrendered. Session 119. |
+| U-04 | Medium | OPEN | Seven surfaces not in the layout harness. `load-worst-case` added (the U-04-adjacent item); the other six remain. |
+| U-05 | Medium | **PARTIAL** | `.filters-chip` 40→48 dp. `.cluster` measured at 36 dp with NO expanded hit area — below even §11.2's 44 dp map exemption; reported, not changed. Two portal controls untouched pending an owner call. Session 119. |
 | U-06 | Critical | **BLOCKED** | Money tab shows fabricated earnings on fetch failure. Blocked on the §23 loading-state entry — and the proposal file itself is missing. |
 | U-07 | Critical | OPEN | Offline queue silently discards server-rejected writes. Not blocked. |
 | U-08 | High | OPEN | A transient failure is treated as permanent. |
@@ -121,6 +128,20 @@ decision — the index puts that kickoff fourth, ahead of everything blocked.
    in the tree.** It has to be written before it can be approved, so the blocker is one
    step further back than the index thinks.
 3. **F-02 + F-12 — the `default_on` versus `enabled` decision.** Must not be split.
+4. **NEW (session 119) — `--marker-500` fails the non-text contrast floor in dark theme.**
+   A white pin glyph on it measures **2.04:1**; WCAG 1.4.11 and §16 require 3:1. That is
+   the "Some" parking pin and, by E3.1's inverted valence, the **OPEN** weigh-station pin
+   — the one a driver is meant to act on. Dark `--ledger-500` is 3.12:1, a hair over;
+   every light-theme fill passes (4.33–5.35:1). **Changing a palette colour is a §22.2
+   never-improvise category**, so it is pinned in `contrast.test.js` at its measured value
+   with a roster check: the ratio cannot drift down silently, and a repair fails the test
+   until the exception row is deleted. Needs an owner decision. §23 entry 130.
+5. **Two portal touch targets** (`FleetWorkspaceSurface`, `OwnerPortalSurface`, both 40 dp).
+   §6.5 grants no portal exemption in writing, but applying the glove floor to a desktop
+   form is a design decision rather than a fix. Untouched, deliberately.
+6. **`.cluster`'s hit area is 36 dp** — measured, and it does **not** exceed its visual
+   size the way `.pin` does (a 44 dp button around a 28 dp puck). It is below §6.5's 48
+   and below §11.2's deliberate 44 dp map-pin exemption too. Reported, not changed.
 
 ## Questions the audit could not answer
 
