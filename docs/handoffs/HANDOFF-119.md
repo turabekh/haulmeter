@@ -1,9 +1,9 @@
 # HANDOFF-119 — the audit queue, worked: every critical that could be closed without an owner decision is closed
 
-> **Stack UP · thirteen commits UNPUSHED · nothing deployed.** haulmeter.online still
+> **Stack UP · fifteen commits UNPUSHED · nothing deployed.** haulmeter.online still
 > serves 112's code.
 >
-> Session 119 read the 2026-08-07 audit and worked it: **ten findings closed, two
+> Session 119 read the 2026-08-07 audit and worked it: **eleven findings closed, two
 > partial.** Three of the eight criticals are closed (F-13, F-21, U-07); four are blocked
 > on things nobody in this environment can supply, and the last one (F-02) needs a
 > decision before anyone starts.
@@ -22,10 +22,10 @@
 
 | | |
 |---|---|
-| Branch | `main`, **thirteen** commits ahead of `origin/main` — 118's six plus this session's seven |
+| Branch | `main`, **fifteen** commits ahead of `origin/main` — 118's six plus this session's nine |
 | `origin/main` | `113327e` — still **not re-verified**; `git fetch` has no credential here. **Re-fetch before pushing** |
-| Gates | **pytest 1411 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** |
-| Migrations | **`0060_money_race_constraints` (head)** — new this session, applied and round-tripped on the running stack |
+| Gates | **pytest 1423 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** |
+| Migrations | **`0061_f01_login_attempt` (head)** — 0060 and 0061 are both new this session, applied and round-tripped on the running stack |
 | Working tree | clean; `longhaul.txt` and `split_dump.py` now **gitignored** at the owner's instruction |
 | Local stack | **UP** |
 | Dev data | Tampa `27.9506,-82.4572` intact, four DEV facilities at 88–125 m |
@@ -73,6 +73,26 @@ idempotency key, so a future retry surface can replay one exactly once.
 
 **U-01, U-02 and the rest of the UI kickoff** — see §4.
 
+**F-07 — authentication had no throttle of any kind.** No limiter, no lockout, no attempt
+counter, on a live product with real driver accounts. Bounded per identifier (5) and per
+IP (20) in a sliding 15-minute window — sliding, because a lockout hands an attacker a
+denial-of-service against a driver. It lives in Postgres, not Redis: `core/events.py`
+establishes that Redis here degrades silently, which is right for a live channel and wrong
+for a security control that would then fail open.
+
+**The throttle runs before the hash, and that ordering is the fix.** Checked afterwards it
+would count correctly and still pay for Argon2 on every rejected attempt — stopping the
+stuffing while leaving the CPU-exhaustion vector the finding actually names exactly as it
+was. `VERIFY_SLOTS` caps concurrent verifications so a flood cannot put every threadpool
+worker inside a hash and stop the endpoints that have nothing to do with logging in.
+
+Two details decide whether it works at all. The client IP is the **last** `X-Forwarded-For`
+entry, not the first — Caddy appends the peer it saw, so taking `[0]` would let an attacker
+rotate a header and evade the IP limit; trusting the header is safe only because the
+deployed API publishes no port. And attempts are recorded against the **submitted** address
+whether or not an account exists, or the throttle becomes an account-existence oracle
+answering what the 401 is careful not to.
+
 **F-31** — the two empty migration downgrades now say why they are empty.
 
 ## 3. Everything was proved by sabotage, not by going green
@@ -88,10 +108,17 @@ test fail:
 | U-02 | restored the un-prefixed key → all 4 fail |
 | U-01's guard | reintroduced one literal → caught, with file and line |
 | F-21 | restored the unscoped resolver → the 2 new tests fail and **all 7 pre-existing m04 tests still pass** |
+| F-07, no throttle at all | 9 of 12 fail |
+| F-07, throttle present but AFTER the hash | **exactly 1 fails** — the plausible-but-wrong version, caught only by the test written for it |
 
-That last row is the audit's own prediction, confirmed: *"a fixture with one visit cannot
-distinguish the two implementations."* It is why nine sessions of green walked past a
-fabricated invoice.
+**The F-21 row is the audit's own prediction, confirmed:** *"a fixture with one visit
+cannot distinguish the two implementations."* It is why nine sessions of green walked past
+a fabricated invoice.
+
+**The last row is the same lesson in the other direction.** A throttle that counts
+correctly but runs after the hash is the version a reviewer would nod at: it stops
+credential stuffing, every obvious test passes, and the denial-of-service the finding
+actually names is untouched. Eleven of twelve tests agreed with it.
 
 **F-21's fixture had to become realistic before it could fail at all.** It planted geofence
 events three weeks *before* the load was created — a sequence the product cannot produce.
@@ -148,8 +175,10 @@ That unreality is part of what hid the defect.
 
 ### 5.3 Then
 
-**F-07, the login throttle** — the largest thing left that needs no decision. Credential
-stuffing is unbounded and Argon2 is a DoS vector on a single VM with no monitoring.
+The largest remaining items that need no decision are **F-17** (the AI budget cap is inert
+— the same built-but-never-registered shape as F-02, and the audit notes one startup
+assertion would cover both) and **F-23** (the settlement audit compares scoped against
+unscoped).
 
 Still open and untouched from 118: the **handset background-sensor test** (v2.0 DoD #8),
 and **push, then decide on deploying**. A deploy needs production `SMTP_*` on the VM.

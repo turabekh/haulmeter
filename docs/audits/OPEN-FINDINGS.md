@@ -32,13 +32,13 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 | Severity | Open | Blocked | Partial | Closed | Accepted | Total |
 |---|---|---|---|---|---|---|
 | Critical | 1 | 4 | 0 | 3 | 0 | **8** |
-| High | 11 | 0 | 1 | 5 | 0 | **17** |
+| High | 10 | 0 | 1 | 6 | 0 | **17** |
 | Medium | 10 | 0 | 1 | 1 | 0 | **12** |
 | Low | 5 | 0 | 0 | 2 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **27** | **4** | **2** | **11** | **1** | **45** |
+| **Total** | **26** | **4** | **2** | **12** | **1** | **45** |
 
-**Session 119 closed ten** — F-05, F-13, F-21, F-28, F-29, F-31, U-01, U-02, U-07, U-08 —
+**Session 119 closed eleven** — F-05, F-07, F-13, F-21, F-28, F-29, F-31, U-01, U-02, U-07, U-08 —
 and left **two partial** (U-03, U-05) with the remainder named. F-24 was already closed by
 F-31 inside the audit itself; it is counted here for completeness and is not this session's
 work.
@@ -66,7 +66,7 @@ unobservable until the literal became a token. See §Blockers.
 | F-04 | High | OPEN | The gateway production uses is untested. |
 | F-05 | High | **CLOSED** | Ledger not idempotent → `uq_journal_entry_type_ref`, partial unique on `(entry_type, external_ref)`. Session 119. |
 | F-06 | High | OPEN | No retry, no dead letter on SMTP failure. |
-| F-07 | High | OPEN | No throttle on authentication — credential stuffing, and Argon2 as a DoS vector on a single VM. Next in the suggested order. |
+| F-07 | High | **CLOSED** | Throttled per identifier (5) and per IP (20) in a sliding 15-min window, in Postgres so it fails closed, checked BEFORE the hash runs; `VERIFY_SLOTS` caps concurrent Argon2 so a flood cannot starve the threadpool. Session 119. |
 | F-08 | — | **ACCEPTED** | Gmail as counterparty transport (owner decision, 2026-08-07). Two owner actions remain, neither a session: split dev from production, and Workspace on the domain for aligned SPF/DKIM/DMARC. |
 | F-09 | Medium | OPEN | Location pings are never purged. |
 | F-10 | Medium | OPEN | Worker scheduling is in-process only. |

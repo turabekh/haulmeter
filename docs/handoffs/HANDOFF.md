@@ -5,7 +5,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 
 ➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — read this first, every session.
 
-> **119** worked the 2026-08-07 audit queue: **ten findings closed, two partial.** Three of
+> **119** worked the 2026-08-07 audit queue: **eleven findings closed, two partial.** Three of
 > the eight criticals are closed (F-13, F-21, U-07) — **every critical that could be closed
 > without an owner decision now is.** Four are blocked on things nobody in this environment
 > can supply; the last, F-02, needs a decision before anyone starts.
@@ -31,7 +31,12 @@ results, exact next task, and blockers always live in the latest numbered handof
 > watching the new test fail, including the one where all seven pre-existing m04 tests still
 > passed against the bug.
 >
-> **Stack UP · thirteen commits UNPUSHED · nothing deployed.** `git fetch` still cannot run
+> **F-07 closed too: authentication had no throttle of any kind.** Bounded per identifier
+> and per IP in Postgres — not Redis, which degrades silently and would fail the control
+> open — and checked BEFORE the Argon2 hash, which is the half that answers the
+> denial-of-service rather than only the credential stuffing.
+>
+> **Stack UP · fifteen commits UNPUSHED · nothing deployed.** `git fetch` still cannot run
 > here — **re-fetch before pushing.**
 
 ➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — the session before.
