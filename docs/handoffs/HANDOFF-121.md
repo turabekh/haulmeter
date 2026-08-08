@@ -1,9 +1,15 @@
 # HANDOFF-121 — the loading state exists, and the fixtures are gone
 
-> **Stack UP · PUSHED and VERIFIED · nothing deployed.** The owner pushed at the end of the
-> session; `origin/main` is **`1254d48`**, confirmed by an actual `git fetch` rather than
-> arithmetic — see §1. haulmeter.online still serves 112's code, so the box now trails
-> origin by everything from 113 onward.
+> **Stack UP · PUSHED and VERIFIED · DEPLOYED.** The owner pushed, then asked for the
+> deploy. **haulmeter.online now serves 121** — sessions 113→121 in one deploy, **seven
+> migrations 0060→0066**, verified end to end. §11.
+>
+> **Two findings came out of the deploy, and one of them is the answer to F-01.**
+> **Production email has been delivering to a Mailpit container on the VM** — `SMTP_HOST`
+> is `'mailpit'` with `configured=True`, so it never fell back to the recording gateway.
+> No broker has ever received a detention notice from the deployed product, and F8 recorded
+> every one as sent. And **the worker boots against the pre-migration schema** on any deploy
+> that carries one (N-03).
 >
 > The owner approved `S23-PROPOSAL-loading-state.md`, PROPOSED since 2026-08-07, and said
 > "do the loading-state work". It is **design-prd §23 entry 131**, and the four-state rule
@@ -44,7 +50,7 @@
 | Local stack | **UP.** Seven containers, `/health` 200, UI 200 |
 | Dev data | Tampa `27.9506,-82.4572` intact, four DEV facilities at 89–125 m |
 | Email | **dev still points at live Gmail.** A send from dev is a real send |
-| Deploy | **not run.** The box has none of 113–121 |
+| Deploy | **RUN and verified, 2026-08-08.** `haulmeter.online` serves 121 at head `0066_f13_default_on`; `/api/health` 200 `environment=test`, UI 200, all seven containers up, all seven worker jobs green. Backup taken first: `haulmeter-20260808T132816Z.dump`, 9.2 MB, uploaded to `gs://haulmeter-backups` |
 
 Baseline was vitest 714 / layout 257. **vitest +32, layout +22** — three skeleton states
 and two portal states at four variants each, plus the two observation tests.
@@ -403,9 +409,84 @@ compute `owed`, and F-23 closed with a named limitation: `owed` is scoped by the
 receivable's creation date as a proxy because there is no settlement→load link, and the
 real fix is a schema change. Optimising now would bake the proxy into a second place.
 
-## 11. Exact next task
+## 11. The deploy — 113→121, and what it turned up
 
-### 11.1 The owner decision — ONE left, down from eight
+Seven migrations onto a box that had been at `0059_f13_config_decl` since session 112.
+**A backup was taken first** (`haulmeter-20260808T132816Z.dump`, 9.2 MB, offsite to
+`gs://haulmeter-backups`) because migration **0060** is written to refuse rather than fail
+half-way if production data already violates the money constraints it adds. It did not
+refuse — production data satisfied all four.
+
+```
+0059_f13_config_decl -> 0060_money_race_constraints   (F-05/F-13/F-28/F-29)
+                     -> 0061_f01_login_attempt        (F-07)
+                     -> 0062_f09_monthly_budget       (F-17/F-18)
+                     -> 0063_f02_facility_timezone    (F-14/F-22)
+                     -> 0064_f08_outbound_delivery    (F-06)
+                     -> 0065_f14_job_schedule         (F-10)
+                     -> 0066_f13_default_on           (F-02/F-12)
+```
+
+Verified: `/api/health` 200 `{"status":"ok","environment":"test"}`, UI 200, a gated
+endpoint 401 (so the routers are mounted), head `0066`, and **every flag's effective state
+unchanged — including `m13_vendor` and `m13_service_center` still off**, which is the
+specific thing 0066's backfill was written to protect (session 114's food decision).
+
+**`/api/health`, not `/health`.** Caddy serves the SPA at the root and proxies the API under
+`/api/*`, so `curl https://haulmeter.online/health` returns **200 and the index.html** — a
+health check that passes without touching the API at all. Worth knowing before someone
+builds a monitor on it.
+
+### 11.1 F-01, answered — and it is the bad answer
+
+```
+SMTP_HOST='mailpit'   SMTP_PORT=1038   configured=True
+```
+
+The last blocked critical, answered by one command now that `gcloud` is authenticated here.
+`configured` is True, so **the gateway never falls back to the recording gateway** — it
+delivers to the Mailpit container running on the box. Every counterparty email the deployed
+product has "sent" went into a local inbox, and F8 wrote `sent_at` for each one.
+
+**No broker has ever received a detention notice from production.** M3 is the wedge.
+
+This is worse than the audit's "probably" and it is exactly what 119 predicted: falling back
+to recording requires `SMTP_HOST` to be **blank**, not un-overridden, and `.env.example`
+ships `mailpit`. The deploy neither caused nor worsened it — `infra/.env` is never shipped —
+and the code half has been correct since §23 entry 122.
+
+**The remaining fix is one `.env` edit on the VM plus an api restart**, per §23 entry 126's
+recorded shape. **Deliberately not done here: it writes a credential onto a production box,
+which is the owner's action under rule 9.**
+
+### 11.2 N-03 — the worker races the migration
+
+The worker came up on schema 0059 while the api was still migrating, and every one of its
+seven jobs failed:
+
+```
+worker: detention_clock failed (1x): column feature_flag.default_on does not exist
+worker: outbound_retry  failed (1x): relation "f14.job_schedule" does not exist
+```
+
+`docker-compose.deploy.yml` gives the worker `depends_on: postgres (healthy)`; the
+migrations run inside the **api's** command (`alembic upgrade head && uvicorn`). Nothing
+makes the worker wait for them.
+
+It self-heals — the failure backoff retries and the retry finds the new schema — but the
+backoff is **up to 3600 s** for four jobs and 120 s for `detention_clock`, so every
+migration-carrying deploy silently costs the wedge feature its clock for a couple of minutes
+and the ingest jobs an hour. Cleared by restarting the worker once the api had finished;
+**all seven jobs then ran clean**, including `location_retention` on production for the first
+time (`{'deleted': 0, 'retention_days': 365}`).
+
+**The fix is ordering, not retry**, and it is filed as N-03 rather than patched here: it is a
+compose change to the deploy path, and changing how a production deploy sequences itself
+immediately after running one is how you find out about the second bug at the worst moment.
+
+## 12. Exact next task
+
+### 12.1 The owner decision — ONE left, down from eight
 
 119 §5.1's list is **half cleared**: items 5–8 were the loading-state proposal and are
 done. What remains:
@@ -415,24 +496,25 @@ done. What remains:
 | **`--marker-500` at 2.04:1 in dark** | against a 3:1 floor. The "Some" parking pin and the **OPEN** weigh-station pin. Pinned in `contrast.test.js` so it cannot drift; a palette colour is §22.2 never-improvise. **§4 above is an argument for taking this seriously** — that was also a token that was legitimate and still wrong on this exact surface |
 | ~~`.cluster` hit area 36 dp~~ | **CLOSED** — §9/§23 entry 133 |
 
-### 11.2 What is left in the queue
+### 12.2 What is left in the queue
 
 | | |
 |---|---|
 | ~~F-02 + F-12~~ | **CLOSED** — §9. Migration 0066 |
-| **F-01** | one command on the box. No box credential here. Still the only *blocked* critical |
+| **F-01** | **ANSWERED — §11.1.** Production email goes to Mailpit on the VM. The fix is a credential on the box, so it is the owner's, not a session's |
+| **N-03** | NEW — the worker races the migration on every deploy. §11.2 |
 | **F-19** | Low now, and the audit's premise is corrected — §10. Waits on the A9 session |
 | ~~F-25~~ | **CLOSED** — §10 |
 | **F-27** | Low. Waits on F-23's schema change — §10 |
 | ~~U-04, U-05~~ | **CLOSED** — §8. Nothing in the queue is PARTIAL any more |
 
-### 11.3 Still open and untouched
+### 12.3 Still open and untouched
 
-The **handset background-sensor test** (v2.0 DoD #8), **ON_SITE has still not been walked
-in a browser** (117 §7), and **push, then decide on deploying**. A deploy needs production
-`SMTP_*` on the VM, which is F-01's question again.
+The **handset background-sensor test** (v2.0 DoD #8) and **ON_SITE has still not been walked
+in a browser** (117 §7). Push and deploy are both **done** — §11. The `SMTP_*` question that
+gated the deploy is answered and is now an owner action rather than a blocker (§11.1).
 
-## 12. Things a later session will trip over
+## 13. Things a later session will trip over
 
 1. **`ui/src/core/fixtures.js` is deliberately empty and says so.** Do not add to it. The
    five alternatives are listed in the file.
@@ -475,7 +557,7 @@ in a browser** (117 §7), and **push, then decide on deploying**. A deploy needs
     check.** If it is a map marker, add it to `MAP_TARGET` too, or it becomes unmeasured —
     which is exactly how `.cluster` shipped at 36 dp. §8.1.
 
-## 13. Restarting
+## 14. Restarting
 
 **`make ui-layout` is now 283 checks and ~3 min.** It runs ALONE.
 `make ui-layout-only STATE=map-loading` measures one state in ~45 s.

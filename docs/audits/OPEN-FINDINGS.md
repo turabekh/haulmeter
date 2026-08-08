@@ -31,15 +31,17 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 
 | Severity | Open | Blocked | Partial | Closed | Accepted | Total |
 |---|---|---|---|---|---|---|
-| Critical | 0 | 1 | 0 | 7 | 0 | **8** |
+| Critical | 1 | 0 | 0 | 7 | 0 | **8** |
 | High | 0 | 0 | 0 | 17 | 0 | **17** |
 | Medium | 0 | 0 | 0 | 12 | 0 | **12** |
 | Low | 3 | 0 | 0 | 4 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
 | **Total** | **3** | **1** | **0** | **40** | **1** | **45** |
 
-**F-01 is the only Critical left and it is BLOCKED on one command on the box. The three
-OPEN items are all Low**: F-19 and F-27 wait on work that is scoped elsewhere (A9's review
+**F-01 is the only Critical left and it is no longer BLOCKED — it is ANSWERED and
+CONFIRMED.** Production email has been delivering to a Mailpit container on the VM; the
+remaining fix is a credential on the box, which is the owner's action rather than a code
+change. **The other three OPEN items are all Low**: F-19 and F-27 wait on work that is scoped elsewhere (A9's review
 surface, F-23's schema change) and `.cluster` — the last of U-05 — is closed. The only
 undelegable item left is the `--marker-500` contrast decision, which is a §22.2 palette
 colour and stops for the owner whatever entry 118 delegates.
@@ -70,7 +72,7 @@ unobservable until the literal became a token. See §Blockers.
 
 | ID | Severity | Status | One line |
 |---|---|---|---|
-| F-01 | Critical | **BLOCKED** | Production email probably delivers to Mailpit on the VM. Blocked on one command on the box — no box credential in the dev environment. See §Blockers. |
+| F-01 | Critical | **CONFIRMED — not fixed** | **ANSWERED on the box, 2026-08-08, during the 113→121 deploy.** `SMTP_HOST='mailpit'`, port 1038, **`configured=True`** — so the gateway does NOT fall back to the recording gateway, it delivers to the Mailpit container running on the VM. **Every counterparty email the deployed product has ever "sent" went into a local inbox on the box, and F8 recorded each one as sent.** No broker has received a detention notice from production. Worse than the audit's "probably", exactly as 119 predicted: falling back to recording requires `SMTP_HOST` to be **blank**, not un-overridden, and `.env.example` ships `mailpit`. **The remaining fix is one `.env` edit on the VM plus an api restart** — `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_STARTTLS=true`, `SMTP_USERNAME`/`SMTP_PASSWORD`/`SMTP_FROM` per §23 entry 126. **Deliberately not done here: that writes a credential onto a production box, which is the owner's action under rule 9.** Not a code change — the code half has been correct since entry 122. |
 | F-02 | Critical | **CLOSED** | `enabled` was one column doing two jobs — a code default and an operator's decision — so `register_all` wrote it by assignment and `enable()`, the only function that reads a gate, was never on the path. **Measured before changing anything: three modules carry gates, all SIX unsatisfied, all three flags enabled.** `default_on` (declared per module, refreshes at boot) and a nullable `enabled` (NULL = nobody decided) are separate now; migration **0066** backfills so no box changes behaviour. **Gates deliberately do NOT block the default** — that would have taken M3's detention clock dark, and satisfying a gate asserts a legal review happened, which a deploy may not decide. The 29 July decision stands and the gate now SAYS SO: `running_ahead_of_gates` reports at boot and on `/admin/flags`, verified live. §23 entry 133. Session 121. |
 | F-03 | High | **CLOSED** | The ref is the message's real RFC 5322 Message-ID — unique, and findable in a mail provider's trace. Session 119. |
 | F-04 | High | **CLOSED** | `_LazyCounterpartyGateway` is tested. Confirmed rather than asserted: against the restored F-03 defect the new test fails while the direct-construction one passes. Session 119. |
@@ -131,6 +133,7 @@ Not part of the 45, and deliberately **not** folded into the finding that surfac
 | ID | Severity | Status | One line |
 |---|---|---|---|
 | N-01 | High | **CLOSED** | Every spoken string comes from F15's `MessageCatalog`, keyed by the driver's locale, with each handoff intent carrying its own key rather than interpolating an English slug into a Spanish sentence. **A missing ROW falls back to compiled English** (F-17's third option — a strict lookup would turn one missing row into a silent copilot at speed); a missing KEY raises and is gated in CI, so a new intent cannot reach a truck mute. Money stays `$` and units imperial in every locale per F15. **114 rows across 19 keys seeded at boot on the real box**, and verified over HTTP: Spanish in → Spanish out, Russian while driving → Russian deferred confirmation with `audio_ref: audio://ru/…`. Session 120. |
+| N-03 | Medium | OPEN | **The worker boots against the PRE-migration schema on any deploy that carries one.** Found by reading the logs after the 113→121 deploy rather than by assuming: `docker-compose.deploy.yml` gives the worker `depends_on: postgres (healthy)`, while the migrations run inside the **api's** command (`alembic upgrade head && uvicorn`). So the worker came up on schema 0059 and every one of its seven jobs failed — `column feature_flag.default_on does not exist`, `relation "f14.job_schedule" does not exist` — including **`detention_clock`, M3's P0**. It is self-healing (the failure backoff retries, and the retry finds the new schema) but the backoff is up to **3600 s** for four jobs and 120 s for the detention clock, so a deploy silently costs the wedge feature its clock for a couple of minutes and the ingest jobs an hour. Cleared this time by restarting the worker after the api finished; all seven then ran clean. **The fix is ordering, not retry:** the worker should not start until the schema it queries exists. Opened 2026-08-08 (session 121). |
 | N-02 | High | **CLOSED** | Nine of the ten `notify.dispatch` sites take their title and body from F15's catalogue, keyed by the driver's locale. **The lookup lives in F8** (`localized_text`) because F8 is what already knows the account — ten call sites resolving a locale ten times is ten chances to resolve it differently, and the one that forgot would be invisible. **366 catalogue rows across 61 keys seeded at boot** on the real box. The tenth site is deliberate: `promotions.py` sends the vendor's OWN words as the body, which is data, not product copy. Session 120. |
 
 **N-01 in full.** `m11_voice/domain/service.py::_dispatch` returns hardcoded English:
@@ -196,7 +199,10 @@ translations of existing copy are not new copy, so §22.2 is not engaged.
 
 ## Blockers, named
 
-1. **F-01 — what is `SMTP_HOST` on the box?** One command:
+1. ~~**F-01 — what is `SMTP_HOST` on the box?**~~ **ANSWERED 2026-08-08: `'mailpit'`, port
+   1038, `configured=True`.** Production email delivers to a local container. The finding is
+   CONFIRMED rather than closed — the fix is a credential on the VM and therefore the
+   owner's, not a code change. The command that answered it, for the record:
    `docker compose exec api python -c "from app.core.config import get_settings as g; s=g(); print(repr(s.smtp_host), s.smtp_port)"`
    The code half is confirmed locally and is worse than the audit's "probably": `config.py`
    defaults to `mailpit`, `.env.example` ships `SMTP_HOST=mailpit`,

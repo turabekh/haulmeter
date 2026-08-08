@@ -80,11 +80,25 @@ results, exact next task, and blockers always live in the latest numbered handof
 > remains — `--marker-500`'s contrast — because a palette colour is §22.2 and entry 118's
 > delegation does not reach it.**
 >
-> **Stack UP · PUSHED and VERIFIED at `1254d48` · nothing deployed.** The owner pushed;
-> `git fetch` **worked**, which it had not since 117, so the ahead-count is an observation
-> for the first time in four sessions and the standing *"re-fetch before pushing"* caveat is
-> **resolved**. The box still serves 112, so it now trails origin by everything from 113 on —
-> **a deploy is the outstanding gap, and migration 0066 is in what would ship.**
+> **Stack UP · PUSHED · DEPLOYED. `haulmeter.online` serves 121 at head `0066`.** The owner
+> pushed and then asked for the deploy: sessions **113→121 in one deploy, seven migrations
+> 0060→0066**, backup taken first, verified end to end. `git fetch` also worked for the first
+> time since 117, so the ahead-count is an observation rather than arithmetic and that
+> four-session caveat is resolved.
+>
+> **The deploy answered F-01, the last blocked critical, and the answer is the bad one.**
+> `SMTP_HOST='mailpit'` with `configured=True` on the box — so the gateway never fell back to
+> recording, it delivered to a container on the VM. **No broker has ever received a detention
+> notice from the deployed product, and F8 recorded every one as sent.** M3 is the wedge. The
+> code has been correct since entry 122; the fix is one `.env` edit on the VM, which is the
+> owner's action under rule 9 and is deliberately not done from here.
+>
+> **And it opened N-03: the worker boots against the pre-migration schema.** `depends_on`
+> waits for postgres, while the migrations run inside the API's command — so all seven jobs
+> failed on schema 0059, `detention_clock` included. Self-healing via backoff, but up to an
+> hour for four of them. Cleared by restarting the worker; filed rather than patched, because
+> changing how a deploy sequences itself immediately after running one is how you meet the
+> second bug at the worst moment. **HANDOFF-121 §11.**
 
 ➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — the session before.
 
