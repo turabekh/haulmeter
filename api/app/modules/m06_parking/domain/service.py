@@ -167,6 +167,15 @@ def _configured_take_rate(db: Session) -> int:
     return int(flags.get_config(db, CONFIG_TAKE_RATE_KEY, DEFAULT_TAKE_RATE_BPS))
 
 
+def _nights_at(db: Session, prop: ParkingProperty, start_at: datetime, end_at: datetime) -> int:
+    facility = facility_registry.get_facility(db, prop.facility_ref)
+    if facility is None:  # a property whose facility is gone: UTC is all that is left
+        return max(1, (end_at.date() - start_at.date()).days)
+    start_day = facility_registry.local_date(db, facility, start_at)
+    end_day = facility_registry.local_date(db, facility, end_at)
+    return max(1, (end_day - start_day).days)
+
+
 def book(
     db: Session,
     spot: ParkingSpot,
@@ -180,12 +189,20 @@ def book(
         raise SpotUnavailable(str(spot.id))
     if take_rate_bps is None:  # unset -> the live F13-config rate (default fallback)
         take_rate_bps = _configured_take_rate(db)
-    nights = max(1, (end_at.date() - start_at.date()).days)
+
+    prop = db.get(ParkingProperty, spot.property_id)
+    # AI-CONTEXT: nights are counted in the LOT'S local calendar, not in UTC (audit F-14).
+    #
+    # `.date()` on a UTC value gives the UTC calendar day, so a stay from 11pm Aug 7 to
+    # 5am Aug 9 in Dallas — two nights by any reading, and by the owner's — arrived as
+    # 05:00 Aug 8 to 11:00 Aug 9 and billed as ONE. `max(1, …)` hid the short cases,
+    # which is why it read as correct in every test. West of UTC, a stay beginning late
+    # evening systematically undercharged the owner by a night.
+    nights = _nights_at(db, prop, start_at, end_at)
     price = nights * spot.price_cents_per_night
     take = round(price * take_rate_bps / 10000)
     owner_payout = price - take
 
-    prop = db.get(ParkingProperty, spot.property_id)
     # AI-CONTEXT: the booking row is claimed BEFORE any money moves. ex_booking_no_overlap
     # is the only thing that can stop a concurrent second booking, and it can only fire on
     # the insert — posting the entry first meant the loser of the race had already credited

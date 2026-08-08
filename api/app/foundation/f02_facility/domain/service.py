@@ -1,4 +1,6 @@
 import re
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from geoalchemy2 import Geography
 from geoalchemy2.elements import WKTElement
@@ -545,6 +547,65 @@ def coordinates(db: Session, facility: Facility) -> tuple[float, float]:
         select(func.ST_X(Facility.geom), func.ST_Y(Facility.geom)).where(Facility.id == facility.id)
     ).one()
     return lat, lon
+
+
+FALLBACK_TIMEZONE = "UTC"
+_TZ_FINDER = None
+
+
+def _timezone_finder():
+    # AI-CONTEXT: built once per process and only when something actually asks. The
+    # lookup tables are tens of megabytes; constructing this at import would pay for them
+    # in every worker, every test run and every alembic invocation, for a question most
+    # of them never ask.
+    global _TZ_FINDER
+    if _TZ_FINDER is None:
+        from timezonefinder import TimezoneFinder
+
+        _TZ_FINDER = TimezoneFinder()
+    return _TZ_FINDER
+
+
+def facility_timezone(db: Session, facility: Facility) -> str:
+    """The IANA zone this facility keeps its calendar in, resolved once and stored.
+
+    AI-CONTEXT: the prerequisite the audit named for F-14 and F-22, which it could not
+    answer from a dump — F2 carried no timezone at all, and `DriverProfile.home_timezone`
+    is set by nothing outside the tests, so the product's only notion of local time was
+    inert. Every calendar-day question was therefore being asked of a UTC instant.
+
+    Resolved from the coordinates rather than stored at ingest, because a facility can be
+    created at runtime by a driver adding a dock, and a lookup that only runs in the
+    extract pipeline would leave those permanently null. Lazily, and PERSISTED on first
+    use: the offline lookup is not free, and this way the 4,800 rows already in the
+    registry heal themselves as they are used, with no backfill migration to half-finish.
+
+    A coordinate the database cannot place — mid-ocean, or a row with no usable geom —
+    falls back to UTC, which is exactly today's behaviour and therefore never worse than
+    what it replaces. In a US-only product it should not occur; if it does, the value is
+    stored, so it shows up as a facility whose timezone is literally "UTC" rather than as
+    a silent assumption.
+    """
+    if facility.timezone:
+        return facility.timezone
+    lat, lon = coordinates(db, facility)
+    resolved = None
+    if lat is not None and lon is not None:
+        resolved = _timezone_finder().timezone_at(lat=lat, lng=lon)
+    facility.timezone = resolved or FALLBACK_TIMEZONE
+    db.flush()
+    return facility.timezone
+
+
+def local_date(db: Session, facility: Facility, moment: datetime) -> date:
+    """The calendar day `moment` fell on AT THIS FACILITY.
+
+    AI-CONTEXT: the whole of F-14 and F-22 in one function. `.date()` on a UTC-normalised
+    datetime gives the UTC calendar day, and both the nights count and the overnight test
+    were doing exactly that. Asking a calendar-day question of an instant needs a place.
+    """
+    at = moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+    return at.astimezone(ZoneInfo(facility_timezone(db, facility))).date()
 
 
 def coordinates_for(db: Session, facility_ids) -> dict:

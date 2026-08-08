@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f03_location import public as location
 from app.foundation.f05_load import public as loads
 from app.foundation.f06_documents import public as documents
@@ -156,7 +157,20 @@ def file_layover(db: Session, stop, layover_rate_cents: int, gateway=None) -> Ac
     )
     if arrival is None or departure is None:
         raise NoLayover("no completed stop at this facility")
-    if _as_utc(arrival).date() == _as_utc(departure).date():
+    # AI-CONTEXT: "overnight" is a question about the DOCK'S calendar, not UTC's (F-22).
+    #
+    # `_as_utc(...).date()` is the UTC calendar day, and a layover is a local overnight.
+    # In Dallas an 8pm→4am stop — an overnight by any reading — is 01:00→09:00 on ONE
+    # UTC day, so the dates matched and the claim was refused outright. This is F-21's
+    # defect pointing the other way: that one filed claims that should not exist, this
+    # one refused claims that should. Same line, same missing input.
+    facility = facility_registry.get_facility(db, stop.facility_id)
+    if facility is not None:
+        arrived_on = facility_registry.local_date(db, facility, arrival)
+        departed_on = facility_registry.local_date(db, facility, departure)
+    else:  # the dock is gone from the registry: UTC is all that is left to compare
+        arrived_on, departed_on = _as_utc(arrival).date(), _as_utc(departure).date()
+    if arrived_on == departed_on:
         raise NoLayover("dwell did not span overnight")
     return _file(
         db,

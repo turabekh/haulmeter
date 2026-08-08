@@ -59,6 +59,18 @@ class Facility(Base):
         Geometry(geometry_type="POLYGON", srid=4326, spatial_index=True), nullable=True
     )
     geohash: Mapped[str | None] = mapped_column(String(12), index=True, nullable=True)
+    # AI-CONTEXT: the IANA zone this place keeps its calendar in (audit F-14 + F-22).
+    #
+    # Nothing in the product knew a facility's local time, so two money questions were
+    # being asked of UTC instants: how many NIGHTS a parking stay covers, and whether a
+    # dwell was OVERNIGHT. Both are calendar-day questions, and a calendar day belongs to
+    # a place. In a US-only product spanning four zones that is not a rounding error —
+    # 8pm→4am in Dallas is one UTC day, so a real layover was refused outright.
+    #
+    # Nullable and resolved lazily by `facility_timezone`, which stores what it finds.
+    # That covers the 4,800-odd rows already in the registry and any facility a driver
+    # creates at a dock, without a backfill migration that could half-finish.
+    timezone: Mapped[str | None] = mapped_column(String(60), nullable=True)
     attributes: Mapped[dict] = mapped_column(JSON, default=dict)
     hours: Mapped[dict] = mapped_column(JSON, default=dict)
     # 0..1, recomputed from the count + priority of contributing sources (PRD §12)

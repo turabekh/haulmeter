@@ -113,3 +113,33 @@ def test_the_booking_entry_carries_a_ref_the_ledger_can_deduplicate(db):
     booking = m6.book(db, spot, driver.id, T0, T0 + timedelta(days=2))
     entry = db.get(ledger.JournalEntry, booking.entry_ref)
     assert entry.external_ref == f"booking:{booking.id}"
+
+
+# --- F-14: nights belong to the LOT's calendar, not UTC's ---
+def test_a_late_evening_stay_bills_the_nights_the_owner_actually_provided(db):
+    """The audit's worked example, in US Central.
+
+    11pm Aug 7 -> 5am Aug 9 local is two nights by any reading. In UTC that is
+    05:00 Aug 8 -> 11:00 Aug 9 — one calendar day apart — so it billed as ONE. `max(1,
+    ...)` papered over the short cases, which is why this read as correct in every test,
+    and west of UTC every stay beginning late evening undercharged the owner by a night.
+    """
+    _, driver, spot = _listing(db)  # the property sits in Dallas
+    # August is CDT, UTC-5 — the audit's own table converted at UTC-6 and is an hour out.
+    # Getting that right is the entire reason this reads a real tz database instead of
+    # subtracting a fixed offset.
+    start = datetime(2026, 8, 8, 4, 0, tzinfo=UTC)  # 11pm Aug 7 Dallas
+    end = datetime(2026, 8, 9, 10, 0, tzinfo=UTC)  # 5am Aug 9 Dallas
+
+    assert (end.date() - start.date()).days == 1, "the UTC answer, and the defect"
+    booking = m6.book(db, spot, driver.id, start, end)
+    assert booking.nights == 2
+    assert booking.price_cents == 2 * 2400
+
+
+def test_a_single_local_night_is_still_one_night(db):
+    # the audit's second row: 6pm -> 6am local was already correct, and must stay correct
+    _, driver, spot = _listing(db)
+    start = datetime(2026, 8, 7, 23, 0, tzinfo=UTC)  # 6pm Aug 7 Central
+    end = datetime(2026, 8, 8, 11, 0, tzinfo=UTC)  # 6am Aug 8 Central
+    assert m6.book(db, spot, driver.id, start, end).nights == 1

@@ -157,3 +157,38 @@ def test_the_claim_is_measured_from_this_visit_not_the_first_one(db):
     )
     assert arrival == T0, "the arrival must be THIS visit's, not the one three weeks ago"
     assert departure == T0 + timedelta(hours=12)
+
+
+# --- F-22: "overnight" is the DOCK's calendar, not UTC's ---
+def test_a_real_overnight_is_not_refused_because_utc_disagrees(db):
+    """The audit's worked example, and the defect pointing the opposite way to F-21.
+
+    8pm -> 4am at a Dallas dock is an overnight by any reading. In UTC it is
+    01:00 -> 09:00 on ONE calendar day, so the dates matched and the claim was refused
+    outright. F-21 filed claims that should not exist; this refused claims that should.
+    Same line, same missing input — the facility's timezone.
+    """
+    account, broker, load, stop = _setup(db)
+    # August in Dallas is CDT, UTC-5
+    arrive = datetime(2026, 7, 21, 1, 0, tzinfo=UTC)  # 8pm Jul 20 Dallas
+    leave = datetime(2026, 7, 21, 9, 0, tzinfo=UTC)  # 4am Jul 21 Dallas
+    assert arrive.date() == leave.date(), "one UTC day — the reason it was refused"
+
+    location.arm_geofence(db, account.id, stop.facility_id)
+    location.evaluate_ping(db, account.id, *DALLAS, occurred_at=arrive)
+    location.evaluate_ping(db, account.id, *FAR, occurred_at=leave)
+
+    claim = m4.file_layover(db, stop, layover_rate_cents=15000)
+    assert claim.kind == m4.AccessorialKind.layover
+
+
+def test_a_long_same_day_dwell_is_still_not_a_layover(db):
+    # the other direction must hold too: 9am -> 6pm local is nine hours and no overnight
+    account, broker, load, stop = _setup(db)
+    arrive = datetime(2026, 7, 20, 14, 0, tzinfo=UTC)  # 9am Dallas
+    leave = datetime(2026, 7, 20, 23, 0, tzinfo=UTC)  # 6pm Dallas
+    location.arm_geofence(db, account.id, stop.facility_id)
+    location.evaluate_ping(db, account.id, *DALLAS, occurred_at=arrive)
+    location.evaluate_ping(db, account.id, *FAR, occurred_at=leave)
+    with pytest.raises(m4.NoLayover):
+        m4.file_layover(db, stop, layover_rate_cents=15000)

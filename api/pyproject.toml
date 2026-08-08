@@ -16,6 +16,16 @@ dependencies = [
     "redis>=5.2",
     "minio>=7.2",
     "tzdata>=2024.2",
+    # AI-CONTEXT: lat/lon -> IANA timezone, offline (audit F-14 + F-22). A facility's
+    # LOCAL calendar decides how many nights a stay covers and whether a dwell was
+    # overnight, and F2 carried no timezone at all — so both money questions were being
+    # asked of UTC instants, refusing real layovers and undercharging lot owners west of
+    # UTC. Chosen over a longitude approximation because DST and the Arizona/Indiana
+    # exceptions are exactly where a US-only product breaks, and over a network lookup
+    # because this must work in a dead zone. It is ~70 MB against an API image already at
+    # 4.6 GB — the "keep the image light" argument that picked reportlab over WeasyPrint
+    # was measured before deciding and no longer applies at this scale.
+    "timezonefinder>=6.5",
     "pgvector>=0.3",
     # F4 evidence-pack rendering (design-prd §17). Pure-Python wheel: no system
     # libraries, so the image and CI stay light and dev=CI parity is trivial.
