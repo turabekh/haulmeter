@@ -3,7 +3,46 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — read this first, every session.
+➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — read this first, every session.
+
+> **120** was one instruction — *"read the latest handoff and restart the app"*, then
+> *"proceed using your best judgement"* — and it worked the audit queue: **ten findings
+> closed** (F-30, F-32, F-33, F-09, F-10, F-15, F-16, F-20, F-26, F-11), one new finding
+> **filed rather than absorbed** (N-01), migration **0065**. **Open findings 18 → 8.**
+>
+> **Every finding that could be closed without an owner decision now is** — again. What is
+> left is four blocked on facts nobody here can get, and four needing the owner's judgement
+> about intended behaviour rather than code. **HANDOFF-119 §5.1 is untouched and is still
+> the highest-value thing on the board**; §22.2's carve-outs were checked against entry
+> 118's delegation and a new palette colour and a new component pattern still stop and ask.
+>
+> **F-30's root was deeper than the audit's "English-only".** Matching asked
+> `term in utterance`, so *"I am in Las Vegas"* routed to fuel and *"my sleeper berth heater
+> is broken"* routed to sleep — neither in the audit. Adding five languages on top of
+> substring matching would have multiplied the bug by six. Accuracy is asserted **per
+> language** now, which is what the DoD always said and nothing measured.
+>
+> **Read §4: three times a fix here was wrong and the process caught it.** I built an inert
+> mechanism — a locale fallback that made `locale` unobservable, with two API tests
+> "proving" a threading that passed without the endpoint change at all — and removed it. A
+> sabotage pass found the F-09 fix had **no test that the job was wired**, which is F-09's
+> own shape reproduced inside its own fix. Another found an accent test that proved nothing.
+> None of it was caught by the suite going green.
+>
+> **F-16's obvious fix shipped the hole:** stripping `"` and `\` leaves `;`, which separates
+> header parameters. The test caught it only because it asserts the header PARSES rather
+> than asserting the hostile text is absent.
+>
+> **Verified against the running system, not the suite:** the live TPIMS feed carries a
+> timestamp on all 51 records (so F-32 costs nothing today); the second worker restart ran
+> **only** `detention_clock` where all seven used to fire; 11 infra files including
+> `deploy.sh` now enter the review dump. And F-09's risk was checked before wiring — the F4
+> evidence pack does not read `location_ping`, so a purge cannot destroy a claim's proof.
+>
+> **Stack UP · twenty-eight commits UNPUSHED · nothing deployed.** `git fetch` still cannot
+> run here — **re-fetch before pushing.**
+
+➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — the session before.
 
 > **119** worked the 2026-08-07 audit queue: **nineteen findings closed, two partial**, and
 > answered one of the audit's three open questions. Three of
@@ -63,7 +102,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · twenty-four commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — the session before.
+➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — two sessions before.
 
 > **118** is a short session with **no source changes**: the owner asked for the stack to be
 > restarted, then for a handoff and a shutdown.
@@ -84,7 +123,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > session (no credential), so the ahead-count is arithmetic, not observation — **re-fetch
 > before pushing.** The next task is still the handset background-sensor test.
 
-➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — two sessions before.
+➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — three sessions before.
 
 > **117** did two things the owner asked for, and both turned up something under them.
 >
@@ -112,7 +151,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · four commits UNPUSHED · nothing deployed.** The next task is still the
 > handset background-sensor test.
 
-➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — three sessions before.
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — four sessions before.
 
 > **116** walked the stop auto-pilot end to end in a real browser, which is what two
 > sessions of building had never been subjected to. **It works.** A human adds a load,
@@ -141,7 +180,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > HANDOFF-116.md's own header contradicted, and its "everything from `a4e282c` onward
 > UNPUSHED" was overtaken by the 2026-08-03 push. Corrected in 117.)
 
-➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — four sessions before.
+➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — five sessions before.
 
 > **115** was scoped as a **surfacing rework** — the A1 automation is built and correct,
 > only the way its result reaches the driver is wrong. Re-grepping the seams before
