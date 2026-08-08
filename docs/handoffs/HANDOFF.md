@@ -5,7 +5,8 @@ results, exact next task, and blockers always live in the latest numbered handof
 
 ➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — read this first, every session.
 
-> **119** worked the 2026-08-07 audit queue: **fourteen findings closed, two partial.** Three of
+> **119** worked the 2026-08-07 audit queue: **sixteen findings closed, two partial**, and
+> answered one of the audit's three open questions. Three of
 > the eight criticals are closed (F-13, F-21, U-07) — **every critical that could be closed
 > without an owner decision now is.** Four are blocked on things nobody in this environment
 > can supply; the last, F-02, needs a decision before anyone starts.
@@ -42,7 +43,13 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **F-23** (the settlement audit compared one document's payments against every receivable
 > the driver had ever had).
 >
-> **Stack UP · eighteen commits UNPUSHED · nothing deployed.** `git fetch` still cannot run
+> **And a facility now knows what calendar it keeps (F-14, F-22).** The audit named this
+> its own prerequisite: F2 had no timezone, and `home_timezone` is written by nothing
+> outside the tests, so the product's only notion of local time was inert. An 8pm→4am
+> Dallas layover is ONE UTC day, so real claims were being **refused**. Cost a dependency;
+> the image went 4.61 → 4.83 GB, measured before deciding.
+>
+> **Stack UP · twenty commits UNPUSHED · nothing deployed.** `git fetch` still cannot run
 > here — **re-fetch before pushing.**
 
 ➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — the session before.

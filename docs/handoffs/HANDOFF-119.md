@@ -1,10 +1,10 @@
 # HANDOFF-119 — the audit queue, worked: every critical that could be closed without an owner decision is closed
 
-> **Stack UP · eighteen commits UNPUSHED · nothing deployed.** haulmeter.online still
+> **Stack UP · twenty commits UNPUSHED · nothing deployed.** haulmeter.online still
 > serves 112's code.
 >
-> Session 119 read the 2026-08-07 audit and worked it: **fourteen findings closed, two
-> partial.** Three of the eight criticals are closed (F-13, F-21, U-07); four are blocked
+> Session 119 read the 2026-08-07 audit and worked it: **sixteen findings closed, two
+> partial**, and one of the audit's three unanswered questions answered. Three of the eight criticals are closed (F-13, F-21, U-07); four are blocked
 > on things nobody in this environment can supply, and the last one (F-02) needs a
 > decision before anyone starts.
 >
@@ -22,10 +22,10 @@
 
 | | |
 |---|---|
-| Branch | `main`, **eighteen** commits ahead of `origin/main` — 118's six plus this session's twelve |
+| Branch | `main`, **twenty** commits ahead of `origin/main` — 118's six plus this session's fourteen |
 | `origin/main` | `113327e` — still **not re-verified**; `git fetch` has no credential here. **Re-fetch before pushing** |
-| Gates | **pytest 1431 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** |
-| Migrations | **`0062_f09_monthly_budget` (head)** — 0060, 0061 and 0062 are all new this session, each applied and round-tripped on the running stack |
+| Gates | **pytest 1444 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** |
+| Migrations | **`0063_f02_facility_timezone` (head)** — 0060–0063 are all new this session, each applied and round-tripped on the running stack |
 | Working tree | clean; `longhaul.txt` and `split_dump.py` now **gitignored** at the owner's instruction |
 | Local stack | **UP** |
 | Dev data | Tampa `27.9506,-82.4572` intact, four DEV facilities at 88–125 m |
@@ -113,6 +113,20 @@ settlement into a number adjacent to the North Star. Scoped to the settlement's 
 period. **The limitation is in the code, not hidden:** it scopes by the receivable's
 creation date as a proxy, because there is no settlement→load link.
 
+**F-14 + F-22 — a facility now knows what calendar it keeps.** The audit named this its
+own prerequisite and could not answer it from a dump. The answer was **no** — F2 carried no
+timezone, and `DriverProfile.home_timezone` is written by nothing outside the tests, so the
+product's only notion of local time was itself inert. Both money questions were being asked
+of UTC instants: an 11pm→5am Dallas stay billed one night instead of two, and an 8pm→4am
+Dallas layover — one UTC day — was **refused outright**. F-21 filed claims that should not
+exist; F-22 refused claims that should.
+
+`facility.timezone` resolves from coordinates and stores on first use, so the ~4,800
+existing rows heal as they are used and a dock a driver creates takes the same path. **It
+cost a dependency** — `timezonefinder`, offline because the lookup must work in a dead
+zone — and the codebase's own "keep the image light" argument was *measured* rather than
+assumed: the API image was already 4.61 GB and is now 4.83 GB. 119 §5.4 has the reasoning.
+
 **F-31** — the two empty migration downgrades now say why they are empty.
 
 ## 3. Everything was proved by sabotage, not by going green
@@ -131,6 +145,7 @@ test fail:
 | F-07, no throttle at all | 9 of 12 fail |
 | F-07, throttle present but AFTER the hash | **exactly 1 fails** — the plausible-but-wrong version, caught only by the test written for it |
 | F-23 | restored the unscoped comparison → both new tests fail |
+| F-14 + F-22 | restored the UTC calendar day → exactly the 3 tests written for it fail |
 
 **The F-21 row is the audit's own prediction, confirmed:** *"a fixture with one visit
 cannot distinguish the two implementations."* It is why nine sessions of green walked past
@@ -196,11 +211,21 @@ That unreality is part of what hid the defect.
 
 ### 5.3 Then
 
-What is left needing no decision is smaller than what has gone: **F-03** (every send
-returns the same provider ref), **F-04** (the gateway production uses is untested), **F-06**
-(no retry, no dead letter on SMTP failure), **F-14 + F-22** (nights and "overnight" counted
-in UTC — both wait on the F2 timezone-column answer in §Questions), **F-30** (voice
-understands one of six languages), and the six remaining surfaces of **U-04**.
+What is left needing no decision is thinner than what has gone. The three notification-
+gateway findings are one session — **F-03** (every send returns the same provider ref),
+**F-04** (the gateway production uses is untested) and **F-06** (no retry, no dead letter) —
+and they pair naturally with **F-01** if the box ever answers. Then **F-30** (voice
+understands one of six languages) and **U-04**'s six remaining surfaces.
+
+### 5.4 The dependency this session added, and why
+
+`timezonefinder`, for F-14 and F-22. Offline because the lookup has to work in a dead zone;
+a longitude approximation was rejected because DST and the Arizona exception are exactly
+where a US-only product breaks. The image cost was measured before the decision, not after:
+**4.61 GB → 4.83 GB (+4.8%)**. The "keep the image light" reasoning in `pyproject.toml` —
+the argument that chose reportlab over WeasyPrint — was written when that was still true of
+this image. It is not, and a 4.6 GB API image on a single VM deployed by tarball (A12) is
+worth someone's attention on its own.
 
 Still open and untouched from 118: the **handset background-sensor test** (v2.0 DoD #8),
 and **push, then decide on deploying**. A deploy needs production `SMTP_*` on the VM.

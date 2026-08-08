@@ -32,14 +32,14 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 | Severity | Open | Blocked | Partial | Closed | Accepted | Total |
 |---|---|---|---|---|---|---|
 | Critical | 1 | 4 | 0 | 3 | 0 | **8** |
-| High | 8 | 0 | 1 | 8 | 0 | **17** |
+| High | 6 | 0 | 1 | 10 | 0 | **17** |
 | Medium | 9 | 0 | 1 | 2 | 0 | **12** |
 | Low | 5 | 0 | 0 | 2 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **23** | **4** | **2** | **15** | **1** | **45** |
+| **Total** | **21** | **4** | **2** | **17** | **1** | **45** |
 
-**Session 119 closed fourteen** — F-05, F-07, F-13, F-17, F-18, F-21, F-23, F-28, F-29, F-31,
-U-01, U-02, U-07, U-08 —
+**Session 119 closed sixteen** — F-05, F-07, F-13, F-14, F-17, F-18, F-21, F-22, F-23, F-28,
+F-29, F-31, U-01, U-02, U-07, U-08 —
 and left **two partial** (U-03, U-05) with the remainder named. F-24 was already closed by
 F-31 inside the audit itself; it is counted here for completeness and is not this session's
 work.
@@ -74,7 +74,7 @@ unobservable until the literal became a token. See §Blockers.
 | F-11 | Medium | OPEN | The deploy path is outside every review — `deploy.sh`, `Makefile`, `check_ports.sh` are not in the dump. Adding `.sh` to `collect_files.py`'s `EXTENSIONS` is the cheapest fix in either audit. |
 | F-12 | Medium | OPEN | Module gate and worker disagree on flag polarity. Ships with F-02. |
 | F-13 | Critical | **CLOSED** | Double-booking race posting money twice → `ex_booking_no_overlap` EXCLUDE constraint, and `book()` claims the row before any money moves. Session 119. |
-| F-14 | High | OPEN | Nights are counted in UTC. Blocked-adjacent: needs the F2 timezone-column answer (see §Questions). |
+| F-14 | High | **CLOSED** | Nights counted in the lot's local calendar. Session 119. |
 | F-15 | Medium | OPEN | Unbounded history scans in two hot paths. |
 | F-16 | Low | OPEN | Filename interpolated into a response header. |
 | F-17 | High | **CLOSED** | Every module seeded a cap at boot, and a module with no row falls back to the compiled default — there is no uncapped state, and no state where a missing row is an outage. `test_module_flags` asserts the invariant. Session 119. |
@@ -82,7 +82,7 @@ unobservable until the literal became a token. See §Blockers.
 | F-19 | Medium | OPEN | No merge-review queue. Already known. |
 | F-20 | Low | OPEN | The amendment describes a mechanism the code does not implement. |
 | F-21 | Critical | **CLOSED** | §23 entry 73's defect in M4 → `_arrival_departure` routed through `location.visit_window`, anchored on the stop's appointment. M4 was the last unscoped `list_events` caller, so the class is closed. Session 119. |
-| F-22 | High | OPEN | "Overnight" is measured in UTC. Pairs with F-14. |
+| F-22 | High | **CLOSED** | "Overnight" measured in the dock's local calendar — this was REFUSING real layover claims. Session 119. |
 | F-23 | High | **CLOSED** | `owed` is scoped to the settlement's own pay period. **Named limitation:** it scopes by the receivable's creation date as a proxy, because there is no settlement→load link — work in the period whose receivable is filed later still falls outside. The link is the audit's own deeper fix and is a schema change. Session 119. |
 | F-24 | Low | **CLOSED** | Migration downgrades — 57 of 59 real, 2 empty. Closed by F-31, which identified the two; not by session 119. |
 | F-25 | Medium | OPEN | The profit model assumes the product does not work. |
@@ -150,9 +150,11 @@ decision — the index puts that kickoff fourth, ahead of everything blocked.
 ## Questions the audit could not answer
 
 1. What is `SMTP_HOST` on the box? (F-01, above.)
-2. Does `F2.Facility` carry a timezone column? (F-14, F-22.) If not, that column is the
-   prerequisite for both — nights and "overnight" are counted in UTC in a US-only product
-   spanning four time zones.
+2. ~~Does `F2.Facility` carry a timezone column?~~ **ANSWERED, session 119: no, it did
+   not** — and neither did anything else. `DriverProfile.home_timezone` exists but is
+   written by nothing outside the tests, so the product had no working notion of local
+   time anywhere. `facility.timezone` now exists, resolved from coordinates and stored on
+   first use. F-14 and F-22 are closed.
 3. Does the Makefile invoke `osm_filter_args.py`? (F-11.)
 
 ## The pattern behind six of the eight criticals
