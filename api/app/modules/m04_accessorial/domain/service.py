@@ -119,19 +119,41 @@ def file_tonu(db: Session, load, amount_cents: int, stop=None, gateway=None) -> 
 
 
 # --- Layover (M4-FR2) — overnight dwell detection ---
-def _arrival_departure(db: Session, account_id, facility_id):
-    arrival = departure = None
-    for event in location.list_events(db, account_id, facility_id):
-        if event.event_type == location.GeofenceEventType.ENTER and arrival is None:
-            arrival = event.occurred_at
-        elif event.event_type == location.GeofenceEventType.EXIT:
-            departure = event.occurred_at
-    return arrival, departure
+def _visit_anchor(load, stop) -> datetime:
+    """Which moment this stop's visit belongs to.
+
+    AI-CONTEXT: the appointment is the contracted window for THIS stop, so it is the
+    most precise anchor available. Falling back to the load's creation is safe because
+    a load always exists before it is driven — the visit that matters is the first one
+    at this dock after the paperwork existed, never one from a previous run.
+    """
+    return stop.appointment_start or load.created_at
+
+
+def _arrival_departure(db: Session, account_id, facility_id, since: datetime):
+    """ONE visit's arrival and departure — §23 entry 73, which M4 never received.
+
+    AI-CONTEXT: this used to replay raw ENTER/EXIT events and take the EARLIEST enter
+    ever recorded at the facility and the LATEST exit, so a driver's second load to the
+    same dock read the first visit's arrival. M3 was fixed by `location.visit_window`;
+    M4 kept its own copy of the original bug, and M4's consequence is the worse one.
+
+    M3's version produced a wrong AMOUNT on a real claim. This one decides whether a
+    claim EXISTS: with an arrival from weeks ago and a departure from today the dates
+    differ, `NoLayover` is not raised, and a layover invoice is filed for a stop that
+    was never overnight — then sent to a broker under the driver's name. A wrong figure
+    invites a question; a fabricated claim invites a refusal to deal.
+
+    The primitive already existed. This function simply never asked it.
+    """
+    return location.visit_window(db, account_id, facility_id, since)
 
 
 def file_layover(db: Session, stop, layover_rate_cents: int, gateway=None) -> AccessorialClaim:
     load = loads.get_load(db, stop.load_id)
-    arrival, departure = _arrival_departure(db, load.account_id, stop.facility_id)
+    arrival, departure = _arrival_departure(
+        db, load.account_id, stop.facility_id, _visit_anchor(load, stop)
+    )
     if arrival is None or departure is None:
         raise NoLayover("no completed stop at this facility")
     if _as_utc(arrival).date() == _as_utc(departure).date():
