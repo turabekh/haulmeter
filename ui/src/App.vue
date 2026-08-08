@@ -8,7 +8,7 @@ import { computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import StatusStrip from "./core/components/StatusStrip.vue";
 import TabBar from "./core/components/TabBar.vue";
-import { online, pendingWrites, flushQueue } from "./core/api.js";
+import { online, pendingWrites, failedWrites, flushQueue } from "./core/api.js";
 import { startLocationReporting, stopLocationReporting } from "./core/location.js";
 
 const route = useRoute();
@@ -46,7 +46,12 @@ onUnmounted(() => {
 
 <template>
   <div class="app-frame" :class="{ 'app-frame--wide': portal }">
-    <StatusStrip v-if="chrome" :online="online" :pending="pendingWrites" />
+    <StatusStrip
+      v-if="chrome"
+      :online="online"
+      :pending="pendingWrites"
+      :failed="failedWrites"
+    />
     <main class="app-content">
       <!-- AI-CONTEXT: §23 entry 100. The MAP alone is kept alive, and the narrowness
            is the decision. Leaving the tab destroyed the Mapbox GL instance; coming

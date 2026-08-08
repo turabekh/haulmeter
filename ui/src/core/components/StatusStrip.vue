@@ -23,17 +23,20 @@
      Owner-requested (§23 entry 89). -->
 <script setup>
 import { computed } from "vue";
-import { WifiOff, CloudOff } from "lucide-vue-next";
+import { WifiOff, CloudOff, AlertTriangle } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 
 const props = defineProps({
   online: { type: Boolean, default: true },
   pending: { type: Number, default: 0 },
+  failed: { type: Number, default: 0 },
 });
 const { t } = useI18n();
-// the strip is for facts a driver cannot see anywhere else. Both of these are
-// invisible without it, and neither is true most of the time.
-const hasSomethingToSay = computed(() => !props.online || props.pending > 0);
+// the strip is for facts a driver cannot see anywhere else. All three of these are
+// invisible without it, and none of them is true most of the time.
+const hasSomethingToSay = computed(
+  () => !props.online || props.pending > 0 || props.failed > 0,
+);
 </script>
 
 <template>
@@ -47,6 +50,17 @@ const hasSomethingToSay = computed(() => !props.online || props.pending > 0);
     <span v-if="pending > 0" class="strip__pending" :aria-label="t('system.pending')">
       <CloudOff :size="14" :stroke-width="2" aria-hidden="true" />
       {{ pending }}
+    </span>
+    <!-- AI-CONTEXT: U-07. A write the server refused is NOT pending and must not read as
+         pending — the driver was previously shown "synced" over lost evidence. This is
+         the one thing on the strip that is not calm, and §15.1's "offline is never red"
+         does not cover it: offline is a condition that resolves itself, and this does
+         not. §15.4 requires a failed money-moving action to be explicit and persistent.
+         --flare-500 is the existing semantic token for that; no new colour, no new
+         pattern — the same icon-plus-count shape the pending glyph already uses. -->
+    <span v-if="failed > 0" class="strip__failed" :aria-label="t('system.failed')">
+      <AlertTriangle :size="14" :stroke-width="2" aria-hidden="true" />
+      {{ failed }}
     </span>
   </header>
 </template>
@@ -72,6 +86,13 @@ const hasSomethingToSay = computed(() => !props.online || props.pending > 0);
   align-items: center;
   gap: var(--s-1);
   color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.strip__failed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--flare-500);
   font-variant-numeric: tabular-nums;
 }
 </style>

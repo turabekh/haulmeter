@@ -37,3 +37,10 @@ npm-debug.log*
 
 # OSM extracts (live-pulled via make osm-extract)
 api/data/osm/
+
+# The owner's dump tooling and its output (owner decision, 2026-08-08: keep untracked).
+# Ignored rather than merely left alone, because "left alone" is exactly what four
+# handoffs said about collect_files.py before it was swept into a feature commit and
+# pushed to a public repo (HANDOFF-118 §4). A rule a `git add -A` can break is not a rule.
+longhaul.txt
+split_dump.py

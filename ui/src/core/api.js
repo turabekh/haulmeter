@@ -171,6 +171,7 @@ export function logout() {
   persist();
   clearCache(); // a new driver never sees the last one's cached reads
   saveQueue([]); // ...nor inherits their unsynced writes
+  saveFailed([]); // ...nor their FAILED ones, which are per-driver evidence (U-07)
   // AI-CONTEXT: clearing storage is only half of it. `signOut()` routes to /login
   // without reloading the page, so these module-scope refs outlive the logout that
   // emptied their keys — the Load tab would render the previous driver's stop from
@@ -179,6 +180,7 @@ export function logout() {
   activeStopId.value = null;
   activeStopFacilityId.value = null;
   activeFleetId.value = null;
+  failedWrites.value = 0;
 }
 
 function _adopt(data, userEmail) {
@@ -280,6 +282,14 @@ function saveQueue(q) {
   }
   pendingWrites.value = q.length;
 }
+// AI-CONTEXT: seeds the replay queue for tests. `pendingWrites` is derived state that
+// only `saveQueue` updates, so a test writing localStorage directly would assert against
+// a stale count — and the count IS what the driver sees. Matches the `__…ForTests`
+// convention in state.js, location.js and map-view.js.
+export function queueForTests(items) {
+  saveQueue([...items]);
+}
+
 function newOpId() {
   try {
     return crypto.randomUUID();
@@ -319,6 +329,60 @@ async function queuedPost(path, body) {
   return resp.json();
 }
 
+// AI-CONTEXT: the DEAD-LETTER queue (audit U-07 / U-08). A write that can never succeed
+// is moved here instead of being dropped, and the driver is told the count.
+//
+// What this replaces: `resp.ok` was never consulted, so a 401, 422 or 500 was
+// indistinguishable from a success — the item was shifted off the queue, `pendingWrites`
+// fell to zero, and the status strip showed SYNCED. A driver photographs a BOL at a dock
+// with no signal; two hours later the replay fires against an expired session; the
+// evidence is gone and nothing anywhere records that it was lost. That evidence is what
+// a detention claim is made of, and §15.4 says failed money-moving actions are "always
+// explicit and persistent until resolved" — this was silent and permanent.
+//
+// The item is kept WHOLE (path, body, opId) rather than reduced to a message. The opId
+// is the F12 idempotency key, so a future retry surface can replay one of these safely,
+// exactly once. Reduce it to a string now and that option is gone.
+const FAILED_KEY = `${CACHE_PREFIX}failed_writes`;
+const MAX_ATTEMPTS = 5;
+
+function readFailed() {
+  try {
+    return JSON.parse(localStorage.getItem(FAILED_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+export const failedWrites = ref(readFailed().length);
+function saveFailed(list) {
+  try {
+    localStorage.setItem(FAILED_KEY, JSON.stringify(list));
+  } catch {
+    /* best-effort */
+  }
+  failedWrites.value = list.length;
+}
+function deadLetter(item, reason) {
+  const list = readFailed();
+  list.push({ ...item, reason, failed_at: new Date().toISOString() });
+  saveFailed(list);
+}
+export function listFailedWrites() {
+  return readFailed();
+}
+export function clearFailedWrites() {
+  saveFailed([]);
+}
+
+// AI-CONTEXT: which HTTP answers are worth trying again. 429 and 5xx are the box being
+// briefly unwell — a deploy, a container restart, the single VM under load — and the
+// write itself is fine. Every other 4xx is a write that will fail identically forever.
+// Treating those two cases the same is U-08: it silently destroyed every queued write
+// that happened to replay during a restart window.
+function isRetryable(status) {
+  return status === 429 || status >= 500;
+}
+
 let _flushing = false;
 export async function flushQueue() {
   if (_flushing || typeof fetch === "undefined" || !token.value) return;
@@ -327,8 +391,9 @@ export async function flushQueue() {
     const q = readQueue();
     while (q.length) {
       const item = q[0];
+      let resp;
       try {
-        await fetch(`${API_BASE}${item.path}`, {
+        resp = await fetch(`${API_BASE}${item.path}`, {
           method: "POST",
           headers: postHeaders(item.opId), // same key -> the server dedupes the replay
           body: JSON.stringify(item.body),
@@ -338,8 +403,33 @@ export async function flushQueue() {
         break;
       }
       online.value = true;
-      q.shift(); // drop on success OR server-rejection (don't retry a bad write forever)
+
+      if (resp.ok) {
+        q.shift();
+        saveQueue(q);
+        continue;
+      }
+
+      if (isRetryable(resp.status)) {
+        // Kept at the head and retried on the next flush, which is what the existing
+        // triggers already provide — a reconnect and every successful write. The attempt
+        // cap is HEAD-OF-LINE protection, not impatience: one write the server keeps
+        // 500ing would otherwise block every write behind it forever, and the queue is
+        // where a driver's evidence waits.
+        item.attempts = (item.attempts || 0) + 1;
+        if (item.attempts < MAX_ATTEMPTS) {
+          saveQueue(q);
+          break;
+        }
+        q.shift();
+        saveQueue(q);
+        deadLetter(item, `http_${resp.status}_after_${item.attempts}_attempts`);
+        continue;
+      }
+
+      q.shift();
       saveQueue(q);
+      deadLetter(item, `http_${resp.status}`);
     }
   } finally {
     _flushing = false;

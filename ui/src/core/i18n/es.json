@@ -741,6 +741,7 @@
   "system.loading": "Cargando",
   "system.offline": "Sin conexión — todo se guarda en tu teléfono",
   "system.pending": "Guardado en tu teléfono",
+  "system.failed": "No enviado — sigue en tu teléfono",
   "unit.mi": "mi",
   "vendor.a_stop": "Una parada",
   "vendor.add_appearance": "Agregar una parada",

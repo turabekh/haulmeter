@@ -741,6 +741,7 @@
   "system.loading": "Загрузка",
   "system.offline": "Офлайн — всё сохраняется на телефоне",
   "system.pending": "Сохранено на телефоне",
+  "system.failed": "Не отправлено — осталось на телефоне",
   "unit.mi": "миль",
   "vendor.a_stop": "Стоянка",
   "vendor.add_appearance": "Добавить выезд",

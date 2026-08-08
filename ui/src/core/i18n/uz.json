@@ -741,6 +741,7 @@
   "system.loading": "Yuklanmoqda",
   "system.offline": "Oflayn — hammasi telefoningizga saqlanadi",
   "system.pending": "Telefoningizga saqlandi",
+  "system.failed": "Yuborilmadi — hali telefoningizda",
   "unit.mi": "mil",
   "vendor.a_stop": "To'xtash joyi",
   "vendor.add_appearance": "Chiqish qo'shish",
