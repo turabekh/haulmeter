@@ -1,40 +1,61 @@
-# HANDOFF-121 — the loading state exists, and the fixtures are gone
+# HANDOFF-121 — the loading state, the last critical, and two deploys
 
-> **Stack UP · PUSHED and VERIFIED · DEPLOYED.** The owner pushed, then asked for the
-> deploy. **haulmeter.online now serves 121** — sessions 113→121 in one deploy, **seven
-> migrations 0060→0066**, verified end to end. §11.
+> **Stack DOWN · thirteen commits, five of them UNPUSHED · DEPLOYED TWICE.**
+> `haulmeter.online` serves 121 at head `0066_f13_default_on`.
 >
-> **Two findings came out of the deploy, and one of them is the answer to F-01.**
-> **Production email has been delivering to a Mailpit container on the VM** — `SMTP_HOST`
-> is `'mailpit'` with `configured=True`, so it never fell back to the recording gateway.
-> No broker has ever received a detention notice from the deployed product, and F8 recorded
-> every one as sent. And **the worker boots against the pre-migration schema** on any deploy
-> that carries one (N-03).
+> Six instructions, each a word or two: *"approved, do the loading-state work"*,
+> *"proceed with the portal touch targets"*, *"use your judgement and proceed"*, *"deploy
+> it"*, *"fix N-03"*, *"deploy it"*.
 >
-> The owner approved `S23-PROPOSAL-loading-state.md`, PROPOSED since 2026-08-07, and said
-> "do the loading-state work". It is **design-prd §23 entry 131**, and the four-state rule
-> is on the **§22.3 DoD**. **Five findings closed — U-06, U-09, U-10 (criticals), U-11 and
-> U-12** — which is every finding that decision was blocking.
+> **The audit went 7 open → 3, and 41 of 45 are closed.** Every **High** and every
+> **Medium** in both audits is now closed, and **nothing is PARTIAL**. Twelve findings closed
+> this session: U-06, U-09, U-10, U-11, U-12 (§23 entry 131), U-04 and U-05 (entry 132),
+> **F-02 and F-12 — the last open critical** — plus F-25 (entries 133/134), and **N-03**,
+> which the deploy opened and the session closed. Migration **0066**.
 >
-> Then a second instruction — *"proceed with the portal touch targets"* — closed **U-04
-> and U-05**, the last two PARTIAL findings. **§23 entry 132.**
+> **F-01 is answered and it is the bad answer.** Production `SMTP_HOST='mailpit'` with
+> `configured=True`, so the gateway never fell back to recording: **every counterparty email
+> the deployed product has "sent" went into a container on the box, and F8 wrote `sent_at`
+> over each one. No broker has ever received a detention notice from production.** M3 is the
+> wedge. The code has been correct since entry 122 — the fix is one `.env` edit on the VM,
+> which is the owner's under rule 9 and deliberately not done from here. §11.1.
 >
-> Then *"use your judgement and proceed"* took the rest: **F-02 + F-12** — the last open
-> critical — plus **U-05**'s remainder and **F-25**, with **F-19** and **F-27** judged and
-> recorded. **§23 entries 133 and 134. Migration 0066.**
+> **What is left: three findings and one design decision.** F-01 (above, owner's),
+> `--marker-500`'s 2.04:1 dark contrast (a §22.2 palette colour — stops for the owner
+> whatever entry 118 delegates), and F-19/F-27, both Low and both waiting on work scoped
+> elsewhere. §12.
 >
-> **Open findings 7 → 3, all Low, none PARTIAL.** Every High and every Medium in both
-> audits is closed. **F-01 is the only Critical left and it is blocked on one command on
-> the box.** The only item that stops for the owner is `--marker-500`'s contrast, because a
-> palette colour is §22.2 and entry 118's delegation does not reach it.
+> ---
 >
-> **Four things are worth reading over the rest. §4:** looking at a screenshot found a
-> defect six automated checks had passed over. **§5:** removing the fixtures revealed that
-> nine unit tests and four harness states had been measuring them. **§8.2:** a harness
-> change of mine silently exempted the entire app from LAW 0's only mechanical check, and
-> the full sweep went green over it. **§9:** the flag mechanism F13's whole promise rests
-> on had never once been consulted, and the fix is the one that does NOT make the gates
-> block anything.
+> **Five things are worth reading over the rest, and all five are the same shape — a check
+> that was green over the thing it existed to catch.**
+>
+> **§4** — the skeleton pins were invisible on a night basemap. Six pucks in the DOM,
+> `visibility: visible`, counted by the layout harness, and unreadable to a human. 745 unit
+> tests and 271 layout checks passed over it. Found by throttling the network and LOOKING.
+> *A colour can be a legitimate token, correctly applied, and still be invisible where it is
+> used.*
+>
+> **§5** — deleting the fixtures revealed that **thirteen checks had been measuring them**:
+> nine unit tests, three of which stubbed an endpoint but never set a session so `apiGet`
+> threw before the stub was reached, and four harness states whose own comment admitted it.
+> The most useful is `facility`, which did **not** go red — it had no `ready` selector, so it
+> kept passing while measuring the error line under the facility's name.
+>
+> **§8.2** — generalising the harness's scroller exemption found `overflow-x: auto` computed
+> on `main.app-content`, above every element on every surface, because CSS promotes `visible`
+> to `auto` when the other axis is not visible. **My change silently exempted the entire app
+> from LAW 0's only mechanical check and the full sweep went green.** Caught by restoring a
+> defect and watching the test pass when it should have failed.
+>
+> **§9** — F13's whole promise is that a flag cannot activate until its gates are satisfied,
+> and **the gate had never once been consulted**: three modules, all six gates unsatisfied,
+> all three live. The fix is the one that does **not** make the gates block anything.
+>
+> **§11.3** — N-03's first verification proved nothing, and noticing that was the fix's real
+> content: a clean boot with the schema already at head runs the migration as a no-op, so the
+> ordering is never exercised. The database had to be downgraded a revision to make the test
+> mean something.
 
 ---
 
@@ -42,12 +63,12 @@
 
 | | |
 |---|---|
-| Branch | `main`, **level with `origin/main`** — `git rev-list --left-right --count origin/main...HEAD` returns `0 0` |
-| `origin/main` | **`1254d48`, OBSERVED.** `git fetch` **worked this session**, which it had not since 117 — so the four-session caveat *"the ahead-count is arithmetic, re-fetch before pushing"* is **resolved**. All five session commits verified present with `git merge-base --is-ancestor`. The owner pushed; nothing was pushed from this session's own tooling |
-| Gates | **pytest 1550 · vitest 746 (39 files) · layout 283 · import-linter 30/30 · ruff clean** — all five measured on the final tree |
-| Migrations | **`0066_f13_default_on` (head)** — new this session; applied, downgraded and re-applied on the running stack |
+| Branch | `main`, **five commits ahead of `origin/main`** — the owner pushed mid-session at `1254d48`; the five since are the N-03 fix and the documentation of it |
+| `origin/main` | **`1254d48`, OBSERVED — not arithmetic.** `git fetch` **worked this session**, which it had not since 117, so the four-session *"re-fetch before pushing"* caveat is **resolved**. Each pushed commit was verified present with `git merge-base --is-ancestor`. **Try the fetch before assuming it fails** — copying that caveat forward unexamined is how it survived four handoffs |
+| Gates | **pytest 1558 · vitest 746 (39 files) · layout 283 · import-linter 30/30 · ruff clean** — all five measured on the final tree |
+| Migrations | **`0066_f13_default_on` (head)**, local and production. New this session; applied, downgraded and re-applied locally, deployed, then downgraded and re-applied once more to prove N-03 (§11.3) |
 | Working tree | clean |
-| Local stack | **UP.** Seven containers, `/health` 200, UI 200 |
+| Local stack | **DOWN** — brought down deliberately at the owner's request at session end. It was UP and verified throughout |
 | Dev data | Tampa `27.9506,-82.4572` intact, four DEV facilities at 89–125 m |
 | Email | **dev still points at live Gmail.** A send from dev is a real send |
 | Deploy | **RUN TWICE and verified, 2026-08-08** — 113→121, then N-03's ordering fix. `haulmeter.online` serves 121 at head `0066_f13_default_on`; `/api/health` 200 `environment=test`, UI 200, all seven containers up, all seven worker jobs green. Backup taken first: `haulmeter-20260808T132816Z.dump`, 9.2 MB, uploaded to `gs://haulmeter-backups` |
@@ -197,7 +218,7 @@ one now (`.dwell__figure`).
   path that does not match turns all four `map-loading` variants red with the right
   diagnosis.
 
-## 7. Sabotage — nineteen restorations, and one that passed when it should not have
+## 7. Sabotage — twenty-three restorations, and one that passed when it should not have
 
 | Fix | Sabotage result |
 |---|---|
@@ -221,6 +242,10 @@ one now (`.dwell__figure`).
 | a kill switch stops beating the default | 2 fail |
 | the code default outranks the operator's decision | 5 fail |
 | `enable()` stops reading its gates | 1 fail |
+| N-03: the worker's wait on `migrate` removed | 1 fail |
+| N-03: `alembic upgrade` back inside the api's command | 1 fail |
+| N-03: `migrate` given a restart policy | 1 fail |
+| N-03: the wait weakened to `service_started` | 1 fail |
 
 **One row came back green, and it was the most valuable result of the session.** Switching
 off the owner table's scroller left the state passing, because the ancestor walk had found
@@ -523,6 +548,26 @@ sabotages, each caught.
 
 ## 12. Exact next task
 
+**Nothing in the audit queue is both unblocked and worth a session.** That is a genuinely new
+state for this project, and it changes what the next session should be: 41 of 45 are closed,
+the two remaining Lows wait on work scoped elsewhere, and the two highest-value items are the
+owner's rather than an agent's.
+
+**So the recommended first move is not the audit — it is v2.0 DoD #8, the handset
+background-sensor test.** It has been the named next task since session 115 and has been
+deferred six times. It is now the oldest unmet thing on the board and it is load-bearing:
+the whole A1 stop auto-pilot — geofence arrival, the detention clock, the packet, ON_SITE —
+rides on a background sensor that nobody has ever watched work on a real phone. Sessions 115
+and 116 built and walked everything downstream of it in a browser; the sensor itself is still
+unproven, and no test in this repo can prove it. **It needs a human, a handset and a drive.**
+
+Second, and cheap, is **walking ON_SITE in a browser** (117 §7) — the fifth built-and-inert
+engine was found there, and the walk has still not happened.
+
+Two things the owner may want to clear first, both minutes rather than sessions: **F-01's
+`.env` edit** (§11.1 — the product's core promise does not currently leave the building) and
+the **`--marker-500`** decision below.
+
 ### 12.1 The owner decision — ONE left, down from eight
 
 119 §5.1's list is **half cleared**: items 5–8 were the loading-state proposal and are
@@ -602,7 +647,7 @@ gated the deploy is answered and is now an owner action rather than a blocker (�
 ```
 make up                              # preflight, then the full stack
 make seed-where                      # the Tampa origin — paste into Sensors
-make test                            # 1550 pytest + 746 vitest — do NOT pipe it
+make test                            # 1558 pytest + 746 vitest — do NOT pipe it
 make lint                            # ruff + import-linter (30 contracts)
 make ui-layout                       # 283 checks, ~3 min, runs ALONE
 make down
@@ -629,8 +674,22 @@ which is how it survived four sessions.
 `infra/.env` carries the live Gmail block and is gitignored. **A send from dev is a real
 send.**
 
-**Migration 0066 is new this session** and was applied, downgraded and re-applied on the
-running stack. It changes no box's behaviour — the backfill preserves every effective flag
-state — but it is a foundation schema change, so read §9.3 before deploying it.
+**Migration 0066 is new this session** and is applied on both the local stack and
+production. It changes no box's behaviour — the backfill preserves every effective flag state
+— but it is a foundation schema change, so read §9.3 before touching it.
 
-Nothing is waiting on a background job, an ingest, or a queue.
+**`make up` now starts a `migrate` service, and that is expected.** It is a one-shot: it runs
+`alembic upgrade head`, exits 0, and the api and worker wait for that before starting (N-03,
+§11.3). So `docker compose ps` shows `migrate  Exited (0)` on a healthy stack — that is
+success, not a crashed container, and `ps -a` is needed to see it at all. If the api and
+worker never start, read `docker compose logs migrate` FIRST: a failed migration now stops
+both of them deliberately, rather than leaving the worker up and erroring against a schema
+that has moved.
+
+**Both compose files are mounted read-only into the api container** (`/repo/infra/*.yml`) so
+`test_compose_migration_order.py` can assert that ordering. The files are mounted
+individually rather than the `infra/` directory, because `infra/.env` lives there and carries
+the live Gmail credential.
+
+Nothing is waiting on a background job, an ingest, or a queue. **The local stack is DOWN**;
+`make up` is all it needs.
