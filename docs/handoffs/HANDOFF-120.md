@@ -1,13 +1,13 @@
-# HANDOFF-120 — ten findings closed, and every one that needed no decision from the owner now is
+# HANDOFF-120 — eleven findings closed, and every one that needed no decision from the owner now is
 
-> **Stack UP · twenty-eight commits UNPUSHED · nothing deployed.** haulmeter.online still
+> **Stack UP · thirty commits UNPUSHED · nothing deployed.** haulmeter.online still
 > serves 112's code.
 >
 > Session 120 was one instruction — *"read the latest handoff and restart the app"*, then
-> *"proceed using your best judgement"* four times over. It restarted the stack and worked
-> the audit queue: **ten findings closed** (F-30, F-32, F-33, F-09, F-10, F-15, F-16, F-20,
-> F-26, F-11), **one new finding filed rather than absorbed** (N-01), and **migration 0065**
-> added.
+> *"proceed using your best judgement"* five times over. It restarted the stack and worked
+> the audit queue: **eleven findings closed** — the audit's F-30, F-32, F-33, F-09, F-10,
+> F-15, F-16, F-20, F-26, F-11, plus **N-01**, which this session both opened and closed —
+> **one new finding filed rather than absorbed** (N-02), and **migration 0065** added.
 >
 > **Open findings 18 → 8.** What remains is four blocked on facts or decisions nobody here
 > can supply, and four that need the owner's judgement about intended behaviour rather than
@@ -22,9 +22,9 @@
 
 | | |
 |---|---|
-| Branch | `main`, **twenty-eight** commits ahead of `origin/main` — 119's twenty-four plus this session's four |
+| Branch | `main`, **thirty** commits ahead of `origin/main` — 119's twenty-four plus this session's six |
 | `origin/main` | `113327e`, still **not re-verified**. `git fetch` fails here: *"could not read Username for 'https://github.com'"*. The ahead-count is arithmetic. **Re-fetch before pushing** |
-| Gates | **pytest 1494 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** — all five measured on the final tree, layout re-run rather than carried forward |
+| Gates | **pytest 1502 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** — all five measured, layout re-run rather than carried forward |
 | Migrations | **`0065_f14_job_schedule` (head)** — new this session, applied AND downgraded AND re-applied on the running stack |
 | Working tree | clean |
 | Local stack | **UP.** Verified from outside the containers: `/health` 200, UI 200, seven containers, worker booting clean |
@@ -76,8 +76,20 @@ lives on a CONNECTION, and every `db.commit()` already inside `_run_job` returns
 connection to the pool — the lock would have been dropped silently mid-run, and a
 single-connection test would have passed.
 
-**F-15, F-16, F-20, F-26, F-11** — see §7 of the commit `5f781aa` message, and §3 below for
-the two that are more interesting than their severity.
+**F-15, F-16, F-20, F-26, F-11** — see the commit `5f781aa` message, and §3 below for the
+two that are more interesting than their severity.
+
+**N-01 — the copilot answered in one language whatever it understood.** Opened while
+closing F-30 and closed later the same session. Every spoken string comes from F15's
+`MessageCatalog` now, keyed by the driver's locale. **It is that catalogue's first producer
+in the product**: `register_message` had been written, exported, and called by nothing but
+F15's own test — the same built-and-inert shape as F-09's purge and F9's budget cap.
+
+Two fallbacks, deliberately different because the failures are: a missing ROW falls back to
+compiled English (F-17's third option — a strict lookup would turn one missing row into a
+*silent* copilot at speed), and a missing KEY raises, gated by a test asserting every intent
+the router can return has one. A new intent with no message would otherwise be a 500 in a
+moving truck.
 
 ## 3. Two things that were smaller than their fix
 
@@ -155,6 +167,10 @@ Every fix was checked by restoring the defect and watching the new test fail.
 | F-15 `visit_window` unbounded | 1 fail |
 | F-16 filename interpolated raw | 2 fail |
 | F-26 rpm falls back to 0 | 1 fail |
+| N-01 `_dispatch` ignores the locale | 2 fail |
+| N-01 deferred string back to a literal | 1 fail |
+| N-01 one locale dropped from a message | 1 fail |
+| N-01 handoff slug interpolation restored | 1 fail |
 
 **The two "exactly 1" rows carry the same lesson as 119's throttle row.** Substring matching
 and rule-order-dependence both pass the entire 96-fixture accuracy set. The accuracy metric
@@ -174,6 +190,11 @@ does not prove the matcher; the false-positive tests are the only guard.
 - **F-11 measured: 11 infra files now enter the dump** that never did — `deploy.sh`,
   `check_ports.sh`, `backup_db.sh`, `verify_restore.sh`, `ingest_remote.sh`, the `Makefile`
   and four Dockerfiles. `.env.example` matches; `.env` does not.
+- **N-01 end to end over HTTP**, because boot registration is only observable on the box:
+  114 catalogue rows across 19 keys seeded at boot; `es` *"cuanto me deben"* →
+  *"Estás al día — no te deben nada ahora."*; `ru` while DRIVING → the deferred confirmation
+  in Russian with `audio_ref: audio://ru/…`, which is the case that matters (spoken aloud,
+  and the TTS is now asked for Russian audio); English unchanged.
 - **F-09's risk was checked before wiring, and it is lower than it looks.** The F4 evidence
   pack does **not** read `location_ping` — `render.py` states the rule and the reason ("the
   trace is drawn from EVIDENCE, not from raw location pings … the map cannot show a position
@@ -208,15 +229,21 @@ U-09, U-10, U-11 and U-12 — four criticals and a High — in one session.**
 | **F-01** | one command on the box. No box credential here |
 | **U-04** | six surfaces not in the layout harness — real work, no decision needed |
 | **U-06, U-09, U-10, U-11, U-12** | all wait on §7.1 item 5 |
-| **N-01** | new this session, needs nothing from the owner — see below |
+| **N-02** | new this session, needs nothing from the owner — see below |
 
-**N-01 is the cleanest un-blocked task on the board.** Voice now *understands* six languages
-and still *answers* in English: `_dispatch` returns hardcoded strings and speaks them aloud
-while driving, which is the one moment a driver cannot fall back to the screen. PRD §7.15
-names voice explicitly. F15's `MessageCatalog` already has `register_message` /
-`get_message` / `missing_locales`, so the mechanism exists and what is missing is ten
-strings × six locales plus the wiring. It was filed rather than folded into F-30 because
-it is the response path, not the classifier.
+**N-02 is the cleanest un-blocked task on the board**, and N-01 just built and proved its
+mechanism. Driver NOTIFICATIONS are English-only everywhere: **10 `notify.dispatch` sites
+across 7 modules** (m01, m03 ×2, m05 ×2, m06, m09, m13 ×3) pass English literal titles and
+bodies straight to a driver's push. M3's detention P0 — *"Detention started · $75/hr"*,
+*"Free time is used up at this stop. Notice ready to send."* — is the product's most
+important driver-facing alert and it is English-only. PRD §7.15 names notifications in the
+same breath as voice.
+
+It is the same shape N-01 now demonstrates end to end: a `messages.py` beside the module,
+registered into F15 at boot, looked up by locale, falling back to compiled English. Roughly
+20 strings × 6 locales plus the wiring, and mechanical. Filed rather than folded into
+N-01's commit because it is a larger defect and hiding it inside a smaller one's fix is
+what this queue keeps catching.
 
 ### 7.3 Still open and untouched from 118 and 119
 

@@ -6,9 +6,10 @@ results, exact next task, and blockers always live in the latest numbered handof
 ➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — read this first, every session.
 
 > **120** was one instruction — *"read the latest handoff and restart the app"*, then
-> *"proceed using your best judgement"* — and it worked the audit queue: **ten findings
-> closed** (F-30, F-32, F-33, F-09, F-10, F-15, F-16, F-20, F-26, F-11), one new finding
-> **filed rather than absorbed** (N-01), migration **0065**. **Open findings 18 → 8.**
+> *"proceed using your best judgement"* — and it worked the audit queue: **eleven findings
+> closed** — F-30, F-32, F-33, F-09, F-10, F-15, F-16, F-20, F-26, F-11, plus **N-01**,
+> which the session both opened and closed — one new finding **filed rather than absorbed**
+> (N-02), migration **0065**. **Open findings 18 → 8.**
 >
 > **Every finding that could be closed without an owner decision now is** — again. What is
 > left is four blocked on facts nobody here can get, and four needing the owner's judgement
@@ -39,7 +40,15 @@ results, exact next task, and blockers always live in the latest numbered handof
 > `deploy.sh` now enter the review dump. And F-09's risk was checked before wiring — the F4
 > evidence pack does not read `location_ping`, so a purge cannot destroy a claim's proof.
 >
-> **Stack UP · twenty-eight commits UNPUSHED · nothing deployed.** `git fetch` still cannot
+> **N-01, opened and closed in the same session, is F15's message catalogue's FIRST
+> producer** — `register_message` had been written, exported and called by nothing but its
+> own test. The copilot answers in the language it understood now: verified over HTTP on the
+> box, `ru` while driving returns the deferred confirmation in Russian with
+> `audio_ref: audio://ru/…`. **N-02 is its sequel and the cleanest un-blocked task left:**
+> driver push notifications are English-only at **10 dispatch sites across 7 modules**,
+> including M3's detention P0.
+>
+> **Stack UP · thirty commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
 ➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — the session before.
