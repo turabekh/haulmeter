@@ -188,6 +188,40 @@ class WebPushNotificationGateway:
         raise NotImplementedError("transactional email adapter is a seam; wired at activation")
 
 
+# AI-CONTEXT: what a provider ref MEANS, in one place (audit F-06).
+#
+# A gateway may never fail its caller — the F8 row is the record that we decided to send,
+# and an SMTP server having a bad minute is a transport fact, not a reason to 500 a driver
+# who just tapped Send. So the outcome travels back as the ref string, and until now every
+# caller that wanted to know had to match on it by hand. Nobody did, which is why a
+# `smtp-failed-…` row still recorded `sent_at` and claimed delivery it never got.
+FAILED_PREFIX = "smtp-failed-"
+
+# Retrying these is pointless and, for an auth error against Gmail, actively harmful:
+# repeated bad logins are how an account gets locked. Everything else — a dropped
+# connection, a timeout, a 4xx greylist, a rate limit — is a bad minute and worth another
+# attempt. The default is RETRY, because the cost of retrying a permanent failure a few
+# bounded times is noise and the cost of dropping a detention notice is a driver's money.
+PERMANENT_FAILURES = frozenset(
+    {
+        "SMTPAuthenticationError",
+        "SMTPRecipientsRefused",
+        "SMTPNotSupportedError",
+        "SMTPSenderRefused",
+    }
+)
+
+
+def is_failure(provider_ref: str | None) -> bool:
+    return bool(provider_ref) and provider_ref.startswith(FAILED_PREFIX)
+
+
+def is_retryable(provider_ref: str | None) -> bool:
+    if not is_failure(provider_ref):
+        return False
+    return provider_ref[len(FAILED_PREFIX) :] not in PERMANENT_FAILURES
+
+
 class SmtpNotificationGateway:
     """The counterparty transport, and until 2026-08-02 it did not exist.
 
@@ -253,13 +287,28 @@ class SmtpNotificationGateway:
     def send_email(self, to_ref: str, subject: str, body: str) -> str:
         import smtplib
         from email.message import EmailMessage
+        from email.utils import make_msgid
 
         if not self.configured:
             return "email-unconfigured"
+        # AI-CONTEXT: the ref is the message's real RFC 5322 Message-ID (audit F-03).
+        #
+        # It used to be f"smtp-{self.delivered}", an instance counter — and
+        # `_LazyCounterpartyGateway._pick()` builds a fresh instance per send, so the
+        # counter never got past one and EVERY successful send in the product's life
+        # returned `smtp-1`. A1 requirement 4 depends on F8 per-thread tracking, and a
+        # constant cannot distinguish two sends.
+        #
+        # A Message-ID is the right answer rather than merely a unique one: it is what
+        # the receiving server logs, so a ref in our database can be searched for in a
+        # mail provider's trace when a broker says they never got it. The `smtp-` prefix
+        # stays because it names the transport and callers already grep for it.
+        message_id = make_msgid(domain=(self._s.smtp_from.split("@")[-1] or None))
         msg = EmailMessage()
         msg["From"] = self._s.smtp_from
         msg["To"] = to_ref
         msg["Subject"] = subject
+        msg["Message-ID"] = message_id
         msg.set_content(body)
         try:
             with smtplib.SMTP(
@@ -271,12 +320,12 @@ class SmtpNotificationGateway:
                     smtp.login(self._s.smtp_username, self._s.smtp_password)
                 smtp.send_message(msg)
             self.delivered += 1
-            return f"smtp-{self.delivered}"
+            return f"smtp-{message_id}"
         except Exception as exc:
             # never fail the caller: the F8 row and the driver's confirmation both stand,
             # and the ref records that this one did not go out.
             self.failed += 1
-            return f"smtp-failed-{type(exc).__name__}"
+            return f"{FAILED_PREFIX}{type(exc).__name__}"
 
 
 class _LazyCounterpartyGateway:

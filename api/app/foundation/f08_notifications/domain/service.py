@@ -14,7 +14,7 @@ from .enums import (
     SuppressReason,
     TemplateAudience,
 )
-from .gateway import NotificationGateway
+from .gateway import NotificationGateway, is_failure, is_retryable
 from .models import (
     Notification,
     NotificationClassPref,
@@ -610,12 +610,81 @@ def send_counterparty_message(
         thread_id=thread.id,
         direction=MessageDirection.outbound,
         body=body,
+        to_ref=to_ref,
         provider_ref=provider_ref,
-        sent_at=now,
+        # AI-CONTEXT: only a send that actually went out gets a `sent_at` (audit F-06).
+        # It was set unconditionally, so a row beside a `smtp-failed-…` ref still claimed
+        # delivery — and because nothing ever read the ref, the failure was invisible to
+        # every surface in the product. A NULL here is what makes it findable.
+        sent_at=None if is_failure(provider_ref) else now,
+        attempts=1,
     )
     db.add(message)
     db.flush()
     return message
+
+
+MAX_SEND_ATTEMPTS = 5
+
+
+def unsent_messages(db: Session, limit: int = 50) -> list[OutboundMessage]:
+    """Outbound mail that has not gone out — the dead-letter queue, such as it is.
+
+    AI-CONTEXT: F8 already had the rows; what it lacked was a reason to look at them.
+    A failed send returned a string nobody read, `sent_at` was written anyway, and the
+    notice was gone. With A12's "no monitoring" nothing would ever have surfaced it.
+    """
+    return list(
+        db.scalars(
+            select(OutboundMessage)
+            .where(
+                OutboundMessage.direction == MessageDirection.outbound,
+                OutboundMessage.sent_at.is_(None),
+                OutboundMessage.attempts < MAX_SEND_ATTEMPTS,
+            )
+            .order_by(OutboundMessage.created_at)
+            .limit(limit)
+        )
+    )
+
+
+def retry_unsent_messages(
+    db: Session, gateway: NotificationGateway, now: datetime | None = None, limit: int = 50
+) -> dict:
+    """Re-send what did not go. Returns a summary for the worker log.
+
+    AI-CONTEXT: one SMTP attempt with a ten-second timeout was the whole delivery
+    strategy, so a transient blip or a Gmail rate limit permanently lost a detention
+    notice — the document the entire detention wedge exists to deliver.
+
+    Permanent failures are NOT retried (see `PERMANENT_FAILURES`): repeatedly presenting
+    a bad App Password to Gmail is how an account gets locked, which would turn one
+    broken notice into every broken notice. They stop here with `sent_at` still NULL, so
+    they stay visible rather than being quietly abandoned.
+    """
+    now = now or datetime.now(UTC)
+    sent = retried = abandoned = 0
+    for message in unsent_messages(db, limit):
+        if not is_retryable(message.provider_ref):
+            abandoned += 1
+            continue
+        thread = db.get(OutboundThread, message.thread_id)
+        if thread is None or not message.to_ref:
+            # a row from before `to_ref` was recorded cannot be re-addressed. Left
+            # unsent and counted rather than guessed at — sending a broker's detention
+            # notice to an address we inferred is worse than not sending it.
+            abandoned += 1
+            continue
+        retried += 1
+        message.attempts += 1
+        message.provider_ref = gateway.send_email(
+            message.to_ref, thread.subject, message.body
+        )
+        if not is_failure(message.provider_ref):
+            message.sent_at = now
+            sent += 1
+    db.flush()
+    return {"retried": retried, "sent": sent, "abandoned": abandoned}
 
 
 def mark_opened(

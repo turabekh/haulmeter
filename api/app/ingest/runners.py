@@ -268,3 +268,24 @@ def run_eia(db: Session, commit: bool = True) -> dict:
     if commit:
         db.commit()
     return {"regions": regions}
+
+
+def run_outbound_retry(db: Session, commit: bool = True) -> dict:
+    """Re-send counterparty mail that did not go out (audit F-06).
+
+    AI-CONTEXT: one SMTP attempt with a ten-second timeout was the entire delivery
+    strategy. A transient blip or a Gmail rate limit permanently lost a detention notice
+    — the document the whole detention wedge exists to deliver — and because the failure
+    was swallowed into a string nobody read, with `sent_at` written anyway, nothing in
+    the product could tell you it had happened.
+
+    Runs on the counterparty gateway rather than a per-driver one: this is outbound mail
+    to a broker, not a push to a phone. Where SMTP is unconfigured the gateway falls back
+    to recording, so a laptop exercises the sweep without sending anything.
+    """
+    from app.foundation.f08_notifications import public as notify
+
+    summary = notify.retry_unsent_messages(db, notify.counterparty_gateway())
+    if commit:
+        db.commit()
+    return summary

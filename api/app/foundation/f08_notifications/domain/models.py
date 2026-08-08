@@ -202,8 +202,21 @@ class OutboundMessage(Base):
         Enum(MessageDirection, name="message_direction", schema=SCHEMA)
     )
     body: Mapped[str] = mapped_column(Text)
+    # AI-CONTEXT: who this was addressed to. The recipient was passed to the gateway and
+    # then forgotten — neither the thread nor the message recorded it — so the database
+    # could say a notice was sent and not say to whom. A retry needs the address, and so
+    # does anyone reconstructing what a broker was actually told.
+    to_ref: Mapped[str | None] = mapped_column(String(320), nullable=True)
     provider_ref: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    # AI-CONTEXT: `sent_at` means IT WENT OUT, and until now it did not (audit F-06).
+    #
+    # It was set unconditionally beside a `smtp-failed-…` ref, so the row asserted a
+    # delivery it never got — the same shape as U-07's queue reporting "synced" over a
+    # dropped write, and as F-01's F8 row claiming a notice was sent. NULL now means the
+    # send has not succeeded, which is what makes the unsent ones findable at all.
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # bounded, so a permanently undeliverable address cannot be retried forever
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

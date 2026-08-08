@@ -16,6 +16,7 @@ from .domain.enums import (
     TemplateAudience,
 )
 from .domain.gateway import (
+    FAILED_PREFIX,
     NotificationGateway,
     RecordingNotificationGateway,
     SentMessage,
@@ -24,6 +25,8 @@ from .domain.gateway import (
     WebPushNotificationGateway,
     counterparty_gateway,
     gateway_for,
+    is_failure,
+    is_retryable,
 )
 from .domain.models import (
     Notification,
@@ -37,6 +40,7 @@ from .domain.models import (
 from .domain.service import (
     BUDGET_EXEMPT_CLASSES,
     LOT_STATUS_PROMPT_CLASS,
+    MAX_SEND_ATTEMPTS,
     MAX_UNPROMPTED_P1_PER_DAY,
     NOTIFICATION_CLASSES,
     PROTECTION_GAP_CLASS,
@@ -72,6 +76,7 @@ from .domain.service import (
     record_inbound_reply,
     register_template,
     render_template,
+    retry_unsent_messages,
     save_subscription,
     send_counterparty_message,
     set_class_opt_in,
@@ -80,6 +85,7 @@ from .domain.service import (
     unfollow_subject,
     unmute_subject,
     unread_count,
+    unsent_messages,
 )
 
 __all__ = [
@@ -149,5 +155,11 @@ __all__ = [
     "record_inbound_reply",
     "register_template",
     "render_template",
+    "MAX_SEND_ATTEMPTS",
+    "FAILED_PREFIX",
+    "is_failure",
+    "is_retryable",
+    "retry_unsent_messages",
     "send_counterparty_message",
+    "unsent_messages",
 ]

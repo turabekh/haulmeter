@@ -27,7 +27,12 @@ BACKOFF_CAP_SECONDS = 3600
 @dataclass
 class Job:
     name: str
-    flag_key: str
+    # AI-CONTEXT: None means ALWAYS RUN. Every job here gates on a module flag, and
+    # `is_enabled` returns False for a flag nobody registered — so giving a foundation
+    # safety net a flag is how it becomes another engine that is built, wired and
+    # permanently idle. `outbound_retry` is delivery insurance for mail F8 has already
+    # decided to send; there is no activation decision to make about it.
+    flag_key: str | None
     interval_seconds: float
     run: object  # callable(db) -> summary
     next_run: float = 0.0
@@ -56,6 +61,11 @@ def _jobs() -> list[Job]:
         # against a two-hour free window is honest, and cheaper than the alternative of
         # scheduling a wake-up per claim. F8's own budget decides what actually leaves.
         Job("detention_clock", m3.FLAG_KEY, 60, runners.run_detention_clock),
+        # audit F-06: counterparty mail that did not go out. Five minutes, because the
+        # failures this exists for are transient — a restart window, a rate limit — and
+        # a detention notice an hour late is still a detention notice, while one that
+        # never goes is the defect. Unflagged: see Job.flag_key.
+        Job("outbound_retry", None, 300, runners.run_outbound_retry),
     ]
 
 
@@ -67,7 +77,7 @@ def _run_job(job: Job, monotonic: float) -> None:
     db = SessionLocal()
     run = None
     try:
-        if not flags.is_enabled(db, job.flag_key):
+        if job.flag_key is not None and not flags.is_enabled(db, job.flag_key):
             job.next_run = monotonic + job.interval_seconds  # flag off -> idle, quietly
             return
         started = datetime.now(UTC)
