@@ -128,6 +128,12 @@ async function open(fac) {
 }
 .search__input {
   flex: 1 1 auto;
+  /* AI-CONTEXT: audit U-04 — this ran to 468 px at 200 % text, past the 360 dp
+     viewport. A flex item defaults to `min-width: auto`, and an <input> has an
+     intrinsic width of about twenty characters that scales WITH the font size, so
+     `flex: 1 1 auto` could not shrink it. `min-width: 0` is the standard release and
+     the pattern this codebase already uses in sixteen other places. */
+  min-width: 0;
   min-height: 52px;
   border: none;
   background: transparent;

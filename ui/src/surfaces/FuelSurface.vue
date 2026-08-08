@@ -157,6 +157,12 @@ async function getCode() {
 .price {
   display: flex;
   align-items: baseline;
+  /* AI-CONTEXT: audit U-04 — `span.price__label` ran to 378 px at 200 % text, past the
+     360 dp viewport, because a Meter-sized figure and its unit label shared one
+     non-wrapping row. §22.3's DoD requires reflow at 200 %, and wrapping is the
+     pattern this codebase already uses for it in 27 other places rather than a new
+     one. The label drops under the figure instead of off the screen. */
+  flex-wrap: wrap;
   gap: var(--s-2);
   margin-top: var(--s-2);
 }

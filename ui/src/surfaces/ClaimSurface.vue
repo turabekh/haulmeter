@@ -152,8 +152,13 @@ function evTime(iso) {
   gap: var(--s-2);
 }
 .back {
-  width: 40px;
-  height: 40px;
+  /* AI-CONTEXT: audit U-04 — 40 dp, and the ONLY one of the nine `.back` buttons in
+     `surfaces/` that was. The other eight are 48 or `--touch-min` already; this is the
+     surface that had no harness state, which is the whole of U-04's argument. §6.5's
+     floor is a gloved hand in a bouncing cab, and this is the screen every detention
+     notification deep-links to. */
+  width: var(--touch-min);
+  height: var(--touch-min);
   display: flex;
   align-items: center;
   justify-content: center;

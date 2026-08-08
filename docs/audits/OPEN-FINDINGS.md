@@ -33,10 +33,10 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 |---|---|---|---|---|---|---|
 | Critical | 1 | 4 | 0 | 3 | 0 | **8** |
 | High | 2 | 0 | 0 | 15 | 0 | **17** |
-| Medium | 4 | 0 | 1 | 7 | 0 | **12** |
+| Medium | 3 | 0 | 2 | 7 | 0 | **12** |
 | Low | 1 | 0 | 0 | 6 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **8** | **4** | **1** | **31** | **1** | **45** |
+| **Total** | **7** | **4** | **2** | **31** | **1** | **45** |
 
 Findings opened *after* the audit are not in this scoreboard — they were never among the
 45. See **Opened after the audit**, below.
@@ -105,7 +105,7 @@ unobservable until the literal became a token. See §Blockers.
 | U-01 | High | **CLOSED** | Map drew outside the token system → `--on-accent` composition plus new `--shadow-pin`/`--scrim` (§23 entry 130), and a `token-discipline` sweep that keeps literals out. **Opened a new finding:** white on `--marker-500` is 2.04:1 in dark theme — see §Blockers. Session 119. |
 | U-02 | High | **CLOSED** | Per-driver keys moved under `CACHE_PREFIX`, plus a third instance the audit missed (`vendor_appearances`) and the in-memory refs that outlived logout. Asserted on what driver B renders. Session 119. |
 | U-03 | High | **CLOSED** | 119 made the fallback loud (counted, warned in dev, per-locale counts at `/dev`) and measured **0** — narrow, because mocked data left the ~45 dynamic families unrendered. 120 closed the other half with the audit's *stronger* fix: `test_dynamic_key_families.py` enumerates the vocabulary **in Python** and asserts a label exists in all six locales. **It found four families broken — 13 keys missing from ALL SIX, including every one of the nine `facility.type.*`.** `resolve()` returns the raw key when a string is missing everywhere, so `money.state.acknowledged` was rendering as literal text on the Money tab **for every driver, in every language** — the JS parity test cannot see this, because six identical holes are perfect parity. Session 120. |
-| U-04 | Medium | OPEN | Seven surfaces not in the layout harness. `load-worst-case` added (the U-04-adjacent item); the other six remain. |
+| U-04 | Medium | **PARTIAL** | **Five of the seven registered** — ClaimSurface in three states (invoice / evidence-only / no-claim), AuditSurface, FuelSurface, BookingSurface, PublicScorecardSurface. Harness **229 → 257 checks**. **Registering them found three real defects on screens nothing had ever measured:** `ClaimSurface`'s back button was **40 dp — the ONLY one of the nine `.back` buttons in `surfaces/` that was**, and it is the screen every detention notification deep-links to; `FuelSurface`'s price row ran to **378 px at 200%**; the scorecard's search input to **468 px**, because a flex item's default `min-width: auto` will not let an `<input>` shrink. All three fixed with existing patterns. **The two remaining are BLOCKED, not skipped:** `FleetWorkspaceSurface` and `OwnerPortalSurface` carry the 40 dp controls that are §5.1 item 3's open owner decision — adding them would either fail CI or decide that question by writing CSS. Session 120. |
 | U-05 | Medium | **PARTIAL** | `.filters-chip` 40→48 dp. `.cluster` measured at 36 dp with NO expanded hit area — below even §11.2's 44 dp map exemption; reported, not changed. Two portal controls untouched pending an owner call. Session 119. |
 | U-06 | Critical | **BLOCKED** | Money tab shows fabricated earnings on fetch failure. Blocked on the §23 loading-state entry — and the proposal file itself is missing. |
 | U-07 | Critical | **CLOSED** | Rejected writes are dead-lettered whole (path, body, opId) and counted on the status strip. Session 119. **Remaining, by design:** the strip says how many, not which — naming them needs a surface, which is a design question. |

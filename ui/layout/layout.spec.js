@@ -478,6 +478,39 @@ const PACKET_ROW = {
   claim: null,
 };
 
+// AI-CONTEXT: audit U-04 — ClaimSurface's two modes. Shape-matched to
+// `GET /load/{stop_id}/claim` (api/app/api/load.py) including the `claim_evidence`
+// spread, because a mock missing `timeline` would render the evidence card empty and
+// measure the screen without the thing the claim is FOR.
+const CLAIM_TIMELINE = [
+  { type: "GEOFENCE", occurred_at: "2026-07-27T04:10:00+00:00" },
+  { type: "PHOTO", occurred_at: "2026-07-27T04:12:00+00:00" },
+  { type: "DOCUMENT", occurred_at: "2026-07-27T04:15:00+00:00" },
+  { type: "NOTIFICATION", occurred_at: "2026-07-27T06:20:00+00:00" },
+];
+const CLAIM_BASE = {
+  claim_id: "00000000-0000-0000-0000-0000000000dd",
+  amount_cents: 18750,
+  detention_seconds: 9000,
+  free_time_minutes: 120,
+  rate_cents_per_hour: 7500,
+  state: "invoiced",
+  facility: "Dallas Cold Storage",
+  counterparty: "Coyote Logistics",
+  notice_sent: true,
+  filed: true,
+  created_at: "2026-07-27T06:20:00+00:00",
+  chain_valid: true,
+  record_count: 12,
+  artifact_count: 3,
+  timeline: CLAIM_TIMELINE,
+};
+const CLAIM_OWED = { ...CLAIM_BASE, mode: "invoice" };
+const CLAIM_EXPORT = { ...CLAIM_BASE, mode: "evidence_only", state: "exported" };
+// the MC# pill renders only for a VERIFIED invoicing driver (F1), and it is the
+// longest single line on the surface — which is the reason to measure it.
+const VERIFIED_ME = { verified: true, mc_number: "1234567", authority_type: "own_mc" };
+
 const SURFACES = [
   ["map", "/"],
   ["load", "/load"],
@@ -849,6 +882,63 @@ const SURFACES = [
   ["sheet-appointment", "/load", {
     stop: LIVE_STOP, mocks: LIVE_MOCKS, open: [".context__fix"], ready: ".appt__input",
   }],
+
+  // AI-CONTEXT: audit U-04 — six surfaces had no harness entry at all. PRD v2.0 §8
+  // acceptance 3 requires every surface registered "in the same commit that creates
+  // it", and these predate the rule.
+  //
+  // CLAIMSURFACE IS THE ONE THAT MATTERS, and it is first for that reason. §13.5
+  // forbids a notification deep-linking to a tab root and `dispatch` refuses to send
+  // without one, so EVERY detention alert this product sends lands here — on a screen
+  // that had never been measured at 360 × 800 under +40% type, while the surfaces a
+  // driver navigates to themselves have been, some in four separate states.
+  //
+  // Two states, because the two modes are genuinely different screens rather than one
+  // screen with a different word in it: `invoice` shows money owed and the verified
+  // MC# pill, `evidence_only` shows an exported pack and no pill at all (M3-FR9 — a
+  // company driver cannot bill anyone). The `ready` selectors prove WHICH one rendered,
+  // so a mock that stops matching cannot quietly measure the same state twice.
+  ["claim-owed", `/claim/${LIVE_STOP}`, {
+    mocks: { ...LIVE_MOCKS, [`/load/${LIVE_STOP}/claim`]: CLAIM_OWED, "/auth/me": VERIFIED_ME },
+    ready: ".hero--owed .authpill",
+  }],
+  ["claim-evidence-only", `/claim/${LIVE_STOP}`, {
+    mocks: { ...LIVE_MOCKS, [`/load/${LIVE_STOP}/claim`]: CLAIM_EXPORT, "/auth/me": VERIFIED_ME },
+    ready: ".hero--export",
+  }],
+  // §15.3: a stop with no claim is the common case for this route, and it must be a
+  // sentence rather than a blank screen. Measured because "absent, never empty" is a
+  // layout claim as much as a copy one.
+  ["claim-none", `/claim/${LIVE_STOP}`, {
+    // NOT a `__status` key — the harness already 404s any path it has no body for
+    // (see the route handler below), and a `{__status:404}` object would be fulfilled
+    // as a 200 carrying that object, rendering a claim with undefined fields under the
+    // name of the empty state.
+    mocks: { ...LIVE_MOCKS, "/auth/me": VERIFIED_ME },
+    ready: ".claim .muted",
+  }],
+
+  // M9's settlement audit and M7/M6's two action screens. All three read their subject
+  // from the ROUTE rather than from a fetch, so they need no mock — which is also why
+  // nothing was stopping them being measured, and why they were not.
+  ["money-audit", "/money/audit", { mocks: {}, ready: ".fields .field__input" }],
+  ["fuel-code", "/fuel/00000000-0000-0000-0000-0000000000f1?name=Pilot%20%23412&gross=419&net=394&savings=25", {
+    mocks: {}, ready: ".fuel__head",
+  }],
+  ["booking", "/book/00000000-0000-0000-0000-0000000000c1?name=Yardline%20Lot&nightly=2400", {
+    mocks: {}, ready: ".book__head",
+  }],
+  // The public scorecard is §18 web-first and LAW 0 still has no portal exemption
+  // written into it, so it is measured at 360 like everything else. It passes as it
+  // stands — it carries no target under 48 dp.
+  //
+  // FleetWorkspaceSurface and OwnerPortalSurface are DELIBERATELY still absent, and
+  // this is the reason: both carry 40 dp controls, which are precisely the two targets
+  // HANDOFF-119 §5.1 item 3 put to the owner — "applying the glove floor to a desktop
+  // form is a design decision, not a fix". Adding them here would either fail CI or
+  // decide that question by writing CSS, so they wait on the decision rather than
+  // pre-empting it. U-04 is closed to the extent an agent can close it.
+  ["scorecard", "/scorecard", { mocks: {}, ready: ".score__title" }],
 ];
 const CAPTION_FLOOR_PX = 13; // §6.2: "Nothing smaller exists."
 const TOUCH_MIN_PX = 48; // §6.5 glove spec
