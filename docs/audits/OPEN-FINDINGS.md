@@ -33,16 +33,23 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 |---|---|---|---|---|---|---|
 | Critical | 1 | 0 | 0 | 7 | 0 | **8** |
 | High | 0 | 0 | 0 | 17 | 0 | **17** |
-| Medium | 0 | 0 | 0 | 12 | 0 | **12** |
-| Low | 3 | 0 | 0 | 4 | 0 | **7** |
+| Medium | 0 | 0 | 0 | 11 | 0 | **11** |
+| Low | 2 | 0 | 0 | 6 | 0 | **8** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **3** | **1** | **0** | **40** | **1** | **45** |
+| **Total** | **3** | **0** | **0** | **41** | **1** | **45** |
+
+*Recomputed from the rows themselves 2026-08-08, not carried forward — the previous total
+said 3 open / 1 blocked while the severity rows added to 4 open / 0 blocked, because F-01
+moved out of BLOCKED and F-19 was reclassified Medium → Low without the totals following.
+Medium is 11 and Low is 8 for that reclassification. **N-01, N-02 and N-03 are NOT in these
+45** — they were opened after the audit and are listed separately below.*
 
 **F-01 is the only Critical left and it is no longer BLOCKED — it is ANSWERED and
 CONFIRMED.** Production email has been delivering to a Mailpit container on the VM; the
 remaining fix is a credential on the box, which is the owner's action rather than a code
-change. **The other three OPEN items are all Low**: F-19 and F-27 wait on work that is scoped elsewhere (A9's review
-surface, F-23's schema change) and `.cluster` — the last of U-05 — is closed. The only
+change. **The other two OPEN items are both Low** — F-19 and F-27, each waiting on work scoped
+elsewhere (A9's review surface, F-23's schema change). **Plus N-03**, opened by the deploy
+and outside the 45. The only
 undelegable item left is the `--marker-500` contrast decision, which is a §22.2 palette
 colour and stops for the owner whatever entry 118 delegates.
 
