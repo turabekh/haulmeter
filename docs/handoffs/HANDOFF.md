@@ -6,10 +6,12 @@ results, exact next task, and blockers always live in the latest numbered handof
 ➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — read this first, every session.
 
 > **120** was one instruction — *"read the latest handoff and restart the app"*, then
-> *"proceed using your best judgement"* — and it worked the audit queue: **twelve findings
-> closed** — F-30, F-32, F-33, F-09, F-10, F-15, F-16, F-20, F-26, F-11, plus **N-01 and
-> N-02**, which the session opened and closed itself — migration **0065**.
-> **Open findings 18 → 8**, and nothing un-blocked is left that does not need the owner.
+> *"proceed using your best judgement"* — and it worked the audit queue to the end:
+> **fourteen findings closed** — F-30, F-32, F-33, F-09, F-10, F-15, F-16, F-20, F-26, F-11,
+> U-03, plus **N-01 and N-02**, which the session opened and closed itself. U-04 is partial,
+> its remainder blocked on a decision already on the board. Migration **0065**.
+> **Open findings 18 → 7.** **Nothing un-blocked is left** — every remaining item needs an
+> owner decision, a command on the box, or a judgement about intended behaviour.
 >
 > **Every finding that could be closed without an owner decision now is** — again. What is
 > left is four blocked on facts nobody here can get, and four needing the owner's judgement
@@ -51,7 +53,17 @@ results, exact next task, and blockers always live in the latest numbered handof
 > a Spanish alert, and the first sabotage pass **missed it** because
 > `notify_protection_gap` had no test at all.
 >
-> **Stack UP · thirty-one commits UNPUSHED · nothing deployed.** `git fetch` still cannot
+> **U-03 found a defect visible to EVERY driver, not only the five non-English ones.**
+> `resolve()` returns the RAW KEY when a string is missing from all six locales, and 13 were
+> — including all nine `facility.type.*`. `money.state.acknowledged` was rendering as
+> literal text on the Money tab. The JS parity test cannot see this: six identical holes are
+> perfect parity, which is why the new check enumerates the vocabulary from PYTHON.
+>
+> **U-04 put five unmeasured surfaces into the harness (229 → 257 checks) and three defects
+> came with them.** `ClaimSurface` — the screen every detention notification deep-links to —
+> had a **40 dp** back button, the only one of the nine in `surfaces/` that did.
+>
+> **Stack UP · thirty-five commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
 ➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — the session before.

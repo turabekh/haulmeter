@@ -1,20 +1,22 @@
-# HANDOFF-120 — twelve findings closed, and every one that needed no decision from the owner now is
+# HANDOFF-120 — fourteen findings closed, and everything that can be done without the owner now is
 
-> **Stack UP · thirty-one commits UNPUSHED · nothing deployed.** haulmeter.online still
+> **Stack UP · thirty-five commits UNPUSHED · nothing deployed.** haulmeter.online still
 > serves 112's code.
 >
 > Session 120 was one instruction — *"read the latest handoff and restart the app"*, then
 > *"proceed using your best judgement"* five times over. It restarted the stack and worked
-> the audit queue: **twelve findings closed** — the audit's F-30, F-32, F-33, F-09, F-10,
-> F-15, F-16, F-20, F-26, F-11, plus **N-01 and N-02**, which this session opened and closed
-> itself — and **migration 0065** added.
+> the audit queue: **fourteen findings closed** — the audit's F-30, F-32, F-33, F-09, F-10,
+> F-15, F-16, F-20, F-26, F-11, U-03, plus **N-01 and N-02**, which this session opened and
+> closed itself; **U-04 is partial with its remainder blocked on a decision already on the
+> board**. **Migration 0065** added.
 >
-> **Open findings 18 → 8.** What remains is four blocked on facts or decisions nobody here
-> can supply, and four that need the owner's judgement about intended behaviour rather than
-> code. §5.1 of HANDOFF-119 is still the highest-value thing on the board and is unchanged.
+> **Open findings 18 → 7**, two partial. What remains is four blocked on facts or decisions
+> nobody here can supply, and three that need the owner's judgement about intended behaviour
+> rather than code. §5.1 of HANDOFF-119 is still the highest-value thing on the board and is
+> untouched.
 >
-> **Three times this session a fix of mine was wrong and the process caught it**, which is
-> the part worth reading: §4.
+> **Five times this session a fix or a test of mine was wrong and the process caught it**,
+> which is the part worth reading: §4.
 
 ---
 
@@ -22,9 +24,9 @@
 
 | | |
 |---|---|
-| Branch | `main`, **thirty-one** commits ahead of `origin/main` — 119's twenty-four plus this session's seven |
+| Branch | `main`, **thirty-five** commits ahead of `origin/main` — 119's twenty-four plus this session's eleven |
 | `origin/main` | `113327e`, still **not re-verified**. `git fetch` fails here: *"could not read Username for 'https://github.com'"*. The ahead-count is arithmetic. **Re-fetch before pushing** |
-| Gates | **pytest 1523 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** — all five measured, layout re-run rather than carried forward |
+| Gates | **pytest 1538 · vitest 714 (38 files) · layout 257 checks · import-linter 30/30 · ruff clean** — all five measured on the final tree |
 | Migrations | **`0065_f14_job_schedule` (head)** — new this session, applied AND downgraded AND re-applied on the running stack |
 | Working tree | clean |
 | Local stack | **UP.** Verified from outside the containers: `/health` 200, UI 200, seven containers, worker booting clean |
@@ -91,6 +93,20 @@ compiled English (F-17's third option — a strict lookup would turn one missing
 the router can return has one. A new intent with no message would otherwise be a 500 in a
 moving truck.
 
+**U-03 — the dynamic key families, and a defect that was visible to everyone.** 119 closed
+the detector half and measured **0** English fallbacks, narrowly: mocked data left the ~45
+dynamic `t(`ns.${...}`)` families unrendered. 120 did the audit's *stronger* fix —
+enumerate the vocabulary **in Python** and assert a label exists in all six locales — and it
+found **13 keys missing from ALL SIX**, including every one of the nine `facility.type.*`.
+
+`resolve()` falls back to English only when the key EXISTS in English. Missing everywhere it
+returns the **raw key**, so `money.state.acknowledged` was rendering as literal text on the
+Money tab **for every driver, in every language**. `MoneySurface.vue` names `acknowledged`
+in its own `PAYABLE_STATES` list three lines from where it renders the label. The JS parity
+test cannot see this: **six identical holes are perfect parity**.
+
+**U-04 — five surfaces into the layout harness, and three defects came with them.** See §3.
+
 ## 3. Two things that were smaller than their fix
 
 **F-16's obvious fix was wrong.** Stripping `"` and `\` from the filename is what the audit
@@ -113,7 +129,16 @@ reopen F-13's double-booking race.** `ex_booking_no_overlap` is what prevents it
 read, narrow or wide, can see a row a concurrent transaction has not committed — which is
 why the constraint exists.
 
-## 4. Three times a fix of mine was wrong, and what caught it
+**U-04's three, and why the finding was worth acting on.** Registering the five surfaces
+found: `ClaimSurface`'s back button at **40 dp — the only one of the nine `.back` buttons in
+`surfaces/` that was** (the other eight are already 48 or `--touch-min`), on the screen every
+detention notification deep-links to; `FuelSurface`'s price row running to **378 px at
+200%**; and the scorecard's search input to **468 px**, because a flex item defaults to
+`min-width: auto` and an `<input>`'s intrinsic ~20-character width scales WITH the font size.
+The surface with no harness state was the surface carrying the touch-target defect, which is
+the whole argument for the rule those seven were exempt from.
+
+## 4. Five times a fix or a test of mine was wrong, and what caught it
 
 This is the section to read. None of these were caught by the suite going green.
 
@@ -135,7 +160,19 @@ place of the fold passed 28 of 28, because my accent test — `"inicia mi reloj 
 detención"` — routes on `inicia` and `reloj` and never needed the accent folded. Rewritten
 so the accented word is the only signal.
 
-**And a fourth, which was mine and not the code's.** My sabotage script backed up three
+**4. A sabotage pass came back green twice on the same fix.** Replacing N-02's localized gap
+labels with raw enum keys passed all 135 tests, because `notify_protection_gap` had **no test
+at all** — the whole alert was untested. Its " the facility" fallback then needed a second
+assertion after the same sabotage came back green again.
+
+**5. Two harness entries of mine were wrong, and the harness said so rather than a reviewer.**
+`claim-none` mocked `{__status: 404}`, which the route handler would have fulfilled as a
+**200 carrying that object** — a claim with undefined fields, measured under the name of the
+empty state. And `/me` instead of `/auth/me` meant the verified-MC# pill never rendered, so
+`claim-owed` sat at its `ready` selector for 16 s instead of 1.5 s. Both are exactly what
+`ready` selectors exist for.
+
+**And one more, which was mine and not the code's.** My sabotage script backed up three
 different `service.py` files to one path, and the restore wrote M8's code into
 `m06_parking/domain/service.py`. The next test run collapsed loudly, git had the committed
 state, the change was re-applied and all four sabotages re-run with unique paths. Nothing
@@ -171,6 +208,18 @@ Every fix was checked by restoring the defect and watching the new test fail.
 | N-01 deferred string back to a literal | 1 fail |
 | N-01 one locale dropped from a message | 1 fail |
 | N-01 handoff slug interpolation restored | 1 fail |
+| N-02 F8 ignores the driver's locale | 3 fail |
+| N-02 a translation drops a placeholder | 2 fail |
+| N-02 a locale missing from a table | 1 fail |
+| N-02 raw gap kinds spliced into the title | **0 fail**, then 2 once the missing test existed |
+| N-02 the facility fallback left English | **0 fail**, then 1 |
+| U-03 the real defect restored | 2 fail |
+| U-03 a label present but blank | 1 fail |
+| U-03 the mount removed | fails — does NOT skip |
+
+**The two `0 fail` rows are the most useful thing in this table.** A sabotage that comes back
+green is not a fix that is safe — it is a test that does not exist. Both were N-02's
+interpolated labels, and both needed a test written before the sabotage could speak.
 
 **The two "exactly 1" rows carry the same lesson as 119's throttle row.** Substring matching
 and rule-order-dependence both pass the entire 96-fixture accuracy set. The accuracy metric
@@ -195,6 +244,11 @@ does not prove the matcher; the false-positive tests are the only guard.
   *"Estás al día — no te deben nada ahora."*; `ru` while DRIVING → the deferred confirmation
   in Russian with `audio_ref: audio://ru/…`, which is the case that matters (spoken aloud,
   and the TTS is now asked for Russian audio); English unchanged.
+- **N-02 at boot: 366 catalogue rows across 61 keys** — m01 18, m03 48, m05 120, m06 18,
+  m09 12, m11 114, m13 36.
+- **U-03 was measured against the real enums, not the audit's description.** `DocType` has
+  12 values and the catalogue had 11; `SERVICE_KINDS` has 8 and the catalogue had 7;
+  `facility.type.*` had **zero** keys for nine values.
 - **F-09's risk was checked before wiring, and it is lower than it looks.** The F4 evidence
   pack does **not** read `location_ping` — `render.py` states the rule and the reason ("the
   trace is drawn from EVIDENCE, not from raw location pings … the map cannot show a position
@@ -206,10 +260,12 @@ does not prove the matcher; the false-positive tests are the only guard.
 
 ## 7. Exact next task
 
-### 7.1 The owner decisions — unchanged, and now the whole queue
+### 7.1 The owner decisions — unchanged, and now essentially the whole queue
 
 HANDOFF-119 §5.1's eight decisions are **untouched and still blocking**, and they are now
-most of what is left. Nothing in them changed this session. Two of them are §22.2
+almost all of what is left. Nothing in them changed this session — but **item 3 grew a
+second consumer**: it is no longer only two portal controls, it is also the reason
+`FleetWorkspaceSurface` and `OwnerPortalSurface` cannot enter the layout harness (U-04). Two of them are §22.2
 never-improvise categories and were confirmed against §23 entry 118's carve-outs as **not
 delegable** — a new palette colour and a new component pattern still stop and ask, whatever
 rule 6 delegates.
@@ -227,19 +283,19 @@ U-09, U-10, U-11 and U-12 — four criticals and a High — in one session.**
 | **F-25** | the profit model assumes the product does not work — same |
 | **F-27** | fleet N+1. Latent (M12 not activated) and it **inherits F-23's `owed` definition**, so fixing the queries without settling that would bake in the wrong number |
 | **F-01** | one command on the box. No box credential here |
-| **U-04** | six surfaces not in the layout harness — real work, no decision needed |
+| **U-04** | **PARTIAL** — five registered; `FleetWorkspaceSurface` and `OwnerPortalSurface` carry the 40 dp controls that ARE §5.1 item 3 |
 | **U-06, U-09, U-10, U-11, U-12** | all wait on §7.1 item 5 |
 
 
-**Nothing un-blocked is left that does not need you.** N-02 was the last of it and closed
-the same session it was opened: nine of the ten `notify.dispatch` sites take their text from
-F15's catalogue now, and **366 rows across 61 keys** seed at boot. The tenth is deliberate —
-`promotions.py` sends a vendor's own words, which are data rather than product copy.
+**Nothing un-blocked is left.** U-03 and U-04 were the last two and both were worked to the
+end: U-03 closed, U-04 partial with its remainder blocked on §5.1 item 3 — the same decision,
+not a new one.
 
-**The remaining engineering that needs no decision is U-04** (six surfaces outside the
-layout harness) and **U-03's narrow half** (the i18n sweep never exercised the ~45 dynamic
-`t()` key families, which are the strings a non-English driver meets on Map and Money).
-Everything else on the board wants an owner decision or a command on the box — §7.1.
+**So the next session's first move is not code.** Every remaining item wants either an owner
+decision (§7.1), a command on the box (F-01), or a judgement about intended behaviour
+(F-19, F-25). The one exception is **F-27**, and it is not really an exception: fixing the
+fleet N+1 without settling F-23's `owed` definition would bake in the wrong number, so it
+waits on the same question.
 
 ### 7.3 Still open and untouched from 118 and 119
 
@@ -267,8 +323,23 @@ a browser** (117 §7), and **push, then decide on deploying**. A deploy needs pr
    writes its row on first boot — but a job that is renamed leaves its old row behind and
    starts due immediately.
 7. **Backup files in a sabotage script must be named for the MODULE, not the file.** §4.
+8. **The api container now mounts `ui/src/core/i18n` read-only** (`/repo/ui-i18n`), so a
+   Python test can check the dynamic key families against the vocabularies that produce
+   them. It **fails rather than skips** when the mount is absent — the Makefile mount beside
+   it carries the same note for the same reason.
+9. **`f15.register_catalogue(db, prefix, mapping)` is how a module registers driver strings**,
+   and `notify.localized_text(db, account_id, key, fallback, **values)` is how it reads one.
+   Seven modules use them. A new driver-facing string belongs in a `messages.py` beside its
+   module, not in a literal at the dispatch site.
+10. **The layout harness's route handler 404s any path it has no mock for.** Do not write
+    `{__status: 404}` to force an empty state — it is fulfilled as a 200 carrying that
+    object, and the state measures a screen full of `undefined` under the empty state's name.
 
 ## 9. Restarting
+
+**`make ui-layout` is now 257 checks and ~2.5 min.** It runs ALONE. `make ui-layout-only
+STATE=claim-owed` measures one state in ~45 s and is what to use while building.
+
 
 ```
 make up                              # preflight, then the full stack
