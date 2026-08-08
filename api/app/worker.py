@@ -6,7 +6,9 @@ each job has exponential failure backoff so a dead feed doesn't log-spam every
 interval. Jobs no-op unless their flag is enabled.
 """
 
+import os
 import signal
+import socket
 import sys
 import time
 from dataclasses import dataclass
@@ -22,6 +24,9 @@ from app.modules.m05_protection import public as m5
 
 TICK_SECONDS = 5
 BACKOFF_CAP_SECONDS = 3600
+# who holds a lease, for the operator staring at a job that has not moved. Hostname is
+# the container id under compose, which is the thing they can actually go and look at.
+WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
 
 
 @dataclass
@@ -84,10 +89,18 @@ def _run_job(job: Job, monotonic: float) -> None:
     # idle job is not an event, and recording it would bury real runs in noise.
     db = SessionLocal()
     run = None
+    claimed = False
     try:
         if job.flag_key is not None and not flags.is_enabled(db, job.flag_key):
             job.next_run = monotonic + job.interval_seconds  # flag off -> idle, quietly
             return
+        # audit F-10: the DB decides who runs this, not this process's own clock.
+        # The flag check stays FIRST — claiming a job only to find its flag is off
+        # would take a lease, log nothing, and make a disabled job look contended.
+        if not admin.claim_job(db, job.name, datetime.now(UTC), job.interval_seconds, WORKER_ID):
+            job.next_run = monotonic + TICK_SECONDS  # another worker has it, or not due
+            return
+        claimed = True
         started = datetime.now(UTC)
         run = admin.start_job_run(db, job.name, started)
         db.commit()
@@ -113,7 +126,29 @@ def _run_job(job: Job, monotonic: float) -> None:
         _record_failure(db, run, job, exc, backoff)
         _log(f"{job.name} failed ({job.failures}x): {exc!r} — retrying in {int(backoff)}s")
     finally:
+        if claimed:
+            _release(db, job)
         db.close()
+
+
+def _release(db, job: Job) -> None:
+    # the lease must come off even when the run raised, or the job waits it out for no
+    # reason. Its own failures are swallowed for the same reason `_record_failure`
+    # swallows: bookkeeping must never be what kills the worker.
+    try:
+        db.rollback()
+        seconds = job.interval_seconds if job.failures == 0 else min(
+            job.interval_seconds * (2**job.failures), BACKOFF_CAP_SECONDS
+        )
+        admin.release_job(
+            db,
+            job.name,
+            datetime.now(UTC) + timedelta(seconds=seconds),
+            consecutive_failures=job.failures,
+        )
+    except Exception as exc:
+        db.rollback()
+        _log(f"{job.name} lease release failed: {exc!r}")
 
 
 def _summary_dict(summary: object) -> dict:
@@ -179,6 +214,40 @@ def _startup() -> None:
             db.close()
 
 
+def _seed_schedule(jobs: list[Job], db=None) -> None:
+    """AI-CONTEXT: audit F-10's second half — `next_run` was an in-memory 0.0, so EVERY
+    restart fired EVERY job immediately. Idempotent upserts did not care; a crash-loop
+    replaying `document_expiry` sends a driver the same credential warning over and
+    over, with only F8's caps between it and the phone.
+
+    A job with no row is due NOW, which is the right answer for a genuinely new job and
+    preserves today's behaviour on a fresh box. A job WITH a row resumes where it was.
+
+    Guarded like `_startup`: a database a few seconds late must leave the worker running
+    to retry, not kill it at boot. Falling back to the in-memory schedule is exactly the
+    old behaviour, which is the safe direction to fail in.
+    """
+    own_session = db is None
+    try:
+        db = SessionLocal() if own_session else db
+        now = datetime.now(UTC)
+        for job in jobs:
+            admin.ensure_job_schedule(db, job.name, now)
+        db.commit()
+        monotonic = time.monotonic()
+        for name, row in admin.job_schedules(db).items():
+            job = next((j for j in jobs if j.name == name), None)
+            if job is None:
+                continue
+            job.failures = row.consecutive_failures
+            job.next_run = monotonic + max(0.0, (row.next_run_at - now).total_seconds())
+    except Exception as exc:
+        _log(f"schedule seeding skipped: {exc!r}")
+    finally:
+        if own_session and db is not None:
+            db.close()
+
+
 def main() -> None:
     running = {"on": True}
 
@@ -189,6 +258,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, stop)
     _startup()
     jobs = _jobs()
+    _seed_schedule(jobs)
     _log(f"started; jobs: {', '.join(j.name for j in jobs)} (flag-gated)")
     while running["on"]:
         now = time.monotonic()

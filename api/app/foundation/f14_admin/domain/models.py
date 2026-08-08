@@ -106,6 +106,47 @@ class AdminView(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class JobSchedule(Base):
+    """AI-CONTEXT: the worker's schedule, in the database (audit F-10).
+
+    `Job.next_run` and `Job.failures` were fields on an in-memory dataclass keyed off
+    `time.monotonic()`, which has two consequences the audit names:
+
+    · **No DB-side claim.** Two worker containers both run every job. Compose runs one
+      replica, but a rolling restart briefly has two, and `document_expiry` sends F8
+      notifications — so a driver gets the same credential warning twice.
+    · **Every restart resets `next_run` to 0.0**, so all jobs fire immediately on boot.
+      Harmless for idempotent upserts; a crash-loop replays notifications.
+
+    `JobRun` could not fix either. It is one row per ATTEMPT, and its own docstring is
+    the reason it must not be bent into this: it records HISTORY, not schedule state, so
+    it cannot prevent a second worker from starting a run it has no row for yet.
+
+    The claim is the UPDATE itself, not a lock: `claim_job` advances `locked_until`
+    WHERE the job is due and unleased, and Postgres serialises that — the loser's
+    rowcount is 0 and it simply does not run. No advisory lock, deliberately: a
+    session-level advisory lock lives on a CONNECTION, and every `db.commit()` in
+    `_run_job` returns that connection to the pool, which would drop the lock silently
+    in the middle of the run it was taken for.
+
+    The LEASE is what makes a dead worker recoverable. A crashed run leaves
+    `locked_until` in the future and nothing else holds it, so the job resumes by
+    itself once the lease expires rather than needing a human.
+    """
+
+    __tablename__ = "job_schedule"
+    __table_args__ = {"schema": SCHEMA}
+
+    job_name: Mapped[str] = mapped_column(String(60), primary_key=True)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    # NULL = nobody is running it. Set to now+lease at claim, cleared when the run ends.
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # the backoff streak, here rather than in memory so a restart does not clear it and
+    # start hammering a feed that is still down
+    consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class JobRun(Base):
     """AI-CONTEXT: worker job telemetry (Admin Console 2.0 Overview).
 

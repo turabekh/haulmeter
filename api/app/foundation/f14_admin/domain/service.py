@@ -10,11 +10,18 @@ a web-first surface (design-prd §18) built later; this is its data spine.
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from .enums import ModerationStatus
-from .models import AdminAction, AdminView, AnalyticsEvent, JobRun, ModerationItem
+from .models import (
+    AdminAction,
+    AdminView,
+    AnalyticsEvent,
+    JobRun,
+    JobSchedule,
+    ModerationItem,
+)
 
 
 # --- Event instrumentation standard ---
@@ -210,6 +217,67 @@ def latest_job_runs(db: Session, job_names: list[str] | None = None) -> dict[str
     for run in db.scalars(stmt):
         latest.setdefault(run.job_name, run)
     return latest
+
+
+# --- Worker schedule, claimed in the database (audit F-10) ---
+# AI-CONTEXT: the lease has a FLOOR as well as an interval multiple. `detention_clock`
+# runs every 60s, and a 60s lease on a job that occasionally takes longer than its own
+# interval would hand a second worker the run while the first is still inside it —
+# which is the duplicate-notification case this exists to stop.
+LEASE_FLOOR_SECONDS = 300
+
+
+def _lease_seconds(interval_seconds: float) -> float:
+    return max(float(interval_seconds) * 2, LEASE_FLOOR_SECONDS)
+
+
+def ensure_job_schedule(db: Session, job_name: str, next_run_at: datetime) -> JobSchedule:
+    """Idempotent. A job absent from the table has never run here, so it is due now —
+    but an EXISTING row is never rewound: that row is the reason a restart no longer
+    refires every job at boot."""
+    row = db.get(JobSchedule, job_name)
+    if row is None:
+        row = JobSchedule(job_name=job_name, next_run_at=next_run_at)
+        db.add(row)
+        db.flush()
+    return row
+
+
+def claim_job(db: Session, job_name: str, now: datetime, interval_seconds: float,
+              worker_id: str | None = None) -> bool:
+    """True if THIS caller may run the job. The UPDATE is the claim: Postgres
+    serialises the two racing workers and the loser updates zero rows."""
+    lease_until = now + timedelta(seconds=_lease_seconds(interval_seconds))
+    result = db.execute(
+        update(JobSchedule)
+        .where(
+            JobSchedule.job_name == job_name,
+            JobSchedule.next_run_at <= now,
+            or_(JobSchedule.locked_until.is_(None), JobSchedule.locked_until <= now),
+        )
+        .values(locked_until=lease_until, locked_by=worker_id)
+    )
+    db.commit()
+    return result.rowcount == 1
+
+
+def release_job(db: Session, job_name: str, next_run_at: datetime,
+                consecutive_failures: int = 0) -> None:
+    db.execute(
+        update(JobSchedule)
+        .where(JobSchedule.job_name == job_name)
+        .values(
+            next_run_at=next_run_at,
+            locked_until=None,
+            locked_by=None,
+            consecutive_failures=consecutive_failures,
+        )
+    )
+    db.commit()
+
+
+def job_schedules(db: Session) -> dict[str, JobSchedule]:
+    return {row.job_name: row for row in db.scalars(select(JobSchedule))}
 
 
 def job_history(db: Session, job_name: str, limit: int = 20) -> list[JobRun]:

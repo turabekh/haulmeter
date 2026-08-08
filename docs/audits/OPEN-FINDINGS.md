@@ -33,10 +33,10 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 |---|---|---|---|---|---|---|
 | Critical | 1 | 4 | 0 | 3 | 0 | **8** |
 | High | 2 | 0 | 1 | 14 | 0 | **17** |
-| Medium | 7 | 0 | 1 | 4 | 0 | **12** |
+| Medium | 6 | 0 | 1 | 5 | 0 | **12** |
 | Low | 4 | 0 | 0 | 3 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **14** | **4** | **2** | **24** | **1** | **45** |
+| **Total** | **13** | **4** | **2** | **25** | **1** | **45** |
 
 Findings opened *after* the audit are not in this scoreboard — they were never among the
 45. See **Opened after the audit**, below.
@@ -73,7 +73,7 @@ unobservable until the literal became a token. See §Blockers.
 | F-07 | High | **CLOSED** | Throttled per identifier (5) and per IP (20) in a sliding 15-min window, in Postgres so it fails closed, checked BEFORE the hash runs; `VERIFY_SLOTS` caps concurrent Argon2 so a flood cannot starve the threadpool. Session 119. |
 | F-08 | — | **ACCEPTED** | Gmail as counterparty transport (owner decision, 2026-08-07). Two owner actions remain, neither a session: split dev from production, and Workspace on the domain for aligned SPF/DKIM/DMARC. |
 | F-09 | Medium | **CLOSED** | A daily unflagged `location_retention` worker job calls the purge that already existed. **The window is an F13 key** (`f03.ping_retention_days`, declared at boot so `/admin/config` shows it), not a constant — how long the product keeps a driver's movements is policy, and PRD §7.3 says "configurable retention". Default **365 days**, conservative by default-choosing rather than by necessity — **checked before wiring: a purge here cannot destroy a claim's evidence.** `render.py` states the rule ("the trace is drawn from EVIDENCE, not from raw location pings"), so every plotted point is a hash-chained F4 record, and `build_trace` — the one function that reads raw pings — has no caller outside its own test. This is a privacy-and-growth control, not evidence retention, and shortening the window is safe. **0 or less means never purge** — this is the only job in the worker that destroys data and the plausible operator accident is typing 0 meaning "off", which read as a cutoff would delete the whole table. Verified on a real worker boot: `location_retention ok: {'deleted': 0, 'retention_days': 365, 'purged': True}`. Session 120. |
-| F-10 | Medium | OPEN | Worker scheduling is in-process only. |
+| F-10 | Medium | **CLOSED** | `f14.job_schedule` (migration **0065**) — the claim is an `UPDATE … WHERE due AND unleased`, so Postgres serialises the two racing workers and the loser's rowcount is 0. **Not an advisory lock, deliberately:** a session-level lock lives on a CONNECTION and every `db.commit()` in `_run_job` returns that connection to the pool, which would drop the lock mid-run. A **lease** (2× interval, floor 300 s) makes a crashed worker recoverable without a human; the floor exists because `detention_clock`'s interval is 60 s and a job slower than its own interval would otherwise be handed to a second worker. `next_run_at` and the failure streak persist, closing the second half — **verified on the box: the first boot ran all seven jobs (empty table, correct), the second restart ran only `detention_clock`, which was genuinely due.** Previously every restart refired everything. Session 120. |
 | F-11 | Medium | OPEN | The deploy path is outside every review — `deploy.sh`, `Makefile`, `check_ports.sh` are not in the dump. Adding `.sh` to `collect_files.py`'s `EXTENSIONS` is the cheapest fix in either audit. |
 | F-12 | Medium | OPEN | Module gate and worker disagree on flag polarity. Ships with F-02. |
 | F-13 | Critical | **CLOSED** | Double-booking race posting money twice → `ex_booking_no_overlap` EXCLUDE constraint, and `book()` claims the row before any money moves. Session 119. |

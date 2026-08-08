@@ -7,16 +7,26 @@ platform operations; every module registers its admin views here.
 """
 
 from .domain.enums import ModerationStatus
-from .domain.models import AdminAction, AdminView, AnalyticsEvent, JobRun, ModerationItem
+from .domain.models import (
+    AdminAction,
+    AdminView,
+    AnalyticsEvent,
+    JobRun,
+    JobSchedule,
+    ModerationItem,
+)
 from .domain.service import (
     MODERATION_SLA_HOURS,
+    claim_job,
     count_events,
     decide_moderation,
     emit,
     enqueue_moderation,
+    ensure_job_schedule,
     finish_job_run,
     funnel,
     job_history,
+    job_schedules,
     last_action_for,
     latest_job_runs,
     list_actions,
@@ -25,6 +35,7 @@ from .domain.service import (
     overdue_moderation,
     record_action,
     register_admin_view,
+    release_job,
     start_job_run,
 )
 
@@ -35,6 +46,11 @@ __all__ = [
     "job_history",
     "finish_job_run",
     "JobRun",
+    "JobSchedule",
+    "claim_job",
+    "ensure_job_schedule",
+    "release_job",
+    "job_schedules",
     "MODERATION_SLA_HOURS",
     "overdue_moderation",
     "ModerationStatus",
