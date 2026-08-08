@@ -164,11 +164,35 @@ def parse_settlement_lines(db: Session, provider, doc_ref, account_id) -> list[d
 _SETTLED_STATES = {"recovered", "written_off"}
 
 
-def _owed_by_kind(db: Session, account_id) -> tuple[dict, dict]:
+def _owed_by_kind(db: Session, account_id, period_start, period_end) -> tuple[dict, dict]:
+    """What the carrier owed FOR THIS PAY PERIOD, not for all time (audit F-23).
+
+    AI-CONTEXT: `paid` is scoped to one settlement document and `owed` was every
+    unsettled receivable the driver had, across every load, ever. Subtracting one from
+    the other is not a like-for-like comparison, and it was wrong in two directions.
+
+    A lumper receivable from a load this settlement does not cover was reported as
+    "missed" — the driver told their broker underpaid on money that broker had never been
+    billed for. And because a receivable stays owed until somebody taps *the broker paid
+    this* — driver-initiated, and the only path to `recovered` until a second actor
+    exists — the same balance was re-flagged on every later settlement, with
+    `_flagged_total` summing the duplicates into the earnings dashboard. Overstating
+    "money the broker owes you" is §11.7's honesty failure pointed at the driver, on a
+    number adjacent to the North Star.
+
+    THE REMAINING GAP, stated rather than hidden: this scopes by the receivable's
+    creation date against the settlement's pay period, because there is no settlement→load
+    link in the schema. That is a proxy. Work performed inside the period whose receivable
+    is filed after `period_end` still falls outside this audit, and closing that properly
+    needs the link the audit named — which is a schema change and its own session.
+    """
     owed: dict[str, int] = {}
     refs: dict[str, str] = {}
     for row in m4.money_owed(db, account_id):
         if row["state"] in _SETTLED_STATES:
+            continue
+        created = row["created_at"].date()
+        if created < period_start or created > period_end:
             continue
         kind = row["kind"]
         owed[kind] = owed.get(kind, 0) + row["amount_cents"]
@@ -180,7 +204,9 @@ def audit_settlement(db: Session, settlement: Settlement) -> list[Discrepancy]:
     paid: dict[str, int] = {}
     for line in settlement.lines:
         paid[line.kind] = paid.get(line.kind, 0) + line.amount_cents
-    owed, refs = _owed_by_kind(db, settlement.driver_account_id)
+    owed, refs = _owed_by_kind(
+        db, settlement.driver_account_id, settlement.period_start, settlement.period_end
+    )
 
     found: list[Discrepancy] = []
     for kind in AUDITABLE_KINDS:

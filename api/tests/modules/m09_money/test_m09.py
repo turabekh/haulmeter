@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
@@ -16,8 +16,20 @@ def _driver(db, email="driver@example.com"):
     return identity.register_account(db, email, "pw-123456")
 
 
-def _owe(db, account_id, kind, amount):
-    return ledger.create_receivable(db, account_id, kind, amount)
+def _owe(db, account_id, kind, amount, on=None):
+    """A receivable dated INSIDE the settlement period unless told otherwise.
+
+    AI-CONTEXT: these fixtures used to leave the receivable at "now" while the period was
+    a fixed date weeks earlier, and nothing noticed because `audit_settlement` compared a
+    period-scoped `paid` against an all-time `owed` (F-23). The two dates never had to
+    correspond, so the test could not have caught the defect. Now the relationship is the
+    thing under test, so it is stated.
+    """
+    receivable = ledger.create_receivable(db, account_id, kind, amount)
+    at = on or PERIOD_START + timedelta(days=1)
+    receivable.created_at = datetime(at.year, at.month, at.day, 12, 0, tzinfo=UTC)
+    db.flush()
+    return receivable
 
 
 def test_flag_registers(db):
@@ -131,3 +143,51 @@ def test_ifta_and_per_diem_are_honest_seams(db):
     pd = m9.per_diem_days(db, driver.id, 2026)
     assert pd.nights_away is None
     assert pd.basis == "needs_account_traces"
+
+
+# --- F-23: `paid` was scoped to one settlement, `owed` was every receivable ever ---
+def test_a_receivable_from_another_period_is_not_a_discrepancy(db):
+    """Consequence one: false discrepancies.
+
+    A lumper receivable from a load this settlement does not cover was reported as
+    "missed" — telling the driver their broker underpaid on money that broker had never
+    been billed for. A wrong figure on the Money tab is §11.7's honesty failure pointed
+    at the driver rather than the counterparty.
+    """
+    driver = _driver(db)
+    _owe(db, driver.id, ledger.ReceivableKind.lumper, 12500, on=PERIOD_START - timedelta(days=30))
+    settlement = m9.upload_settlement(
+        db,
+        driver.id,
+        "Acme Carrier",
+        PERIOD_START,
+        PERIOD_END,
+        lines=[{"kind": "linehaul", "amount_cents": 200000}],
+    )
+    assert m9.audit_settlement(db, settlement) == []
+
+
+def test_an_unpaid_balance_is_not_re_flagged_on_every_later_settlement(db):
+    """Consequence two: repeat flagging.
+
+    A receivable stays owed until somebody taps *the broker paid this* — driver-initiated,
+    and until a second actor exists the only path to `recovered`. So the same balance was
+    flagged again on every subsequent settlement and `_flagged_total` summed the
+    duplicates into the earnings dashboard, a number adjacent to the North Star.
+    """
+    driver = _driver(db)
+    _owe(db, driver.id, ledger.ReceivableKind.detention, 15000)
+
+    first = m9.upload_settlement(
+        db, driver.id, "Acme", PERIOD_START, PERIOD_END, lines=[]
+    )
+    assert len(m9.audit_settlement(db, first)) == 1  # correctly flagged, once
+
+    next_start = PERIOD_END + timedelta(days=1)
+    second = m9.upload_settlement(
+        db, driver.id, "Acme", next_start, next_start + timedelta(days=7), lines=[]
+    )
+    assert m9.audit_settlement(db, second) == [], "the same money must not be flagged twice"
+
+    # and the dashboard total counts it once, not once per settlement
+    assert m9.earnings_dashboard(db, driver.id).flagged_cents == 15000

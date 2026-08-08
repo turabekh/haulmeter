@@ -189,12 +189,18 @@ def test_full_platform_synthetic_end_to_end(db):
 
     # --- M9: an owed layover the carrier settlement missed -> flagged; then DDD ---
     ledger.create_receivable(db, driver.id, ledger.ReceivableKind.layover, 20000)  # owed
+    # AI-CONTEXT: the period must COVER the receivable (F-23). It used to end 2026-07-20
+    # while the receivable was created at real `now()`, and the audit flagged it anyway —
+    # because `owed` was every unsettled receivable ever while `paid` was this one
+    # document. The receivable is the only thing here dated by the clock rather than by
+    # the synthetic day, so the period is the part that has to follow it.
+    settled_today = date.today()
     settlement = m9.upload_settlement(
         db,
         driver.id,
         "Acme Carrier",
-        MONTH,
-        date(2026, 7, 20),
+        settled_today - timedelta(days=14),
+        settled_today,
         lines=[{"kind": "layover", "amount_cents": 0}],
     )
     discrepancies = m9.audit_settlement(db, settlement)

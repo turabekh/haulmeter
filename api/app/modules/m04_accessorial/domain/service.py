@@ -240,6 +240,10 @@ def money_owed(db: Session, account_id, now: datetime | None = None) -> list[dic
                 "amount_cents": r.amount_cents,
                 "state": r.state.value,
                 "aging_days": aging,
+                # M9 audits a settlement against ONE pay period, so it needs the date and
+                # not only the age (F-23). `aging_days` answers "how long has this been
+                # outstanding"; this answers "which period does it belong to".
+                "created_at": _as_utc(r.created_at),
                 "is_reimbursement": r.kind == ledger.ReceivableKind.lumper,
             }
         )

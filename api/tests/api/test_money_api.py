@@ -4,6 +4,7 @@ auditor and the earnings/DDD dashboard over HTTP.
 """
 
 import uuid
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -40,12 +41,17 @@ def test_settlement_audit_flags_missed_pay(client, db):
     account_id, headers = _auth(client)
     # the driver is owed detention $150 (GPS-backed receivable)
     ledger.create_receivable(db, uuid.UUID(account_id), ledger.ReceivableKind.detention, 15000)
+    # AI-CONTEXT: the period has to COVER the receivable now (F-23). It used to be a
+    # fixed fortnight three weeks before the receivable's own date, and the audit still
+    # flagged it — because `owed` was every unsettled receivable ever while `paid` was
+    # this one document. The two were never comparable and nothing said so.
+    today = date.today()
     resp = client.post(
         "/money/settlements/audit",
         json={
             "carrier": "Acme",
-            "period_start": "2026-07-13",
-            "period_end": "2026-07-20",
+            "period_start": (today - timedelta(days=7)).isoformat(),
+            "period_end": today.isoformat(),
             "lines": [{"kind": "detention", "amount_cents": 5000}],
         },
         headers=headers,
