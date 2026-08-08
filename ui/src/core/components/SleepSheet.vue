@@ -3,7 +3,8 @@
      range — guaranteed-bookable first (M6), then predicted availability (M1),
      then nearest — plus the cheapest fuel on the way (M7) and the guaranteed
      spot. Composed by the backend; this sheet just presents it. Live via api.js
-     -> /intel/sleep; offline shows a sample plan. Distances in miles (never
+     -> /intel/sleep, on the four-state model — it used to answer a failed lookup with
+     an invented plan naming lots that may not exist (§23 entry 131). Distances in miles (never
      localized, F15). -->
 <script setup>
 import { ref } from "vue";
@@ -13,7 +14,8 @@ import StatusPill from "./StatusPill.vue";
 import { useI18n } from "../i18n.js";
 import { formatMoney } from "../meter.js";
 import { fetchSleepPlan } from "../api.js";
-import { sampleSleepPlan } from "../fixtures.js";
+import SkeletonRow from "./SkeletonRow.vue";
+import { LoadState, Failure, failureOf } from "../load-state.js";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -33,6 +35,10 @@ function goBook(g) {
 
 const hours = ref(3);
 const plan = ref(null);
+// AI-CONTEXT: §23 entry 131. Like the audit, this is asked for rather than loaded on
+// mount, so `null` state means "not asked yet" and shows the form alone.
+const planState = ref(null);
+const planFailure = ref(null);
 const busy = ref(false);
 
 function miles(m) {
@@ -41,6 +47,7 @@ function miles(m) {
 
 async function find() {
   busy.value = true;
+  planState.value = LoadState.LOADING;
   try {
     // a real app centers on GPS; fixed center pending geolocation wiring
     plan.value = await fetchSleepPlan({
@@ -48,8 +55,15 @@ async function find() {
       lon: -96.797,
       hosMinutesRemaining: Math.round(Number(hours.value || 0) * 60),
     });
-  } catch {
-    plan.value = sampleSleepPlan(); // unauthenticated / offline
+    planState.value = LoadState.LOADED;
+    planFailure.value = null;
+  } catch (e) {
+    // this answered with `sampleSleepPlan()` — invented lots, with invented prices and
+    // an invented guaranteed spot, to a driver deciding where to spend the night on
+    // the hours they have left. §11.7's worst shape: a place that is not there.
+    plan.value = null;
+    planFailure.value = failureOf(e);
+    planState.value = LoadState.FAILED;
   }
   busy.value = false;
 }
@@ -63,7 +77,12 @@ async function find() {
     </label>
     <button class="cta" type="button" :disabled="busy" @click="find">{{ t("sleep.find") }}</button>
 
-    <template v-if="plan">
+    <SkeletonRow v-if="planState === LoadState.LOADING" :count="3" />
+    <p v-else-if="planState === LoadState.FAILED" class="sleep__failed">
+      {{ planFailure === Failure.OFFLINE ? t("system.load_offline") : t("sleep.load_failed") }}
+      <button class="sleep__retry" type="button" @click="find">{{ t("system.retry") }}</button>
+    </p>
+    <template v-else-if="plan">
       <ul v-if="plan.stops.length" class="stops">
         <li v-for="s in plan.stops" :key="s.facility_id">
           <button class="stop" type="button" @click="goFacility(s.facility_id)">
@@ -143,6 +162,23 @@ async function find() {
 }
 .cta:disabled {
   opacity: 0.6;
+}
+.sleep__failed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.sleep__retry {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
 }
 .stops {
   list-style: none;

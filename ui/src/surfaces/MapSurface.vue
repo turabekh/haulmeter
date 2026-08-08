@@ -3,11 +3,18 @@
      (bottom-right, thumb zone) → facility card as a bottom sheet on pin tap.
      DRIVING (§5/§11.4): Corridor mode replaces free-pan; taps deferred-safe.
 
-     Data is LIVE — `GET /map/overlay`, with `core/fixtures.js` as the OFFLINE
-     fallback only (§15.1). This line read "fixture-backed pending the M1 HTTP API"
-     for long after that API shipped, which is worse than no comment: the surface's own
-     `catch` falls back to those fixtures, so a reader told the screen was fixture-fed
-     had no reason to look at what a swallowed failure was hiding. It was hiding
+     Data is LIVE — `GET /map/overlay` — and there is NO fixture fallback any more
+     (§23 entry 131). The overlay declares four states: `loading` renders skeleton
+     pucks over the real basemap, `failed` renders §15.4's inline error, and the two
+     loaded states are pins or the honest empty line. Nothing here invents a facility.
+
+     This comment has now been wrong twice, in the same place, about the same thing, so
+     it is worth knowing why. It read "fixture-backed pending the M1 HTTP API" long
+     after that API shipped; then it read "fixtures as the OFFLINE fallback only",
+     which understated it — `rawPins` resolved a null overlay to `SAMPLE_PINS` on EVERY
+     cold open, not only offline, so the fabricated pins were the FIRST thing a driver
+     saw every single time (audit U-10). Both versions gave a reader a reason not to
+     look at what the swallowed failure was hiding. What it hid the first time was
      `preset=food` answering 500 on every tap since the chip shipped (HANDOFF-114 §4). -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch } from "vue";
@@ -26,9 +33,10 @@ import VoiceSheet from "../core/components/VoiceSheet.vue";
 import SleepSheet from "../core/components/SleepSheet.vue";
 import HandoffSheet from "../core/components/HandoffSheet.vue";
 import VendorSheet from "../core/components/VendorSheet.vue";
+import SkeletonPin from "../core/components/SkeletonPin.vue";
 import { useDriverState } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
-import { SAMPLE_PINS, sampleHandoffs } from "../core/fixtures.js";
+import { LoadState, Failure, failureOf } from "../core/load-state.js";
 import { lastFix, metersBetween } from "../core/location.js";
 import { presetFor, rememberPreset } from "../core/map-presets.js";
 import { openStream, coalesce } from "../core/live.js";
@@ -109,25 +117,12 @@ async function loadPresets() {
   }
 }
 
-const PRESET_TYPES = {
-  // E3.1: scales ride the Drive preset, which is the preset for moving forward —
-  // exactly when a weigh station is a decision. They are absent from Tonight and
-  // Work, where they would be noise (§11.1 keeps the map quiet).
-  drive: ["truck_stop", "rest_area", "fuel_station", "weigh_station", "scale"],
-  tonight: ["truck_stop", "rest_area", "parking_property"],
-  work: ["shipper_receiver"],
-  fuel: ["fuel_station"],
-  // M13: Food is a filter over the lots vendors actually work, not a new layer —
-  // §11.1 caps active layers at two, and the badge does the signalling.
-  food: ["truck_stop", "rest_area", "parking_property"],
-  // A5: a service is a fact about a SITE, not a kind, so every kind that can host a
-  // repair bay belongs here — 10 of Wisconsin's 65 repair records merged into a truck
-  // stop or a parking property, and filtering on `repair` alone would hide every one
-  // of them. This list is the OFFLINE fallback only; the server filters on
-  // `has_service`, which is the one definition.
-  service: ["repair", "truck_stop", "rest_area", "parking_property", "shipper_receiver"],
-};
-const PARKING_RANK = { empty: 0, some: 1, null: 2, full: 3 };
+// AI-CONTEXT: `PRESET_TYPES` and `PARKING_RANK` lived here and are gone with the
+// fixture (§23 entry 131). Both existed ONLY to shape `SAMPLE_PINS` into something
+// preset-shaped on the client — the server filters the overlay by preset and ranks
+// parking itself, which is the one definition. Their comments claimed to encode E3.1's
+// scale placement and A5's service breadth; that reasoning is real but it lives in the
+// endpoint, and a second copy here could only ever drift from it.
 
 // the map's fetch center: the driver's GPS once located (MapCanvas @located),
 // else a sensible default until then (§10.1 — a real map follows the driver).
@@ -248,11 +243,21 @@ function onLocated({ lat, lon }) {
 // span the server returns cluster bubbles (§11.5), never a hardcoded city.
 const CONTINENTAL_US = { min_lat: 24, min_lon: -125, max_lat: 50, max_lon: -66 };
 
-// live pins from the M1 API when a session exists; otherwise fixtures (§ api.js).
-// At real density the server returns clusters instead (§11.5) — kept in `clusters`
+// AI-CONTEXT: the four-state model (§23 entry 131), and this surface is where U-10 was.
+//
+// This was `const livePins = ref(null)` with `rawPins` resolving null to
+// `SAMPLE_PINS.filter(...)`, which meant EVERY COLD APP OPEN drew fabricated truck
+// stops until `/map/overlay` answered — not only on failure. A driver could route to
+// one. With no `loading` state, `null` had to mean either data or no-data, and a map
+// with no pins looks broken, so the codebase chose data.
+//
+// `livePins` is now always an array and `overlay` says which of the four states it is
+// in. At real density the server returns clusters instead (§11.5) — kept in `clusters`
 // for the cluster-bubble render; `pins` is empty in that case.
-const livePins = ref(null);
+const livePins = ref([]);
 const clusters = ref([]);
+const overlay = ref(LoadState.LOADING);
+const overlayFailure = ref(null);
 let lastBbox = CONTINENTAL_US; // the current viewport; a preset flip refetches it
 let overlayController = null; // aborts the in-flight fetch when a newer one starts
 let boundsTimer = null; // debounce rapid pan/zoom moveend bursts (~300ms)
@@ -269,10 +274,24 @@ async function loadOverlay(bbox = lastBbox) {
     });
     livePins.value = resp.pins;
     clusters.value = resp.clusters || [];
+    overlay.value = LoadState.LOADED;
+    overlayFailure.value = null;
   } catch (e) {
-    if (e.name === "AbortError") return; // superseded by a newer viewport — keep pins
-    livePins.value = null; // fall back to fixtures (unauthenticated / offline)
+    // AI-CONTEXT: an abort is NOT a failure, and this is the trap this surface sets.
+    //
+    // A newer viewport supersedes an older fetch on every pan, so treating an abort as
+    // a failure would flash the skeleton or the error banner on each drag. The early
+    // return keeps the CURRENT pins, the current state, and the current error — the
+    // superseding fetch is already in flight and will set all three.
+    if (e.name === "AbortError") return;
+    // §15.4 / §11.7: a failed overlay renders an error, never data. The pins are
+    // cleared rather than kept because a pan that failed leaves the previous
+    // viewport's pins on screen — facilities that are not where the driver is
+    // looking, which is the same false assertion the fixture made.
+    livePins.value = [];
     clusters.value = [];
+    overlayFailure.value = failureOf(e);
+    overlay.value = LoadState.FAILED;
   }
 }
 
@@ -348,15 +367,8 @@ const foodEmpty = computed(() => preset.value === "food" && pins.value.length ==
 const serviceEmpty = computed(() => preset.value === "service" && pins.value.length === 0);
 const filteredEmpty = computed(() => foodEmpty.value && filtersActive.value);
 
-const rawPins = computed(() => {
-  if (livePins.value) return livePins.value; // API already preset-filtered
-  const types = PRESET_TYPES[preset.value];
-  let list = SAMPLE_PINS.filter((p) => types.includes(p.facility_type));
-  if (preset.value === "tonight") {
-    list = [...list].sort((a, b) => (PARKING_RANK[a.status] ?? 2) - (PARKING_RANK[b.status] ?? 2));
-  }
-  return list;
-});
+// the API preset-filters and ranks; there is nothing left for the client to shape
+const rawPins = computed(() => livePins.value);
 
 // §11.3: the ONE "More filters" sheet. Persisted like the preset is, because the
 // choice has to survive into DRIVING — no keyboard is available at speed, so a
@@ -683,7 +695,14 @@ async function loadHandoffs() {
   try {
     handoffs.value = await fetchNearbyHandoffs({ lat: geo.value.lat, lon: geo.value.lon });
   } catch {
-    handoffs.value = sampleHandoffs(); // unauthenticated / offline
+    // AI-CONTEXT: this returned `sampleHandoffs()` — invented "leaving soon" broadcasts
+    // from drivers who do not exist, on lots that may be full (§23 entry 131).
+    //
+    // Empty is the honest render and needs no banner of its own: a handoff is an
+    // ADDITIVE signal that rides on a pin as a badge, so no handoffs means no badges,
+    // and §11.7 already holds that an absent badge asserts nothing. The overlay's own
+    // failed state carries the "we could not reach the server" sentence for the screen.
+    handoffs.value = [];
   }
 }
 onMounted(loadHandoffs);
@@ -885,28 +904,48 @@ async function submitPrice(cents) {
         {{ t("filters.button") }}
       </button>
 
-      <!-- two different facts, two different next actions: nobody cooks here, or
-           your filter hid them. Saying the first when the second is true would make
-           a driver stop looking. -->
-      <p v-if="filteredEmpty" class="food-empty">
-        {{ t("filters.none_match") }}
-        <button class="food-empty__cta" type="button" @click="filters = { ...EMPTY_FILTERS }">
-          {{ t("filters.clear") }}
+      <!-- AI-CONTEXT: §23 entry 131 — the empty lines can only speak once the overlay
+           has actually LOADED, which is what the wrapping template buys.
+           `serviceEmpty` and `foodEmpty` are unchanged and deliberately so: their
+           expressions were always correct ("None mapped here yet" is a true sentence;
+           a blank map is not) and merely unreachable, because `rawPins` guaranteed
+           pins. What made them wrong to render was the STATE, not the condition —
+           `pins.length === 0` is equally true while a fetch is in flight, and saying
+           "nobody cooks here" to a driver whose request has not come back yet is the
+           same false assertion in the opposite direction. -->
+      <template v-if="overlay === LoadState.LOADED">
+        <!-- two different facts, two different next actions: nobody cooks here, or
+             your filter hid them. Saying the first when the second is true would make
+             a driver stop looking. -->
+        <p v-if="filteredEmpty" class="food-empty">
+          {{ t("filters.none_match") }}
+          <button class="food-empty__cta" type="button" @click="filters = { ...EMPTY_FILTERS }">
+            {{ t("filters.clear") }}
+          </button>
+        </p>
+        <!-- Q-7: one quiet line + the recruitment affordance. No filler, no scolding. -->
+        <p v-else-if="serviceEmpty" class="food-empty">{{ t("map.service_none") }}</p>
+        <p v-else-if="foodEmpty" class="food-empty">
+          {{ t("vendor.none_nearby") }}
+          <button
+            v-if="!suggested"
+            class="food-empty__cta"
+            type="button"
+            @click="suggestCook"
+          >
+            {{ t("vendor.suggest") }}
+          </button>
+          <span v-else class="food-empty__done">{{ t("vendor.suggest_thanks") }}</span>
+        </p>
+      </template>
+      <!-- §15.4: inline, specific, actionable — and never data. Offline and a server
+           error are split because the next action differs: one is "get signal", the
+           other is "try that again". -->
+      <p v-else-if="overlay === LoadState.FAILED" class="map__failed">
+        {{ overlayFailure === Failure.OFFLINE ? t("system.load_offline") : t("map.load_failed") }}
+        <button class="map__retry" type="button" @click="loadOverlay()">
+          {{ t("system.retry") }}
         </button>
-      </p>
-      <!-- Q-7: one quiet line + the recruitment affordance. No filler, no scolding. -->
-      <p v-else-if="serviceEmpty" class="food-empty">{{ t("map.service_none") }}</p>
-      <p v-else-if="foodEmpty" class="food-empty">
-        {{ t("vendor.none_nearby") }}
-        <button
-          v-if="!suggested"
-          class="food-empty__cta"
-          type="button"
-          @click="suggestCook"
-        >
-          {{ t("vendor.suggest") }}
-        </button>
-        <span v-else class="food-empty__done">{{ t("vendor.suggest_thanks") }}</span>
       </p>
       <div class="map__canvas">
         <MapCanvas
@@ -917,6 +956,11 @@ async function submitPrice(cents) {
           @located="onLocated"
           @bounds="onBounds"
         />
+        <!-- the basemap underneath is REAL and stays; it is the pins that are unknown,
+             so the skeleton stands in for pins alone. Never a status colour — §11.1
+             puts availability on the pin's fill, and a coloured skeleton pin would
+             assert parking nobody has reported. -->
+        <SkeletonPin v-if="overlay === LoadState.LOADING" :count="6" class="map__skeleton" />
         <button class="report-chip" type="button" :aria-label="t('map.report')" @click="reportChip">
           <CircleDot :size="24" :stroke-width="2" aria-hidden="true" />
         </button>
@@ -1076,6 +1120,36 @@ async function submitPrice(cents) {
 }
 .food-empty__done {
   color: var(--text-3);
+}
+/* §15.4's failed state wears the same banner as the empty ones deliberately: it is a
+   line of text about this screen, not an event, and §6.3 expresses hierarchy with the
+   surface step rather than with alarm. Composition only — every value below is already
+   on `.food-empty` / `.food-empty__cta`. */
+.map__failed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  padding: var(--s-2) var(--s-4);
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+}
+.map__retry {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+}
+/* the skeleton pins sit OVER the real basemap and take no taps — there is nothing to
+   tap yet, and a pin that answers nothing spends the driver's trust (§8) */
+.map__skeleton {
+  position: absolute;
+  inset: 0;
+  padding: var(--s-5);
+  pointer-events: none;
 }
 /* §15.3 at speed: one sentence, body size because it is read in a glance from a
    metre away, and no card — an empty stretch of road is not an event. */

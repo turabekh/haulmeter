@@ -3,7 +3,10 @@
      PAID per accessorial kind; the app reconciles it against their own GPS-backed
      receivables and flags the missed pay, evidence attached. Output is framed
      "review with your carrier," never legal advice (§8.9 note). Missed pay is the
-     hero figure in Mono/flare (T-2). Live via api.js; offline it shows a sample. -->
+     hero figure in Mono/flare (T-2). LIVE via api.js, on the four-state model — it
+     used to answer with `sampleAudit()` when the call failed, so a driver asking what
+     their carrier had underpaid could be shown an invented discrepancy (§23 entry
+     131). A failure says the check did not run. -->
 <script setup>
 import { ref, reactive, computed } from "vue";
 import { ArrowLeft } from "lucide-vue-next";
@@ -12,7 +15,8 @@ import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
 import { auditSettlement } from "../core/api.js";
-import { sampleAudit } from "../core/fixtures.js";
+import SkeletonCard from "../core/components/SkeletonCard.vue";
+import { LoadState, Failure, failureOf } from "../core/load-state.js";
 
 const router = useRouter();
 const { t } = useI18n();
@@ -23,6 +27,12 @@ const carrier = ref("");
 const paid = reactive({ detention: 0, layover: 0, lumper: 0, tonu: 0 });
 const result = ref(null);
 const submitting = ref(false);
+// AI-CONTEXT: §23 entry 131. `null` means the driver has not asked yet — which is a
+// genuine FIFTH condition on this surface and not one of the four states: there is
+// nothing to load until the form is submitted, so an idle screen shows the form and
+// no skeleton. Once asked, the three remaining states apply.
+const auditState = ref(null);
+const auditFailure = ref(null);
 
 function isoDaysAgo(days) {
   const d = new Date();
@@ -32,6 +42,7 @@ function isoDaysAgo(days) {
 
 async function run() {
   submitting.value = true;
+  auditState.value = LoadState.LOADING;
   const lines = KINDS.map((kind) => ({ kind, amount_cents: Math.round(Number(paid[kind] || 0) * 100) }));
   try {
     result.value = await auditSettlement({
@@ -40,8 +51,15 @@ async function run() {
       periodEnd: isoDaysAgo(0),
       lines,
     });
-  } catch {
-    result.value = sampleAudit(); // unauthenticated / offline
+    auditState.value = LoadState.LOADED;
+    auditFailure.value = null;
+  } catch (e) {
+    // this returned `sampleAudit()` — an invented settlement discrepancy, with an
+    // invented figure, presented as the answer to a question the driver just asked
+    // about their own pay. A wrong number here is one a driver takes to their carrier.
+    result.value = null;
+    auditFailure.value = failureOf(e);
+    auditState.value = LoadState.FAILED;
   }
   submitting.value = false;
 }
@@ -73,7 +91,15 @@ const missed = computed(() => result.value?.total_missed_cents ?? 0);
       <button v-else class="cta" type="submit" :disabled="submitting">{{ t("audit.run") }}</button>
     </form>
 
-    <section v-if="result" class="result">
+    <SkeletonCard v-if="auditState === LoadState.LOADING" :count="1" />
+    <!-- §15.4, and the kickoff's own note about this surface: an audit is a RESULT the
+         driver asked for, not an empty state, so a failure has to say plainly that the
+         check did not run. Silence here reads as "nothing was found". -->
+    <p v-else-if="auditState === LoadState.FAILED" class="audit__failed">
+      {{ auditFailure === Failure.OFFLINE ? t("system.load_offline") : t("audit.load_failed") }}
+      <button class="audit__retry" type="button" @click="run">{{ t("system.retry") }}</button>
+    </p>
+    <section v-else-if="result" class="result">
       <template v-if="result.discrepancies.length">
         <div class="result__hero">
           <span class="result__label">{{ t("audit.missed") }}</span>
@@ -167,6 +193,23 @@ const missed = computed(() => result.value?.total_missed_cents ?? 0);
 }
 .cta:disabled {
   opacity: 0.6;
+}
+.audit__failed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-4);
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.audit__retry {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
 }
 .result {
   margin-top: var(--s-5);

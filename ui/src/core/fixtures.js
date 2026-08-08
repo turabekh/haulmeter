@@ -1,317 +1,47 @@
-// AI-CONTEXT: TEMPORARY client fixtures for the Map surface, pending the real
-// HTTP API. Shape matches F11/M1 `overlay_pins` output exactly (facility_id,
-// name, facility_type, shape, lat, lon, status, badges, freshness). When the
-// api exposes M1 endpoints (+ F1 session auth + CORS), swap this module for a
-// fetch client behind the same interface — components stay unchanged.
-function minsAgo(mins) {
-  return new Date(Date.now() - mins * 60000).toISOString();
-}
-
-export const SAMPLE_PINS = [
-  {
-    facility_id: "f-1",
-    name: "Loves Travel Stop #212",
-    facility_type: "truck_stop",
-    shape: "circle",
-    lat: 32.78,
-    lon: -96.8,
-    status: "some",
-    badges: [{ kind: "fuel_price", value: 4.19 }],
-    freshness: { reported_at: minsAgo(40), sample_size: 3 },
-  },
-  {
-    facility_id: "f-2",
-    name: "Pilot #77",
-    facility_type: "truck_stop",
-    shape: "circle",
-    lat: 32.83,
-    lon: -96.84,
-    status: "full",
-    badges: [{ kind: "fuel_price", value: 4.09 }],
-    freshness: { reported_at: minsAgo(12), sample_size: 6 },
-  },
-  {
-    facility_id: "f-3",
-    name: "Yardline Secured Parking",
-    facility_type: "parking_property",
-    shape: "square",
-    lat: 32.86,
-    lon: -96.79,
-    status: "empty",
-    badges: [{ kind: "bookable", value: 2400, spot_id: "spot-f3-a1" }],
-    freshness: { reported_at: minsAgo(3), sample_size: 1 },
-  },
-  {
-    facility_id: "f-4",
-    name: "Rest Area — I-35 NB",
-    facility_type: "rest_area",
-    shape: "circle",
-    lat: 32.9,
-    lon: -96.79,
-    status: null,
-    badges: [],
-    freshness: null,
-  },
-  {
-    // M7: a fuel-network station — the badge carries gross/net/savings (cents)
-    facility_id: "f-5",
-    name: "TA Travel Center",
-    facility_type: "fuel_station",
-    shape: "circle",
-    lat: 32.82,
-    lon: -96.81,
-    status: null,
-    badges: [
-      { kind: "fuel_net", gross: 419, net: 394, savings: 25, is_network: true, station_ref: "station-f5" },
-    ],
-    freshness: { reported_at: minsAgo(20), sample_size: 4 },
-  },
-];
-
-// AI-CONTEXT: fixture Public Scorecard data (§18), pending live /public/*.
-// Aggregate-only; dwell carries its sample size (§11.7).
-export function sampleFacilities() {
-  return [
-    { id: "rcv-1", name: "Dallas Receiver", facility_type: "shipper_receiver" },
-    { id: "f-1", name: "Loves Travel Stop #212", facility_type: "truck_stop" },
-    { id: "f-3", name: "Yardline Secured Parking", facility_type: "parking_property" },
-  ];
-}
-export function sampleScorecard(id) {
-  return {
-    id,
-    name: "Dallas Receiver",
-    facility_type: "shipper_receiver",
-    dwell: { median_seconds: 8100, p90_seconds: 15300, sample_size: 12 },
-    rating: { overall: 3.8, review_count: 6 },
-    // moderation-approved, de-identified excerpts (no author/date), §13
-    reviews: [
-      "Quick in and out — staff waved me right to door 4.",
-      "Detention paid without a fight.",
-      "Overnight parking while you wait for a door.",
-    ],
-  };
-}
-
-// AI-CONTEXT: fixture Property-Owner dashboard (M6-FR5, the supply side), the
-// web-first portal (§18): listings + spots, bookings, accrued owner_payable.
-// Payout SETTLEMENT is the deferred Stripe/Connect seam — figures are the view.
-export const SAMPLE_OWNER = {
-  payout_cents: 39600,
-  properties: [
-    {
-      id: "prop-1",
-      name: "Yardline Secured Parking",
-      vetted: true,
-      spots: [
-        { label: "A1", price_cents_per_night: 2400, active: true },
-        { label: "A2", price_cents_per_night: 2400, active: true },
-        { label: "B1", price_cents_per_night: 2800, active: false },
-      ],
-    },
-    {
-      id: "prop-2",
-      name: "Depot Overnight Lot",
-      vetted: false,
-      spots: [{ label: "1", price_cents_per_night: 2000, active: true }],
-    },
-  ],
-  bookings: [
-    { id: "bk-1", nights: 2, price_cents: 4800, owner_payout_cents: 3960, state: "checked_out" },
-    { id: "bk-2", nights: 1, price_cents: 2400, owner_payout_cents: 1980, state: "booked" },
-    { id: "bk-3", nights: 3, price_cents: 8400, owner_payout_cents: 6930, state: "refunded" },
-  ],
-};
-
-// AI-CONTEXT: fixture Fleet Workspace data (M12), pending live /fleet/*. The
-// web-first portal (§18); recovered/owed/fuel + per-member + counterparty rates.
-export const SAMPLE_FLEET = {
-  report: {
-    driver_count: 4,
-    recovered_cents: 184000,
-    owed_cents: 92500,
-    fuel_saved_cents: 213400,
-    members: [
-      { driver_account_id: "Marcus D.", recovered_cents: 75000, owed_cents: 15000, fuel_saved_cents: 68200 },
-      { driver_account_id: "Rosa V.", recovered_cents: 45000, owed_cents: 30000, fuel_saved_cents: 51100 },
-      { driver_account_id: "Danny K.", recovered_cents: 39000, owed_cents: 17500, fuel_saved_cents: 49900 },
-      { driver_account_id: "Priya S.", recovered_cents: 25000, owed_cents: 30000, fuel_saved_cents: 44200 },
-    ],
-  },
-  claims: {
-    owed_cents: 92500,
-    recovered_cents: 184000,
-    by_counterparty: {
-      "Sunbelt Logistics": { total: 120000, recovered: 108000, owed: 12000, recovery_rate: 0.9 },
-      "Range Freight": { total: 96500, recovered: 52000, owed: 44500, recovery_rate: 0.539 },
-      "Delta 3PL": { total: 60000, recovered: 24000, owed: 36000, recovery_rate: 0.4 },
-    },
-  },
-};
-
-// AI-CONTEXT: fixture nearby spot-handoffs (M10-FR2), pending live
-// /community/handoff/nearby. "leaving in X" broadcasts at free lots to claim.
-export function sampleHandoffs() {
-  const soon = (min) => new Date(Date.now() + min * 60000).toISOString();
-  return [
-    { handoff_id: "h-1", facility_name: "Loves Travel Stop #212", leaving_at: soon(12), mine: false },
-    { handoff_id: "h-2", facility_name: "Rest Area — I-35 NB", leaving_at: soon(25), mine: false },
-  ];
-}
-
-// AI-CONTEXT: fixture points/reputation (M10), pending live /community/points.
-export const SAMPLE_POINTS = {
-  balance: 340,
-  points_earned: 485,
-  contribution_count: 32,
-  trust_score: 1.4,
-  level: "regular",
-};
-
-// AI-CONTEXT: fixture facility Q&A (M10-FR4), pending live /community/questions.
-// presence_proven answers (on-site) rank first and carry the badge.
-export function sampleQuestions() {
-  return [
-    {
-      question_id: "q-1",
-      text: "Is the north entrance still closed?",
-      answers: [
-        { text: "Open as of this morning — go around the fuel island.", presence_proven: true },
-        { text: "Was closed last week.", presence_proven: false },
-      ],
-    },
-    { question_id: "q-2", text: "Any overnight parking after 8pm?", answers: [] },
-  ];
-}
-
-// AI-CONTEXT: fixture "where do I sleep tonight" plan (M8-FR3), pending live
-// /intel/sleep. Guaranteed-bookable first, then predicted availability, nearest.
-export function sampleSleepPlan() {
-  return {
-    range_m: 177000,
-    stops: [
-      { facility_id: "f-3", name: "Yardline Secured Parking", distance_m: 9200, predicted_status: null, guaranteed_bookable: true },
-      { facility_id: "f-1", name: "Loves Travel Stop #212", distance_m: 5400, predicted_status: "some", guaranteed_bookable: false },
-      { facility_id: "f-2", name: "Pilot #77", distance_m: 12800, predicted_status: "full", guaranteed_bookable: false },
-    ],
-    guaranteed: { spot_id: "spot-f3-a1", property_name: "Yardline Secured Parking", price_cents_per_night: 2400 },
-    fuel: { facility_id: "f-5", name: "TA Travel Center", net_cents_per_gal: 394 },
-  };
-}
-
-// AI-CONTEXT: fixture settlement-audit result (M9-FR1), pending live
-// /money/settlements/audit. A flagged discrepancy = evidence-backed pay the
-// carrier didn't pay; "review with your carrier", never legal advice.
-export function sampleAudit() {
-  return {
-    discrepancies: [
-      { kind: "detention", owed_cents: 15000, paid_cents: 5000, missed_cents: 10000, status: "flagged" },
-    ],
-    total_missed_cents: 10000,
-  };
-}
-
-// AI-CONTEXT: fixture Driver Dollars Delivered (M9-FR4 / North Star), pending
-// live /money/earnings. recovered (M3/M4) + fuel saved (M7) + audit-flagged.
-export const SAMPLE_EARNINGS = {
-  recovered_cents: 12500,
-  fuel_saved_cents: 36250,
-  flagged_cents: 10000,
-  ddd_cents: 58750,
-};
-
-// AI-CONTEXT: fixture fuel savings-to-date (M7-FR4), pending live /fuel/analytics.
-// Shape matches driver_analytics() exactly (gallons in thousandths, money cents).
-export const SAMPLE_FUEL_ANALYTICS = {
-  gallons_milli: 1450000,
-  spend_cents: 571300,
-  savings_cents: 36250,
-  txn_count: 9,
-};
-
-// AI-CONTEXT: fixture facility profile (M2) for the profile surface pending auth.
-// Shape matches GET /facility/{id}/profile exactly.
-export function sampleProfile(facilityId) {
-  const pin = SAMPLE_PINS.find((p) => p.facility_id === facilityId) ?? SAMPLE_PINS[0];
-  return {
-    facility_id: pin.facility_id,
-    name: pin.name,
-    check_in_procedure: "Check in at guard shack; keep PPE on in the yard.",
-    overnight_parking: true,
-    restrooms: true,
-    dwell: {
-      overall: { median_seconds: 8100, p90_seconds: 15300, sample_size: 12 },
-      by_hour: { 6: { median_seconds: 5400, sample_size: 4 }, 14: { median_seconds: 12600, sample_size: 5 } },
-    },
-    ratings: { overall: 3.8, review_count: 2, per_aspect: {} },
-    detention_risk: { rate: null, sample_size: 0, basis: "m3_pending" },
-    reviews: [
-      { id: "r-1", ratings: { would_return: 4 }, text: "Quick unload at 6am, slow by afternoon.", created_at: new Date().toISOString() },
-      { id: "r-2", ratings: { would_return: 3 }, text: "Tight backing but staff were helpful.", created_at: new Date().toISOString() },
-    ],
-  };
-}
-
-// AI-CONTEXT: fixture M8 decision-intel for the facility scorecard, pending live
-// /intel/detention-risk + /intel/appointment-hours. Basis (sample size) always
-// present so the UI can show it and never fake precision (M8-FR5).
-export function sampleFacilityIntel() {
-  return {
-    risk: { exceed_rate: 0.43, sample_size: 14, confidence: "high", basis: "tracked_stops" },
-    best_hour: { hour: 6, median_seconds: 2400, sample_size: 9, confidence: "medium" },
-  };
-}
-
-// AI-CONTEXT: fixture ACTIVE stop for the Load tab / The Meter, pending the
-// active-load API. Arrived 150 min ago with 120 min free time -> detention is
-// accruing (the signature "money ticking up" moment).
-// AI-CONTEXT: SAMPLE_STOP was DELETED, not corrected (§23 entry 52). It drove the
-// Load tab's empty state — a ticking $37.52 detention Meter for a load that did not
-// exist — and its shape did not match the endpoint it stood in for: `appointment`
-// was "07:00", a preformatted display string, where GET /load/{stop}/meter returns
-// an ISO timestamp. The demo therefore rendered a tidy "07:00 · Acme Brokerage" in
-// §10.2's stop context row while every live driver got
-// "2026-07-27T04:10:50.993277+00:00 · TQL". A fixture whose shape does not match its
-// endpoint does not preview that endpoint — it hides it.
-
-// AI-CONTEXT: fixture "Money Owed" rows (M3+M4 receivables), pending the live
-// /accessorial/owed API. Shape matches money_owed() exactly.
-export const SAMPLE_OWED = [
-  { receivable_id: "r-1", kind: "detention", amount_cents: 15000, state: "invoiced", aging_days: 3, is_reimbursement: false },
-  { receivable_id: "r-2", kind: "tonu", amount_cents: 30000, state: "disputed", aging_days: 11, is_reimbursement: false },
-  { receivable_id: "r-3", kind: "lumper", amount_cents: 12500, state: "recovered", aging_days: 21, is_reimbursement: true },
-];
-
-// AI-CONTEXT: fixture document wallet (M5), pending live /protection/wallet.
-export const SAMPLE_WALLET = {
-  documents: [
-    { id: "d-1", doc_type: "cdl", expires_on: "2027-03-01", status: "ok",
-      content_type: "image/jpeg" },
-    { id: "d-2", doc_type: "med_card", expires_on: "2026-08-01", status: "expiring",
-      content_type: "image/jpeg" },
-    { id: "d-3", doc_type: "insurance", expires_on: "2026-01-01", status: "expired",
-      content_type: "application/pdf" },
-    { id: "d-4", doc_type: "permit", expires_on: null, status: "ok",
-      content_type: "image/jpeg" },
-  ],
-  expiring: [
-    { id: "d-2", doc_type: "med_card", expires_on: "2026-08-01", status: "expiring" },
-    { id: "d-3", doc_type: "insurance", expires_on: "2026-01-01", status: "expired" },
-  ],
-  archived_count: 0,
-  // shape-matched to the endpoint (§23 entry 79). A sample wallet has no loads behind
-  // it, so these are empty rather than absent — a fixture whose shape does not match
-  // its endpoint hides the endpoint, which is how the old sample load hid an ISO
-  // timestamp rendering where a "07:00" was expected.
-  load_paperwork: [],
-  unattached: [],
-};
-
-// AI-CONTEXT: SAMPLE_CORRIDOR is deliberately GONE (§23 entry 81).
+// AI-CONTEXT: this module is DELIBERATELY EMPTY. Do not add anything to it.
 //
-// It supplied Corridor mode's entire content — "Pilot #77 · full · 3.4 mi" and two
-// more — while `GET /map/corridor` sat unreached, so DRIVING showed invented parking
-// statuses in the one state where a driver cannot look anything up. It also carried a
-// `status` field the endpoint did not return, which is why swapping the prop was
-// never the whole fix: a fixture whose shape does not match its endpoint hides the
-// endpoint. Same shape as the sample load's "07:00" against a live ISO timestamp.
+// It held sixteen fixtures — SAMPLE_PINS, SAMPLE_WALLET, SAMPLE_OWED, SAMPLE_EARNINGS,
+// SAMPLE_POINTS, SAMPLE_FLEET, SAMPLE_OWNER, SAMPLE_FUEL_ANALYTICS, sampleProfile,
+// sampleFacilityIntel, sampleQuestions, sampleSleepPlan, sampleAudit, sampleHandoffs,
+// sampleFacilities, sampleScorecard — imported by ten files. They are gone (§23 entry
+// 131), and the file is kept rather than deleted so this note survives: the next
+// person needing placeholder data will reach for this drawer, and the reasoning has to
+// be here when they open it.
+//
+// WHY THEY WENT. Every surface that fetches had two states, data and no-data, so a
+// null response had to mean one of the two — and the codebase chose data:
+//
+//     const rawPins = computed(() => livePins.value ?? SAMPLE_PINS.filter(...))
+//
+// That put fabricated truck stops on the map on EVERY cold open, not only offline
+// (audit U-10). Five other surfaces did the same on failure: a CDL that was not the
+// driver's (U-09), Driver Dollars Delivered they had not earned (U-06), a settlement
+// discrepancy no carrier owed, lots to sleep in that do not exist. §11.7 is the law all
+// of them broke — the product asserting something it does not know — and it is the
+// pattern behind six of the eight criticals across both audits.
+//
+// The fixtures could not simply be deleted, which is why this took an owner decision
+// rather than a session: with no `loading` state, removing them traded a §11.7
+// violation for a §8 one — a blank screen on every cold start. The skeleton primitive
+// (`components/Skeleton{Card,Row,Pin}.vue`) and the four-state model (`load-state.js`)
+// are the prerequisite that made the deletion possible.
+//
+// WHAT TO DO INSTEAD, depending on what you actually need:
+//
+//   · a surface with nothing to show yet ..... `LoadState.LOADING` + a Skeleton shape
+//   · a surface whose fetch failed ........... `LoadState.FAILED` + §15.4's inline line
+//   · a surface with a real empty result ..... §15.3: one sentence + one action
+//   · test data .............................. a constant in the TEST file, shaped to
+//                                              the endpoint it stands in for
+//   · something to demo `/dev` against ....... `make seed`, against a real account
+//
+// The distinction that decides all five: a placeholder EXPORTED FROM `src/` is one
+// import away from a driver's screen. §23 entry 81 removed the corridor fixture on
+// exactly that argument — "an exported placeholder is one import away from being back
+// on the screen a driver cannot verify" — and this file proved the point on its own:
+// `SAMPLE_FUEL_ANALYTICS` was exported here and imported by NOTHING, a fixture already
+// halfway back.
+//
+// Held by `test/loading-state.test.js`, which asserts this module exports nothing and
+// that no file under `src/` imports it. That test was written first and watched failing.
+export {};

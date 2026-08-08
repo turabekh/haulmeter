@@ -3,7 +3,9 @@
      North Star DRIVER DOLLARS DELIVERED (recovered + fuel saved + audit-flagged,
      M9-FR4) → its breakdown → receivables list (status pills + aging in Mono).
      S3 comfortable density (§7.4). Money is ALWAYS Mono + tabular, never
-     truncated (T-2/T-6). Fixture-backed until the live APIs answer. -->
+     truncated (T-2/T-6). LIVE — `/accessorial/owed` and `/money/earnings`, on the
+     four-state model (§23 entry 131). No figure on this screen is ever invented; the
+     two fetches carry separate states because they fail separately. -->
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
@@ -16,28 +18,64 @@ import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
 import { receivableStatusToken } from "../core/presentation.js";
 import { fetchOwed, fetchEarnings, fetchMe, markReceivablePaid } from "../core/api.js";
-import { SAMPLE_OWED, SAMPLE_EARNINGS } from "../core/fixtures.js";
+import SkeletonCard from "../core/components/SkeletonCard.vue";
+import SkeletonRow from "../core/components/SkeletonRow.vue";
+import { LoadState, Failure, failureOf } from "../core/load-state.js";
 
 const { t } = useI18n();
 const { isDriving } = useDriverState();
 const router = useRouter();
-const rows = ref(SAMPLE_OWED);
-const earnings = ref(SAMPLE_EARNINGS);
+// AI-CONTEXT: audit U-06 lived on these two lines (§23 entry 131). The tab opened
+// showing invented receivables and an invented Driver-Dollars-Delivered figure — the
+// product's North Star, in Mono, on the Meter — and fell back to the same on failure.
+// A driver could have taken that number to a broker.
+//
+// TWO fetches, TWO states, deliberately not one: `/money/owed` and `/money/earnings`
+// fail independently, and collapsing them would blank the list because the summary
+// broke, or vice versa. §15.4 wants an error about the thing that actually failed.
+const EMPTY_EARNINGS = Object.freeze({
+  ddd_cents: 0,
+  recovered_cents: 0,
+  fuel_saved_cents: 0,
+  flagged_cents: 0,
+});
+const rows = ref([]);
+const earnings = ref(EMPTY_EARNINGS);
+const owedState = ref(LoadState.LOADING);
+const owedFailure = ref(null);
+const earningsState = ref(LoadState.LOADING);
+const earningsFailure = ref(null);
 const drafting = ref(false);
 const marking = ref(false);
 const me = ref(null); // F1: verified operating authority, shown as a trust pill
 
-onMounted(async () => {
+async function loadOwed() {
   try {
     rows.value = await fetchOwed();
-  } catch {
-    rows.value = SAMPLE_OWED; // unauthenticated / offline
+    owedState.value = LoadState.LOADED;
+    owedFailure.value = null;
+  } catch (e) {
+    rows.value = [];
+    owedFailure.value = failureOf(e);
+    owedState.value = LoadState.FAILED;
   }
+}
+
+async function loadEarnings() {
   try {
     earnings.value = await fetchEarnings();
-  } catch {
-    earnings.value = SAMPLE_EARNINGS; // unauthenticated / offline
+    earningsState.value = LoadState.LOADED;
+    earningsFailure.value = null;
+  } catch (e) {
+    earnings.value = EMPTY_EARNINGS;
+    earningsFailure.value = failureOf(e);
+    earningsState.value = LoadState.FAILED;
   }
+}
+
+onMounted(async () => {
+  await loadOwed();
+  await loadEarnings();
   try {
     me.value = await fetchMe();
   } catch {
@@ -76,8 +114,22 @@ async function onMarkPaid(receivableId) {
 
 <template>
   <div class="money">
+    <!-- AI-CONTEXT: §23 entry 131 is explicit that THE METER must not gain a loading
+         state — §9 and entry 52 already specify how it looks at rest, and a Meter that
+         shimmered would put the one living element on the screen in service of a
+         network request.
+         What happens instead: the CARD is replaced until the figure is known, and The
+         Meter renders once, with a real number. That is the distinction the entry
+         draws — no loading treatment is applied to The Meter, because The Meter is not
+         there yet. Rendering it against `ddd_cents: 0` would be worse than either: a
+         confident $0.00 in Mono is a claim about the driver's month. -->
+    <SkeletonCard v-if="earningsState === LoadState.LOADING" :count="1" />
+    <p v-else-if="earningsState === LoadState.FAILED" class="money__failed">
+      {{ earningsFailure === Failure.OFFLINE ? t("system.load_offline") : t("money.earnings_failed") }}
+      <button class="money__retry" type="button" @click="loadEarnings">{{ t("system.retry") }}</button>
+    </p>
     <!-- North Star: Driver Dollars Delivered (§238 month summary, Meter) -->
-    <section class="card meter-card">
+    <section v-else class="card meter-card">
       <TheMeter
         :label="t('money.delivered')"
         :figure="formatMoney(earnings.ddd_cents)"
@@ -92,7 +144,9 @@ async function onMarkPaid(receivableId) {
       </span>
     </div>
 
-    <ul class="breakdown">
+    <!-- the breakdown is the same fetch as the Meter, so it appears with it rather
+         than rendering three confident $0.00 rows in Mono while one is in flight -->
+    <ul v-if="earningsState === LoadState.LOADED" class="breakdown">
       <li class="breakdown__row">
         <span>{{ t("money.recovered") }}</span>
         <span class="mono">{{ formatMoney(earnings.recovered_cents) }}</span>
@@ -108,7 +162,20 @@ async function onMarkPaid(receivableId) {
     </ul>
 
     <h1 class="money__title">{{ t("money.title") }}</h1>
-    <ul class="rows">
+    <SkeletonRow v-if="owedState === LoadState.LOADING" :count="3" />
+    <p v-else-if="owedState === LoadState.FAILED" class="money__failed">
+      {{ owedFailure === Failure.OFFLINE ? t("system.load_offline") : t("money.load_failed") }}
+      <button class="money__retry" type="button" @click="loadOwed">{{ t("system.retry") }}</button>
+    </p>
+    <!-- AI-CONTEXT: §15.3's empty state, found MISSING while applying the four-state
+         rule (§23 entry 131) — which is the rule earning its place on the §22.3 DoD.
+         `money.empty` was already written and already translated into all six locales,
+         and was rendered by NOTHING: a driver owed nothing got a bare heading over an
+         empty list. The same built-and-inert shape as `register_message` before N-01
+         and `system.loading` beside it. It says what the tab is FOR and names the one
+         action that starts it, which is both halves of §15.3. -->
+    <p v-else-if="!rows.length" class="money__empty">{{ t("money.empty") }}</p>
+    <ul v-else class="rows">
       <li v-for="r in rows" :key="r.receivable_id" class="row">
         <div class="row__main">
           <span class="row__kind">{{ kindLabel(r.kind) }}</span>
@@ -182,6 +249,31 @@ async function onMarkPaid(receivableId) {
   border: 1px solid var(--line-1);
   border-radius: var(--r-card);
   margin-bottom: var(--s-4);
+}
+/* §15.3's empty line and §15.4's failed line share the body treatment: both are one
+   quiet sentence about this list, and neither is an event. Composition only. */
+.money__empty {
+  margin: 0 var(--s-4);
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.money__failed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0 var(--s-4);
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.money__retry {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
 }
 .money__title {
   margin: 0 0 var(--s-3);

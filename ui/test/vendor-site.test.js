@@ -281,8 +281,26 @@ describe("claiming a site (M13-FR7)", () => {
 
 // the other end of the flow: what an approved, curated claim is actually FOR
 describe("what a driver sees for a claimed service centre", () => {
+  // AI-CONTEXT: the profile endpoint has to answer for this surface to render (§23
+  // entry 131). It used to fall back to `sampleProfile()` when the route 404'd, so
+  // these two tests measured the service-centre card sitting on an invented facility.
+  const PROFILE = {
+    facility_id: FACILITY_ID,
+    name: "Gateway Truck Service",
+    check_in_procedure: null,
+    overnight_parking: false,
+    restrooms: false,
+    dwell: { overall: { median_seconds: 0, p90_seconds: 0, sample_size: 0 }, by_hour: {} },
+    ratings: { overall: null, review_count: 0, per_aspect: {} },
+    detention_risk: { rate: null, sample_size: 0, basis: "m3_pending" },
+    reviews: [],
+  };
+
   async function profileAt(serviceCenter) {
-    stub(serviceCenter ? { [`/vendors/service-center/${FACILITY_ID}`]: serviceCenter } : {});
+    stub({
+      [`/facility/${FACILITY_ID}/profile`]: PROFILE,
+      ...(serviceCenter ? { [`/vendors/service-center/${FACILITY_ID}`]: serviceCenter } : {}),
+    });
     const r = router();
     r.push(`/facility/${FACILITY_ID}`);
     await r.isReady();

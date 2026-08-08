@@ -132,8 +132,30 @@ describe("the class switch in the notifications sheet", () => {
 describe("the mute toggle on the facility screen", () => {
   const FACILITY = "f-mute-1";
 
+// AI-CONTEXT: the facility profile this surface needs to render at all (§23 entry
+// 131). It used to come from `sampleProfile()` inside the SURFACE — the stub below
+// left `/profile` unhandled on purpose, with a comment saying the fixture fallback
+// was what made that work. It no longer is: an unreachable profile now renders
+// §15.4's failed line, which is correct and has no mute control on it. Shape copied
+// from GET /facility/{id}/profile.
+const PROFILE = {
+  facility_id: FACILITY,
+  name: "Dallas Cold Storage",
+  check_in_procedure: "Check in at guard shack; keep PPE on in the yard.",
+  overnight_parking: true,
+  restrooms: true,
+  dwell: {
+    overall: { median_seconds: 8100, p90_seconds: 15300, sample_size: 12 },
+    by_hour: {},
+  },
+  ratings: { overall: 3.8, review_count: 2, per_aspect: {} },
+  detention_risk: { rate: null, sample_size: 0, basis: "m3_pending" },
+  reviews: [],
+};
+
   async function mountFacility(handlers) {
-    stubFetch(handlers);
+    // the profile handler goes LAST so a test may still override it
+    stubFetch([...handlers, ["/profile", () => jsonOnce(PROFILE)]]);
     const router = createRouter({ history: createMemoryHistory(), routes });
     router.push(`/facility/${FACILITY}`);
     await router.isReady();

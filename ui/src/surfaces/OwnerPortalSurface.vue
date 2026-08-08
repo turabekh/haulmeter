@@ -6,7 +6,9 @@
      owes them (F7 owner_payable). Now READ-WRITE: create a listing, add/pause a
      spot, re-price it (M6-FR1) — writes hit /owner/* and reload. Payout SETTLEMENT
      is the deferred Stripe/Connect seam. Money is Mono/tabular (T-2). Falls back
-     to a read-only fixture demo when unauthenticated/offline. -->
+     LIVE, on the four-state model (§23 entry 131). It used to fall back to a read-only
+     fixture demo when unauthenticated or offline — invented properties, bookings and
+     revenue in a table whose other rows are real. -->
 <script setup>
 import { ref, reactive, onMounted } from "vue";
 import { Building2, BadgeCheck, Plus } from "lucide-vue-next";
@@ -19,11 +21,18 @@ import {
   updateOwnerSpot,
   cancelBooking,
 } from "../core/api.js";
-import { SAMPLE_OWNER } from "../core/fixtures.js";
+import SkeletonCard from "../core/components/SkeletonCard.vue";
+import { LoadState, Failure, failureOf } from "../core/load-state.js";
 
 const { t } = useI18n();
-const board = ref(SAMPLE_OWNER);
-const demo = ref(false);
+// AI-CONTEXT: §23 entry 131. `demo` is gone: the portal used to fall back to
+// SAMPLE_OWNER and label it "Demo data — sign in to manage your listings", which was
+// the most honest of the ten fixture fallbacks and still the wrong shape. It rendered
+// invented properties, invented bookings and invented revenue in a table whose every
+// other row is real, so the one thing a reader could not do was tell which was which.
+const board = ref(null);
+const boardState = ref(LoadState.LOADING);
+const boardFailure = ref(null);
 const newProp = reactive({ name: "", lat: "", lon: "" });
 const spotDrafts = reactive({}); // property_id -> { label, price }
 // AI-CONTEXT: cancelling ARMS before it acts (§23 entry 108). Pausing a spot next to
@@ -73,9 +82,12 @@ async function onCancel(booking) {
 async function init() {
   try {
     await reload();
-  } catch {
-    board.value = SAMPLE_OWNER; // unauthenticated / offline demo (read-only)
-    demo.value = true;
+    boardState.value = LoadState.LOADED;
+    boardFailure.value = null;
+  } catch (e) {
+    board.value = null;
+    boardFailure.value = failureOf(e);
+    boardState.value = LoadState.FAILED;
   }
 }
 onMounted(init);
@@ -118,15 +130,20 @@ async function togglePause(spot) {
   <div class="owner">
     <header class="owner__head">
       <h1 class="owner__title">{{ t("owner.title") }}</h1>
-      <div class="payout">
+      <div v-if="boardState === LoadState.LOADED" class="payout">
         <span class="payout__label">{{ t("owner.payout") }}</span>
         <span class="payout__figure">{{ formatMoney(board.payout_cents) }}</span>
         <span class="payout__note">{{ t("owner.payout_note") }}</span>
       </div>
     </header>
 
-    <p v-if="demo" class="demo">{{ t("owner.demo") }}</p>
+    <SkeletonCard v-if="boardState === LoadState.LOADING" :count="2" />
+    <p v-else-if="boardState === LoadState.FAILED" class="demo">
+      {{ boardFailure === Failure.OFFLINE ? t("system.load_offline") : t("owner.load_failed") }}
+      <button class="owner__retry" type="button" @click="init">{{ t("system.retry") }}</button>
+    </p>
 
+    <template v-else-if="boardState === LoadState.LOADED">
     <section class="block">
       <h2 class="block__title">{{ t("owner.properties") }}</h2>
       <p v-if="!board.properties.length" class="muted">{{ t("owner.empty") }}</p>
@@ -146,7 +163,6 @@ async function togglePause(spot) {
               <span class="spot__money">
                 <span class="spot__cur">$</span>
                 <input
-                  v-if="!demo"
                   class="spot__price-in"
                   type="number"
                   step="0.01"
@@ -155,17 +171,20 @@ async function togglePause(spot) {
                   :aria-label="t('owner.per_night')"
                   @change="reprice(s, $event.target.value)"
                 />
-                <span v-else class="spot__price">{{ (s.price_cents_per_night / 100).toFixed(2) }}</span>
                 <span class="spot__per">{{ t("owner.per_night") }}</span>
               </span>
-              <button v-if="!demo" class="pause" type="button" @click="togglePause(s)">
+              <!-- AI-CONTEXT: the `v-else` here rendered a read-only state label for
+                   demo mode (§23 entry 131). With no demo mode there is no read-only
+                   owner: whoever reaches this board is signed in and owns these spots.
+                   The button carries the state in its own label — Pause when active,
+                   Resume when paused — so nothing is lost with the span. -->
+              <button class="pause" type="button" @click="togglePause(s)">
                 {{ s.active ? t("owner.pause") : t("owner.resume") }}
               </button>
-              <span v-else class="spot__state">{{ s.active ? t("owner.active") : t("owner.paused") }}</span>
             </li>
           </ul>
 
-          <form v-if="!demo" class="addspot" @submit.prevent="addSpot(p.id)">
+          <form class="addspot" @submit.prevent="addSpot(p.id)">
             <input v-model="draftFor(p.id).label" class="in in--label" type="text" :placeholder="t('owner.spot_label')" />
             <input v-model="draftFor(p.id).price" class="in in--price" type="number" step="0.01" min="0" :placeholder="t('owner.price')" />
             <button class="add add--sm" type="submit">
@@ -175,7 +194,7 @@ async function togglePause(spot) {
         </li>
       </ul>
 
-      <form v-if="!demo" class="addprop" @submit.prevent="addProperty">
+      <form class="addprop" @submit.prevent="addProperty">
         <input v-model="newProp.name" class="in in--name" type="text" :placeholder="t('owner.prop_name')" />
         <input v-model="newProp.lat" class="in in--geo" type="number" step="any" :placeholder="t('owner.lat')" />
         <input v-model="newProp.lon" class="in in--geo" type="number" step="any" :placeholder="t('owner.lon')" />
@@ -195,7 +214,7 @@ async function togglePause(spot) {
             <th class="num">{{ t("owner.charged") }}</th>
             <th class="num">{{ t("owner.your_cut") }}</th>
             <th>{{ t("owner.status") }}</th>
-            <th v-if="!demo">{{ t("owner.cancel") }}</th>
+            <th>{{ t("owner.cancel") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -204,7 +223,7 @@ async function togglePause(spot) {
             <td class="num">{{ formatMoney(b.price_cents) }}</td>
             <td class="num ledger">{{ formatMoney(b.owner_payout_cents) }}</td>
             <td>{{ stateLabel(b.state) }}</td>
-            <td v-if="!demo">
+            <td>
               <button
                 v-if="isActive(b)"
                 class="pause"
@@ -218,6 +237,7 @@ async function togglePause(spot) {
         </tbody>
       </table>
     </section>
+    </template>
   </div>
 </template>
 
@@ -267,6 +287,16 @@ async function togglePause(spot) {
   color: var(--text-3);
   font-size: var(--type-caption-size);
 }
+.owner__retry {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+}
+/* AI-CONTEXT: the class name `.demo` is kept because the TREATMENT is right — a quiet
+   bordered line at caption size — and renaming it would touch the portal-boundary
+   test for no gain. What it holds is now §15.4's failed sentence, never demo data. */
 .demo {
   margin: 0 0 var(--s-4);
   padding: var(--s-2) var(--s-3);

@@ -9,7 +9,8 @@ import { Check } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
 import { useTheme } from "../core/theme.js";
 import { email, logout, fetchPoints, fetchMe, verifyAuthority, saveEquipment, setFoodAlerts } from "../core/api.js";
-import { SAMPLE_POINTS } from "../core/fixtures.js";
+import SkeletonCard from "../core/components/SkeletonCard.vue";
+import { LoadState, Failure, failureOf } from "../core/load-state.js";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import LocalePicker from "../core/components/LocalePicker.vue";
 import NotificationsSheet from "../core/components/NotificationsSheet.vue";
@@ -51,7 +52,12 @@ async function openNotification(n) {
   if (n.deep_link) router.push(n.deep_link);
 }
 const { mode, setMode, modes } = useTheme();
-const points = ref(SAMPLE_POINTS);
+// AI-CONTEXT: §23 entry 131 — this was `ref(SAMPLE_POINTS)`, so More opened showing a
+// balance and a loyalty LEVEL the driver had not earned. A points balance is a promise
+// about what the platform owes them.
+const points = ref(null);
+const pointsState = ref(LoadState.LOADING);
+const pointsFailure = ref(null);
 
 // F1: operating-authority verification (FMCSA). Section only appears when the
 // F13 flag is on; verified state is plain text here (§10 — no badges on More),
@@ -133,12 +139,20 @@ async function toggleFoodAlerts() {
   });
 }
 
-onMounted(async () => {
+async function loadPoints() {
   try {
     points.value = await fetchPoints();
-  } catch {
-    points.value = SAMPLE_POINTS; // unauthenticated / offline
+    pointsState.value = LoadState.LOADED;
+    pointsFailure.value = null;
+  } catch (e) {
+    points.value = null;
+    pointsFailure.value = failureOf(e);
+    pointsState.value = LoadState.FAILED;
   }
+}
+
+onMounted(async () => {
+  await loadPoints();
   await loadMe();
 });
 
@@ -161,10 +175,17 @@ function signOut() {
       </button>
     </section>
 
-    <!-- M10 points + contributor level -->
-    <section class="card">
+    <!-- M10 points + contributor level. The whole CARD is the unit of loading, per
+         §8's "skeletons mirror the real layout" — a balance and a level are one fact
+         about the driver's standing and appear together or not at all. -->
+    <SkeletonCard v-if="pointsState === LoadState.LOADING" :count="1" />
+    <section v-else class="card">
       <h2 class="card__title">{{ t("points.title") }}</h2>
-      <div class="points">
+      <p v-if="pointsState === LoadState.FAILED" class="more__failed">
+        {{ pointsFailure === Failure.OFFLINE ? t("system.load_offline") : t("more.points_failed") }}
+        <button class="more__retry" type="button" @click="loadPoints">{{ t("system.retry") }}</button>
+      </p>
+      <div v-else class="points">
         <span class="points__figure">{{ points.balance }}</span>
         <span class="points__level">{{ t(`points.level.${points.level}`) }}</span>
       </div>
@@ -407,6 +428,23 @@ function signOut() {
 }
 .lang__tick {
   color: var(--shield-500);
+}
+.more__failed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.more__retry {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
 }
 .points {
   display: flex;

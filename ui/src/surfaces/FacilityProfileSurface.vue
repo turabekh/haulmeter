@@ -25,7 +25,8 @@ import {
   unmutePrompts,
 } from "../core/api.js";
 import { verificationPresentation } from "../core/vendors.js";
-import { sampleProfile, sampleFacilityIntel, sampleQuestions } from "../core/fixtures.js";
+import SkeletonCard from "../core/components/SkeletonCard.vue";
+import { LoadState, Failure, failureOf } from "../core/load-state.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -39,20 +40,41 @@ const serviceCenter = ref(null);
 const reviewing = ref(false);
 const asking = ref(false);
 const questionText = ref("");
+const profileState = ref(LoadState.LOADING);
+const profileFailure = ref(null);
+const intelState = ref(LoadState.LOADING);
+const intelFailure = ref(null);
+const questionsState = ref(LoadState.LOADING);
+const questionsFailure = ref(null);
 
+// AI-CONTEXT: §23 entry 131 — THREE fetches, THREE states, which is what the kickoff
+// called for on this surface. They fail independently: the dock-time card can be real
+// while the Q&A is unreachable, and one state for all three would have hidden a
+// perfectly good profile because the community endpoint was down.
 async function loadQuestions() {
   try {
     questions.value = await fetchQuestions(route.params.id);
-  } catch {
-    questions.value = sampleQuestions(); // unauthenticated / offline
+    questionsState.value = LoadState.LOADED;
+    questionsFailure.value = null;
+  } catch (e) {
+    questions.value = [];
+    questionsFailure.value = failureOf(e);
+    questionsState.value = LoadState.FAILED;
   }
 }
 
 async function load() {
   try {
     profile.value = await fetchProfile(route.params.id);
-  } catch {
-    profile.value = sampleProfile(route.params.id); // unauthenticated / offline
+    profileState.value = LoadState.LOADED;
+    profileFailure.value = null;
+  } catch (e) {
+    // this invented a facility — its name, its dock-time median and its sample size —
+    // for whatever id was in the URL. A driver reads that median to decide whether to
+    // accept the load.
+    profile.value = null;
+    profileFailure.value = failureOf(e);
+    profileState.value = LoadState.FAILED;
   }
   try {
     const [risk, hours] = await Promise.all([
@@ -60,8 +82,12 @@ async function load() {
       fetchAppointmentHours(route.params.id),
     ]);
     intel.value = { risk, best_hour: hours[0] ?? null };
-  } catch {
-    intel.value = sampleFacilityIntel(); // unauthenticated / offline
+    intelState.value = LoadState.LOADED;
+    intelFailure.value = null;
+  } catch (e) {
+    intel.value = null;
+    intelFailure.value = failureOf(e);
+    intelState.value = LoadState.FAILED;
   }
   // M13-FR7: an UNCLAIMED facility returns null and stays a plain POI. Claiming
   // adds contact detail and curated services; it never changes what the facility
@@ -145,7 +171,18 @@ async function onReview(payload) {
 </script>
 
 <template>
-  <div v-if="profile" class="profile">
+  <!-- the whole screen is one facility, so its loading and failed states are the
+       screen's, not a card's (§15.4) -->
+  <div v-if="profileState === LoadState.LOADING" class="profile">
+    <SkeletonCard :count="3" />
+  </div>
+  <div v-else-if="profileState === LoadState.FAILED" class="profile">
+    <p class="profile__failed">
+      {{ profileFailure === Failure.OFFLINE ? t("system.load_offline") : t("facility.load_failed") }}
+      <button class="profile__retry" type="button" @click="load">{{ t("system.retry") }}</button>
+    </p>
+  </div>
+  <div v-else-if="profile" class="profile">
     <header class="profile__head">
       <button class="back" type="button" :aria-label="'Back'" @click="router.back()">
         <ArrowLeft :size="24" :stroke-width="2" aria-hidden="true" />
@@ -190,7 +227,16 @@ async function onReview(payload) {
     </section>
 
     <!-- M8 decision intel: detention-risk pre-acceptance flag + fastest hour -->
-    <section v-if="intel" class="card">
+    <!-- the intel card is a SECOND fetch and says so when it is the one that failed —
+         a driver who can see the dock time must not be told the whole place is
+         unavailable because the risk model was unreachable -->
+    <section v-if="intelState === LoadState.FAILED" class="card">
+      <h2 class="card__title">{{ t("profile.risk") }}</h2>
+      <p class="profile__failed">
+        {{ intelFailure === Failure.OFFLINE ? t("system.load_offline") : t("facility.intel_failed") }}
+      </p>
+    </section>
+    <section v-else-if="intel" class="card">
       <h2 class="card__title">{{ t("profile.risk") }}</h2>
       <p v-if="riskPct !== null" class="risk">
         <span class="risk__figure" :class="{ hot: riskPct >= 40 }">{{ riskPct }}%</span>
@@ -227,7 +273,10 @@ async function onReview(payload) {
     <!-- M10-FR4: moderated driver Q&A pinned to the facility page -->
     <section class="card">
       <h2 class="card__title">{{ t("qa.title") }}</h2>
-      <ul v-if="questions.length" class="qa">
+      <p v-if="questionsState === LoadState.FAILED" class="profile__failed">
+        {{ questionsFailure === Failure.OFFLINE ? t("system.load_offline") : t("facility.questions_failed") }}
+      </p>
+      <ul v-else-if="questions.length" class="qa">
         <li v-for="q in questions" :key="q.question_id" class="qa__item">
           <p class="qa__q">{{ q.text }}</p>
           <p v-for="(a, i) in q.answers" :key="i" class="qa__a">
@@ -236,7 +285,7 @@ async function onReview(payload) {
           </p>
         </li>
       </ul>
-      <p v-else class="muted">{{ t("qa.empty") }}</p>
+      <p v-else-if="questionsState === LoadState.LOADED" class="muted">{{ t("qa.empty") }}</p>
       <!-- SM-3: the intel stays readable at speed — that is the point of it — but
            writing a question or a review is composition, and Forbidden #11 rules out
            interactive prompts in motion. -->
@@ -288,6 +337,23 @@ async function onReview(payload) {
 <style scoped>
 .profile {
   padding: var(--s-4);
+}
+.profile__failed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.profile__retry {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
 }
 .profile__head {
   display: flex;

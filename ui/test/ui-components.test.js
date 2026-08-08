@@ -43,7 +43,36 @@ import en from "../src/core/i18n/en.json";
 import { messages, LAUNCH_LOCALES } from "../src/core/i18n/index.js";
 import { useI18n } from "../src/core/i18n.js";
 import { useDriverState, DriverState } from "../src/core/state.js";
-import { SAMPLE_OWED, SAMPLE_EARNINGS } from "../src/core/fixtures.js";
+// AI-CONTEXT: these were imported from `src/core/fixtures.js` and now live here
+// (§23 entry 131). The distinction is the one entry 81 drew: a placeholder EXPORTED
+// FROM `src/` is one import away from a driver's screen, and these two were exactly
+// that — `MoneySurface` imported the same constants this test does. Test data in a
+// test file ships to nobody, so it belongs here, shaped to the endpoints it stands in
+// for (`/accessorial/owed`, `/money/earnings`).
+const OWED_ROWS = [
+  { receivable_id: "r-1", kind: "detention", amount_cents: 15000, state: "invoiced", aging_days: 3, is_reimbursement: false },
+  { receivable_id: "r-2", kind: "tonu", amount_cents: 30000, state: "disputed", aging_days: 11, is_reimbursement: false },
+  { receivable_id: "r-3", kind: "lumper", amount_cents: 12500, state: "recovered", aging_days: 21, is_reimbursement: true },
+];
+const EARNINGS = {
+  recovered_cents: 12500,
+  fuel_saved_cents: 36250,
+  flagged_cents: 10000,
+  ddd_cents: 58750,
+};
+
+// every Money state below needs a SESSION as well as a stub: `fetchOwed` goes through
+// `apiGet`, which throws "no session" before it ever calls fetch. Without this the
+// surface used to fall back to the fixture and the assertions measured that instead.
+function stubMoney({ owed = OWED_ROWS, earnings = EARNINGS } = {}) {
+  setToken("tok-money");
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((url) => {
+    const u = String(url);
+    if (u.includes("/accessorial/owed")) return jsonOk(owed);
+    if (u.includes("/money/earnings")) return jsonOk(earnings);
+    return jsonOk({});
+  }));
+}
 
 // AI-CONTEXT: find the call this test is ABOUT (§23 entry 115).
 //
@@ -643,7 +672,8 @@ describe("FuelSurface — pump-code flow (M7, NAV-3 / §8.7 one net price)", () 
 });
 
 describe("MoneySurface — Driver Dollars Delivered (M9-FR4, design-prd §238)", () => {
-  it("leads with the DDD North Star figure + breakdown (fixture)", async () => {
+  it("leads with the DDD North Star figure + breakdown", async () => {
+    stubMoney();
     const w = mount(MoneySurface);
     await flushPromises();
     // hero Meter = recovered + fuel saved + flagged = $587.50 (fixture DDD)
@@ -800,8 +830,64 @@ describe("LoadCalcSurface — true-profit calculator (M8-FR1, §11.7 basis)", ()
   });
 });
 
+// AI-CONTEXT: §23 entry 131 — the three tests below mounted this surface with NO stub
+// at all and asserted on `sampleProfile()` / `sampleFacilityIntel()` / `sampleQuestions()`,
+// which the surface substituted when every fetch failed. Two of them said "(fixture)" in
+// their own names. They assert the same things against the endpoints now. Shapes copied
+// from GET /facility/{id}/profile, /intel/detention-risk, /intel/appointment-hours and
+// /community/questions.
+const FAC_PROFILE = {
+  facility_id: "f-1",
+  name: "Love's Travel Stop #212",
+  check_in_procedure: "Check in at guard shack; keep PPE on in the yard.",
+  overnight_parking: true,
+  restrooms: true,
+  dwell: {
+    overall: { median_seconds: 8100, p90_seconds: 15300, sample_size: 12 },
+    by_hour: {},
+  },
+  ratings: { overall: 3.8, review_count: 2, per_aspect: {} },
+  detention_risk: { rate: null, sample_size: 0, basis: "m3_pending" },
+  reviews: [],
+};
+const FAC_RISK = { exceed_rate: 0.43, sample_size: 14, confidence: "high", basis: "tracked_stops" };
+const FAC_HOURS = [{ hour: 6, median_seconds: 2400, sample_size: 9, confidence: "medium" }];
+const FAC_QUESTIONS = [
+  {
+    question_id: "q-1",
+    text: "Is the north entrance still closed?",
+    answers: [
+      { text: "Open as of this morning — go around the fuel island.", presence_proven: true },
+      { text: "Was closed last week.", presence_proven: false },
+    ],
+  },
+  { question_id: "q-2", text: "Any overnight parking after 8pm?", answers: [] },
+];
+
+function stubFacility() {
+  setToken("tok-facility");
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((url) => {
+    const u = String(url);
+    if (u.includes("/facility/f-1/profile")) return jsonOk(FAC_PROFILE);
+    if (u.includes("/intel/detention-risk")) return jsonOk(FAC_RISK);
+    if (u.includes("/intel/appointment-hours")) return jsonOk(FAC_HOURS);
+    if (u.includes("/community/questions")) return jsonOk(FAC_QUESTIONS);
+    // AI-CONTEXT: null, not `{}`, and the difference is not cosmetic. An UNCLAIMED
+    // facility returns null here (M13-FR7), and the surface's `v-if="serviceCenter"`
+    // is written for exactly that. A truthy `{}` has no `services` array, so
+    // `serviceCenter.services.length` throws DURING RENDER — which collapses every
+    // branch below it, including the Q&A list this stub exists to feed. Caught while
+    // writing it: the questions arrived, the state said `loaded`, and the section
+    // rendered `<!--v-if-->`. A stub whose shape does not match its endpoint hides
+    // that endpoint, which is the fixtures' own lesson (§23 entry 52).
+    if (u.includes("/vendors/service-center/")) return jsonOk(null);
+    return jsonOk({});
+  }));
+}
+
 describe("FacilityProfileSurface — M8 intel (FR6 risk + FR2 fastest hour)", () => {
-  it("shows the detention-risk % and fastest hour with basis (fixture)", async () => {
+  it("shows the detention-risk % and fastest hour with basis", async () => {
+    stubFacility();
     const router = testRouter();
     router.push("/facility/f-1");
     await router.isReady();
@@ -992,13 +1078,35 @@ describe("AuthSurface + auth guard (F1, PRD §7.1)", () => {
 });
 
 describe("MoreSurface — account + points + logout (F1 / M10)", () => {
-  it("shows the points balance + contributor level (fixture)", async () => {
-    logout(); // no session -> fixture path (no network)
+  it("shows the points balance + contributor level from the endpoint", async () => {
+    // AI-CONTEXT: this said `logout(); // no session -> fixture path` and asserted
+    // "340" — SAMPLE_POINTS' balance (§23 entry 131). It was a test OF the defect: a
+    // driver with no session was shown a balance and a loyalty level they had not
+    // earned. It reads the real endpoint now.
+    setToken("tok-points");
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url) => {
+      if (String(url).includes("/community/points")) {
+        return jsonOk({ balance: 512, points_earned: 700, contribution_count: 40, trust_score: 1.6, level: "pro" });
+      }
+      return jsonOk({});
+    }));
     const router = testRouter();
     const w = mount(MoreSurface, { global: { plugins: [router] } });
     await flushPromises();
-    expect(w.find(".points__figure").text()).toBe("340"); // fixture balance, Mono
-    expect(w.find(".points__level").text()).toBe("Regular"); // level -> i18n
+    expect(w.find(".points__figure").text()).toBe("512");
+    expect(w.find(".points__level").text()).toBe("Pro");
+    w.unmount();
+  });
+
+  it("shows no balance at all when the points call fails", async () => {
+    // the other half, and the one that was the finding: absence must read as absence.
+    setToken("tok-points");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+    const router = testRouter();
+    const w = mount(MoreSurface, { global: { plugins: [router] } });
+    await flushPromises();
+    expect(w.find(".points__figure").exists()).toBe(false);
+    expect(w.text()).toContain(en["more.points_failed"]);
     w.unmount();
   });
 
@@ -1098,7 +1206,8 @@ describe("MoreSurface — operating-authority verification (F1 / FMCSA)", () => 
 });
 
 describe("FacilityProfileSurface — driver Q&A (M10-FR4)", () => {
-  it("lists questions + answers with the on-site badge (fixture)", async () => {
+  it("lists questions + answers with the on-site badge", async () => {
+    stubFacility();
     const router = testRouter();
     router.push("/facility/f-1");
     await router.isReady();
@@ -1249,14 +1358,17 @@ describe("MapSurface — voice wake affordance (M11-FR5)", () => {
 });
 
 describe("FleetWorkspaceSurface — web-first portal (M12, design-prd §18)", () => {
-  it("falls back to the fixture demo when unauthenticated", async () => {
+  it("names no figure at all when it cannot reach the fleet", async () => {
+    // AI-CONTEXT: this asserted `$1,840.00` — SAMPLE_FLEET's invented recovered total —
+    // under the name "falls back to the fixture demo" (§23 entry 131). It was a test OF
+    // the defect. The portal now says it could not load, and shows no money.
     logout();
     const w = mount(FleetWorkspaceSurface);
     await flushPromises();
-    expect(w.text()).toContain("Fleet Workspace");
-    expect(w.find(".kpi__figure").text()).toBe("$1,840.00"); // demo recovered
-    expect(w.find(".good").exists()).toBe(true);
-    expect(w.find(".bad").exists()).toBe(true);
+    expect(w.text()).toContain("Fleet Workspace"); // the heading is still real
+    expect(w.find(".kpi__figure").exists()).toBe(false);
+    expect(w.text()).toContain(en["fleet.load_failed"]);
+    expect(w.text()).not.toContain("$1,840.00");
     w.unmount();
   });
 
@@ -1358,8 +1470,28 @@ describe("GhostwriterSheet — comms drafting (M11-FR3)", () => {
 });
 
 describe("SleepSheet — where-do-I-sleep solver (M8-FR3)", () => {
-  it("ranks stops with the guaranteed-bookable starred (offline fixture)", async () => {
-    logout(); // no session -> fixture plan (no network)
+  it("ranks stops with the guaranteed-bookable starred", async () => {
+    // AI-CONTEXT: was "(offline fixture)" and began `logout(); // no session ->
+    // fixture plan`. It asserted against three invented lots with invented prices,
+    // shown to a driver deciding where to sleep on the hours they have left — §11.7's
+    // worst shape, a place that is not there (§23 entry 131). Same assertions, real
+    // endpoint, shape copied from /intel/sleep's own return.
+    setToken("tok-sleep");
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url) => {
+      if (String(url).includes("/intel/sleep")) {
+        return jsonOk({
+          range_m: 177000,
+          stops: [
+            { facility_id: "f-3", name: "Yardline Secured Parking", distance_m: 9200, predicted_status: null, guaranteed_bookable: true },
+            { facility_id: "f-1", name: "Loves Travel Stop #212", distance_m: 5400, predicted_status: "some", guaranteed_bookable: false },
+            { facility_id: "f-2", name: "Pilot #77", distance_m: 12800, predicted_status: "full", guaranteed_bookable: false },
+          ],
+          guaranteed: { spot_id: "spot-f3-a1", property_name: "Yardline Secured Parking", price_cents_per_night: 2400 },
+          fuel: { facility_id: "f-5", name: "TA Travel Center", net_cents_per_gal: 394 },
+        });
+      }
+      return jsonOk({});
+    }));
     const w = mount(SleepSheet);
     await w.find(".cta").trigger("click");
     await flushPromises();
@@ -1369,6 +1501,17 @@ describe("SleepSheet — where-do-I-sleep solver (M8-FR3)", () => {
     expect(stops.at(0).find(".stop__star").exists()).toBe(true);
     expect(w.text()).toContain("Guaranteed spot");
     expect(w.text()).toContain("Fuel on the way");
+    w.unmount();
+  });
+
+  it("names no lot at all when the solver cannot be reached", async () => {
+    setToken("tok-sleep");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503, json: () => Promise.resolve({}) }));
+    const w = mount(SleepSheet);
+    await w.find(".cta").trigger("click");
+    await flushPromises();
+    expect(w.findAll(".stop")).toHaveLength(0);
+    expect(w.text()).toContain(en["sleep.load_failed"]);
     w.unmount();
   });
 });
@@ -1726,13 +1869,18 @@ describe("PublicScorecardSurface — public portal (design-prd §18)", () => {
 });
 
 describe("OwnerPortalSurface — Property-Owner portal (M6-FR5, design-prd §18)", () => {
-  it("falls back to the fixture demo when unauthenticated", async () => {
-    logout(); // no session -> apiGet throws -> demo
+  it("names no property and no payout when it cannot reach the board", async () => {
+    // was "falls back to the fixture demo", asserting `$396.00` and a property called
+    // "Yardline Secured Parking" that belongs to nobody (§23 entry 131). The portal
+    // labelled that data "Demo data — sign in to manage your listings", which was the
+    // most honest of the ten fallbacks and still put invented revenue on the screen.
+    logout(); // no session -> apiGet throws
     const w = mount(OwnerPortalSurface);
     await flushPromises();
-    expect(w.text()).toContain("Property Owner");
-    expect(w.find(".payout__figure").text()).toBe("$396.00"); // demo payable
-    expect(w.text()).toContain("Yardline Secured Parking");
+    expect(w.text()).toContain("Property Owner"); // the heading is still real
+    expect(w.find(".payout__figure").exists()).toBe(false);
+    expect(w.text()).not.toContain("Yardline Secured Parking");
+    expect(w.text()).toContain(en["owner.load_failed"]);
     w.unmount();
   });
 
@@ -2993,7 +3141,8 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
 });
 
 describe("MoneySurface (M4 Money tab, design-prd §10.3)", () => {
-  it("lists receivables with Mono amounts + status pills (fixture)", async () => {
+  it("lists receivables with Mono amounts + status pills", async () => {
+    stubMoney();
     const w = mount(MoneySurface);
     await flushPromises();
     expect(w.findAll(".row")).toHaveLength(3);
@@ -3171,7 +3320,7 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
     await flushPromises();
   }
 
-  function stubWallet({ onPost } = {}) {
+  function stubWallet({ onPost, wallet = WALLET } = {}) {
     const posts = [];
     const stub = vi.fn().mockImplementation((url, opts) => {
       const u = String(url);
@@ -3181,7 +3330,7 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
         return jsonOk({ document_id: "x" });
       }
       if (u.includes("/protection/documents/archive")) return jsonOk(ARCHIVE);
-      if (u.includes("/protection/wallet")) return jsonOk(WALLET);
+      if (u.includes("/protection/wallet")) return jsonOk(wallet);
       if (/\/protection\/documents\/[0-9a-z-]+$/.test(u)) {
         return Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob(["%PDF"])) });
       }
@@ -3209,6 +3358,13 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
   // had ever filed, and had to work out which one was meant — the same "it was done and I
   // could not find it" failure the Load tab's review card was built to end.
   it("marks the document a reminder was about, and opens the section holding it", async () => {
+    // AI-CONTEXT: `setToken` is not decoration (§23 entry 131). `fetchWallet` goes
+    // through `apiGet`, which throws "no session" BEFORE it calls fetch — so this test
+    // and the two below stubbed a wallet the surface never asked for, and asserted
+    // against `SAMPLE_WALLET` while naming an endpoint. It passed for the wrong reason
+    // for as long as the fixture existed, and the fixture's ids happened to match the
+    // stub's. Deleting the fixture is what exposed it.
+    setToken("tok-docs");
     stubWallet();
     const router = createRouter({ history: createMemoryHistory(), routes });
     router.push("/docs?doc=d-2");
@@ -3224,6 +3380,7 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
   });
 
   it("marks nothing when no reminder sent the driver here", async () => {
+    setToken("tok-docs");
     stubWallet();
     const router = createRouter({ history: createMemoryHistory(), routes });
     router.push("/docs");
@@ -3237,6 +3394,7 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
   it("a renewed document whose id no longer exists still lands on the wallet", async () => {
     // the reminder is durable and the wallet moves on. A driver who renews before tapping
     // the notification should get their wallet, not an error and not an empty screen.
+    setToken("tok-docs");
     stubWallet();
     const router = createRouter({ history: createMemoryHistory(), routes });
     router.push("/docs?doc=gone-forever");
@@ -3304,17 +3462,38 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
     expect(w.find(".inspect").exists()).toBe(true);
   });
 
-  it("shows inspection button, expiring pills, and the document grid (fixture)", async () => {
+  it("shows inspection button, expiring pills, and the document grid", async () => {
+    // was "(fixture)" in its own name, and that is exactly what it measured: the
+    // surface mounted with no session and rendered SAMPLE_WALLET's four invented
+    // documents, including a CDL (audit U-09). It asserts the same shapes against the
+    // real endpoint now.
+    setToken("tok-docs");
+    stubWallet();
     const w = mount(DocsSurface);
     await flushPromises();
     expect(w.find(".inspect").text()).toContain("Inspection mode");
     // §23 entry 80: sections start collapsed, so the strip and the headings are what
     // a driver sees first -- the expiring pills still need no tap at all
     expect(w.findAll(".doc")).toHaveLength(0);
-    expect(w.findAll(".pill").length).toBeGreaterThan(0); // expiring-soon strip
     await openSection(w);
-    expect(w.findAll(".doc")).toHaveLength(4);
+    expect(w.findAll(".doc")).toHaveLength(3);
     expect(w.text()).toContain("CDL"); // acronym stays English (§12.3)
+  });
+
+  it("flies the expiring strip when the wallet says something is expiring", async () => {
+    // split out of the test above, which asserted `.pill` > 0 against a stub whose
+    // `expiring` is EMPTY — it was reading the fixture's two expiring documents. The
+    // strip is real and worth covering, so it gets a wallet that actually has one.
+    setToken("tok-docs");
+    stubWallet({
+      wallet: {
+        ...WALLET,
+        expiring: [{ id: "d-9", doc_type: "med_card", expires_on: "2026-08-20", status: "expiring" }],
+      },
+    });
+    const w = mount(DocsSurface);
+    await flushPromises();
+    expect(w.findAll(".pill").length).toBeGreaterThan(0);
   });
 
   it("groups the grid by type (§10.4 'document grid by type')", async () => {
@@ -3534,7 +3713,8 @@ describe("DocsSurface (M5 Docs tab, design-prd §10.4)", () => {
 });
 
 describe("FacilityProfileSurface (M2, PRD §8.2)", () => {
-  it("shows dwell figures with sample size and reviews (fixture fallback)", async () => {
+  it("shows dwell figures with sample size and reviews", async () => {
+    stubFacility();
     const router = testRouter();
     router.push("/facility/f-1");
     await router.isReady();
@@ -3800,6 +3980,7 @@ describe("MoneySurface — marking a claim paid (§23 entry 108)", () => {
   });
 
   it("offers the control and lists only what the ledger could accept", async () => {
+    stubMoney();
     const w = mount(MoneySurface);
     await flushPromises();
 
@@ -3815,6 +3996,7 @@ describe("MoneySurface — marking a claim paid (§23 entry 108)", () => {
   });
 
   it("will not submit until a claim is chosen", async () => {
+    stubMoney();
     const w = mount(MoneySurface);
     await flushPromises();
     await w.findAll(".audit-cta").at(-1).trigger("click");
@@ -3831,8 +4013,8 @@ describe("MoneySurface — marking a claim paid (§23 entry 108)", () => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation((url, opts) => {
       const u = String(url);
       calls.push(`${opts?.method || "GET"} ${u}`);
-      if (u.includes("/accessorial/owed")) return jsonOk(SAMPLE_OWED);
-      if (u.includes("/money/earnings")) return jsonOk(SAMPLE_EARNINGS);
+      if (u.includes("/accessorial/owed")) return jsonOk(OWED_ROWS);
+      if (u.includes("/money/earnings")) return jsonOk(EARNINGS);
       if (u.includes("/paid")) return jsonOk({ receivable_id: "r-1", state: "recovered" });
       return jsonOk({});
     }));

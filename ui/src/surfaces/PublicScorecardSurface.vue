@@ -11,27 +11,45 @@ import { Search, Star } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
 import { formatDwell } from "../core/presentation.js";
 import { searchFacilities, fetchScorecard } from "../core/api.js";
-import { sampleFacilities, sampleScorecard } from "../core/fixtures.js";
+import SkeletonRow from "../core/components/SkeletonRow.vue";
+import { LoadState, Failure, failureOf } from "../core/load-state.js";
 
 const { t } = useI18n();
 const q = ref("");
+// AI-CONTEXT: §23 entry 131. `sampleFacilities()` and `sampleScorecard()` invented
+// facilities and their dock-time scores on the PUBLIC scorecard — the one surface a
+// shipper or broker sees, where an invented median is a claim about a real business.
 const results = ref([]);
 const selected = ref(null);
+const searchState = ref(LoadState.LOADING);
+const searchFailure = ref(null);
+const cardState = ref(null); // null = nothing chosen yet
+const cardFailure = ref(null);
 
 async function runSearch() {
+  searchState.value = LoadState.LOADING;
   try {
     results.value = await searchFacilities(q.value);
-  } catch {
-    results.value = sampleFacilities(); // offline / demo
+    searchState.value = LoadState.LOADED;
+    searchFailure.value = null;
+  } catch (e) {
+    results.value = [];
+    searchFailure.value = failureOf(e);
+    searchState.value = LoadState.FAILED;
   }
 }
 onMounted(runSearch);
 
 async function open(fac) {
+  cardState.value = LoadState.LOADING;
   try {
     selected.value = await fetchScorecard(fac.id);
-  } catch {
-    selected.value = sampleScorecard(fac.id); // offline / demo
+    cardState.value = LoadState.LOADED;
+    cardFailure.value = null;
+  } catch (e) {
+    selected.value = null;
+    cardFailure.value = failureOf(e);
+    cardState.value = LoadState.FAILED;
   }
 }
 </script>
@@ -53,7 +71,13 @@ async function open(fac) {
     </form>
 
     <div class="cols">
-      <ul class="list">
+      <SkeletonRow v-if="searchState === LoadState.LOADING" :count="5" class="list" />
+      <p v-else-if="searchState === LoadState.FAILED" class="score__failed">
+        {{ searchFailure === Failure.OFFLINE ? t("system.load_offline") : t("score.search_failed") }}
+        <button class="score__retry" type="button" @click="runSearch">{{ t("system.retry") }}</button>
+      </p>
+      <p v-else-if="!results.length" class="score__failed">{{ t("score.search_hint") }}</p>
+      <ul v-else class="list">
         <li v-for="f in results" :key="f.id">
           <button
             class="list__row"
@@ -66,7 +90,11 @@ async function open(fac) {
         </li>
       </ul>
 
-      <section v-if="selected" class="card">
+      <SkeletonRow v-if="cardState === LoadState.LOADING" :count="3" />
+      <p v-else-if="cardState === LoadState.FAILED" class="score__failed">
+        {{ cardFailure === Failure.OFFLINE ? t("system.load_offline") : t("score.load_failed") }}
+      </p>
+      <section v-else-if="selected" class="card">
         <h2 class="card__name">{{ selected.name }}</h2>
 
         <div class="stat">
@@ -139,6 +167,23 @@ async function open(fac) {
   background: transparent;
   color: var(--text-1);
   font-size: var(--type-body-size);
+}
+.score__failed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.score__retry {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
 }
 .cols {
   display: grid;

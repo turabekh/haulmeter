@@ -33,13 +33,35 @@ import {
   archiveDocument,
   restoreDocument,
 } from "../core/api.js";
-import { SAMPLE_WALLET } from "../core/fixtures.js";
+import SkeletonRow from "../core/components/SkeletonRow.vue";
+import { LoadState, Failure, failureOf } from "../core/load-state.js";
 
 const { t, has } = useI18n();
 const { isDriving } = useDriverState();
 const router = useRouter();
 const route = useRoute();
-const data = ref(SAMPLE_WALLET);
+// AI-CONTEXT: this was `ref(SAMPLE_WALLET)` — audit U-09's worst case (§23 entry 131).
+//
+// The wallet rendered four invented documents from the moment the tab mounted, and a
+// fabricated CDL is not a cosmetic defect: M5 exists so a driver can produce a
+// credential at a roadside inspection, and this surface showed one that was not theirs,
+// with an expiry that was not real, before any fetch resolved and again whenever one
+// failed.
+//
+// The zero value is an EMPTY wallet rather than `null`, because the template reads
+// `data.documents.length` in a dozen places and a null guard at each would be a dozen
+// chances to miss one. An empty shape asserts nothing — which is the whole distinction
+// between a zero value and a fixture.
+const EMPTY_WALLET = Object.freeze({
+  documents: [],
+  expiring: [],
+  load_paperwork: [],
+  unattached: [],
+  archived_count: 0,
+});
+const data = ref(EMPTY_WALLET);
+const wallet = ref(LoadState.LOADING);
+const walletFailure = ref(null);
 const inspecting = ref(false);
 const capturing = ref(false);
 // AI-CONTEXT: SM-3 — the capture BUTTON was guarded and the SHEET was not.
@@ -183,12 +205,20 @@ function honourDeepLink() {
   open_.value = new Set([...open_.value, "mine"]);
 }
 
-onMounted(async () => {
+async function loadWallet() {
   try {
     data.value = await fetchWallet();
-  } catch {
-    data.value = SAMPLE_WALLET;
+    wallet.value = LoadState.LOADED;
+    walletFailure.value = null;
+  } catch (e) {
+    data.value = EMPTY_WALLET;
+    walletFailure.value = failureOf(e);
+    wallet.value = LoadState.FAILED;
   }
+}
+
+onMounted(async () => {
+  await loadWallet();
   honourDeepLink();
   try {
     archived.value = (await fetchArchivedDocuments()).documents;
@@ -263,6 +293,15 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
       {{ t("docs.inspection") }}
     </button>
 
+    <!-- §8's skeleton: rows, because that is what the wallet is (§23 entry 131) -->
+    <SkeletonRow v-if="wallet === LoadState.LOADING" :count="4" />
+    <!-- §15.4: a driver reaching for a credential at a roadside needs to know the app
+         could not fetch it, and needs it said plainly. Never a document. -->
+    <p v-else-if="wallet === LoadState.FAILED" class="docs__failed">
+      {{ walletFailure === Failure.OFFLINE ? t("system.load_offline") : t("docs.load_failed") }}
+      <button class="docs__retry" type="button" @click="loadWallet">{{ t("system.retry") }}</button>
+    </p>
+    <template v-else>
     <div v-if="data.expiring.length" class="expiring">
       <span
         v-for="d in data.expiring"
@@ -366,8 +405,12 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
         </ul>
       </section>
     </div>
+    </template>
 
-    <!-- §10.4's capture chip. DRIVING: capture is Forbidden #11 territory, so the
+    <!-- §10.4's capture chip. Deliberately OUTSIDE the four-state chain above: a
+         driver can photograph a document whether or not the wallet fetched, and
+         withholding the one action that works offline because a GET failed would be
+         the opposite of §15.1. DRIVING: capture is Forbidden #11 territory, so the
          chip does not render at speed — a credential photographed at 65 mph is not
          a credential, it is a hazard. -->
     <button v-if="!isDriving" class="capture" type="button" @click="capturing = true">
@@ -502,6 +545,27 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
   color: var(--text-2);
   font-size: var(--type-body-size);
   line-height: var(--type-body-line);
+}
+/* §15.4's failed line wears the empty state's treatment — same step, same colour. The
+   difference between "you have no documents" and "we could not load them" is the
+   SENTENCE, not the styling; making the error louder would imply the driver did
+   something wrong. */
+.docs__failed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-5) var(--s-4) 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.docs__retry {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
 }
 .grid {
   list-style: none;

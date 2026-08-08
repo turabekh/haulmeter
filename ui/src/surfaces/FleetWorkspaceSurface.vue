@@ -9,7 +9,8 @@
 import { ref, onMounted } from "vue";
 import { useI18n } from "../core/i18n.js";
 import { formatMoney } from "../core/meter.js";
-import { SAMPLE_FLEET } from "../core/fixtures.js";
+import SkeletonCard from "../core/components/SkeletonCard.vue";
+import { Failure, failureOf } from "../core/load-state.js";
 import {
   activeFleetId,
   setActiveFleet,
@@ -20,8 +21,14 @@ import {
 } from "../core/api.js";
 
 const { t } = useI18n();
-const view = ref("loading"); // loading | demo | picker | create | workspace
-const fleet = ref(SAMPLE_FLEET);
+// AI-CONTEXT: §23 entry 131. The "demo" view is gone and `failed` replaces it — the
+// kickoff's instruction was to ALIGN with this state machine rather than bolt a second
+// model beside it, and `view` already had the four states under other names.
+// `SAMPLE_FLEET` rendered invented recovery figures and an invented claims desk to
+// whoever could not authenticate.
+const view = ref("loading"); // loading | failed | picker | create | workspace
+const fleet = ref(null);
+const fleetFailure = ref(null);
 const myFleets = ref([]);
 const fleetName = ref("");
 const newName = ref("");
@@ -45,9 +52,10 @@ async function init() {
     } else {
       view.value = "create";
     }
-  } catch {
-    fleet.value = SAMPLE_FLEET; // unauthenticated / offline demo
-    view.value = "demo";
+  } catch (e) {
+    fleet.value = null;
+    fleetFailure.value = failureOf(e);
+    view.value = "failed";
   }
 }
 onMounted(init);
@@ -116,8 +124,14 @@ function driverLabel(id) {
       </ul>
     </section>
 
-    <!-- the workspace (live) or the fixture demo -->
-    <template v-else-if="view === 'workspace' || view === 'demo'">
+    <!-- §8's card skeleton: the KPI row and the panels below are all cards -->
+    <SkeletonCard v-else-if="view === 'loading'" :count="3" />
+    <p v-else-if="view === 'failed'" class="fleet__failed">
+      {{ fleetFailure === Failure.OFFLINE ? t("system.load_offline") : t("fleet.load_failed") }}
+      <button class="fleet__retry" type="button" @click="init">{{ t("system.retry") }}</button>
+    </p>
+    <!-- the workspace, live. There is no demo any more (§23 entry 131). -->
+    <template v-else-if="view === 'workspace'">
     <!-- KPI row (§18 comfortable density) -->
     <section class="kpis">
       <div class="kpi">
@@ -271,6 +285,23 @@ function driverLabel(id) {
   font-size: var(--type-display-size);
   line-height: var(--type-display-line);
   font-weight: var(--type-display-weight);
+}
+.fleet__failed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-4);
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.fleet__retry {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
 }
 .kpis {
   display: grid;
