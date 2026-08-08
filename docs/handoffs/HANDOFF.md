@@ -96,9 +96,12 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **And it opened N-03: the worker boots against the pre-migration schema.** `depends_on`
 > waits for postgres, while the migrations run inside the API's command — so all seven jobs
 > failed on schema 0059, `detention_clock` included. Self-healing via backoff, but up to an
-> hour for four of them. Cleared by restarting the worker; filed rather than patched, because
-> changing how a deploy sequences itself immediately after running one is how you meet the
-> second bug at the worst moment. **HANDOFF-121 §11.**
+> hour for four of them. **Fixed and deployed later the same session:** the migration is its
+> own one-shot `migrate` service and both the api and the worker wait on
+> `service_completed_successfully`, in BOTH compose files. Proved by exercising the race — the
+> local DB was downgraded a revision so the migration was genuinely pending, and the worker
+> logged zero errors where it had failed all seven jobs — then observed on production, where
+> `migrate` exits before api and worker start. **HANDOFF-121 §11.**
 
 ➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — the session before.
 

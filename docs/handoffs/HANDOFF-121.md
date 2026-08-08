@@ -50,7 +50,7 @@
 | Local stack | **UP.** Seven containers, `/health` 200, UI 200 |
 | Dev data | Tampa `27.9506,-82.4572` intact, four DEV facilities at 89–125 m |
 | Email | **dev still points at live Gmail.** A send from dev is a real send |
-| Deploy | **RUN and verified, 2026-08-08.** `haulmeter.online` serves 121 at head `0066_f13_default_on`; `/api/health` 200 `environment=test`, UI 200, all seven containers up, all seven worker jobs green. Backup taken first: `haulmeter-20260808T132816Z.dump`, 9.2 MB, uploaded to `gs://haulmeter-backups` |
+| Deploy | **RUN TWICE and verified, 2026-08-08** — 113→121, then N-03's ordering fix. `haulmeter.online` serves 121 at head `0066_f13_default_on`; `/api/health` 200 `environment=test`, UI 200, all seven containers up, all seven worker jobs green. Backup taken first: `haulmeter-20260808T132816Z.dump`, 9.2 MB, uploaded to `gs://haulmeter-backups` |
 
 Baseline was vitest 714 / layout 257. **vitest +32, layout +22** — three skeleton states
 and two portal states at four variants each, plus the two observation tests.
@@ -480,9 +480,46 @@ and the ingest jobs an hour. Cleared by restarting the worker once the api had f
 **all seven jobs then ran clean**, including `location_retention` on production for the first
 time (`{'deleted': 0, 'retention_days': 365}`).
 
-**The fix is ordering, not retry**, and it is filed as N-03 rather than patched here: it is a
-compose change to the deploy path, and changing how a production deploy sequences itself
-immediately after running one is how you find out about the second bug at the worst moment.
+**The fix is ordering, not retry** — and it was made and deployed later the same session, on
+the owner's instruction, once the first deploy had settled. §11.3.
+
+### 11.3 N-03, fixed and deployed
+
+The migration is its own one-shot `migrate` service, and **both** the api and the worker wait
+on `service_completed_successfully`. A dedicated step rather than a healthcheck on the api,
+because the dependency is on the SCHEMA — *"wait until the api answers /health and know that
+its command happens to migrate first"* is the implicit coupling that caused this, and with two
+consumers declaring the same wait, a third cannot be added that forgets it. **Both compose
+files**, because the local stack had the identical race and dev = CI parity means the ordering
+a deploy relies on has to be the one `make up` exercises.
+
+**The first verification proved nothing and saying so is the point.** A clean boot with the
+schema already at head runs the migration as a no-op, so the ordering is never tested. The
+local database was downgraded one revision to make `0066` genuinely pending, and on that boot
+`migrate` applied it and the worker logged **zero** schema errors where it had previously
+failed all seven jobs.
+
+Deployed and observed on production, which is where the ordering actually matters:
+
+```
+Container haulmeter-migrate-1  Waiting
+Container haulmeter-postgres-1 Healthy
+Container haulmeter-migrate-1  Exited
+Container haulmeter-worker-1   Starting     <- after, not alongside
+Container haulmeter-api-1      Starting
+```
+
+`migrate` Exited (0), head `0066`, **worker schema errors: 0**, `/api/health` 200, UI 200.
+
+**One consequence, stated rather than left to be discovered: a FAILED migration now stops the
+api and the worker together** instead of leaving the worker up and erroring. That is the
+honest outcome — a half-applied schema is not a state either should serve from — and the
+driver-visible result is unchanged, because a failed migration already meant the API was down.
+
+Held by `test_compose_migration_order.py`: exactly one service may run `alembic upgrade`,
+every database consumer must wait for it to COMPLETE, and the one-shot must not restart (under
+`unless-stopped` it would re-run alembic forever and the loop would look healthy). Four
+sabotages, each caught.
 
 ## 12. Exact next task
 
@@ -502,7 +539,7 @@ done. What remains:
 |---|---|
 | ~~F-02 + F-12~~ | **CLOSED** — §9. Migration 0066 |
 | **F-01** | **ANSWERED — §11.1.** Production email goes to Mailpit on the VM. The fix is a credential on the box, so it is the owner's, not a session's |
-| **N-03** | NEW — the worker races the migration on every deploy. §11.2 |
+| ~~N-03~~ | **CLOSED and DEPLOYED** — §11.3 |
 | **F-19** | Low now, and the audit's premise is corrected — §10. Waits on the A9 session |
 | ~~F-25~~ | **CLOSED** — §10 |
 | **F-27** | Low. Waits on F-23's schema change — §10 |
