@@ -6,10 +6,10 @@ results, exact next task, and blockers always live in the latest numbered handof
 ➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — read this first, every session.
 
 > **120** was one instruction — *"read the latest handoff and restart the app"*, then
-> *"proceed using your best judgement"* — and it worked the audit queue: **eleven findings
-> closed** — F-30, F-32, F-33, F-09, F-10, F-15, F-16, F-20, F-26, F-11, plus **N-01**,
-> which the session both opened and closed — one new finding **filed rather than absorbed**
-> (N-02), migration **0065**. **Open findings 18 → 8.**
+> *"proceed using your best judgement"* — and it worked the audit queue: **twelve findings
+> closed** — F-30, F-32, F-33, F-09, F-10, F-15, F-16, F-20, F-26, F-11, plus **N-01 and
+> N-02**, which the session opened and closed itself — migration **0065**.
+> **Open findings 18 → 8**, and nothing un-blocked is left that does not need the owner.
 >
 > **Every finding that could be closed without an owner decision now is** — again. What is
 > left is four blocked on facts nobody here can get, and four needing the owner's judgement
@@ -44,11 +44,14 @@ results, exact next task, and blockers always live in the latest numbered handof
 > producer** — `register_message` had been written, exported and called by nothing but its
 > own test. The copilot answers in the language it understood now: verified over HTTP on the
 > box, `ru` while driving returns the deferred confirmation in Russian with
-> `audio_ref: audio://ru/…`. **N-02 is its sequel and the cleanest un-blocked task left:**
-> driver push notifications are English-only at **10 dispatch sites across 7 modules**,
-> including M3's detention P0.
+> `audio_ref: audio://ru/…`. **N-02 is its sequel and closed too:** driver push
+> notifications were English-only at **10 dispatch sites across 7 modules**, including M3's
+> detention P0. Nine now read from F15 — **366 rows across 61 keys, seeded at boot**. The
+> interpolated LABELS were the trap: *"Falta: pickup photos"* is an English fragment inside
+> a Spanish alert, and the first sabotage pass **missed it** because
+> `notify_protection_gap` had no test at all.
 >
-> **Stack UP · thirty commits UNPUSHED · nothing deployed.** `git fetch` still cannot
+> **Stack UP · thirty-one commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
 ➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — the session before.

@@ -1,13 +1,13 @@
-# HANDOFF-120 — eleven findings closed, and every one that needed no decision from the owner now is
+# HANDOFF-120 — twelve findings closed, and every one that needed no decision from the owner now is
 
-> **Stack UP · thirty commits UNPUSHED · nothing deployed.** haulmeter.online still
+> **Stack UP · thirty-one commits UNPUSHED · nothing deployed.** haulmeter.online still
 > serves 112's code.
 >
 > Session 120 was one instruction — *"read the latest handoff and restart the app"*, then
 > *"proceed using your best judgement"* five times over. It restarted the stack and worked
-> the audit queue: **eleven findings closed** — the audit's F-30, F-32, F-33, F-09, F-10,
-> F-15, F-16, F-20, F-26, F-11, plus **N-01**, which this session both opened and closed —
-> **one new finding filed rather than absorbed** (N-02), and **migration 0065** added.
+> the audit queue: **twelve findings closed** — the audit's F-30, F-32, F-33, F-09, F-10,
+> F-15, F-16, F-20, F-26, F-11, plus **N-01 and N-02**, which this session opened and closed
+> itself — and **migration 0065** added.
 >
 > **Open findings 18 → 8.** What remains is four blocked on facts or decisions nobody here
 > can supply, and four that need the owner's judgement about intended behaviour rather than
@@ -22,9 +22,9 @@
 
 | | |
 |---|---|
-| Branch | `main`, **thirty** commits ahead of `origin/main` — 119's twenty-four plus this session's six |
+| Branch | `main`, **thirty-one** commits ahead of `origin/main` — 119's twenty-four plus this session's seven |
 | `origin/main` | `113327e`, still **not re-verified**. `git fetch` fails here: *"could not read Username for 'https://github.com'"*. The ahead-count is arithmetic. **Re-fetch before pushing** |
-| Gates | **pytest 1502 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** — all five measured, layout re-run rather than carried forward |
+| Gates | **pytest 1523 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** — all five measured, layout re-run rather than carried forward |
 | Migrations | **`0065_f14_job_schedule` (head)** — new this session, applied AND downgraded AND re-applied on the running stack |
 | Working tree | clean |
 | Local stack | **UP.** Verified from outside the containers: `/health` 200, UI 200, seven containers, worker booting clean |
@@ -229,21 +229,17 @@ U-09, U-10, U-11 and U-12 — four criticals and a High — in one session.**
 | **F-01** | one command on the box. No box credential here |
 | **U-04** | six surfaces not in the layout harness — real work, no decision needed |
 | **U-06, U-09, U-10, U-11, U-12** | all wait on §7.1 item 5 |
-| **N-02** | new this session, needs nothing from the owner — see below |
 
-**N-02 is the cleanest un-blocked task on the board**, and N-01 just built and proved its
-mechanism. Driver NOTIFICATIONS are English-only everywhere: **10 `notify.dispatch` sites
-across 7 modules** (m01, m03 ×2, m05 ×2, m06, m09, m13 ×3) pass English literal titles and
-bodies straight to a driver's push. M3's detention P0 — *"Detention started · $75/hr"*,
-*"Free time is used up at this stop. Notice ready to send."* — is the product's most
-important driver-facing alert and it is English-only. PRD §7.15 names notifications in the
-same breath as voice.
 
-It is the same shape N-01 now demonstrates end to end: a `messages.py` beside the module,
-registered into F15 at boot, looked up by locale, falling back to compiled English. Roughly
-20 strings × 6 locales plus the wiring, and mechanical. Filed rather than folded into
-N-01's commit because it is a larger defect and hiding it inside a smaller one's fix is
-what this queue keeps catching.
+**Nothing un-blocked is left that does not need you.** N-02 was the last of it and closed
+the same session it was opened: nine of the ten `notify.dispatch` sites take their text from
+F15's catalogue now, and **366 rows across 61 keys** seed at boot. The tenth is deliberate —
+`promotions.py` sends a vendor's own words, which are data rather than product copy.
+
+**The remaining engineering that needs no decision is U-04** (six surfaces outside the
+layout harness) and **U-03's narrow half** (the i18n sweep never exercised the ~45 dynamic
+`t()` key families, which are the strings a non-English driver meets on Map and Money).
+Everything else on the board wants an owner decision or a command on the box — §7.1.
 
 ### 7.3 Still open and untouched from 118 and 119
 
