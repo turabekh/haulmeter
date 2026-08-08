@@ -31,12 +31,18 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 
 | Severity | Open | Blocked | Partial | Closed | Accepted | Total |
 |---|---|---|---|---|---|---|
-| Critical | 1 | 1 | 0 | 6 | 0 | **8** |
+| Critical | 0 | 1 | 0 | 7 | 0 | **8** |
 | High | 0 | 0 | 0 | 17 | 0 | **17** |
-| Medium | 3 | 0 | 0 | 9 | 0 | **12** |
-| Low | 1 | 0 | 0 | 6 | 0 | **7** |
+| Medium | 0 | 0 | 0 | 12 | 0 | **12** |
+| Low | 3 | 0 | 0 | 4 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **5** | **1** | **0** | **38** | **1** | **45** |
+| **Total** | **3** | **1** | **0** | **40** | **1** | **45** |
+
+**F-01 is the only Critical left and it is BLOCKED on one command on the box. The three
+OPEN items are all Low**: F-19 and F-27 wait on work that is scoped elsewhere (A9's review
+surface, F-23's schema change) and `.cluster` — the last of U-05 — is closed. The only
+undelegable item left is the `--marker-500` contrast decision, which is a §22.2 palette
+colour and stops for the owner whatever entry 118 delegates.
 
 Findings opened *after* the audit are not in this scoreboard — they were never among the
 45. See **Opened after the audit**, below.
@@ -65,7 +71,7 @@ unobservable until the literal became a token. See §Blockers.
 | ID | Severity | Status | One line |
 |---|---|---|---|
 | F-01 | Critical | **BLOCKED** | Production email probably delivers to Mailpit on the VM. Blocked on one command on the box — no box credential in the dev environment. See §Blockers. |
-| F-02 | Critical | OPEN | Validation gates have never governed a flag. Needs the `default_on` vs `enabled` decision; must ship with F-12 or M3's detention clock goes silent. |
+| F-02 | Critical | **CLOSED** | `enabled` was one column doing two jobs — a code default and an operator's decision — so `register_all` wrote it by assignment and `enable()`, the only function that reads a gate, was never on the path. **Measured before changing anything: three modules carry gates, all SIX unsatisfied, all three flags enabled.** `default_on` (declared per module, refreshes at boot) and a nullable `enabled` (NULL = nobody decided) are separate now; migration **0066** backfills so no box changes behaviour. **Gates deliberately do NOT block the default** — that would have taken M3's detention clock dark, and satisfying a gate asserts a legal review happened, which a deploy may not decide. The 29 July decision stands and the gate now SAYS SO: `running_ahead_of_gates` reports at boot and on `/admin/flags`, verified live. §23 entry 133. Session 121. |
 | F-03 | High | **CLOSED** | The ref is the message's real RFC 5322 Message-ID — unique, and findable in a mail provider's trace. Session 119. |
 | F-04 | High | **CLOSED** | `_LazyCounterpartyGateway` is tested. Confirmed rather than asserted: against the restored F-03 defect the new test fails while the direct-construction one passes. Session 119. |
 | F-05 | High | **CLOSED** | Ledger not idempotent → `uq_journal_entry_type_ref`, partial unique on `(entry_type, external_ref)`. Session 119. |
@@ -75,22 +81,22 @@ unobservable until the literal became a token. See §Blockers.
 | F-09 | Medium | **CLOSED** | A daily unflagged `location_retention` worker job calls the purge that already existed. **The window is an F13 key** (`f03.ping_retention_days`, declared at boot so `/admin/config` shows it), not a constant — how long the product keeps a driver's movements is policy, and PRD §7.3 says "configurable retention". Default **365 days**, conservative by default-choosing rather than by necessity — **checked before wiring: a purge here cannot destroy a claim's evidence.** `render.py` states the rule ("the trace is drawn from EVIDENCE, not from raw location pings"), so every plotted point is a hash-chained F4 record, and `build_trace` — the one function that reads raw pings — has no caller outside its own test. This is a privacy-and-growth control, not evidence retention, and shortening the window is safe. **0 or less means never purge** — this is the only job in the worker that destroys data and the plausible operator accident is typing 0 meaning "off", which read as a cutoff would delete the whole table. Verified on a real worker boot: `location_retention ok: {'deleted': 0, 'retention_days': 365, 'purged': True}`. Session 120. |
 | F-10 | Medium | **CLOSED** | `f14.job_schedule` (migration **0065**) — the claim is an `UPDATE … WHERE due AND unleased`, so Postgres serialises the two racing workers and the loser's rowcount is 0. **Not an advisory lock, deliberately:** a session-level lock lives on a CONNECTION and every `db.commit()` in `_run_job` returns that connection to the pool, which would drop the lock mid-run. A **lease** (2× interval, floor 300 s) makes a crashed worker recoverable without a human; the floor exists because `detention_clock`'s interval is 60 s and a job slower than its own interval would otherwise be handed to a second worker. `next_run_at` and the failure streak persist, closing the second half — **verified on the box: the first boot ran all seven jobs (empty table, correct), the second restart ran only `detention_clock`, which was genuinely due.** Previously every restart refired everything. Session 120. |
 | F-11 | Medium | **CLOSED** | `.sh` added to `EXTENSIONS`, plus a `FILENAMES` tuple for the extensionless ones (`Makefile`, `Dockerfile`, `Caddyfile`). **Measured: 11 infra files now collected** that never were — `deploy.sh`, `check_ports.sh`, `backup_db.sh`, `verify_restore.sh`, `ingest_remote.sh`, the `Makefile` and four Dockerfiles. No new secret exposure: `.env.example` matches, `.env` does not. 118 §4 ruled this file "not ours to commit or delete"; this edit is additive and was the owner's call. Session 120. |
-| F-12 | Medium | OPEN | Module gate and worker disagree on flag polarity. Ships with F-02. |
+| F-12 | Medium | **CLOSED** | Both predicates defer to one `_effective`, so they cannot disagree about a registered flag — the audit's point was that they *"only agree because F-02 force-enables everything"*, and agreement is structural now rather than incidental. They still diverge on an ABSENT flag, deliberately, and both §23 entry 105 rationales survive: a capability nobody registered must not fire, and a registry hiccup must not 404 twelve modules. Asserted in both directions. Session 121. |
 | F-13 | Critical | **CLOSED** | Double-booking race posting money twice → `ex_booking_no_overlap` EXCLUDE constraint, and `book()` claims the row before any money moves. Session 119. |
 | F-14 | High | **CLOSED** | Nights counted in the lot's local calendar. Session 119. |
 | F-15 | Medium | **CLOSED** | Both are one `WHERE` clause from bounded and now are. `_overlaps` became a `SELECT … LIMIT 1` filtered on the time range and state — it was loading every booking a spot ever took, with `bookable_summary` calling it once per spot (an N+1 on a full scan). `visit_window`'s Python skip became the `WHERE`, with `LIMIT 1`. **The pre-check narrowing cannot reopen F-13's race** — `ex_booking_no_overlap` is what prevents a double booking, not this read. Tested by counting statements, not timing: a full scan is correctness-neutral, so the only thing that can fail is how much the database was asked for. Session 120. |
 | F-16 | Low | **CLOSED** | `_content_disposition` with an **allowlist** ASCII fallback plus `filename*=UTF-8''`. Stripping `"` and `\` is the obvious fix and is **not enough** — `;` separates parameters, so `evil; attachment; filename=x.exe` survives quote-stripping and still injects; the first version of this fix shipped that hole and the test caught it. The extended form is what makes it a fix rather than an escape: RFC 6266 quoted-string is ASCII and this product ships in six locales, so a Cyrillic filename was already arriving mangled. Session 120. |
 | F-17 | High | **CLOSED** | Every module seeded a cap at boot, and a module with no row falls back to the compiled default — there is no uncapped state, and no state where a missing row is an outage. `test_module_flags` asserts the invariant. Session 119. |
 | F-18 | Medium | **CLOSED** | Calendar-month cap; the column is `monthly_budget_micros` so it cannot be misread. Had to ship WITH F-17 — seeding budgets against a lifetime sum would have made each module go permanently dark. Composite `(module, created_at)` index. Session 119. |
-| F-19 | Medium | OPEN | No merge-review queue. Already known. |
+| F-19 | Low | OPEN | **Severity corrected from Medium, and the audit's premise does not reproduce (§23 entry 134).** It states `upsert_record` → dedupe → `merge_facilities` runs automatically; **the ingest pipeline never calls `merge_facilities`.** A cross-source match calls `add_source` — a source row attached to an existing facility, non-destructive and reversible by detaching. `merge_facilities` has two callers: the human admin endpoint, which records an F14 `AdminAction`, and three operator-run repair scripts. What remains real is that a `"matched"` outcome is a machine decision that two records are one place, unqueued for review — that is A9 requirement 5, a new admin surface, and it belongs to the A9 session. **Deliberately not half-built: moderation rows nothing renders would be the sixth built-and-inert engine.** |
 | F-20 | Low | **CLOSED** | The amendment said "geohash-7 blocking"; the code has never done that — `find_duplicate_candidates` blocks on distance (`DEDUP_RADIUS_M = 60.0`) and `Facility.geohash` is stored, indexed and unread by it. Corrected in place with a dated note saying what it used to claim, because the governing document is what a future session plans against. The 0.4 similarity figure was right. Session 120. |
 | F-21 | Critical | **CLOSED** | §23 entry 73's defect in M4 → `_arrival_departure` routed through `location.visit_window`, anchored on the stop's appointment. M4 was the last unscoped `list_events` caller, so the class is closed. Session 119. |
 | F-22 | High | **CLOSED** | "Overnight" measured in the dock's local calendar — this was REFUSING real layover claims. Session 119. |
 | F-23 | High | **CLOSED** | `owed` is scoped to the settlement's own pay period. **Named limitation:** it scopes by the receivable's creation date as a proxy, because there is no settlement→load link — work in the period whose receivable is filed later still falls outside. The link is the audit's own deeper fix and is a schema change. Session 119. |
 | F-24 | Low | **CLOSED** | Migration downgrades — 57 of 59 real, 2 empty. Closed by F-31, which identified the two; not by session 119. |
-| F-25 | Medium | OPEN | The profit model assumes the product does not work. |
+| F-25 | Medium | **CLOSED** | The assumption is declared; the arithmetic deliberately is not changed. Subtracting the full expected detention cost is the right conservative default — a recovery that has not happened is not money in hand, and netting one in would make the figure optimistic about money M3 has not collected, on the screen a driver uses to accept or refuse a load. `basis["detention_recovery"] = "assumed_none"` sits beside the sample size and confidence, which describe the ESTIMATE where this describes the MODEL. §11.7: a figure does not travel without what produced it. §23 entry 134. Session 121. |
 | F-26 | Low | **CLOSED** | `rpm_after_cents` is `int | None`; no loaded miles yields `None` with `basis["rpm"] == "no_loaded_miles"` rather than a real-looking rate of $0.00/mi. Absence dressed as a result is the §11.7 failure this codebase treats as non-negotiable everywhere else. Session 120. |
-| F-27 | Low | OPEN | Fleet rollups are N+1 per member. |
+| F-27 | Low | OPEN | **Deferred on a dependency, not on effort (§23 entry 134).** Latent — M12 is not activated, so nothing is slow for anyone. The queries compute `owed`, and F-23 closed with a named limitation: `owed` is scoped by the receivable's creation date as a proxy because there is no settlement→load link, and the real fix is a schema change. Optimising now would bake that proxy into a second place. Waits on F-23's deeper fix. |
 | F-28 | High | **CLOSED** | Points can be spent twice → `lock_account` row lock taken before the balance is read; `book_with_points` books before it redeems. Session 119. |
 | F-29 | Medium | **CLOSED** | The daily cap could be turned off by a pricing knob → every contribution is logged, `points > 0` gates only the ledger issue. Session 119. |
 | F-30 | High | **CLOSED** | Per-locale vocabulary for all six launch languages, English always in scope (M11-FR6 mixed-language; F15's glossary is the authority). **The root was deeper than the audit's "English-only":** matching was raw `term in utterance`, so `"I am in Las Vegas"` routed to fuel and `"my sleeper berth heater is broken"` to sleep — adding five languages on top of that would have multiplied the bug by six. Token-phrase matching with explicit `*` prefixes for Russian/Uzbek morphology, `casefold` + Latin-only diacritic folding (Gurmukhi vowel signs are meaning, not decoration), and specificity scoring replacing first-match-wins. `/voice/ask` accepted **no locale at all** and now resolves the driver's F15 locale. Accuracy is asserted **per language**, 16 fixtures × 6. Session 120. |
@@ -205,7 +211,10 @@ translations of existing copy are not new copy, so §22.2 is not engaged.
    NOTHING, a fixture already halfway back), and `/dev` keeps none. All five findings
    closed in session 121. 119's undercount was right to flag: 16 exports across 10
    importers, and the work was about twice the size the proposal read as.
-3. **F-02 + F-12 — the `default_on` versus `enabled` decision.** Must not be split.
+3. ~~**F-02 + F-12 — the `default_on` versus `enabled` decision.**~~ **RESOLVED
+   2026-08-08** under owner delegation; §23 entry 133, migration 0066. They shipped
+   together as the audit required. The gates deliberately do not block the default — see
+   the entry for why stopping M3's clock would have been the worse outcome.
 4. **NEW (session 119) — `--marker-500` fails the non-text contrast floor in dark theme.**
    A white pin glyph on it measures **2.04:1**; WCAG 1.4.11 and §16 require 3:1. That is
    the "Some" parking pin and, by E3.1's inverted valence, the **OPEN** weigh-station pin
@@ -218,9 +227,12 @@ translations of existing copy are not new copy, so §22.2 is not engaged.
    floor to the portals; §23 entry 132. It was **seven** controls, not two, and the worst
    was 20 dp rather than 40. U-04 and U-05 are both closed, and both portals are now in
    the layout harness.
-6. **`.cluster`'s hit area is 36 dp** — measured, and it does **not** exceed its visual
-   size the way `.pin` does (a 44 dp button around a 28 dp puck). It is below §6.5's 48
-   and below §11.2's deliberate 44 dp map-pin exemption too. Reported, not changed.
+6. ~~**`.cluster`'s hit area is 36 dp.**~~ **RESOLVED 2026-08-08** — a 44 dp button around
+   a 36 dp bubble, the shape `.pin` already had, so the map is not re-weighted. §11.2
+   governs it as a map marker rather than §6.5. **And the exemption that allowed it gained
+   a floor:** `pin` and `cluster` were excused from 48 because §11.2 says 44, and nothing
+   checked the 44 — a fifth harness check does now, plus a `map-clusters` state, because no
+   state had ever rendered a cluster bubble. §23 entry 133.
 
 ## Questions the audit could not answer
 

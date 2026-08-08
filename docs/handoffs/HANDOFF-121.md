@@ -1,6 +1,6 @@
 # HANDOFF-121 — the loading state exists, and the fixtures are gone
 
-> **Stack UP · thirty-eight commits UNPUSHED · nothing deployed.** haulmeter.online still
+> **Stack UP · forty commits UNPUSHED · nothing deployed.** haulmeter.online still
 > serves 112's code.
 >
 > The owner approved `S23-PROPOSAL-loading-state.md`, PROPOSED since 2026-08-07, and said
@@ -11,14 +11,22 @@
 > Then a second instruction — *"proceed with the portal touch targets"* — closed **U-04
 > and U-05**, the last two PARTIAL findings. **§23 entry 132.**
 >
-> **Open findings 7 → 5, and NOTHING IS PARTIAL any more.** Criticals: 3 closed, 1 open
-> (F-02), 1 blocked (F-01). **Every High in both audits is closed.**
+> Then *"use your judgement and proceed"* took the rest: **F-02 + F-12** — the last open
+> critical — plus **U-05**'s remainder and **F-25**, with **F-19** and **F-27** judged and
+> recorded. **§23 entries 133 and 134. Migration 0066.**
 >
-> **Three things are worth reading over the rest. §4:** looking at a screenshot found a
+> **Open findings 7 → 3, all Low, none PARTIAL.** Every High and every Medium in both
+> audits is closed. **F-01 is the only Critical left and it is blocked on one command on
+> the box.** The only item that stops for the owner is `--marker-500`'s contrast, because a
+> palette colour is §22.2 and entry 118's delegation does not reach it.
+>
+> **Four things are worth reading over the rest. §4:** looking at a screenshot found a
 > defect six automated checks had passed over. **§5:** removing the fixtures revealed that
 > nine unit tests and four harness states had been measuring them. **§8.2:** a harness
 > change of mine silently exempted the entire app from LAW 0's only mechanical check, and
-> the full sweep went green over it.
+> the full sweep went green over it. **§9:** the flag mechanism F13's whole promise rests
+> on had never once been consulted, and the fix is the one that does NOT make the gates
+> block anything.
 
 ---
 
@@ -26,10 +34,10 @@
 
 | | |
 |---|---|
-| Branch | `main`, **thirty-eight** commits ahead of `origin/main` — 120's thirty-five plus this session's three |
+| Branch | `main`, **forty** commits ahead of `origin/main` — 120's thirty-five plus this session's five |
 | `origin/main` | `113327e`, still **not re-verified**. `git fetch` fails here: *"could not read Username for 'https://github.com'"*. The ahead-count is arithmetic. **Re-fetch before pushing** |
-| Gates | **pytest 1538 · vitest 746 (39 files) · layout 279 · import-linter 30/30 · ruff clean** — all five measured on the final tree |
-| Migrations | `0065_f14_job_schedule` (head) — unchanged, no migration this session |
+| Gates | **pytest 1550 · vitest 746 (39 files) · layout 283 · import-linter 30/30 · ruff clean** — all five measured on the final tree |
+| Migrations | **`0066_f13_default_on` (head)** — new this session; applied, downgraded and re-applied on the running stack |
 | Working tree | clean |
 | Local stack | **UP.** Seven containers, `/health` 200, UI 200 |
 | Dev data | Tampa `27.9506,-82.4572` intact, four DEV facilities at 89–125 m |
@@ -181,7 +189,7 @@ one now (`.dwell__figure`).
   path that does not match turns all four `map-loading` variants red with the right
   diagnosis.
 
-## 7. Sabotage — eleven restorations, and one that passed when it should not have
+## 7. Sabotage — nineteen restorations, and one that passed when it should not have
 
 | Fix | Sabotage result |
 |---|---|
@@ -197,6 +205,14 @@ one now (`.dwell__figure`).
 | portal scroller switched off, BEFORE the shell fix | **0 fail — see below** |
 | portal scroller switched off, after it | 4 fail |
 | `.app-content`'s `overflow-x` declaration removed | 1 fail *(0 before the test stopped matching its own comment)* |
+| `.cluster` back to 36 dp, after the §11.2 floor check existed | 3 fail |
+| F-02: `register_all` force-assigns `enabled` again | 1 fail |
+| F-02: `register_flag` writes the operator's column | 2 fail |
+| F-12: `is_enabled` computes the state itself again | 3 fail |
+| the gate report goes quiet | 1 fail |
+| a kill switch stops beating the default | 2 fail |
+| the code default outranks the operator's decision | 5 fail |
+| `enable()` stops reading its gates | 1 fail |
 
 **One row came back green, and it was the most valuable result of the session.** Switching
 off the owner table's scroller left the state passing, because the ancestor walk had found
@@ -279,9 +295,115 @@ left it green. It strips comments now. Same shape as 120 §4's accent test that 
 word other than the one it claimed to check: *a test that matches its own documentation
 asserts nothing about the code.*
 
-## 9. Exact next task
+## 9. F-02 + F-12 — the flag mechanism that had never gated anything
 
-### 9.1 The owner decisions — two left, down from eight
+**This closed the last open critical, and the interesting part is what the fix declines to
+do.**
+
+### 9.1 One column doing two jobs
+
+`enabled` carried both *"this capability ships on"* — a fact about the code — and *"an
+operator switched this"* — a fact about this box. `register_all` wrote it by assignment to
+express the first, so `enable()`, the only function in F13 that reads a validation gate,
+was never on the path. **Measured on the running box before touching anything:**
+
+```
+m03_detention   collection_partner_agreement=false, legal_signoff=false   enabled=true
+m06_parking     damage_liability_posture=false,     refund_policy=false   enabled=true
+m07_fuel        merchant_agreement=false,           payment_partner=false enabled=true
+```
+
+Three modules carry gates. All six were unsatisfied. All three were live. M3 is the wedge —
+it has been sending broker notices and generating claims with no legal sign-off recorded.
+
+They are separate columns now: `default_on`, declared per module and refreshed at boot like
+`description`, and a nullable `enabled` where NULL means nobody has decided.
+`enable()`/`disable()` are its only writers and `enable()` still refuses on an unsatisfied
+gate.
+
+### 9.2 What the fix deliberately does NOT do
+
+**It does not make gates block the default.** That is the obvious reading of "make the
+gates real", and it would have taken M3 dark on the next boot. A stopped detention clock is
+far worse than an unverified one, and satisfying one of those gates is an assertion that a
+legal review or a commercial agreement actually happened — not something a deploy may
+decide. The 29 July owner decision stands.
+
+So the gate does the one honest thing left to it: **it says so.** `running_ahead_of_gates`
+reports at every boot and on `/admin/flags`. Verified live:
+
+```
+WARNING: m03_detention is ON with unsatisfied validation gates:
+         collection_partner_agreement, legal_signoff — the capability is live and its
+         preconditions are not recorded as met
+```
+
+That turns "the gate silently does nothing" into "M3, M6 and M7 are live ahead of their
+preconditions, and here they are" — §11.7 aimed at the operator instead of the driver.
+
+**F-12 closes by construction.** Both predicates defer to one `_effective`, so they cannot
+disagree about a registered flag; the audit's complaint was that they "only agree because
+F-02 force-enables everything". They still diverge on an ABSENT flag, deliberately, and
+both entry 105 rationales survive.
+
+### 9.3 The backfill, and two things a tidier one would have broken
+
+`default_on := enabled`, `enabled` untouched. Every one of the 22 rows keeps its effective
+state. Applied, downgraded and re-applied on the running stack.
+
+- **Nulling `enabled` everywhere** would have handed every flag back to its code default —
+  and turned session 114's food half back ON, since m13's declared default is a shipped
+  capability. "A redeploy must never silently flip a flag back" is the rule that column
+  already obeyed.
+- **Gating the default** would have stopped the clock. §9.2.
+
+Stated plainly rather than hidden: on an already-booted box every flag now has a non-NULL
+`enabled`, so `default_on` governs nothing *there* until somebody calls `clear_decision`.
+That is correct and is the point — what changes is the mechanism, and it governs every
+future flag, every future activation, and A7's inventory gate, which v2.0 §3 specifies and
+which would have done nothing under the old assignment.
+
+### 9.4 Two mistakes of mine that the tests caught
+
+**I declared four flags on that ship off** — m13's two halves, F1 authority verification,
+the weigh-station layer. Their own tests said so and failed. Their production rows say
+`enabled=false`/`true` as operator decisions, which the migration preserves either way.
+
+**`register_flag`'s refresh was an `elif` chain**, so a flag whose default AND description
+both changed refreshed only the default — which is precisely the m13 rename that motivated
+the description refresh in the first place. Caught by the test I wrote for the refresh, one
+minute after writing it.
+
+## 10. The three judgement calls
+
+**F-25 — closed by disclosure, not by arithmetic.** `true_profit` subtracts the full
+expected detention cost, which models a driver who recovers nothing inside the app whose
+thesis is recovering it. Two loads with identical revenue — one dock detains you three
+hours and pays, one detains you three hours and does not — scored identically. **The
+arithmetic is unchanged deliberately:** netting in an expected recovery would make the
+figure optimistic about money M3 has not collected, on the screen a driver uses to accept
+or refuse a load. `basis["detention_recovery"] = "assumed_none"` now sits beside the sample
+size and confidence — those describe the ESTIMATE, this describes the MODEL.
+
+**F-19 — the audit's premise does not reproduce.** It says `upsert_record` → dedupe →
+`merge_facilities` runs with no human in the loop. **The ingest pipeline never calls
+`merge_facilities`.** A cross-source match calls `add_source`: a source row attached to an
+existing facility, non-destructive, reversible by detaching. `merge_facilities` has two
+callers — the human admin endpoint, which records an F14 `AdminAction`, and three
+operator-run repair scripts. Severity corrected Medium → Low. What remains real is that a
+`"matched"` outcome is a machine decision that two records are one place with nothing
+queued for review; that is A9 requirement 5, a new admin surface, and the A9 session's
+work. **Deliberately not half-built** — moderation rows nothing renders would be the sixth
+built-and-inert engine this codebase has paid for.
+
+**F-27 — deferred on a dependency, not on effort.** Latent, M12 is dark. The queries
+compute `owed`, and F-23 closed with a named limitation: `owed` is scoped by the
+receivable's creation date as a proxy because there is no settlement→load link, and the
+real fix is a schema change. Optimising now would bake the proxy into a second place.
+
+## 11. Exact next task
+
+### 11.1 The owner decision — ONE left, down from eight
 
 119 §5.1's list is **half cleared**: items 5–8 were the loading-state proposal and are
 done. What remains:
@@ -289,26 +411,26 @@ done. What remains:
 | | |
 |---|---|
 | **`--marker-500` at 2.04:1 in dark** | against a 3:1 floor. The "Some" parking pin and the **OPEN** weigh-station pin. Pinned in `contrast.test.js` so it cannot drift; a palette colour is §22.2 never-improvise. **§4 above is an argument for taking this seriously** — that was also a token that was legitimate and still wrong on this exact surface |
-| **`.cluster` hit area 36 dp** | below §6.5's 48 and below §11.2's 44 dp map exemption. **It is a MAP finding, not a portal one** — §8.1 closed the portal half, and this is what is left of U-05's class |
+| ~~`.cluster` hit area 36 dp~~ | **CLOSED** — §9/§23 entry 133 |
 
-### 9.2 What is left in the queue
+### 11.2 What is left in the queue
 
 | | |
 |---|---|
-| **F-02 + F-12** | the `default_on` vs `enabled` decision. Must not be split, or M3's detention clock goes silent. **The last open critical** |
+| ~~F-02 + F-12~~ | **CLOSED** — §9. Migration 0066 |
 | **F-01** | one command on the box. No box credential here. Still the only *blocked* critical |
-| **F-19** | no merge-review queue — needs a judgement about intended behaviour |
-| **F-25** | the profit model assumes the product does not work — same |
-| **F-27** | fleet N+1. Latent, and inherits F-23's `owed` definition |
+| **F-19** | Low now, and the audit's premise is corrected — §10. Waits on the A9 session |
+| ~~F-25~~ | **CLOSED** — §10 |
+| **F-27** | Low. Waits on F-23's schema change — §10 |
 | ~~U-04, U-05~~ | **CLOSED** — §8. Nothing in the queue is PARTIAL any more |
 
-### 9.3 Still open and untouched
+### 11.3 Still open and untouched
 
 The **handset background-sensor test** (v2.0 DoD #8), **ON_SITE has still not been walked
 in a browser** (117 §7), and **push, then decide on deploying**. A deploy needs production
 `SMTP_*` on the VM, which is F-01's question again.
 
-## 10. Things a later session will trip over
+## 12. Things a later session will trip over
 
 1. **`ui/src/core/fixtures.js` is deliberately empty and says so.** Do not add to it. The
    five alternatives are listed in the file.
@@ -341,18 +463,27 @@ in a browser** (117 §7), and **push, then decide on deploying**. A deploy needs
 13. **The §18 portals ARE in the layout harness.** They are exempt from LAW 0's ORDER, not
     from §6's floors. `fleet-portal` needs the active fleet planted in
     `longhaul.cache.active_fleet` or it measures the picker instead of the workspace.
+14. **`register_flag` takes `default_on`, not `enabled`.** Nothing but `enable()`/
+    `disable()`/`clear_decision()` may write `enabled`, and a new module MUST choose its
+    `default_on` — a capability that has never shipped should declare nothing and let its
+    gates govern activation. §9.
+15. **`enabled` is nullable and NULL means "no operator decision".** Any new read must go
+    through `is_enabled`/`is_switched_off`, never the column, or NULL will be read as off.
+16. **Adding a class to the harness's `TARGET_EXEMPT` regex removes it from the 48 dp
+    check.** If it is a map marker, add it to `MAP_TARGET` too, or it becomes unmeasured —
+    which is exactly how `.cluster` shipped at 36 dp. §8.1.
 
-## 11. Restarting
+## 13. Restarting
 
-**`make ui-layout` is now 271 checks and ~2.7 min.** It runs ALONE.
+**`make ui-layout` is now 283 checks and ~3 min.** It runs ALONE.
 `make ui-layout-only STATE=map-loading` measures one state in ~45 s.
 
 ```
 make up                              # preflight, then the full stack
 make seed-where                      # the Tampa origin — paste into Sensors
-make test                            # 1538 pytest + 745 vitest — do NOT pipe it
+make test                            # 1550 pytest + 746 vitest — do NOT pipe it
 make lint                            # ruff + import-linter (30 contracts)
-make ui-layout                       # 271 checks, ~2.7 min, runs ALONE
+make ui-layout                       # 283 checks, ~3 min, runs ALONE
 make down
 ```
 
@@ -370,4 +501,8 @@ docker compose -f infra/docker-compose.yml --env-file infra/.env run --rm \
 `infra/.env` carries the live Gmail block and is gitignored. **A send from dev is a real
 send.**
 
-No migration this session. Nothing is waiting on a background job, an ingest, or a queue.
+**Migration 0066 is new this session** and was applied, downgraded and re-applied on the
+running stack. It changes no box's behaviour — the backfill preserves every effective flag
+state — but it is a foundation schema change, so read §9.3 before deploying it.
+
+Nothing is waiting on a background job, an ingest, or a queue.

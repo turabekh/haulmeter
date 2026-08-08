@@ -87,6 +87,38 @@ def test_true_profit_nets_fuel_and_expected_detention(db):
     assert result.net_cents == 200000 - result.fuel_cost_cents - 3000 - 7500
     assert result.rpm_after_cents == round(result.net_cents / 500)
     assert result.basis["detention_sample_size"] == 1
+    # AI-CONTEXT: audit F-25 — the figure carries its MODELLING ASSUMPTION, not just the
+    # confidence in the estimate. The full expected detention cost is subtracted, which
+    # models a driver who recovers none of it, inside the app whose thesis is recovering
+    # it. The arithmetic is the right conservative default; leaving it unstated was not.
+    assert result.basis["detention_recovery"] == "assumed_none"
+
+
+def test_the_profit_figure_states_that_it_assumes_no_recovery(db):
+    """A separate test because the disclosure must survive the case where there is NO
+    detention history at all — that is the state most loads are in, and a basis key that
+    only appears when a sample exists would be absent exactly when a driver is most
+    likely to misread the number."""
+    driver = _account(db)
+    fac = _receiver(db)  # no dwell recorded: nothing known about this dock
+
+    result = m8.true_profit(
+        db,
+        driver.id,
+        revenue_cents=200000,
+        loaded_miles=500,
+        mpg=6.0,
+        tolls_cents=3000,
+        receiver_facility_id=fac.id,
+        free_time_minutes=120,
+        rate_cents_per_hour=7500,
+        origin_lat=DALLAS[0],
+        origin_lon=DALLAS[1],
+        heading_deg=0,
+        max_distance_m=40000,
+    )
+    assert result.basis["detention_sample_size"] == 0
+    assert result.basis["detention_recovery"] == "assumed_none"
 
 
 def test_appointment_hours_ranked_fastest_first(db):

@@ -121,6 +121,22 @@ def true_profit(
     det_cost, det_n = expected_detention_cost(
         db, receiver_facility_id, free_time_minutes, rate_cents_per_hour
     )
+    # AI-CONTEXT: audit F-25 — the full expected detention cost is subtracted, and that
+    # assumption is now DECLARED rather than implied (§23 entry 134).
+    #
+    # Subtracting it in full is the standard owner-operator "true rate" calculation and it
+    # is the right conservative default: detained hours are hours you cannot earn in, and
+    # a recovery that has not happened yet is not money in hand. What it also does,
+    # silently, is model a world in which the driver recovers NOTHING — on a screen inside
+    # the app whose entire thesis is recovering it. Two loads with identical revenue, one
+    # to a dock that detains you three hours and pays and one to a dock that detains you
+    # three hours and does not, score identically here.
+    #
+    # The arithmetic is unchanged, deliberately. Netting an expected recovery into this
+    # figure would make the number optimistic about money M3 has not collected, which is
+    # the worse error on a screen a driver uses to accept or refuse a load. §11.7's rule
+    # is that a figure does not travel without what produced it, so the fix is disclosure:
+    # `basis["detention_recovery"]` says which world this number is in.
     net = revenue_cents - fuel_cost - tolls_cents - det_cost
     rpm = round(net / loaded_miles) if loaded_miles else None
     return ProfitResult(
@@ -135,6 +151,9 @@ def true_profit(
             "fuel": fuel_basis,
             "detention_sample_size": det_n,
             "detention_confidence": confidence_for(det_n).value,
+            # the MODELLING assumption, beside the confidence in the estimate — they are
+            # different disclosures and only the second one existed (audit F-25)
+            "detention_recovery": "assumed_none",
             "rpm": "computed" if rpm is not None else "no_loaded_miles",
         },
     )
