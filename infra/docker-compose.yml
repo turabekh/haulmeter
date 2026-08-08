@@ -52,6 +52,48 @@ services:
       - "${MAILPIT_SMTP_PORT}:${MAILPIT_SMTP_PORT}"
       - "${MAILPIT_UI_PORT}:${MAILPIT_UI_PORT}"
 
+  # AI-CONTEXT: the migration is its own STEP, and it exists because of N-03.
+  #
+  # It used to ride inside the api's command — `alembic upgrade head && uvicorn` — and the
+  # worker waited only on postgres being healthy. So on any deploy carrying a migration the
+  # worker booted against the OLD schema and every one of its seven jobs failed:
+  #
+  #     worker: detention_clock failed (1x): column feature_flag.default_on does not exist
+  #     worker: outbound_retry  failed (1x): relation "f14.job_schedule" does not exist
+  #
+  # Observed on the 113→121 deploy, `detention_clock` included — M3's P0, the alert that
+  # free time expired. It self-healed on the failure backoff, but that backoff is up to
+  # 3600 s for four jobs, so every migration-carrying deploy quietly cost the wedge feature
+  # its clock and the ingest jobs an hour.
+  #
+  # A one-shot service rather than a healthcheck on the api, for two reasons. The dependency
+  # is on the SCHEMA, and saying so directly beats "wait until the api answers /health and
+  # know that its command happens to migrate first" — the implicit kind of coupling this
+  # file's own comments keep having to explain. And with two consumers declaring the same
+  # wait, neither can be given a new sibling that forgets it.
+  #
+  # The LOCAL stack carries it too, because the race is identical here and CLAUDE.md's
+  # "dev = CI parity" rule means the ordering a deploy relies on has to be the ordering
+  # `make up` exercises. This is also the cheaper place to find out it is wrong.
+  #
+  # `restart: "no"` is load-bearing: a one-shot with the stack's `unless-stopped` policy
+  # would re-run alembic in a loop forever. `service_completed_successfully` means a FAILED
+  # migration now stops the api and the worker together instead of leaving the worker up and
+  # erroring — which is the honest outcome, because a half-applied schema is not a state
+  # either of them should serve from.
+  migrate:
+    build:
+      context: ../api
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: ../api
@@ -68,7 +110,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
-    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${API_PORT} --reload"]
+    command: ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${API_PORT} --reload"]
     ports:
       - "${API_PORT}:${API_PORT}"
     volumes:
@@ -87,9 +129,22 @@ services:
       # side that owns the vocabulary. It FAILS rather than skips when the mount is
       # absent — a check that skips is a check that reports nothing while looking green.
       - ../ui/src/core/i18n:/repo/ui-i18n:ro
+      # AI-CONTEXT: the two compose files, read-only, so `test_compose_migration_order.py`
+      # can assert the N-03 ordering from the side that owns it. Same reasoning as the
+      # Makefile and i18n mounts above, and the same rule: the test FAILS rather than skips
+      # when the mount is absent.
+      #
+      # The FILES are mounted individually rather than the `infra/` directory, deliberately:
+      # `infra/.env` lives there and carries the live Gmail credential. The api already
+      # receives those values via `env_file`, but there is no reason to also hand a test
+      # container the file (rule 9).
+      - ./docker-compose.yml:/repo/infra/docker-compose.yml:ro
+      - ./docker-compose.deploy.yml:/repo/infra/docker-compose.deploy.yml:ro
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -115,6 +170,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # N-03: the worker queries the schema the migration writes — see `migrate` above
+      migrate:
+        condition: service_completed_successfully
 
   ui:
     build:
