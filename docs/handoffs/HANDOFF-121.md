@@ -1,7 +1,9 @@
 # HANDOFF-121 — the loading state exists, and the fixtures are gone
 
-> **Stack UP · forty commits UNPUSHED · nothing deployed.** haulmeter.online still
-> serves 112's code.
+> **Stack UP · PUSHED and VERIFIED · nothing deployed.** The owner pushed at the end of the
+> session; `origin/main` is **`1254d48`**, confirmed by an actual `git fetch` rather than
+> arithmetic — see §1. haulmeter.online still serves 112's code, so the box now trails
+> origin by everything from 113 onward.
 >
 > The owner approved `S23-PROPOSAL-loading-state.md`, PROPOSED since 2026-08-07, and said
 > "do the loading-state work". It is **design-prd §23 entry 131**, and the four-state rule
@@ -34,8 +36,8 @@
 
 | | |
 |---|---|
-| Branch | `main`, **forty** commits ahead of `origin/main` — 120's thirty-five plus this session's five |
-| `origin/main` | `113327e`, still **not re-verified**. `git fetch` fails here: *"could not read Username for 'https://github.com'"*. The ahead-count is arithmetic. **Re-fetch before pushing** |
+| Branch | `main`, **level with `origin/main`** — `git rev-list --left-right --count origin/main...HEAD` returns `0 0` |
+| `origin/main` | **`1254d48`, OBSERVED.** `git fetch` **worked this session**, which it had not since 117 — so the four-session caveat *"the ahead-count is arithmetic, re-fetch before pushing"* is **resolved**. All five session commits verified present with `git merge-base --is-ancestor`. The owner pushed; nothing was pushed from this session's own tooling |
 | Gates | **pytest 1550 · vitest 746 (39 files) · layout 283 · import-linter 30/30 · ruff clean** — all five measured on the final tree |
 | Migrations | **`0066_f13_default_on` (head)** — new this session; applied, downgraded and re-applied on the running stack |
 | Working tree | clean |
@@ -497,6 +499,13 @@ docker compose -f infra/docker-compose.yml --env-file infra/.env run --rm \
 ```
 
 **Do not run pytest while `make test` is running** — same database, phantom failures.
+
+**`git fetch` works again.** It had failed with *"could not read Username for
+'https://github.com'"* in 118, 119, 120 and the first part of 121, and every one of those
+handoffs carried an ahead-count that was arithmetic rather than an observation. It resolved
+by the end of this session with no action from here, so a future session should **try the
+fetch before assuming it cannot** — and should not re-copy the caveat forward unexamined,
+which is how it survived four sessions.
 
 `infra/.env` carries the live Gmail block and is gitignored. **A send from dev is a real
 send.**

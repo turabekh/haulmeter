@@ -80,8 +80,11 @@ results, exact next task, and blockers always live in the latest numbered handof
 > remains — `--marker-500`'s contrast — because a palette colour is §22.2 and entry 118's
 > delegation does not reach it.**
 >
-> **Stack UP · forty commits UNPUSHED · nothing deployed.** `git fetch` still cannot
-> run here — **re-fetch before pushing.**
+> **Stack UP · PUSHED and VERIFIED at `1254d48` · nothing deployed.** The owner pushed;
+> `git fetch` **worked**, which it had not since 117, so the ahead-count is an observation
+> for the first time in four sessions and the standing *"re-fetch before pushing"* caveat is
+> **resolved**. The box still serves 112, so it now trails origin by everything from 113 on —
+> **a deploy is the outstanding gap, and migration 0066 is in what would ship.**
 
 ➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — the session before.
 
