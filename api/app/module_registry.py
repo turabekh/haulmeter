@@ -97,6 +97,7 @@ def register_all(db: Session) -> list[str]:
     this compares before and after rather than simply setting `enabled=True`.
     """
     from app.foundation.f01_identity import public as identity
+    from app.foundation.f03_location import public as location
     from app.foundation.f13_flags import public as flags
 
     # AI-CONTEXT: F1's registration runs HERE, at boot, and it did not before.
@@ -111,6 +112,10 @@ def register_all(db: Session) -> list[str]:
     # flag-gated like modules, so it takes no part in the enable-on-first-registration
     # rule below.
     identity.register_authority_verification(db)
+    # AI-CONTEXT: same reasoning, one component over (audit F-09). The ping-retention
+    # window is declared at boot so it is in /admin/config before an operator needs it,
+    # rather than appearing only once somebody has already set it.
+    location.register_location_retention(db)
     _register_ai_budgets(db)
 
     known_before = {

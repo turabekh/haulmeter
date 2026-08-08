@@ -380,6 +380,65 @@ def purge_pings_older_than(db: Session, cutoff: datetime) -> int:
     return result.rowcount
 
 
+# AI-CONTEXT: audit F-09 — `purge_pings_older_than` existed, was exported, and its only
+# caller in the entire tree was one test. PRD §7.3 specifies "PostGIS storage of traces
+# … with configurable retention"; the retention was configurable in the sense that
+# nothing enforced it. F3 is the sensory system under the whole evidence engine, so
+# `location_ping` is also the fastest-growing table the product has.
+#
+# The NUMBER is a policy decision, not an engineering one, so it is a declared F13 key
+# rather than a constant — visible in /admin/config before anybody needs it (session
+# 112's finding).
+#
+# WHAT A PURGE HERE CANNOT BREAK, checked before wiring it rather than assumed: the F4
+# evidence pack does NOT read this table. `render.py` states the rule and the reason —
+# "the trace is drawn from EVIDENCE, not from raw location pings … the map cannot show
+# a position the verification block does not cover" — so every plotted point is a
+# hash-chained record. The one function that DOES read raw pings, `build_trace`, has no
+# caller anywhere outside its own test. So deleting an old ping destroys no claim's
+# evidence, and this is a privacy-and-growth control, not an evidence-retention one.
+#
+# 365 days is therefore conservative by DEFAULT-CHOOSING, not by necessity: nobody has
+# decided the number, a long window is the safe direction for a first wiring, and it
+# still bounds a table growing at ~700–1,300 rows per driver per DRIVING DAY. Shortening
+# it is cheap and safe; the paragraph above is what makes that sentence checkable.
+#
+# ZERO OR LESS MEANS NEVER PURGE, and that is the safety property that matters most
+# here: this is the one job in the worker that destroys data, and the plausible operator
+# accident is typing 0 into a retention box meaning "off". Read as a cutoff, 0 would
+# delete the entire table.
+CONFIG_PING_RETENTION_DAYS = "f03.ping_retention_days"
+DEFAULT_PING_RETENTION_DAYS = 365
+
+
+def register_location_retention(db: Session) -> None:
+    from app.foundation.f13_flags import public as flags
+
+    flags.register_config(
+        db,
+        CONFIG_PING_RETENTION_DAYS,
+        DEFAULT_PING_RETENTION_DAYS,
+        description=(
+            "Days of raw GPS pings to keep before the nightly purge deletes them. "
+            "0 or less disables the purge entirely. Safe to shorten: the F4 evidence "
+            "pack is built from hash-chained evidence records, not from this table, "
+            "so a purge here cannot remove a claim's proof."
+        ),
+        scope="location",
+    )
+
+
+def purge_expired_pings(db: Session, now: datetime | None = None) -> dict:
+    from app.foundation.f13_flags import public as flags
+
+    now = now or datetime.now(UTC)
+    days = int(flags.get_config(db, CONFIG_PING_RETENTION_DAYS, DEFAULT_PING_RETENTION_DAYS))
+    if days <= 0:
+        return {"deleted": 0, "retention_days": days, "purged": False}
+    deleted = purge_pings_older_than(db, now - timedelta(days=days))
+    return {"deleted": deleted, "retention_days": days, "purged": True}
+
+
 # --- Stationary detection, read-only (§23 entry 112, shape (c)) ---
 #
 # AI-CONTEXT: this exists because the geofence could NOT answer the question. Events

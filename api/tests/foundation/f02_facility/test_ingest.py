@@ -5,7 +5,10 @@ NTAD pagination edge (condition B), and TPIMS Low/numeric handling (condition A)
 """
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
 
 from app.foundation.f02_facility import public as facility
 
@@ -86,6 +89,68 @@ def test_tpims_unknown_and_trend_hardening_from_real_il_rows():
 
     low = statuses["IL00074IE006200001"]
     assert low.available == facility.LOW and facility.derive_parking_status(low) == "some"
+
+
+def test_a_missing_feed_timestamp_is_not_a_fresh_reading():
+    # audit F-32: `_parse_ts` returned `datetime.now(UTC)`, so a record with no
+    # timeStamp reached the driver as `0m · IDOT` — a fabricated age on a reading
+    # the A3 feed badge is about to make MORE trusted.
+    statuses = facility.parse_tpims_dynamic(
+        [
+            {"siteId": "NO-TS", "reportedAvailable": "12", "capacity": 55, "open": True},
+            {
+                "siteId": "BAD-TS",
+                "timeStamp": "not-a-timestamp",
+                "reportedAvailable": "12",
+                "capacity": 55,
+                "open": True,
+            },
+            {
+                "siteId": "GOOD-TS",
+                "timeStamp": "2026-08-07T12:00:00Z",
+                "reportedAvailable": "12",
+                "capacity": 55,
+                "open": True,
+            },
+        ]
+    )
+    by_id = {s.site_id: s for s in statuses}
+    assert by_id["NO-TS"].reported_at is None
+    assert by_id["BAD-TS"].reported_at is None
+    assert by_id["GOOD-TS"].reported_at is not None
+
+    # the availability is perfectly good on all three; it is the AGE that is unknown,
+    # and a belief needs both
+    assert facility.has_usable_reading(by_id["NO-TS"]) is False
+    assert facility.has_usable_reading(by_id["BAD-TS"]) is False
+    assert facility.has_usable_reading(by_id["GOOD-TS"]) is True
+
+
+def test_an_unknown_age_closed_station_is_also_dropped():
+    # "closed" is a usable reading only when its age is known — an unknown-age CLOSED
+    # is what sends a driver past a lot that reopened hours ago
+    (closed,) = facility.parse_tpims_dynamic(
+        [{"siteId": "CLOSED-NO-TS", "reportedAvailable": "Unknown", "open": False}]
+    )
+    assert closed.reported_at is None
+    assert facility.has_usable_reading(closed) is False
+
+
+def test_deriving_a_status_without_a_reading_fails_loud():
+    # audit F-33: this branch returned "some" and called it conservative. "some" is a
+    # positive claim that spots exist, derived from no reading.
+    bogus = facility.DynamicStatus(
+        site_id="NO-READING",
+        reported_at=datetime(2026, 8, 7, 12, 0, tzinfo=UTC),
+        available="not-a-category",
+        capacity=55,
+        trend=None,
+        open=True,
+        trust_data=True,
+    )
+    assert facility.has_usable_reading(bogus) is True  # the gate cannot see this one
+    with pytest.raises(ValueError, match="has_usable_reading"):
+        facility.derive_parking_status(bogus)
 
 
 def test_osm_polygon_uses_centroid():

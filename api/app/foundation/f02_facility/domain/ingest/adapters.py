@@ -9,7 +9,7 @@ and a chain-locator STUB (no scraping — ToS review pending). Never Google Plac
 
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Protocol
 
 from ..enums import FacilityType, SourceKind
@@ -45,7 +45,7 @@ class DynamicStatus:
     """A TPIMS dynamic availability reading for one site (feeds the M1 belief)."""
 
     site_id: str
-    reported_at: datetime
+    reported_at: datetime | None  # None = the feed gave no usable timestamp (F-32)
     available: int | str | None  # int, LOW, or None
     capacity: int | None
     trend: str | None
@@ -152,13 +152,19 @@ def parse_available(raw) -> int | str | None:
         return None
 
 
-def _parse_ts(raw: str | None) -> datetime:
+# AI-CONTEXT: None, never `now` (audit F-32). Ingest time standing in for reading
+# time is a FABRICATED freshness: the driver saw `0m · IDOT` on a reading whose age
+# nobody knew, and under A3 the feed badge makes that MORE trusted, not less. The two
+# honesty signals (source and age) disagreed and only one of them was on screen.
+# Same shape as `parse_available` returning None for "Unknown", one function above —
+# `has_usable_reading` drops the record and the runner counts the skip.
+def _parse_ts(raw: str | None) -> datetime | None:
     if not raw:
-        return datetime.now(UTC)
+        return None
     try:
         return datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
-        return datetime.now(UTC)
+        return None
 
 
 def parse_tpims_static(records: list[dict]) -> list[StagedRecord]:
@@ -220,6 +226,13 @@ def has_usable_reading(status: DynamicStatus) -> bool:
     # a belief needs a real signal: a known availability, or a closed station (which
     # is itself "no spots"). "Unknown"/absent availability on an OPEN station says
     # nothing — no belief, regardless of trustData (real IL feeds are mostly these).
+    #
+    # AI-CONTEXT: a reading also needs to know its own AGE (F-32). Freshness is half
+    # of what §11.7 puts on the pin, and "closed" without a timestamp is not the safe
+    # half of this — an unknown-age CLOSED is what sends a driver past a lot that
+    # reopened hours ago.
+    if status.reported_at is None:
+        return False
     return status.available is not None or not status.open
 
 
@@ -238,7 +251,16 @@ def derive_parking_status(status: DynamicStatus) -> str:
         if cap and avail <= max(1, round(cap * 0.25)):
             return "some"
         return "empty"
-    return "some"  # unknown count but open -> conservative "some"
+    # AI-CONTEXT: this branch used to `return "some"`, called conservative (audit
+    # F-33). It is not conservative, it is a positive claim that spots exist derived
+    # from no reading at all. "empty" would be worse and "full" would be wrong; the
+    # honest answer is NO BELIEF, which `has_usable_reading` already produces — so
+    # the only way here is a caller that skipped the gate, and that is a bug in the
+    # caller. Fails loud rather than fabricating, following ChainLocatorAdapter.
+    raise ValueError(
+        f"no usable availability reading for site {status.site_id!r} "
+        "— call has_usable_reading() first"
+    )
 
 
 def fetch_tpims(url: str) -> list[dict]:

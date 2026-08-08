@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
+from app.foundation.f13_flags import public as flags
 
 DALLAS = (32.7767, -96.7970)
 FAR = (32.9000, -96.7970)
@@ -136,6 +137,58 @@ def test_purge_pings_retention(db):
     location.record_ping(db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=1))
     removed = location.purge_pings_older_than(db, datetime.now(UTC) + timedelta(days=1))
     assert removed == 2
+
+
+def test_expired_pings_are_purged_on_the_configured_window(db):
+    # audit F-09: the purge existed, was exported, and its only caller was one test —
+    # so `location_ping` grew without bound and PRD §7.3's "configurable retention"
+    # was enforced nowhere.
+    account = _account(db)
+    now = datetime(2026, 8, 8, 12, 0, tzinfo=UTC)
+    old = location.record_ping(db, account.id, *DALLAS, occurred_at=T0)
+    recent = location.record_ping(db, account.id, *DALLAS, occurred_at=T0)
+    old.received_at = now - timedelta(days=400)
+    recent.received_at = now - timedelta(days=10)
+    db.flush()
+
+    summary = location.purge_expired_pings(db, now=now)
+    assert summary == {"deleted": 1, "retention_days": 365, "purged": True}
+    assert db.get(location.LocationPing, recent.id) is not None
+    assert db.get(location.LocationPing, old.id) is None
+
+
+def test_a_retention_of_zero_never_purges_rather_than_purging_everything(db):
+    # the one job in the worker that DESTROYS data, and the plausible operator accident
+    # is typing 0 meaning "off". Read as a cutoff, 0 deletes the entire table.
+    flags.set_config(db, location.CONFIG_PING_RETENTION_DAYS, 0)
+    account = _account(db)
+    now = datetime(2026, 8, 8, 12, 0, tzinfo=UTC)
+    ping = location.record_ping(db, account.id, *DALLAS, occurred_at=T0)
+    ping.received_at = now - timedelta(days=4000)
+    db.flush()
+
+    summary = location.purge_expired_pings(db, now=now)
+    assert summary == {"deleted": 0, "retention_days": 0, "purged": False}
+    assert db.get(location.LocationPing, ping.id) is not None
+
+
+def test_the_purge_is_wired_to_the_worker(db):
+    # F-09 WAS a purge nothing called. Without this assertion the fix is one refactor
+    # away from being the same finding again, and the tests above would all still pass.
+    from app.worker import _jobs
+
+    job = next(j for j in _jobs() if j.name == "location_retention")
+    assert job.flag_key is None  # a foundation retention job gated on an unregistered
+    assert job.interval_seconds == 86400  # flag is a policy that silently does not run
+
+
+def test_the_retention_window_is_declared_so_an_operator_can_find_it(db):
+    # session 112's finding: /admin/config listed only keys somebody had already set
+    from app import module_registry
+
+    module_registry.register_all(db)
+    declared = flags.declared_configs(db, scope="location")
+    assert location.CONFIG_PING_RETENTION_DAYS in declared
 
 
 def test_is_present_tracks_geofence_presence(db):

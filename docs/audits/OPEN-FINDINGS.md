@@ -33,10 +33,10 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 |---|---|---|---|---|---|---|
 | Critical | 1 | 4 | 0 | 3 | 0 | **8** |
 | High | 2 | 0 | 1 | 14 | 0 | **17** |
-| Medium | 9 | 0 | 1 | 2 | 0 | **12** |
-| Low | 5 | 0 | 0 | 2 | 0 | **7** |
+| Medium | 7 | 0 | 1 | 4 | 0 | **12** |
+| Low | 4 | 0 | 0 | 3 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **17** | **4** | **2** | **21** | **1** | **45** |
+| **Total** | **14** | **4** | **2** | **24** | **1** | **45** |
 
 Findings opened *after* the audit are not in this scoreboard — they were never among the
 45. See **Opened after the audit**, below.
@@ -72,7 +72,7 @@ unobservable until the literal became a token. See §Blockers.
 | F-06 | High | **CLOSED** | `sent_at` NULL means it did not go out; a 5-min worker sweep retries transient failures, bounded, and never retries auth errors. `to_ref` recorded — the DB had no record of the recipient at all. Session 119. |
 | F-07 | High | **CLOSED** | Throttled per identifier (5) and per IP (20) in a sliding 15-min window, in Postgres so it fails closed, checked BEFORE the hash runs; `VERIFY_SLOTS` caps concurrent Argon2 so a flood cannot starve the threadpool. Session 119. |
 | F-08 | — | **ACCEPTED** | Gmail as counterparty transport (owner decision, 2026-08-07). Two owner actions remain, neither a session: split dev from production, and Workspace on the domain for aligned SPF/DKIM/DMARC. |
-| F-09 | Medium | OPEN | Location pings are never purged. |
+| F-09 | Medium | **CLOSED** | A daily unflagged `location_retention` worker job calls the purge that already existed. **The window is an F13 key** (`f03.ping_retention_days`, declared at boot so `/admin/config` shows it), not a constant — how long the product keeps a driver's movements is policy, and PRD §7.3 says "configurable retention". Default **365 days**, conservative by default-choosing rather than by necessity — **checked before wiring: a purge here cannot destroy a claim's evidence.** `render.py` states the rule ("the trace is drawn from EVIDENCE, not from raw location pings"), so every plotted point is a hash-chained F4 record, and `build_trace` — the one function that reads raw pings — has no caller outside its own test. This is a privacy-and-growth control, not evidence retention, and shortening the window is safe. **0 or less means never purge** — this is the only job in the worker that destroys data and the plausible operator accident is typing 0 meaning "off", which read as a cutoff would delete the whole table. Verified on a real worker boot: `location_retention ok: {'deleted': 0, 'retention_days': 365, 'purged': True}`. Session 120. |
 | F-10 | Medium | OPEN | Worker scheduling is in-process only. |
 | F-11 | Medium | OPEN | The deploy path is outside every review — `deploy.sh`, `Makefile`, `check_ports.sh` are not in the dump. Adding `.sh` to `collect_files.py`'s `EXTENSIONS` is the cheapest fix in either audit. |
 | F-12 | Medium | OPEN | Module gate and worker disagree on flag polarity. Ships with F-02. |
@@ -95,8 +95,8 @@ unobservable until the literal became a token. See §Blockers.
 | F-29 | Medium | **CLOSED** | The daily cap could be turned off by a pricing knob → every contribution is logged, `points > 0` gates only the ledger issue. Session 119. |
 | F-30 | High | **CLOSED** | Per-locale vocabulary for all six launch languages, English always in scope (M11-FR6 mixed-language; F15's glossary is the authority). **The root was deeper than the audit's "English-only":** matching was raw `term in utterance`, so `"I am in Las Vegas"` routed to fuel and `"my sleeper berth heater is broken"` to sleep — adding five languages on top of that would have multiplied the bug by six. Token-phrase matching with explicit `*` prefixes for Russian/Uzbek morphology, `casefold` + Latin-only diacritic folding (Gurmukhi vowel signs are meaning, not decoration), and specificity scoring replacing first-match-wins. `/voice/ask` accepted **no locale at all** and now resolves the driver's F15 locale. Accuracy is asserted **per language**, 16 fixtures × 6. Session 120. |
 | F-31 | Low | **CLOSED** | The two empty downgrades identified — `0033_f01_vendor_role` and `0058_a01_checklist_doc_types`, both adding enum values Postgres cannot drop. Each now carries an AI-CONTEXT line saying the `pass` is deliberate, which was the finding's whole ask. Session 119. |
-| F-32 | Medium | OPEN | A missing feed timestamp becomes a fresh reading. |
-| F-33 | Low | OPEN | A defensive branch that asserts. |
+| F-32 | Medium | **CLOSED** | `_parse_ts` returns `None` instead of `now()`, and `has_usable_reading` drops a reading whose AGE is unknown — freshness is half of what §11.7 puts on the pin, so a known availability with an unknown age is not half a belief, it is a fabricated one. **Measured against the live feed before and after: 51 records, 0 without a timeStamp**, so it costs nothing today — which is the audit's own "narrow in practice", confirmed rather than assumed. It matters for A9's eight further publishers whose payload conformance is unknown. Session 120. |
+| F-33 | Low | **CLOSED** | The "conservative" `return "some"` raises `ValueError` naming `has_usable_reading()`. "Some" is a positive claim that spots exist, derived from no reading; the honest answer is no belief, which the gate already produces, so the only route here is a caller that skipped the gate — a bug, and it fails loud (the `ChainLocatorAdapter` precedent). Closed **with F-32**: same file, same class, and the findings doc's own instruction is to grep for the rest of the class. Session 120. |
 
 ## UI — 12 findings
 

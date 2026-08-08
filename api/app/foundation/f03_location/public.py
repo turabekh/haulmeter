@@ -15,6 +15,8 @@ from .domain.models import (
     LocationPing,
 )
 from .domain.service import (
+    CONFIG_PING_RETENTION_DAYS,
+    DEFAULT_PING_RETENTION_DAYS,
     DEFAULT_RADIUS_M,
     DWELL_TICK_INTERVAL,
     GPS_DIVERGENCE_THRESHOLD,
@@ -31,8 +33,10 @@ from .domain.service import (
     is_present_anywhere,
     last_known_position,
     list_events,
+    purge_expired_pings,
     purge_pings_older_than,
     record_ping,
+    register_location_retention,
     stationary_since,
     visit_window,
 )
@@ -48,6 +52,8 @@ __all__ = [
     "DEFAULT_RADIUS_M",
     "DWELL_TICK_INTERVAL",
     "GPS_DIVERGENCE_THRESHOLD",
+    "CONFIG_PING_RETENTION_DAYS",
+    "DEFAULT_PING_RETENTION_DAYS",
     "FacilityNotFound",
     "arm_geofence",
     "build_trace",
@@ -60,6 +66,8 @@ __all__ = [
     "last_known_position",
     "list_events",
     "purge_pings_older_than",
+    "purge_expired_pings",
+    "register_location_retention",
     "record_ping",
     "stationary_since",
     "STATIONARY_RADIUS_M",

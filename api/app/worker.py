@@ -66,6 +66,14 @@ def _jobs() -> list[Job]:
         # a detention notice an hour late is still a detention notice, while one that
         # never goes is the defect. Unflagged: see Job.flag_key.
         Job("outbound_retry", None, 300, runners.run_outbound_retry),
+        # audit F-09: raw GPS pings were never purged — the purge existed and nothing
+        # called it. Daily; the window is an F13 key (`f03.ping_retention_days`) and 0
+        # disables it. Unflagged for the same reason as outbound_retry: a foundation
+        # retention job gated on a flag nobody registered is a retention policy that
+        # silently does not run, which is indistinguishable from the defect being fixed.
+        # The config value is the switch, and it is the honest one — an operator turning
+        # this off should be setting a retention policy, not disabling a job.
+        Job("location_retention", None, 86400, runners.run_location_retention),
     ]
 
 

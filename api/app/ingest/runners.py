@@ -289,3 +289,27 @@ def run_outbound_retry(db: Session, commit: bool = True) -> dict:
     if commit:
         db.commit()
     return summary
+
+
+def run_location_retention(db: Session, commit: bool = True) -> dict:
+    """Delete raw GPS pings past the configured retention window (audit F-09).
+
+    AI-CONTEXT: `purge_pings_older_than` had existed and been exported since F3 was
+    written, and its only caller in the tree was a single test — so the retention PRD
+    §7.3 calls "configurable" was enforced nowhere and `location_ping` grew without
+    bound. The window itself is an F13 key, not a constant here: how long a product
+    keeps a driver's movements is a policy decision, and the number that is right for
+    it is not one an ingest runner should be asserting.
+
+    Daily rather than hourly, and NOT batched. Both are the same argument: with a
+    365-day default on a product whose oldest ping is weeks old, this deletes nothing
+    for a year, so a chunking loop written now would be a year of untested code
+    guarding a case nobody has measured. The day the window is shortened is the day to
+    measure it — `deleted` is in the summary and lands in `f14.job_run`.
+    """
+    from app.foundation.f03_location import public as location
+
+    summary = location.purge_expired_pings(db)
+    if commit:
+        db.commit()
+    return summary
