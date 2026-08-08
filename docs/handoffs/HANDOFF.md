@@ -39,6 +39,17 @@ results, exact next task, and blockers always live in the latest numbered handof
 > driver's month. **`money.empty` was translated into all six locales and rendered by
 > nothing** — found by applying the four-state rule, which is that rule earning its place.
 >
+> **The last open critical is closed, and the fix is the one that does NOT make the gates
+> block anything.** `enabled` was one column doing two jobs — a code default and an
+> operator's decision — so `register_all` wrote it by assignment and `enable()`, the only
+> function that reads a validation gate, was never on the path. Measured on the box:
+> **three modules carry gates, all SIX were unsatisfied, all three were live** — M3 has
+> been sending broker notices with no legal sign-off recorded. Making the gates block the
+> default would have taken the detention clock dark, and satisfying one asserts a legal
+> review happened, which a deploy may not decide. So the columns split, `enable()` regains
+> its monopoly, and **the gate now says out loud what it cannot enforce** — reported at
+> every boot. Migration **0066**, backfilled so no box changes behaviour.
+>
 > **The portals were worse than the audit said and the harness nearly died proving it.**
 > U-05 described "two portal controls (40 dp)"; there were **seven** below §6.5's floor and
 > the worst was `.switch` at **233 × 20 dp** with no height declared at all. Registering the
@@ -55,7 +66,21 @@ results, exact next task, and blockers always live in the latest numbered handof
 > pass when it should have failed. *A sabotage that comes back green is not a safe fix; it is
 > a check that does not exist.*
 >
-> **Stack UP · thirty-eight commits UNPUSHED · nothing deployed.** `git fetch` still cannot
+> **Three findings needed a judgement rather than code, and two were judged "do not change
+> the code".** F-25's profit model keeps its conservative arithmetic and gains the
+> disclosure it was missing (`detention_recovery: assumed_none`) — netting in a recovery M3
+> has not collected would be the worse error on the screen a driver accepts a load on.
+> **F-19's premise does not reproduce:** the ingest pipeline never calls `merge_facilities`,
+> it calls `add_source`, so there is no automatic destructive merge; corrected Medium → Low,
+> and its review surface is left to the A9 session rather than half-built. F-27 waits on
+> F-23's schema change.
+>
+> **Open findings 7 → 3, all Low. Every High and every Medium in both audits is closed.**
+> F-01 is the only Critical left and needs one command on the box. **One owner decision
+> remains — `--marker-500`'s contrast — because a palette colour is §22.2 and entry 118's
+> delegation does not reach it.**
+>
+> **Stack UP · forty commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
 ➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — the session before.
