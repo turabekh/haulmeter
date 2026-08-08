@@ -207,7 +207,8 @@ async function togglePause(spot) {
     <section class="block">
       <h2 class="block__title">{{ t("owner.bookings") }}</h2>
       <p v-if="!board.bookings.length" class="muted">{{ t("owner.no_bookings") }}</p>
-      <table v-else class="ledger-table">
+      <div v-else class="table-scroll">
+      <table class="ledger-table">
         <thead>
           <tr>
             <th>{{ t("owner.nights") }}</th>
@@ -236,6 +237,7 @@ async function togglePause(spot) {
           </tr>
         </tbody>
       </table>
+      </div>
     </section>
     </template>
   </div>
@@ -328,8 +330,13 @@ async function togglePause(spot) {
   background: var(--ink-1);
   overflow: hidden;
 }
+/* AI-CONTEXT: `flex-wrap` is what §12.5 asks of a row at +40% and at 200% text — "rows
+   grow, nothing clips". Without it the property name, the vetted badge and the spot count
+   sat on one unwrappable line and `.prop__count` ran to 382 px at 200% (§23 entry 132).
+   Measured by the harness the first time these portals were registered in it. */
 .prop__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2);
   padding: var(--s-3) var(--s-4);
@@ -386,9 +393,11 @@ async function togglePause(spot) {
 .spot__cur {
   color: var(--text-3);
 }
+/* the per-night price an owner TYPES INTO — the smallest target on the portal and the
+   one that moves money (§23 entry 132) */
 .spot__price-in {
   width: 84px;
-  min-height: 40px;
+  min-height: var(--touch-min);
   padding: 0 var(--s-2);
   border: 1px solid var(--line-1);
   border-radius: var(--r-control);
@@ -407,9 +416,15 @@ async function togglePause(spot) {
   font-size: var(--type-caption-size);
   color: var(--text-2);
 }
+/* pause/resume a spot, AND cancel a booking — one class, two jobs, the second of which
+   refunds money (§23 entry 108) */
 .pause {
   margin-left: auto;
-  min-height: 40px;
+  min-height: var(--touch-min);
+  /* §6.5 is 48 x 48, and the WIDTH is the half that a short label breaks: "Pause" is
+     ਰੋਕੋ in Punjabi and the button measured 43x48 (§23 entry 132). Measured, not
+     guessed — the layout harness reported it once these portals were registered. */
+  min-width: var(--touch-min);
   padding: 0 var(--s-3);
   border: 1px solid var(--line-1);
   border-radius: var(--r-control);
@@ -432,8 +447,15 @@ async function togglePause(spot) {
 .addprop {
   margin-top: var(--s-2);
 }
+/* the add-property fields. 44 was below the floor too — the audit counted the 40s and
+   missed these (§23 entry 132) */
+/* `min-width: 0` is the same defect U-04 found on the scorecard's search input, in the
+   same shape: a flex item defaults to `min-width: auto`, and an <input>'s intrinsic width
+   is about 20 characters, which SCALES WITH THE FONT SIZE. At 200% text `.in--name` ran to
+   451 px and could not shrink. The flex-basis below does the sizing; this lets it. */
 .in {
-  min-height: 44px;
+  min-width: 0;
+  min-height: var(--touch-min);
   padding: 0 var(--s-3);
   border: 1px solid var(--line-1);
   border-radius: var(--r-control);
@@ -459,7 +481,7 @@ async function togglePause(spot) {
   display: inline-flex;
   align-items: center;
   gap: var(--s-1);
-  min-height: 44px;
+  min-height: var(--touch-min);
   padding: 0 var(--s-4);
   border-radius: var(--r-control);
   background: var(--accent-fill);
@@ -468,8 +490,19 @@ async function togglePause(spot) {
   font-weight: 500;
 }
 .add--sm {
-  min-height: 40px;
+  min-height: var(--touch-min);
   padding: 0 var(--s-3);
+}
+/* AI-CONTEXT: §18 says these portals are "responsive down to tablet/phone", and until
+   they were registered in the layout harness nobody had checked (§23 entry 132). At 360 dp
+   this table ran to 437 px and pushed the whole PAGE sideways — an owner on a phone
+   scrolled the header and the property list to read a booking.
+   A horizontal scroller around the table is the fix, and it is not a new pattern: the
+   harness's own overflow rule names "the preset chip row, the portal rail" as approved
+   deliberate scrollers. The table keeps its comfortable desktop density (§18) and stops
+   dragging the page with it. */
+.table-scroll {
+  overflow-x: auto;
 }
 .ledger-table {
   width: 100%;

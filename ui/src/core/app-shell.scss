@@ -49,6 +49,22 @@ button {
 .app-content {
   flex: 1 1 auto;
   overflow-y: auto;
+  // AI-CONTEXT: `overflow-x: hidden` is EXPLICIT here for a reason that is not obvious
+  // and cost a near-miss (§23 entry 132).
+  //
+  // CSS promotes `visible` to `auto` on one axis when the other is not visible. So
+  // `overflow-y: auto` alone made this element compute `overflow-x: auto` — a horizontal
+  // scroll container nobody asked for, wrapping the ENTIRE app.
+  //
+  // Why that matters beyond tidiness: the layout harness exempts elements inside a
+  // deliberate horizontal scroller from its 360 dp overflow rule, and when that lookup
+  // was generalised to walk ancestors it found this computed `auto` above every element
+  // on every surface — silently exempting the whole app from LAW 0's only mechanical
+  // check, with the sweep still green. Declaring it `hidden` states what was always
+  // intended (MF-2: nothing sticks out of the driver column) and keeps the exemption
+  // meaning what it says. Anything that legitimately scrolls sideways — the preset chip
+  // row, the portal rail, a §18 table — does so in its own container and is unaffected.
+  overflow-x: hidden;
   padding-bottom: var(--s-4);
 }
 

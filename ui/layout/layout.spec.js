@@ -25,8 +25,10 @@ import { test, expect } from "@playwright/test";
 
 const BASE = process.env.UI_BASE || "http://ui:9008";
 
-// every driver-app surface. Portals are §18 and deliberately exempt from LAW 0 —
-// they are not driver screens.
+// every driver-app surface, plus the two §18 portals — see the note on PORTAL_SURFACES.
+//
+// Portals are exempt from LAW 0, which is about mobile-FIRST design. They are NOT exempt
+// from §6, and that distinction is what put them in this file (§23 entry 132).
 //
 // The last three were added when the theme dimension came out: the evidence surface
 // is where the newest and largest UI in the project landed (export, share, the §15.1
@@ -560,6 +562,69 @@ const HANDOFF_MOCKS = {
   ],
 };
 
+// AI-CONTEXT: the §18 portals, and why a LAW 0 harness measures them at 360 dp
+// (§23 entry 132, audit U-04 + U-05).
+//
+// This file used to say "Portals are §18 and deliberately exempt from LAW 0 — they are
+// not driver screens", and both halves of that are true. It does not follow that nothing
+// here applies to them, and reading §18 closely is what settled it:
+//
+//   · LAW 0 is mobile-FIRST — design and build at 360 first, widen later. §18 exempts
+//     portals from that ORDER, and nothing below tests order.
+//   · §18's own text says portals are "responsive down to tablet/phone". So an owner
+//     opening their board on a phone is a case §18 SPECIFIES, and "no horizontal
+//     overflow at 360 dp" is that specification, checked.
+//   · §6.2's type floor and §6.5's 48 dp target floor are in §6 and carry no portal
+//     exemption. §18's only exemption sentence points the other way — it protects the
+//     driver app FROM §18 ("Nothing in Section 18 ever justifies desktop-first thinking
+//     in the driver app"), not the portals from §6.
+//
+// So all four checks are §6/§18 claims rather than LAW 0 claims, and the portals were
+// simply the two surfaces where nobody had run them. That is exactly what U-04 found.
+//
+// They need mocks because both are on the four-state model now (§23 entry 131) — an
+// unmocked portal renders §15.4's one error line, which would measure nothing.
+const FLEET_ID = "00000000-0000-0000-0000-0000000000f1";
+const FLEET_MOCKS = {
+  "/fleet/mine": [{ fleet_id: FLEET_ID, name: "Cross-Country Freight", role: "owner" }],
+  [`/fleet/${FLEET_ID}/report`]: {
+    driver_count: 3,
+    recovered_cents: 184000,
+    owed_cents: 92500,
+    fuel_saved_cents: 36250,
+    // the longest member row the table can carry, because that is what overflows
+    members: [
+      { driver_account_id: "acc-1111-2222-3333", recovered_cents: 120000, owed_cents: 45000, fuel_saved_cents: 20000 },
+      { driver_account_id: "acc-4444-5555-6666", recovered_cents: 64000, owed_cents: 47500, fuel_saved_cents: 16250 },
+    ],
+  },
+  [`/fleet/${FLEET_ID}/claims`]: {
+    owed_cents: 92500,
+    recovered_cents: 184000,
+    by_counterparty: { "Bolt Logistics": 52500, "Coyote Logistics": 40000 },
+  },
+};
+const OWNER_MOCKS = {
+  "/owner/dashboard": {
+    payout_cents: 39600,
+    properties: [
+      {
+        id: "p1",
+        name: "Riverside Secured Parking",
+        vetted: true,
+        spots: [
+          { id: "s1", label: "A1", price_cents_per_night: 2400, active: true },
+          { id: "s2", label: "B2", price_cents_per_night: 2800, active: false },
+        ],
+      },
+    ],
+    bookings: [
+      { id: "b1", nights: 2, price_cents: 4800, owner_payout_cents: 3960, state: "checked_out" },
+      { id: "b2", nights: 1, price_cents: 2400, owner_payout_cents: 1980, state: "booked" },
+    ],
+  },
+};
+
 const SURFACES = [
   ["map", "/"],
   ["load", "/load"],
@@ -599,6 +664,19 @@ const SURFACES = [
   }],
   ["docs-loading", "/docs", { hang: ["/protection/wallet"], ready: ".skel__row" }],
   ["map-loading", "/", { hang: ["/map/overlay"], ready: ".skel__pin" }],
+  // the two §18 portals — see the note above PORTAL mocks
+  // AI-CONTEXT: the ACTIVE FLEET has to be planted or `init()` lands on the picker
+  // instead of the workspace — `myFleets.find(f => f.fleet_id === activeFleetId)` is what
+  // chooses between them, and `activeFleetId` is read from storage at module load. The
+  // key lives under CACHE_PREFIX (U-02), so logout sweeps it. Without this the state
+  // measures a two-row list under the workspace's name, which is the failure this file
+  // keeps catching.
+  ["fleet-portal", "/fleet", {
+    mocks: FLEET_MOCKS,
+    storage: { "longhaul.cache.active_fleet": FLEET_ID },
+    ready: ".kpi__figure",
+  }],
+  ["owner-portal", "/owner", { mocks: OWNER_MOCKS, ready: ".payout__figure" }],
   // §23 entry 80: the sections collapse and start collapsed, so the grid is behind a
   // disclosure. Every state that reaches a document opens its section first —
   // otherwise the harness would measure three headings and report the surface covered.
@@ -1251,15 +1329,31 @@ const CHECKS = [
           if (r.width === 0 || r.height === 0) continue;
           // 1 px of tolerance: sub-pixel rounding is not a layout defect
           if (r.right > doc.clientWidth + 1 || r.left < -1) {
-            const style = getComputedStyle(el);
             // an element that scrolls its own overflow is doing so ON PURPOSE
             // (the preset chip row, the portal rail) — that is a pattern the
-            // constitution approves, not a break
-            const scrolls = ["auto", "scroll"].includes(style.overflowX);
-            const parentScrolls = el.parentElement
-              ? ["auto", "scroll"].includes(getComputedStyle(el.parentElement).overflowX)
-              : false;
-            if (!scrolls && !parentScrolls) {
+            // constitution approves, not a break.
+            //
+            // AI-CONTEXT: this walks ANCESTORS now, and used to check only the
+            // immediate parent (§23 entry 132). The comment above states the intent
+            // correctly; the one-level implementation was an incomplete expression of
+            // it. It happened to work for the cases it was written against — a chip
+            // row is `.row > .chip`, one level — and could not work for a TABLE, which
+            // is `table > thead > tr > th`: wrapping the table in a scroller exempted
+            // the table and still reported every cell inside it.
+            //
+            // This cannot hide a real MF-2 break, and that is the load-bearing part:
+            // the `doc.scrollWidth > doc.clientWidth` assertion below is untouched, so
+            // a page that actually scrolls sideways still fails whatever any element
+            // declares. What changed is only whether a cell INSIDE a deliberate
+            // scroller is reported as a page-level defect.
+            let inScroller = false;
+            for (let n = el; n && n !== document.body; n = n.parentElement) {
+              if (["auto", "scroll"].includes(getComputedStyle(n).overflowX)) {
+                inScroller = true;
+                break;
+              }
+            }
+            if (!inScroller) {
               offenders.push(`${el.tagName.toLowerCase()}.${el.className} @${Math.round(r.right)}`);
             }
           }
@@ -1476,12 +1570,15 @@ for (const [name, path, live] of SURFACES) {
       for (const el of document.querySelectorAll("body *")) {
         const r = el.getBoundingClientRect();
         if (r.width !== 0 && r.height !== 0 && (r.right > doc.clientWidth + 1 || r.left < -1)) {
-          const style = getComputedStyle(el);
-          const scrolls = ["auto", "scroll"].includes(style.overflowX);
-          const parentScrolls = el.parentElement
-            ? ["auto", "scroll"].includes(getComputedStyle(el.parentElement).overflowX)
-            : false;
-          if (!scrolls && !parentScrolls) {
+          // ancestor-aware, for the reason spelled out in CHECKS' overflow rule
+          let inScroller = false;
+          for (let n = el; n && n !== document.body; n = n.parentElement) {
+            if (["auto", "scroll"].includes(getComputedStyle(n).overflowX)) {
+              inScroller = true;
+              break;
+            }
+          }
+          if (!inScroller) {
             past.push(`${el.tagName.toLowerCase()}.${el.className} @${Math.round(r.right)}`);
           }
         }

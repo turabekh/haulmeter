@@ -327,3 +327,37 @@ describe("U-10 — the map declares four states and invents no facility", () => 
     expect(w.findAll(".skel__pin")).toHaveLength(0); // and no skeleton
   });
 });
+
+// AI-CONTEXT: §23 entry 132 — the app shell must not be a horizontal scroll container.
+//
+// This guards a near-miss rather than a defect, and the near-miss is the interesting
+// part. `.app-content` sets `overflow-y: auto`, and CSS promotes `visible` to `auto` on
+// the other axis when one axis is not visible — so it computed `overflow-x: auto`, a
+// horizontal scroller wrapping every element on every surface.
+//
+// That was harmless until the layout harness's scroller exemption was generalised to
+// walk ancestors (it had to be: a table is `table > thead > tr > th`, and a one-level
+// parent lookup could only ever exempt a chip row). At that point the computed `auto`
+// above everything exempted THE WHOLE APP from LAW 0's only mechanical check, and the
+// full 279-check sweep went green over it. It was caught by restoring the defect and
+// watching the test pass when it should have failed.
+//
+// So the declaration is pinned here. A future session that removes it does not get a
+// quiet regression in a browser-only suite; it gets a unit-test failure naming the rule.
+describe("§23 entry 132 — the app shell is not a horizontal scroller (MF-2)", () => {
+  it("declares overflow-x explicitly, so overflow-y cannot promote it to auto", () => {
+    // AI-CONTEXT: comments are STRIPPED first, and the first version of this test did
+    // not do that — so it passed against the AI-CONTEXT note above the declaration,
+    // which quotes `overflow-x: hidden` in prose. Removing the real declaration left it
+    // green. Caught by sabotage, and it is the same shape as HANDOFF-120 §4's accent
+    // test that routed on a word other than the one it claimed to check: a test that
+    // matches its own documentation asserts nothing about the code.
+    const shell = read("src/core/app-shell.scss")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    const block = shell.slice(shell.indexOf(".app-content {"));
+    const body = block.slice(0, block.indexOf("}"));
+    expect(body).toMatch(/overflow-y:\s*auto/);
+    expect(body).toMatch(/overflow-x:\s*hidden/);
+  });
+});

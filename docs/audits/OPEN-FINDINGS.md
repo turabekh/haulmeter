@@ -33,10 +33,10 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 |---|---|---|---|---|---|---|
 | Critical | 1 | 1 | 0 | 6 | 0 | **8** |
 | High | 0 | 0 | 0 | 17 | 0 | **17** |
-| Medium | 3 | 0 | 2 | 7 | 0 | **12** |
+| Medium | 3 | 0 | 0 | 9 | 0 | **12** |
 | Low | 1 | 0 | 0 | 6 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **5** | **1** | **2** | **36** | **1** | **45** |
+| **Total** | **5** | **1** | **0** | **38** | **1** | **45** |
 
 Findings opened *after* the audit are not in this scoreboard — they were never among the
 45. See **Opened after the audit**, below.
@@ -105,8 +105,8 @@ unobservable until the literal became a token. See §Blockers.
 | U-01 | High | **CLOSED** | Map drew outside the token system → `--on-accent` composition plus new `--shadow-pin`/`--scrim` (§23 entry 130), and a `token-discipline` sweep that keeps literals out. **Opened a new finding:** white on `--marker-500` is 2.04:1 in dark theme — see §Blockers. Session 119. |
 | U-02 | High | **CLOSED** | Per-driver keys moved under `CACHE_PREFIX`, plus a third instance the audit missed (`vendor_appearances`) and the in-memory refs that outlived logout. Asserted on what driver B renders. Session 119. |
 | U-03 | High | **CLOSED** | 119 made the fallback loud (counted, warned in dev, per-locale counts at `/dev`) and measured **0** — narrow, because mocked data left the ~45 dynamic families unrendered. 120 closed the other half with the audit's *stronger* fix: `test_dynamic_key_families.py` enumerates the vocabulary **in Python** and asserts a label exists in all six locales. **It found four families broken — 13 keys missing from ALL SIX, including every one of the nine `facility.type.*`.** `resolve()` returns the raw key when a string is missing everywhere, so `money.state.acknowledged` was rendering as literal text on the Money tab **for every driver, in every language** — the JS parity test cannot see this, because six identical holes are perfect parity. Session 120. |
-| U-04 | Medium | **PARTIAL** | **Five of the seven registered** — ClaimSurface in three states (invoice / evidence-only / no-claim), AuditSurface, FuelSurface, BookingSurface, PublicScorecardSurface. Harness **229 → 257 checks**. **Registering them found three real defects on screens nothing had ever measured:** `ClaimSurface`'s back button was **40 dp — the ONLY one of the nine `.back` buttons in `surfaces/` that was**, and it is the screen every detention notification deep-links to; `FuelSurface`'s price row ran to **378 px at 200%**; the scorecard's search input to **468 px**, because a flex item's default `min-width: auto` will not let an `<input>` shrink. All three fixed with existing patterns. **The two remaining are BLOCKED, not skipped:** `FleetWorkspaceSurface` and `OwnerPortalSurface` carry the 40 dp controls that are §5.1 item 3's open owner decision — adding them would either fail CI or decide that question by writing CSS. Session 120. |
-| U-05 | Medium | **PARTIAL** | `.filters-chip` 40→48 dp. `.cluster` measured at 36 dp with NO expanded hit area — below even §11.2's 44 dp map exemption; reported, not changed. Two portal controls untouched pending an owner call. Session 119. |
+| U-04 | Medium | **CLOSED** | All nine surfaces are in the harness. 120 registered five and found three defects; 121 registered the last two — the §18 portals — once the owner applied §6.5's floor to them (§23 entry 132). **Harness 229 → 279 checks.** Registering the portals found three more reflow defects on screens nothing had ever measured: the bookings ledger ran to **437 px** at 360 dp and dragged the page sideways; `.prop__head` did not wrap at 200% text; and `.in--name` ran to **451 px** — a flex item's `min-width: auto` against an `<input>`'s intrinsic ~20-character width, **the same defect U-04 found on the scorecard search input**, plus its grid form on `.kpis` (`repeat(2, 1fr)` → `minmax(0, 1fr)`). Session 121. |
+| U-05 | Medium | **CLOSED** | `.filters-chip` 40→48 (119). The portal controls are done (§23 entry 132) and the audit's count was low in both directions: **seven** controls were below §6.5's floor, not two, and the worst was `FleetWorkspaceSurface`'s `.switch` at **233 × 20 dp** with no height declared at all — the control that changes which fleet the whole screen is about. Two also failed on WIDTH: `.pause` measured 43 × 48 in Punjabi, where "Pause" is ਰੋਕੋ, so `min-width` was the missing half of §6.5's 48 × 48. **`.cluster` at 36 dp is the one remaining item and is a MAP finding, not a portal one** — reported by 119, still awaiting the owner. Session 121. |
 | U-06 | Critical | **CLOSED** | The Money tab shows no figure it does not have. `earnings` and `owed` are SEPARATE states because they fail separately, and the §23 entry's one hard rule is honoured: **The Meter gains no loading treatment** (§9, entry 52) — the CARD is replaced until `ddd_cents` is known, so The Meter renders once, with a real number. Rendering it against 0 would put a confident $0.00 in Mono over the driver's month. Closing it found §15.3's empty state MISSING: `money.empty` was translated into all six locales and rendered by nothing, so a driver owed nothing got a bare heading over an empty list. Session 121. |
 | U-07 | Critical | **CLOSED** | Rejected writes are dead-lettered whole (path, body, opId) and counted on the status strip. Session 119. **Remaining, by design:** the strip says how many, not which — naming them needs a surface, which is a design question. |
 | U-08 | High | **CLOSED** | 429/5xx now retry on the next flush with a bounded attempt cap (head-of-line protection); only non-429 4xx dead-letters. Session 119. |
@@ -214,9 +214,10 @@ translations of existing copy are not new copy, so §22.2 is not engaged.
    never-improvise category**, so it is pinned in `contrast.test.js` at its measured value
    with a roster check: the ratio cannot drift down silently, and a repair fails the test
    until the exception row is deleted. Needs an owner decision. §23 entry 130.
-5. **Two portal touch targets** (`FleetWorkspaceSurface`, `OwnerPortalSurface`, both 40 dp).
-   §6.5 grants no portal exemption in writing, but applying the glove floor to a desktop
-   form is a design decision rather than a fix. Untouched, deliberately.
+5. ~~**Two portal touch targets.**~~ **RESOLVED 2026-08-08** — the owner applied §6.5's
+   floor to the portals; §23 entry 132. It was **seven** controls, not two, and the worst
+   was 20 dp rather than 40. U-04 and U-05 are both closed, and both portals are now in
+   the layout harness.
 6. **`.cluster`'s hit area is 36 dp** — measured, and it does **not** exceed its visual
    size the way `.pin` does (a 44 dp button around a 28 dp puck). It is below §6.5's 48
    and below §11.2's deliberate 44 dp map-pin exemption too. Reported, not changed.

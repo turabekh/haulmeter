@@ -156,6 +156,7 @@ function driverLabel(id) {
       <!-- Members (M12-FR4) -->
       <section class="panel">
         <h2 class="panel__title">{{ t("fleet.members") }}</h2>
+        <div class="table-scroll">
         <table class="table">
           <thead>
             <tr>
@@ -174,11 +175,13 @@ function driverLabel(id) {
             </tr>
           </tbody>
         </table>
+        </div>
       </section>
 
       <!-- Claims desk: which brokers actually pay (M12-FR3) -->
       <section class="panel">
         <h2 class="panel__title">{{ t("fleet.claims") }}</h2>
+        <div class="table-scroll">
         <table class="table">
           <thead>
             <tr>
@@ -197,6 +200,7 @@ function driverLabel(id) {
             </tr>
           </tbody>
         </table>
+        </div>
       </section>
     </div>
     </template>
@@ -215,7 +219,13 @@ function driverLabel(id) {
   flex-wrap: wrap;
   margin-bottom: var(--s-4);
 }
+/* AI-CONTEXT: this had NO height at all and measured 233x20 dp — the worst target in
+   either portal, and one the audit never counted (§23 entry 132). U-05 described "two
+   portal controls (40 dp)"; there were seven below §6.5's floor and this was 20.
+   It is the control that changes which fleet the whole screen is about. */
 .switch {
+  min-height: var(--touch-min);
+  padding: 0 var(--s-2);
   background: transparent;
   color: var(--shield-500);
   font-size: var(--type-label-size);
@@ -259,8 +269,15 @@ function driverLabel(id) {
   font-size: var(--type-label-size);
   font-weight: 500;
 }
+/* AI-CONTEXT: 40 -> --touch-min (§23 entry 132, audit U-05). §6.5's "minimum target
+   48 x 48 dp" carries no portal exemption, and §18's own text says these portals are
+   "responsive down to tablet/phone" — its only exemption sentence protects the DRIVER
+   APP from §18, not the portals from §6. This is the row-level "Open" on each fleet.
+   Not raised to §6.5's 56 dp primary height: that is for a screen's one primary action,
+   and this is a control inside a list. */
 .cta--sm {
-  min-height: 40px;
+  min-height: var(--touch-min);
+  min-width: var(--touch-min); /* §6.5 is 48 x 48 — both dimensions */
 }
 .fleets {
   list-style: none;
@@ -303,9 +320,14 @@ function driverLabel(id) {
   color: var(--shield-500);
   font-size: var(--type-label-size);
 }
+/* AI-CONTEXT: `minmax(0, 1fr)`, not `1fr` — the grid form of the same defect twice over
+   in this session (§23 entry 132). A grid TRACK, like a flex item, defaults to a minimum
+   of min-content, so at 200% text the KPI figures could not shrink and the row ran to
+   488 px at 360 dp. `minmax(0, …)` is what lets a track go narrower than its content and
+   the content wrap instead. */
 .kpis {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-3);
   margin-bottom: var(--s-5);
 }
@@ -356,6 +378,17 @@ function driverLabel(id) {
   font-size: var(--type-label-size);
   color: var(--text-2);
   font-weight: 500;
+}
+/* AI-CONTEXT: §18 says these portals are "responsive down to tablet/phone", and until
+   they were registered in the layout harness nobody had checked (§23 entry 132). At 360 dp
+   this table ran to 437 px and pushed the whole PAGE sideways — an owner on a phone
+   scrolled the header and the property list to read a booking.
+   A horizontal scroller around the table is the fix, and it is not a new pattern: the
+   harness's own overflow rule names "the preset chip row, the portal rail" as approved
+   deliberate scrollers. The table keeps its comfortable desktop density (§18) and stops
+   dragging the page with it. */
+.table-scroll {
+  overflow-x: auto;
 }
 .table {
   width: 100%;
