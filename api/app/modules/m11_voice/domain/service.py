@@ -90,7 +90,9 @@ def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
     from app.foundation.f14_admin import public as admin
 
-    flags.register_flag(db, FLAG_KEY, description="M11 Voice Copilot & AI Communications")
+    flags.register_flag(
+        db, FLAG_KEY, description="M11 Voice Copilot & AI Communications", default_on=True
+    )
     admin.register_admin_view(db, "m11.voice", MODULE, "Voice & Comms", "/admin/m11/voice")
     if ai.get_active_prompt(db, GHOSTWRITER_PROMPT) is None:
         ai.register_prompt(

@@ -85,6 +85,7 @@ def _register_module_flags() -> None:
     try:
         register_all(db)
         db.commit()
+        _report_ungated_activations(db)
     except Exception:  # noqa: BLE001 — a registry failure must not stop the API booting
         db.rollback()
         print(
@@ -95,6 +96,36 @@ def _register_module_flags() -> None:
         )
     finally:
         db.close()
+
+
+def _report_ungated_activations(db) -> None:
+    """Say out loud which capabilities are running ahead of their own preconditions.
+
+    AI-CONTEXT: audit F-02's honest half (§23 entry 133). Three modules carry validation
+    gates and all six were unsatisfied while all three flags read enabled — M3 detention
+    without `legal_signoff`, M6 parking without a `refund_policy`, M7 fuel without a
+    `merchant_agreement`. Those encode business facts a deploy cannot decide, and blocking
+    the default on them would have taken the detention clock down, so the 29 July decision
+    to preserve live behaviour stands.
+
+    What the gate can honestly do is refuse to be silent. This prints at every boot, which
+    is where an operator will actually see it, and `/admin/flags` carries the same list for
+    the console. §11.7 says never assert what you do not know; this is that rule aimed at
+    the operator rather than the driver.
+    """
+    from app.foundation.f13_flags import public as flags
+
+    ahead = flags.running_ahead_of_gates(db)
+    if not ahead:
+        return
+    for key, unsatisfied in ahead:
+        print(
+            f"WARNING: {key} is ON with unsatisfied validation gates: "
+            f"{', '.join(unsatisfied)} — the capability is live and its preconditions "
+            f"are not recorded as met",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 @asynccontextmanager

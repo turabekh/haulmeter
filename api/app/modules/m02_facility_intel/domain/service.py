@@ -56,7 +56,9 @@ class ParsedDwell:
 def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
 
-    flags.register_flag(db, FLAG_KEY, description="M2 Facility Intelligence & Scorecard")
+    flags.register_flag(
+        db, FLAG_KEY, description="M2 Facility Intelligence & Scorecard", default_on=True
+    )
     admin.register_admin_view(
         db, "m02.scorecard", MODULE, "Facility Scorecard", "/admin/m02/scorecard"
     )

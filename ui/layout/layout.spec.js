@@ -664,6 +664,32 @@ const SURFACES = [
   }],
   ["docs-loading", "/docs", { hang: ["/protection/wallet"], ready: ".skel__row" }],
   ["map-loading", "/", { hang: ["/map/overlay"], ready: ".skel__pin" }],
+  // AI-CONTEXT: §11.5's CLUSTER bubbles, which no state had ever rendered (audit U-05).
+  //
+  // They only appear when the server clusters at density, and every map state here mocks
+  // pins — so `.cluster` shipped unmeasured, and 119 found it at 36 dp by hand. It is the
+  // first thing a driver sees at national span, which is where the app opens before GPS
+  // resolves. Four counts including a four-digit one, because the bubble grows with its
+  // number and the widest is the one that can overflow.
+  ["map-clusters", "/", {
+    mocks: {
+      ...NO_LOAD_MOCKS,
+      "/map/overlay": {
+        clustered: true,
+        total: 4821,
+        pins: [],
+        clusters: [
+          { count: 7, lat: 32.9, lon: -96.9, status: "empty" },
+          { count: 84, lat: 33.1, lon: -96.5, status: "some" },
+          { count: 312, lat: 32.6, lon: -97.2, status: "full" },
+          { count: 4821, lat: 33.4, lon: -97.6, status: null },
+        ],
+      },
+      "/map/presets": { presets: ["drive", "tonight", "work", "fuel", "food", "service"] },
+      "/community/handoff/nearby": [],
+    },
+    ready: ".cluster",
+  }],
   // the two §18 portals — see the note above PORTAL mocks
   // AI-CONTEXT: the ACTIVE FLEET has to be planted or `init()` lands on the picker
   // instead of the workspace — `myFleets.find(f => f.fleet_id === activeFleetId)` is what
@@ -1091,6 +1117,10 @@ const SURFACES = [
 ];
 const CAPTION_FLOOR_PX = 13; // §6.2: "Nothing smaller exists."
 const TOUCH_MIN_PX = 48; // §6.5 glove spec
+const MAP_TARGET_MIN_PX = 44; // §11.2, the deliberate map exemption — and its FLOOR
+// the map markers §11.2 governs, held to 44 by the check above rather than merely
+// excused from 48 by TARGET_EXEMPT below
+const MAP_TARGET = /(^|\s)(pin|cluster)(\s|$)/;
 // The tab bar is a fixed 5-across strip: at 360 dp each tab is 72 dp wide and the
 // spec sets its own height. Individual icons inside it are not separate targets.
 const TARGET_SELECTOR = "button, a[href], [role='button'], input, select";
@@ -1102,10 +1132,15 @@ const TARGET_SELECTOR = "button, a[href], [role='button'], input, select";
 // · MAP PINS: §11.2 sets them at "44 dp hit areas regardless of visual size",
 //   deliberately and against §6.5's general 48. A denser tap grid is the point of a
 //   map. The specific rule wins over the general one.
+// · CLUSTER BUBBLES: the same rule and the same reason (audit U-05, §23 entry 133). A
+//   cluster is a map marker; §11.2 governs it. It was 36 dp with NO expanded hit area —
+//   below even the exemption — and is a 44 dp button around a 36 dp bubble now, which is
+//   the shape `.pin` already had. The `map-clusters` state renders them so this is
+//   measured rather than asserted.
 // · MAPBOX CONTROLS: `mapboxgl-ctrl-*` is third-party furniture injected by the map
 //   library, and the attribution button and logo are required by Mapbox's terms —
 //   they are not ours to resize, and hiding them would breach the licence.
-const TARGET_EXEMPT = /(^|\s)(pin|mapboxgl-ctrl[\w-]*|mapboxgl-ctrl-logo)(\s|$)/;
+const TARGET_EXEMPT = /(^|\s)(pin|cluster|mapboxgl-ctrl[\w-]*|mapboxgl-ctrl-logo)(\s|$)/;
 
 // AI-CONTEXT: the harness has to be SIGNED IN, and finding that out was the first
 // thing it taught us. Unauthenticated, the router guard sends every route to /login,
@@ -1460,6 +1495,40 @@ const CHECKS = [
         return found;
       });
       return [inert, `controls that do nothing when pressed: ${inert.join(" | ")}`];
+    },
+  },
+  {
+    // AI-CONTEXT: the exemption above needed a FLOOR, and without one it was a hole
+    // (§23 entry 133). `pin` and `cluster` are exempt from §6.5's 48 dp because §11.2
+    // sets map markers at "44 dp hit areas regardless of visual size" — but nothing
+    // then checked the 44, so the exemption was really "map markers are unmeasured".
+    // Audit U-05 is the proof: `.cluster` sat at 36 dp, below even its own exemption,
+    // and no automated check could see it.
+    //
+    // Written the moment `cluster` joined the exempt list, because adding a name to
+    // that regex is exactly how a target stops being measured.
+    name: "map markers meet §11.2's 44 dp hit area",
+    async run(page) {
+      const tooSmall = await page.evaluate(
+        ([selector, min, exempt]) => {
+          const found = [];
+          for (const el of document.querySelectorAll(selector)) {
+            if (!new RegExp(exempt).test(el.className)) continue; // not a map marker
+            if (el.closest(".mapboxgl-ctrl")) continue; // third-party furniture
+            const r = el.getBoundingClientRect();
+            if (r.width === 0 || r.height === 0) continue;
+            if (getComputedStyle(el).visibility === "hidden") continue;
+            if (r.height < min - 0.5 || r.width < min - 0.5) {
+              found.push(
+                `${el.tagName.toLowerCase()}.${el.className} ${Math.round(r.width)}x${Math.round(r.height)}`,
+              );
+            }
+          }
+          return found;
+        },
+        [TARGET_SELECTOR, MAP_TARGET_MIN_PX, MAP_TARGET.source],
+      );
+      return [tooSmall, `§11.2 map hit area — under 44 dp: ${tooSmall.join(" | ")}`];
     },
   },
   {

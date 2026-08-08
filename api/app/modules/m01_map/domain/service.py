@@ -153,25 +153,31 @@ def register_module(db: Session) -> None:
     from app.foundation.f15_localization import public as localization
 
     localization.register_catalogue(db, messages.KEY_PREFIX, messages.ALERT_MESSAGES)
-    flags.register_flag(db, FLAG_KEY, description="M1 Road Intelligence Map")
+    flags.register_flag(db, FLAG_KEY, description="M1 Road Intelligence Map", default_on=True)
     flags.register_flag(
         db, WEIGH_STATION_FLAG, description="M1 Weigh-station layer (E3.1, OSM-sourced)"
     )
-    # AI-CONTEXT: `enabled=True` is load-bearing, and its absence shipped this feature
-    # DEAD. `register_flag` creates a row with enabled=False, and `is_switched_off`
-    # reads "a row that says not enabled" as switched off — so registering the flag was
-    # what turned the preset off. The real endpoint returned zero service pins in
-    # Madison while 45 repair facilities sat in the table.
+    # AI-CONTEXT: `default_on=True` is load-bearing, and its absence shipped this feature
+    # DEAD. A flag with no default and no operator decision reads as off, and
+    # `is_switched_off` reads that as switched off — so registering the flag was what
+    # turned the preset off. The real endpoint returned zero service pins in Madison
+    # while 45 repair facilities sat in the table.
     #
-    # Same reasoning the module registry records for the twelve module flags: a kill
-    # switch exists so a capability can be STOPPED, not so it starts stopped. An
-    # existing row is left alone by `register_flag`, so an owner's decision to switch
-    # this off still survives every restart.
+    # Same reasoning every module flag now records: a kill switch exists so a capability
+    # can be STOPPED, not so it starts stopped. An operator's decision lives in `enabled`
+    # and this declaration cannot overwrite it, so switching the preset off survives
+    # every restart.
+    #
+    # This was `enabled=True` until audit F-02 (§23 entry 133), and it is the flag that
+    # exposed the bug: it carries a GATE, and being born enabled meant `can_activate` had
+    # never been consulted — so disabling it once made it impossible to re-enable
+    # (HANDOFF-114 §7). `enable()` governs that transition now and always did; what
+    # changed is that nothing bypasses it.
     flags.register_flag(
         db,
         SERVICE_PRESET_FLAG,
         description="A5 Service preset — repair, tire, wash and parts on the map",
-        enabled=True,
+        default_on=True,
     )
     flags.add_gate(
         db,

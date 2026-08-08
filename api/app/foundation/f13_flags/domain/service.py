@@ -29,14 +29,34 @@ class FlagNotFound(Exception):
 
 # --- Flags ---
 def register_flag(
-    db: Session, key: str, description: str | None = None, enabled: bool = False
+    db: Session, key: str, description: str | None = None, default_on: bool = False
 ) -> FeatureFlag:
+    """AI-CONTEXT: the `enabled` parameter is GONE, and that is audit F-02's fix.
+
+    It used to let a caller create a row already switched on, which is how six validation
+    gates across M3, M6 and M7 came to have never been read: `enable()` is the only
+    function here that checks them, and a flag born enabled never goes through it.
+
+    `default_on` says the same thing honestly — "this capability ships on" is a fact about
+    the code — and it REFRESHES on every boot for the same reason `description` does. What
+    it cannot do is write `enabled`, which now belongs to the operator alone.
+    """
     flag = db.get(FeatureFlag, key)
     if flag is None:
-        flag = FeatureFlag(key=key, description=description, enabled=enabled)
+        flag = FeatureFlag(key=key, description=description, default_on=default_on)
         db.add(flag)
         db.flush()
-    elif description is not None and flag.description != description:
+        return flag
+    # AI-CONTEXT: two INDEPENDENT refreshes, not an elif chain, and the difference was a
+    # real bug caught by its own test. Written as `elif`, a flag whose default AND
+    # description both changed refreshed only the default — which is exactly the m13 case
+    # that motivated the description refresh in the first place (a half renamed at the
+    # same time as its default changing). Both are facts about the shipped code, so both
+    # refresh, always. `enabled` is neither and is never touched here.
+    if flag.default_on != default_on:
+        flag.default_on = default_on
+        db.flush()
+    if description is not None and flag.description != description:
         # AI-CONTEXT: the description REFRESHES; `enabled` never does.
         #
         # `register_config` has always done this for declarations — "a code default
@@ -53,6 +73,71 @@ def register_flag(
         # operator's state, and a redeploy must never silently flip a flag back.
         flag.description = description
         db.flush()
+    return flag
+
+
+def _effective(flag: FeatureFlag) -> bool:
+    """The one place the effective state of an EXISTING flag is decided (audit F-12).
+
+    A kill switch beats everything — that is what a kill switch is for. Otherwise the
+    operator's decision wins if they have made one, and the code's declaration carries it
+    if they have not.
+    """
+    if flag.kill_switch:
+        return False
+    return flag.default_on if flag.enabled is None else flag.enabled
+
+
+def running_ahead_of_gates(db: Session) -> list[tuple[str, list[str]]]:
+    """Flags that are effectively ON while their own activation gates are unsatisfied.
+
+    AI-CONTEXT: this is the honest half of audit F-02, and the reason the fix is not
+    simply "make gates block the default".
+
+    Three modules carry gates and all six were unsatisfied on the running box while all
+    three flags read enabled: M3 detention (`legal_signoff`,
+    `collection_partner_agreement`), M6 parking (`refund_policy`,
+    `damage_liability_posture`), M7 fuel (`merchant_agreement`, `payment_partner`). Those
+    are business preconditions, and satisfying a gate is an assertion that a legal review
+    or a commercial agreement actually happened — which is not something a deploy may
+    decide.
+
+    Making the gates block the default would therefore have taken M3 dark on the next
+    boot: the detention clock is the wedge, and stopping it is a far worse outcome than
+    the state being unverified. The 29 July owner decision — preserve live behaviour —
+    stands.
+
+    So the gate does the one thing it can honestly do here: it SAYS SO. This is reported
+    at boot and exposed on the admin console, which turns "the gate silently does nothing"
+    into "M3, M6 and M7 are running ahead of their preconditions, and here they are". That
+    is §11.7's rule — never assert what you do not know — pointed at the operator instead
+    of the driver.
+
+    Every DELIBERATE activation is still gated: `enable()` refuses, and it is now the only
+    writer of `enabled` to True.
+    """
+    out: list[tuple[str, list[str]]] = []
+    for flag in db.query(FeatureFlag).all():
+        if not _effective(flag):
+            continue
+        unsatisfied = sorted(g.name for g in flag.gates if not g.satisfied)
+        if unsatisfied:
+            out.append((flag.key, unsatisfied))
+    return sorted(out)
+
+
+def clear_decision(db: Session, flag_key: str) -> FeatureFlag:
+    """Hand a flag back to its code default by forgetting the operator's decision.
+
+    Without this there is no way back: once `disable()` has written False, `enabled` is
+    non-NULL forever and the declared default can never apply again. `enable()` would set
+    it True, which is a different thing — an explicit decision to be on, gates checked.
+    """
+    flag = db.get(FeatureFlag, flag_key)
+    if flag is None:
+        raise FlagNotFound(flag_key)
+    flag.enabled = None
+    db.flush()
     return flag
 
 
@@ -77,7 +162,7 @@ def is_switched_off(db: Session, flag_key: str) -> bool:
     flag = db.get(FeatureFlag, flag_key)
     if flag is None:
         return False  # never governed — behaves exactly as it did before gates existed
-    return flag.kill_switch or not flag.enabled
+    return not _effective(flag)
 
 
 def add_gate(db: Session, flag_key: str, name: str, note: str | None = None) -> ValidationGate:
@@ -184,10 +269,28 @@ def clear_kill(db: Session, flag_key: str) -> FeatureFlag:
 
 
 def is_enabled(db: Session, flag_key: str) -> bool:
+    """AI-CONTEXT: audit F-12 — this and `is_switched_off` are no longer two
+    implementations of one question.
+
+    They used to compute the effective state separately, and the audit's finding was that
+    they "only agree because F-02 force-enables everything". Both now defer to
+    `_effective`, so for a flag that EXISTS they cannot disagree — not by discipline, by
+    construction.
+
+    What still differs, deliberately, is the answer for a flag that does not exist at all,
+    and both defaults remain the ones §23 entry 105 argued for:
+
+      · here, absent means DOES NOT RUN — a capability nobody registered must not fire.
+      · in `is_switched_off`, absent means NOT SWITCHED OFF — a registry hiccup must not
+        take twelve modules dark and 404 the product.
+
+    `test_module_flags` asserts both halves, including that they agree on every registered
+    flag, so a future edit to one of them cannot quietly reintroduce the split.
+    """
     flag = db.get(FeatureFlag, flag_key)
     if flag is None:
         return False
-    return flag.enabled and not flag.kill_switch
+    return _effective(flag)
 
 
 # --- Config registry ---

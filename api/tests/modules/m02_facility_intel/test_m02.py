@@ -35,7 +35,9 @@ def test_register_module(db):
     from app.foundation.f13_flags import public as flags
 
     m2.register_module(db)
-    assert flags.is_enabled(db, "m02_facility_intel") is False
+    # ships on (audit F-02, §23 entry 133) — and nobody has decided otherwise
+    assert flags.is_enabled(db, "m02_facility_intel") is True
+    assert db.get(flags.FeatureFlag, "m02_facility_intel").enabled is None
     assert admin.list_admin_views(db, module="m02")[0].title == "Facility Scorecard"
 
 

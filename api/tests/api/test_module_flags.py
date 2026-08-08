@@ -119,6 +119,139 @@ def test_the_kill_switch_still_closes_the_gate(db):
     assert flags.is_switched_off(db, "m03_detention") is True
 
 
+# --- F-02 + F-12: the gate mechanism that had never gated anything ---
+#
+# AI-CONTEXT: measured on the running box before any of this was written — three modules
+# carry validation gates, all SIX were unsatisfied, and all three flags read enabled:
+#
+#     m03_detention   collection_partner_agreement=false, legal_signoff=false
+#     m06_parking     damage_liability_posture=false, refund_policy=false
+#     m07_fuel        merchant_agreement=false, payment_partner=false
+#
+# `enable()` is the only function in F13 that reads a gate, and `register_all` set
+# `enabled` by assignment, so it was never on the path. These tests hold the separation
+# that fixed it (§23 entry 133).
+
+
+def test_registration_writes_no_operator_state(db):
+    """The heart of F-02. `register_all` used to assign `flag.enabled = True`, which
+    bypassed `enable()` and therefore every validation gate. It must now declare the code
+    default and leave the operator's column untouched."""
+    register_all(db)
+    for module in MODULES:
+        row = db.get(flags.FeatureFlag, module.FLAG_KEY)
+        assert row.enabled is None, f"{module.FLAG_KEY}: registration wrote a decision"
+    # and the twelve that were live on 29 July still come up live, by declaration
+    assert flags.is_enabled(db, "m03_detention") is True
+
+
+def test_a_gate_refuses_a_deliberate_activation(db):
+    """What the gates are FOR, and what they had never once done."""
+    register_all(db)
+    flags.disable(db, "m03_detention")  # an operator switches the wedge off
+    with pytest.raises(flags.GateNotSatisfied):
+        flags.enable(db, "m03_detention")  # ...and cannot switch it back on unverified
+    assert flags.is_enabled(db, "m03_detention") is False
+
+
+def test_a_satisfied_gate_lets_the_activation_through(db):
+    """The other direction, or the test above would pass against a flag that can never
+    be enabled at all."""
+    register_all(db)
+    flags.disable(db, "m03_detention")
+    row = db.get(flags.FeatureFlag, "m03_detention")
+    for gate in row.gates:
+        flags.satisfy_gate(db, gate, note="test")
+    flags.enable(db, "m03_detention")
+    assert flags.is_enabled(db, "m03_detention") is True
+
+
+def test_the_two_predicates_agree_on_every_registered_flag(db):
+    """F-12. `is_switched_off` and `is_enabled` were separate implementations of one
+    question, and the audit's point was that they "only agree because F-02 force-enables
+    everything". They share `_effective` now, so agreement is structural."""
+    register_all(db)
+    flags.disable(db, "m06_parking")
+    flags.kill(db, "m07_fuel")
+    rows = db.query(flags.FeatureFlag).all()
+    assert len(rows) > 10  # the assertion must have something to range over
+    for row in rows:
+        assert flags.is_enabled(db, row.key) is not flags.is_switched_off(db, row.key), row.key
+
+
+def test_the_two_predicates_still_diverge_on_an_ABSENT_flag(db):
+    """And that divergence is deliberate, not the defect. Both defaults are §23 entry
+    105's and both survive: a capability nobody registered must not FIRE, and a registry
+    hiccup must not take twelve modules dark and 404 the product."""
+    assert flags.is_enabled(db, "m99_never_registered") is False  # does not run
+    assert flags.is_switched_off(db, "m99_never_registered") is False  # not withheld
+
+
+def test_a_flag_running_ahead_of_its_gates_says_so(db):
+    """The honest half of F-02. Blocking the default would have taken M3's detention
+    clock down — the wedge — so the 29 July decision stands and the unmet preconditions
+    are REPORTED instead. This is the mechanism that stops that being silent."""
+    register_all(db)
+    ahead = dict(flags.running_ahead_of_gates(db))
+    assert ahead["m03_detention"] == ["collection_partner_agreement", "legal_signoff"]
+    assert ahead["m06_parking"] == ["damage_liability_posture", "refund_policy"]
+    assert ahead["m07_fuel"] == ["merchant_agreement", "payment_partner"]
+    # a module with no gates is not "ahead" of anything
+    assert "m09_money" not in ahead
+
+
+def test_a_satisfied_module_drops_off_the_ahead_report(db):
+    """Otherwise the report could be a hardcoded list of three keys."""
+    register_all(db)
+    row = db.get(flags.FeatureFlag, "m07_fuel")
+    for gate in row.gates:
+        flags.satisfy_gate(db, gate, note="test")
+    assert "m07_fuel" not in dict(flags.running_ahead_of_gates(db))
+
+
+def test_a_switched_off_module_is_not_reported_as_running_ahead(db):
+    """It is not running at all, so it is not running ahead of anything."""
+    register_all(db)
+    flags.disable(db, "m06_parking")
+    assert "m06_parking" not in dict(flags.running_ahead_of_gates(db))
+
+
+def test_the_code_default_refreshes_but_the_decision_never_does(db):
+    """`register_flag` refreshes `description` and now `default_on`, because both are
+    facts about the shipped code. `enabled` is the operator's and a redeploy must never
+    flip it back — the rule that column was already written to obey."""
+    flags.register_flag(db, "zz_test_flag", description="first", default_on=False)
+    flags.register_flag(db, "zz_test_flag", description="second", default_on=True)
+    row = db.get(flags.FeatureFlag, "zz_test_flag")
+    assert row.description == "second"
+    assert row.default_on is True
+    assert row.enabled is None  # never written by registration
+
+    flags.disable(db, "zz_test_flag")
+    flags.register_flag(db, "zz_test_flag", description="second", default_on=True)
+    assert db.get(flags.FeatureFlag, "zz_test_flag").enabled is False  # decision survives
+    assert flags.is_enabled(db, "zz_test_flag") is False
+
+
+def test_clearing_a_decision_hands_the_flag_back_to_its_default(db):
+    """Without this there is no way back: `disable()` writes False and the declared
+    default could never apply again."""
+    register_all(db)
+    flags.disable(db, "m09_money")
+    assert flags.is_enabled(db, "m09_money") is False
+    flags.clear_decision(db, "m09_money")
+    assert db.get(flags.FeatureFlag, "m09_money").enabled is None
+    assert flags.is_enabled(db, "m09_money") is True
+
+
+def test_a_kill_switch_beats_both_the_default_and_the_decision(db):
+    register_all(db)
+    flags.kill(db, "m01_map")
+    assert flags.is_enabled(db, "m01_map") is False
+    flags.clear_decision(db, "m01_map")
+    assert flags.is_enabled(db, "m01_map") is False  # default cannot outrank a kill
+
+
 # --- F-17: the cost control that had never governed a call ---
 def test_every_module_gets_an_ai_budget_at_boot(db):
     """`_check_budget` returned silently for a module with no ModuleBudget row, and

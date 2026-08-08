@@ -59,7 +59,7 @@ def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
     from app.foundation.f14_admin import public as admin
 
-    flags.register_flag(db, FLAG_KEY, description="M4 Accessorial Recovery Suite")
+    flags.register_flag(db, FLAG_KEY, description="M4 Accessorial Recovery Suite", default_on=True)
     admin.register_admin_view(db, "m04.owed", MODULE, "Money Owed", "/admin/m04/owed")
     if ai.get_active_prompt(db, LUMPER_PROMPT) is None:
         ai.register_prompt(

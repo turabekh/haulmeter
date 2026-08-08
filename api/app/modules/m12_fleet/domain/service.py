@@ -81,7 +81,7 @@ def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
     from app.foundation.f14_admin import public as admin
 
-    flags.register_flag(db, FLAG_KEY, description="M12 Fleet & B2B Layer")
+    flags.register_flag(db, FLAG_KEY, description="M12 Fleet & B2B Layer", default_on=True)
     admin.register_admin_view(db, "m12.fleet", MODULE, "Fleet & Data", "/admin/m12/fleet")
 
 

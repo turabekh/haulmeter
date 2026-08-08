@@ -37,7 +37,7 @@ def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
     from app.foundation.f14_admin import public as admin
 
-    flags.register_flag(db, FLAG_KEY, description="M8 Decision Intelligence")
+    flags.register_flag(db, FLAG_KEY, description="M8 Decision Intelligence", default_on=True)
     admin.register_admin_view(db, "m08.intel", MODULE, "Decision Intelligence", "/admin/m08/intel")
 
 

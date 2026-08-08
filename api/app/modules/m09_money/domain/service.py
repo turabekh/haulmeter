@@ -117,7 +117,7 @@ def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
     from app.foundation.f14_admin import public as admin
 
-    flags.register_flag(db, FLAG_KEY, description="M9 Driver Money & Tax Tools")
+    flags.register_flag(db, FLAG_KEY, description="M9 Driver Money & Tax Tools", default_on=True)
     from app.foundation.f15_localization import public as localization
 
     localization.register_catalogue(db, messages.KEY_PREFIX, messages.ALERT_MESSAGES)

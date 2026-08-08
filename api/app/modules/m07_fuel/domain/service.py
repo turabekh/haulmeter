@@ -59,7 +59,7 @@ def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
     from app.foundation.f14_admin import public as admin
 
-    flags.register_flag(db, FLAG_KEY, description="M7 Fuel Savings Network")
+    flags.register_flag(db, FLAG_KEY, description="M7 Fuel Savings Network", default_on=True)
     for gate in GATES:
         flags.add_gate(db, FLAG_KEY, gate)
     admin.register_admin_view(db, "m07.fuel", MODULE, "Fuel Network", "/admin/m07/fuel")

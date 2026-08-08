@@ -82,9 +82,19 @@ def list_flags(
             {
                 "key": f.key,
                 "description": f.description,
-                "enabled": f.enabled,
+                # AI-CONTEXT: `enabled` is the EFFECTIVE state — what the product is doing
+                # — and the two facts behind it are reported separately (audit F-02,
+                # §23 entry 133). A console that showed only the raw column could not tell
+                # an operator whether a capability is on because they decided so or because
+                # it ships that way, and that is the distinction the whole fix rests on.
+                "enabled": flags.is_enabled(db, f.key),
+                "default_on": f.default_on,
+                "operator_decision": f.enabled,  # None = nobody has decided
                 "kill_switch": f.kill_switch,
                 "can_activate": flags.can_activate(db, f.key),
+                # the honest flag: live, with its own preconditions unmet
+                "running_ahead_of_gates": flags.is_enabled(db, f.key)
+                and not flags.can_activate(db, f.key),
                 "gates": [{"name": g.name, "satisfied": g.satisfied} for g in f.gates],
                 # grouping is server-side so every client groups identically
                 "family": _flag_family(f.key),

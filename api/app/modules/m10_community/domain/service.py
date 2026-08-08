@@ -80,7 +80,7 @@ def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
     from app.foundation.f14_admin import public as admin
 
-    flags.register_flag(db, FLAG_KEY, description="M10 Community & Points Economy")
+    flags.register_flag(db, FLAG_KEY, description="M10 Community & Points Economy", default_on=True)
     admin.register_admin_view(db, "m10.points", MODULE, "Community & Points", "/admin/m10/points")
 
 

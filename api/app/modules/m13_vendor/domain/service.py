@@ -153,6 +153,13 @@ def register_module(db: Session) -> None:
     from app.foundation.f15_localization import public as localization
 
     localization.register_catalogue(db, messages.KEY_PREFIX, messages.ALERT_MESSAGES)
+    # AI-CONTEXT: BOTH halves declare no default, i.e. they ship OFF (audit F-02,
+    # §23 entry 133). That is deliberate and load-bearing: session 114 found the food half
+    # live in production over 13 seed vendors, so a driver could see invented food wrapped
+    # in §11.7's honesty apparatus. Food is Phase A and activates when there are real
+    # cooks; the service half activates when a real shop has claimed a site. Their
+    # PRODUCTION rows say `enabled=false` — an operator decision the migration preserves
+    # and this declaration cannot overrule.
     flags.register_flag(db, FLAG_KEY, description="M13 Vendor Network — food vendors (Phase A)")
     flags.register_flag(
         db,

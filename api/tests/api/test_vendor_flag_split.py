@@ -86,7 +86,13 @@ def test_both_halves_default_off_and_are_registered_separately(db, registered):
     }
     assert all(row is not None for row in rows.values()), rows
     assert all(row.description for row in rows.values())  # switchable AND explicable
-    assert all(row.enabled is False for row in rows.values())
+    # AI-CONTEXT: `enabled is None` and `default_on is False` (audit F-02, §23 entry 133).
+    # Both halves ship OFF, and no operator has been asked — which is a stronger statement
+    # than the old single column could make, because it separates "deferred by design"
+    # from "somebody switched it off". Session 114 switched the food half off in
+    # production, so THAT box has enabled=False; a fresh one has None. Both are off.
+    assert all(row.default_on is False for row in rows.values())
+    assert all(row.enabled is None for row in rows.values())
     assert m13.is_active(db) is False
 
 

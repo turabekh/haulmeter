@@ -23,7 +23,29 @@ class FeatureFlag(Base):
 
     key: Mapped[str] = mapped_column(String(120), primary_key=True)
     description: Mapped[str | None] = mapped_column(String(300), nullable=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # AI-CONTEXT: audit F-02 — `enabled` was doing TWO jobs, and that is the whole bug.
+    #
+    # It carried both "this capability ships on" (a fact about the CODE) and "an operator
+    # switched this" (a fact about this BOX). `register_all` wrote it by assignment to
+    # express the first, which meant `enable()` — the only function in F13 that consults
+    # validation gates — was never on the path. Six gates across M3, M6 and M7 had
+    # therefore never been read: measured on the running box, all six `false`, all three
+    # flags `true`.
+    #
+    # They are separate columns now:
+    #
+    #   default_on  the CODE's declaration. Refreshes on every boot, exactly like
+    #               `description` does, because it is a fact about the shipped software.
+    #   enabled     the OPERATOR's decision, and NULL means they have not made one.
+    #               `enable()` and `disable()` are the only writers, and `enable()` still
+    #               refuses on an unsatisfied gate — so the gate now governs every
+    #               deliberate activation instead of nothing.
+    #
+    # The effective state is `enabled` when an operator has decided and `default_on`
+    # otherwise; `service._effective` is the one place that resolves it, which is what
+    # closes F-12 (two predicates that used to compute it separately).
+    default_on: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
     kill_switch: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

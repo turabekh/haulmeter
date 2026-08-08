@@ -493,7 +493,9 @@ function stale(pin) {
       :aria-label="`${cl.count} ${t('map.cluster_label')}`"
       @click="zoomToCluster(cl)"
     >
-      <span class="cluster__count">{{ cl.count }}</span>
+      <span class="cluster__bubble">
+        <span class="cluster__count">{{ cl.count }}</span>
+      </span>
     </button>
     <!-- AI-CONTEXT: ODbL credit for our OSM-derived facility rows (PRD §12), shown
          only when there is no basemap to carry it. Mapbox's own attribution bar
@@ -644,9 +646,30 @@ function stale(pin) {
   border-color: var(--pin-color);
 }
 /* §11.5 cluster chip: count + dominant status color */
+/* AI-CONTEXT: audit U-05 — the cluster was a 36 dp target with NO expanded hit area,
+   below §6.5's 48 and below §11.2's deliberate 44 dp map exemption too. §11.2 sets map
+   markers at "44 dp hit areas regardless of visual size", and a cluster bubble is that
+   species of marker, so 44 is the floor it belongs under rather than 48.
+   The fix is the pattern `.pin` already uses — a 44 dp BUTTON around a smaller visual —
+   so the bubble still renders at 36 dp and the map is not re-weighted. §23 entry 130's
+   warning applies: a touch-target pass that restyles the map is not a touch-target pass.
+   The bubble itself moved to `.cluster__bubble`; `.cluster` is now the hit area. */
 .cluster {
   position: absolute;
   transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.cluster__bubble {
   min-width: 36px;
   height: 36px;
   padding: 0 var(--s-2);
@@ -658,7 +681,6 @@ function stale(pin) {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
 }
 .cluster__count {
   font-size: var(--type-label-size);

@@ -39,7 +39,9 @@ def _setup(db, email="oo@example.com"):
 
 def test_register_module_seeds_flag_and_prompt(db):
     m4.register_module(db)
-    assert flags.is_enabled(db, "m04_accessorial") is False
+    # ships on (audit F-02, §23 entry 133); the operator has decided nothing
+    assert flags.is_enabled(db, "m04_accessorial") is True
+    assert db.get(flags.FeatureFlag, "m04_accessorial").enabled is None
     assert ai.get_active_prompt(db, "lumper_ocr") is not None
 
 

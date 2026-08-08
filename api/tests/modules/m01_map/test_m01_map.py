@@ -24,9 +24,25 @@ def _belief(db, account, fac, signal, value):
 
 
 def test_register_module_creates_flag_and_admin_view(db):
+    """AI-CONTEXT: this asserted `is_enabled(...) is False` after registration, and that
+    was never what production looked like (audit F-02, §23 entry 133). `register_all`
+    force-assigned `enabled = True`, so on every real box M1 came up ON while the test
+    environment had it off — the suite was measuring a state the product never had.
+
+    M1 DECLARES `default_on=True` now, so the test and the box agree, and the assertion
+    became the sharper one: the capability is on because the code ships it on, and NO
+    operator has decided anything. Those were indistinguishable before."""
     m1.register_module(db)
-    assert flags.is_enabled(db, "m01_map") is False  # registered, off until activated
-    flags.enable(db, "m01_map")
+    row = db.get(flags.FeatureFlag, "m01_map")
+    assert row is not None  # registered — switchable in the console
+    assert row.default_on is True  # ships on: the 29 July decision, declared
+    assert row.enabled is None  # and nobody has overruled it
+    assert flags.is_enabled(db, "m01_map") is True
+
+    # an operator's decision beats the declaration, in both directions
+    flags.disable(db, "m01_map")
+    assert flags.is_enabled(db, "m01_map") is False
+    flags.clear_decision(db, "m01_map")
     assert flags.is_enabled(db, "m01_map") is True
 
 

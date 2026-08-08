@@ -84,21 +84,19 @@ def register_all(db: Session) -> list[str]:
     """Idempotent. Returns the flag keys that now exist, so a caller can assert on the
     result rather than trusting that a loop ran.
 
-    AI-CONTEXT: a flag REGISTERED FOR THE FIRST TIME comes up ENABLED, and only then.
-    `register_flag` defaults to off, which is the right default for a flag somebody is
-    about to switch on deliberately — but these twelve are not new capabilities, they
-    are capabilities that have been serving drivers ungated for months. Registering
-    them off would have switched the product off on deploy, including M3 detention.
-    Owner decision, 29 July 2026: preserve today's behaviour; the point of the exercise
-    is that a kill switch EXISTS, not that everything stops.
+    AI-CONTEXT: this writes NO operator state, and that is audit F-02's fix (§23 entry
+    133). It declares what each module ships as — `default_on`, refreshed every boot —
+    and never touches `enabled`, which belongs to `enable()`/`disable()` alone and is
+    NULL until a human decides.
 
-    A flag that already exists is left exactly as it is — enabled or disabled — because
-    that state is an owner decision and a deploy must never overrule it. That is why
-    this compares before and after rather than simply setting `enabled=True`.
+    The 29 July 2026 owner decision still holds and is unchanged in effect: the twelve
+    capabilities that have been serving drivers come up on, because registering them off
+    would switch the product off on deploy, M3 detention included. What changed is that
+    they come up on because they DECLARE it, so `enable()` keeps its monopoly on writing
+    operator state and validation gates govern every deliberate activation.
     """
     from app.foundation.f01_identity import public as identity
     from app.foundation.f03_location import public as location
-    from app.foundation.f13_flags import public as flags
 
     # AI-CONTEXT: F1's registration runs HERE, at boot, and it did not before.
     #
@@ -118,19 +116,28 @@ def register_all(db: Session) -> list[str]:
     location.register_location_retention(db)
     _register_ai_budgets(db)
 
-    known_before = {
-        key for (key,) in db.query(flags.FeatureFlag.key).all()  # noqa: S608 - ORM
-    }
     registered = []
     for module in MODULES:
         module.register_module(db)
         registered.append(module.FLAG_KEY)
     db.flush()
-    for key in registered:
-        if key in known_before:
-            continue  # already an owner's decision — never overruled by a restart
-        flag = db.get(flags.FeatureFlag, key)
-        if flag is not None:
-            flag.enabled = True
-    db.flush()
+    # AI-CONTEXT: audit F-02 — the loop that used to live here is GONE.
+    #
+    # It read `if key in known_before: continue` and then `flag.enabled = True`, which is
+    # how twelve module flags came up on with their validation gates unread: `enable()` is
+    # the only function in F13 that checks a gate, and assignment does not go through it.
+    #
+    # Each module DECLARES `default_on` in its own `register_module` now, beside the
+    # capability it describes, and that declaration carries a fresh box exactly as the
+    # assignment did. Two things improve by moving it there. The 29 July decision
+    # ("preserve today's behaviour; the point is that a kill switch EXISTS, not that
+    # everything stops") is now written where a reader of the module can see it, instead
+    # of being a fact about a loop in the registry. And the NEXT module's author has to
+    # choose — v2.0 §3's `a07_parking_ahead` is specified with an inventory gate precisely
+    # so it does not ship into an empty search, and under the old loop that gate would
+    # have done nothing.
+    #
+    # `known_before` is no longer needed: nothing here writes operator state at all, so
+    # there is nothing for a restart to overrule. `enabled` stays NULL until a human
+    # decides, and `register_flag` refuses to touch it.
     return registered

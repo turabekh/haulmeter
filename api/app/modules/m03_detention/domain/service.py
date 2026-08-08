@@ -90,7 +90,9 @@ def compute_detention(
 def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
 
-    flags.register_flag(db, FLAG_KEY, description="M3 Detention Tracker & Recovery")
+    flags.register_flag(
+        db, FLAG_KEY, description="M3 Detention Tracker & Recovery", default_on=True
+    )
     for gate in GATES:
         flags.add_gate(db, FLAG_KEY, gate)
     from app.foundation.f14_admin import public as admin

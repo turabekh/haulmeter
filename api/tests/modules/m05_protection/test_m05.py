@@ -32,7 +32,9 @@ def _stop(db, account, appt_start=T0, appt_end=None):
 
 def test_register_module(db):
     m5.register_module(db)
-    assert flags.is_enabled(db, "m05_protection") is False
+    # ships on (audit F-02, §23 entry 133); the operator has decided nothing
+    assert flags.is_enabled(db, "m05_protection") is True
+    assert db.get(flags.FeatureFlag, "m05_protection").enabled is None
 
 
 def test_on_time_proof_within_window_and_notice(db):
