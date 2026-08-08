@@ -19,10 +19,12 @@ intents to the modules below it and drafts through F9.
 - Multilingual (M11-FR6): utterances transcribe in any launch locale and
   CLASSIFY in it — the locale scopes the vocabulary, with English always in
   scope for embedded trucking jargon. The ghostwriter accepts any language and
-  always outputs English. NOT yet true of the ANSWER: `_dispatch` speaks
-  English whatever it understood (finding N-01, `docs/audits/OPEN-FINDINGS.md`).
+  always outputs English. The ANSWER is localized too (N-01): every spoken
+  string comes from F15's message catalogue via `messages.py`, keyed by the
+  driver's locale, falling back to compiled English if a row is missing.
 
-Composes f08 + f09 + m04 + m07 + m08 + m10. Runs behind the F13 flag m11_voice.
+Composes f08 + f09 + f15 + m04 + m07 + m08 + m10. Runs behind the F13 flag
+m11_voice.
 """
 
 from dataclasses import dataclass, field
@@ -31,12 +33,13 @@ from sqlalchemy.orm import Session
 
 from app.foundation.f08_notifications import public as notifications
 from app.foundation.f09_ai_gateway import public as ai
+from app.foundation.f15_localization import public as localization
 from app.modules.m04_accessorial import public as m4
 from app.modules.m07_fuel import public as m7
 from app.modules.m08_intelligence import public as m8
 from app.modules.m10_community import public as m10
 
-from . import lexicon
+from . import lexicon, messages
 
 FLAG_KEY = "m11_voice"
 MODULE = "m11"
@@ -96,6 +99,20 @@ def register_module(db: Session) -> None:
             ai.AiTask.drafting,
             "Write a {tone} {kind} to the counterparty in ENGLISH. Facts: {facts}",
         )
+    register_voice_messages(db)
+
+
+def register_voice_messages(db: Session) -> None:
+    """AI-CONTEXT: N-01 — this is F15's message catalogue's FIRST producer in the
+    product. `register_message` was written, exported and called by nothing but F15's
+    own test, which is the same built-and-inert shape as F-09's purge.
+
+    Idempotent by `register_message`'s own upsert, so an edited string here is what the
+    box serves after the next boot rather than needing a migration.
+    """
+    for key, by_locale in messages.VOICE_MESSAGES.items():
+        for locale, text in by_locale.items():
+            localization.register_message(db, messages.KEY_PREFIX + key, locale, text)
 
 
 # --- Intent routing (M11-FR1) + motion policy (M11-FR2) ---
@@ -107,22 +124,46 @@ def interaction_mode(driving: bool) -> str:
     return "voice" if driving else "visual"
 
 
+# AI-CONTEXT: finding N-01 — the copilot understood six languages and answered in one.
+# Every string it speaks comes from F15's catalogue now, keyed by the driver's locale.
+#
+# A MISSING ROW FALLS BACK TO THE COMPILED ENGLISH rather than to a blank, a raw key, or
+# a refusal. That is F-17's third option applied again: `main.py` only warns if boot
+# registration fails, so a strict lookup would turn one missing row into a silent voice
+# on the surface a driver is using at speed.
+def _say(db: Session, key: str, locale: str, **values) -> str:
+    default = messages.VOICE_MESSAGES[key][messages.DEFAULT_LOCALE_KEY]
+    text = localization.get_message(db, messages.KEY_PREFIX + key, locale) or default
+    return text.format(**values) if values else text
+
+
+def _money(cents: int) -> str:
+    # NOT localized, deliberately. F15 fixes units imperial and currency USD in every
+    # locale because this is a US trucking product; a driver reading "1.234,56 €" would
+    # be reading about a different country's money.
+    return f"${cents / 100:.2f}"
+
+
 def _dispatch(db: Session, account_id, intent: str, context: dict) -> tuple[str, dict]:
+    locale = context.get("locale", lexicon.DEFAULT_LOCALE)
     if intent in ("money_owed", "next_action"):
         items = claim_assistant(db, account_id)
         total = sum(i.amount_cents for i in items if i.state not in ("recovered", "written_off"))
         return (
-            f"You're owed ${total / 100:.2f} across {len(items)} claims."
+            _say(db, "money_owed", locale, amount=_money(total), count=len(items))
             if items
-            else "You're all paid up — nothing owed right now.",
+            else _say(db, "money_owed_none", locale),
             {"claims": [i.__dict__ for i in items]},
         )
     if intent == "points_balance":
         pts = m10.points_balance(db, account_id)
-        return f"You have {pts} points.", {"points": pts}
+        return _say(db, "points_balance", locale, points=pts), {"points": pts}
     if intent == "fuel_savings":
         saved = m7.driver_analytics(db, account_id).savings_cents
-        return f"You've saved ${saved / 100:.2f} on fuel so far.", {"fuel_saved_cents": saved}
+        return (
+            _say(db, "fuel_savings", locale, amount=_money(saved)),
+            {"fuel_saved_cents": saved},
+        )
     if intent == "sleep_tonight":
         if {"lat", "lon", "hos_minutes_remaining"} <= context.keys():
             plan = m8.where_to_sleep(
@@ -134,28 +175,26 @@ def _dispatch(db: Session, account_id, intent: str, context: dict) -> tuple[str,
                 context["hos_minutes_remaining"],
             )
             n = len(plan.stops)
-            return f"I found {n} stops within your hours.", {"stops": n}
-        return "How many hours do you have left?", {"clarify": "hos"}
+            return _say(db, "sleep_found", locale, count=n), {"stops": n}
+        return _say(db, "sleep_clarify", locale), {"clarify": "hos"}
     if intent == "detention_status":
         owed = sum(
             r["amount_cents"] for r in m4.money_owed(db, account_id) if r["kind"] == "detention"
         )
         return (
-            f"Detention on record: ${owed / 100:.2f}."
+            _say(db, "detention_status", locale, amount=_money(owed))
             if owed
-            else "No detention on record right now.",
+            else _say(db, "detention_none", locale),
             {"detention_cents": owed},
         )
     if intent == "help":
-        return (
-            "Ask me about parking, fuel, your detention clock, "
-            "what you're owed, or to draft a message.",
-            {},
-        )
+        return _say(db, "help", locale), {}
     if intent == "unknown":
-        return "I didn't catch that — try 'parking ahead' or 'what am I owed'.", {}
-    # remaining query intents acknowledge and hand to the on-screen surface
-    return f"Pulling up {intent.replace('_', ' ')}.", {"handoff": intent}
+        return _say(db, "unknown", locale), {}
+    # remaining query intents acknowledge and hand to the on-screen surface. Each has its
+    # OWN key: interpolating `intent.replace("_", " ")` spoke an English slug inside a
+    # Spanish sentence, which is worse than either language on its own.
+    return _say(db, f"handoff.{intent}", locale), {"handoff": intent}
 
 
 def route(
@@ -170,8 +209,10 @@ def route(
     intent = classify_intent(utterance, context.get("locale", lexicon.DEFAULT_LOCALE))
     needs_conf = intent in _CONFIRM_INTENTS
     if needs_conf and driving:
-        # M11-FR2: never commit an action in motion — confirm on screen when stopped
-        spoken = "I'll set that up — confirm on screen when you're stopped."
+        # M11-FR2: never commit an action in motion — confirm on screen when stopped.
+        # This one is ALWAYS spoken aloud (mode="voice"), so it is the string N-01
+        # matters most for: the driver cannot read the screen to recover from it.
+        spoken = _say(db, "deferred", context.get("locale", lexicon.DEFAULT_LOCALE))
         return VoiceResponse(
             intent,
             spoken,

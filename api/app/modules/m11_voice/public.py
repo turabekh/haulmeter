@@ -22,6 +22,7 @@ from .domain.service import (
     handle_utterance,
     interaction_mode,
     register_module,
+    register_voice_messages,
     route,
 )
 
@@ -40,5 +41,6 @@ __all__ = [
     "handle_utterance",
     "interaction_mode",
     "register_module",
+    "register_voice_messages",
     "route",
 ]

@@ -11,7 +11,7 @@ from app.foundation.f15_localization import public as localization
 from app.modules.m07_fuel import public as m7
 from app.modules.m10_community import public as m10
 from app.modules.m11_voice import public as m11
-from app.modules.m11_voice.domain import lexicon
+from app.modules.m11_voice.domain import lexicon, messages
 
 # eval fixture set (M11-FR1/FR6 DoD: >=15 intents, >=95% routing accuracy
 # IN EACH LAUNCH LANGUAGE). Audit F-30: the English list below was the whole
@@ -301,3 +301,86 @@ def test_handle_utterance_transcribes_then_routes(db):
     assert resp.intent == "money_owed"
     assert resp.mode == "voice"
     assert resp.audio_ref is not None and resp.audio_ref.startswith("audio://")
+
+
+# --- N-01: the copilot answers in the language it understood ---
+def test_every_spoken_string_exists_in_all_six_launch_locales(db):
+    # F15's own rule: "a driver-facing string missing any of them fails CI"
+    m11.register_module(db)
+    for key in messages.VOICE_MESSAGES:
+        full = messages.KEY_PREFIX + key
+        assert localization.missing_locales(db, full) == [], f"{key} missing locales"
+        assert localization.is_complete(db, full) is True
+
+
+def test_every_intent_the_router_can_return_has_something_to_say(db):
+    # `_say` raises KeyError on an unknown key, deliberately — a new intent added to
+    # the lexicon with no message would otherwise be a 500 in a moving truck. This
+    # makes that gap fail in CI instead.
+    for intent in m11.INTENTS:
+        if intent in ("money_owed", "next_action", "points_balance", "fuel_savings",
+                      "sleep_tonight", "detention_status", "help", "unknown"):
+            continue  # these have their own keys, asserted by the dispatch tests
+        assert f"handoff.{intent}" in messages.VOICE_MESSAGES, intent
+
+
+def test_a_spanish_driver_is_answered_in_spanish(db):
+    driver = _driver(db)
+    m11.register_module(db)
+    ledger.create_receivable(db, driver.id, ledger.ReceivableKind.detention, 15000)
+
+    resp = m11.route(db, driver.id, "cuanto me deben", context={"locale": "es"})
+    assert resp.intent == "money_owed"
+    assert "Te deben" in resp.spoken
+    # the MONEY is not localized — F15 fixes currency USD and units imperial
+    assert "$150.00" in resp.spoken
+
+
+def test_the_same_question_in_english_is_unchanged(db):
+    driver = _driver(db)
+    m11.register_module(db)
+    ledger.create_receivable(db, driver.id, ledger.ReceivableKind.detention, 15000)
+
+    resp = m11.route(db, driver.id, "what am I owed")
+    assert "You're owed $150.00 across 1 claims." == resp.spoken
+
+
+def test_the_deferred_confirmation_is_localized_because_it_is_always_spoken(db):
+    # mode="voice" — the driver cannot read the screen to recover from this one
+    driver = _driver(db)
+    m11.register_module(db)
+    resp = m11.route(
+        db, driver.id, "empieza mi detention clock", context={"locale": "es"}, driving=True
+    )
+    assert resp.intent == "start_detention"
+    assert resp.mode == "voice"
+    assert resp.spoken == messages.VOICE_MESSAGES["deferred"]["es"]
+
+
+def test_a_handoff_speaks_the_topic_rather_than_an_english_slug(db):
+    driver = _driver(db)
+    m11.register_module(db)
+    resp = m11.route(db, driver.id, "hay estacionamiento cerca", context={"locale": "es"})
+    assert resp.intent == "parking_nearby"
+    assert resp.spoken == messages.VOICE_MESSAGES["handoff.parking_nearby"]["es"]
+    assert "parking_nearby" not in resp.spoken  # the old slug interpolation
+
+
+def test_a_missing_catalogue_row_falls_back_to_english_not_to_silence(db):
+    # F-17's third option: `main.py` only warns if boot registration fails, so a strict
+    # lookup would turn one missing row into a silent copilot at speed
+    driver = _driver(db)
+    m11.register_module(db)
+    localization.register_message(db, messages.KEY_PREFIX + "unknown", "es", "")
+
+    resp = m11.route(db, driver.id, "banana helicoptero morado", context={"locale": "es"})
+    assert resp.intent == "unknown"
+    assert resp.spoken == messages.VOICE_MESSAGES["unknown"]["en"]
+
+
+def test_an_unregistered_catalogue_still_speaks(db):
+    # register_module has NOT run here — nothing seeded the catalogue at all
+    driver = _driver(db)
+    resp = m11.route(db, driver.id, "how many points do I have")
+    assert resp.intent == "points_balance"
+    assert resp.spoken == "You have 0 points."

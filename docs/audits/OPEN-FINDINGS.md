@@ -124,7 +124,8 @@ Not part of the 45, and deliberately **not** folded into the finding that surfac
 
 | ID | Severity | Status | One line |
 |---|---|---|---|
-| N-01 | High | OPEN | **Voice ANSWERS in one language, whatever it understood.** Found while closing F-30, session 120. |
+| N-01 | High | **CLOSED** | Every spoken string comes from F15's `MessageCatalog`, keyed by the driver's locale, with each handoff intent carrying its own key rather than interpolating an English slug into a Spanish sentence. **A missing ROW falls back to compiled English** (F-17's third option — a strict lookup would turn one missing row into a silent copilot at speed); a missing KEY raises and is gated in CI, so a new intent cannot reach a truck mute. Money stays `$` and units imperial in every locale per F15. **114 rows across 19 keys seeded at boot on the real box**, and verified over HTTP: Spanish in → Spanish out, Russian while driving → Russian deferred confirmation with `audio_ref: audio://ru/…`. Session 120. |
+| N-02 | High | OPEN | **Driver notifications are English-only, everywhere.** Found while closing N-01, session 120. |
 
 **N-01 in full.** `m11_voice/domain/service.py::_dispatch` returns hardcoded English:
 `"You have {pts} points."`, `"You're all paid up — nothing owed right now."`, `"I didn't
@@ -142,8 +143,27 @@ already exist and `missing_locales` already gives it a CI gate, so the mechanism
 what is missing is the strings and the wiring. That is a session, not a patch, and folding
 it into F-30 would have hidden a second defect inside the first one's commit.
 
-**Not a blocker.** It needs no owner decision — the strings are translations of existing
-copy, not new copy, so §22.2 is not engaged.
+**Closed in session 120.** It was also F15's message catalogue's **first producer in the
+product** — `register_message` had been written, exported and called by nothing but F15's
+own test, the same built-and-inert shape as F-09's purge and F9's budget cap.
+
+**N-02 in full — the rest of the class, measured rather than assumed.** Closing N-01 meant
+grepping for the pattern, and it is much wider than voice: **10 `notify.dispatch` sites
+across 7 modules** (m01, m03 ×2, m05 ×2, m06, m09, m13 ×3) pass English literal titles and
+bodies straight to a driver's push notification. M3's `detention_clock` P0 — *"Detention
+started · $75/hr"*, *"Free time is used up at this stop. Notice ready to send."* — is the
+product's most important driver-facing alert and it is English-only.
+
+PRD §7.15's coverage rule names notifications in the same breath as voice: *"every
+driver-facing surface — UI, notifications (F8), voice (M11 via F9 STT/TTS), and help
+content — renders in the user's language."*
+
+**Why it is filed rather than fixed here.** It is the same mechanism N-01 just built and
+proved — register at boot, look up by locale, fall back to compiled English — so the
+remaining work is roughly 20 strings × 6 locales plus the wiring, and it is mechanical.
+Folding it into N-01's commit would have hidden a second, larger defect inside the first
+one's fix, which is the thing this queue keeps catching. **Needs no owner decision:**
+translations of existing copy are not new copy, so §22.2 is not engaged.
 
 ---
 
