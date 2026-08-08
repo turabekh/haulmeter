@@ -22,6 +22,7 @@ from app.foundation.f05_load import public as loads
 from app.foundation.f07_ledger import public as ledger
 from app.foundation.f08_notifications import public as notify
 
+from . import messages
 from .enums import ClaimMode, ClaimState, DetentionPhase, DetentionTrigger
 from .models import DetentionClaim
 
@@ -95,6 +96,22 @@ def register_module(db: Session) -> None:
     from app.foundation.f14_admin import public as admin
 
     admin.register_admin_view(db, "m03.claims", MODULE, "Claims Pipeline", "/admin/m03/claims")
+    from app.foundation.f15_localization import public as localization
+
+    localization.register_catalogue(db, messages.KEY_PREFIX, messages.ALERT_MESSAGES)
+
+
+# AI-CONTEXT: finding N-02 — these alerts were English literals. F8 resolves the driver's
+# locale (it is what already knows the account) and falls back to the compiled English
+# below if a catalogue row is missing, so a translation gap can never silence a P0.
+def _alert(db: Session, account_id, key: str, **values) -> str:
+    return notify.localized_text(
+        db,
+        account_id,
+        messages.KEY_PREFIX + key,
+        messages.ALERT_MESSAGES[key][messages.DEFAULT_LOCALE_KEY],
+        **values,
+    )
 
 
 def _default_mode(db: Session, account_id) -> ClaimMode:
@@ -423,13 +440,19 @@ def dispatch_detention_start(
     if state.detention_seconds > ALERT_FRESHNESS.total_seconds():
         return None
     rate = _rate_label(claim.detention_rate_cents_per_hour)
-    title = f"Detention started · {rate}" if rate else "Detention started"
+    title = (
+        _alert(db, claim.account_id, "detention_started.title", rate=rate)
+        if rate
+        else _alert(db, claim.account_id, "detention_started.title_no_rate")
+    )
     # §12.6 verbatim for the invoicing driver. A company driver cannot bill anyone, so
     # promising them a notice would name an action their mode does not have (M3-FR9).
-    action = (
-        "Notice ready to send."
+    action = _alert(
+        db,
+        claim.account_id,
+        "detention_started.action_invoice"
         if claim.mode == ClaimMode.invoice
-        else "Your evidence pack is recording."
+        else "detention_started.action_record",
     )
     notification = notify.dispatch(
         db,
@@ -437,7 +460,7 @@ def dispatch_detention_start(
         notify.NotificationTier.P0,
         DETENTION_START_CATEGORY,
         title,
-        f"Free time is used up at this stop. {action}",
+        _alert(db, claim.account_id, "detention_started.body", action=action),
         _claim_deep_link(claim),
         gateway,
         now=now,
@@ -470,13 +493,17 @@ def dispatch_free_time_warning(
         return None
     minutes = max(1, int(remaining // 60))
     rate = _rate_label(claim.detention_rate_cents_per_hour)
-    body = f"Detention starts after that at {rate}." if rate else "Detention starts after that."
+    body = (
+        _alert(db, claim.account_id, "free_time_warning.body", rate=rate)
+        if rate
+        else _alert(db, claim.account_id, "free_time_warning.body_no_rate")
+    )
     notification = notify.dispatch(
         db,
         claim.account_id,
         notify.NotificationTier.P1,
         FREE_TIME_WARNING_CATEGORY,
-        f"{minutes} min free time left",
+        _alert(db, claim.account_id, "free_time_warning.title", minutes=minutes),
         body,
         _claim_deep_link(claim),
         gateway,

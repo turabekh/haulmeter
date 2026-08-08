@@ -34,6 +34,7 @@ from app.foundation.f13_flags import public as flags
 from app.foundation.f14_admin import public as admin
 from app.modules.m01_map import public as m1
 
+from . import messages
 from .enums import (
     AppearanceStatus,
     DocumentKind,
@@ -134,7 +135,24 @@ class PublishSuspended(Exception):
 # it knows which vendor is involved. Anything narrower than the router asks about a
 # type, because a caller that does not name one is a caller that can leak the other
 # half — the failure this split exists to prevent.
+
+# AI-CONTEXT: finding N-02 — English literals on a driver's push. F8 resolves the locale;
+# the compiled English is the fallback. `promotions.py` deliberately does NOT use this:
+# its body is the vendor's own words, which are data, not product copy.
+def _alert(db: Session, account_id, key: str, **values) -> str:
+    return notify.localized_text(
+        db,
+        account_id,
+        messages.KEY_PREFIX + key,
+        messages.ALERT_MESSAGES[key][messages.DEFAULT_LOCALE_KEY],
+        **values,
+    )
+
+
 def register_module(db: Session) -> None:
+    from app.foundation.f15_localization import public as localization
+
+    localization.register_catalogue(db, messages.KEY_PREFIX, messages.ALERT_MESSAGES)
     flags.register_flag(db, FLAG_KEY, description="M13 Vendor Network — food vendors (Phase A)")
     flags.register_flag(
         db,
@@ -546,8 +564,15 @@ def notify_cancelled(db: Session, appearance: Appearance, gateway, now=None) -> 
                 account_id,
                 notify.NotificationTier.P1,
                 VENDOR_ALERT,
-                f"{vendor.name} cancelled",
-                f"Not at {facility.name if facility else 'the stop'} tonight",
+                _alert(db, account_id, "vendor_cancelled.title", name=vendor.name),
+                _alert(
+                    db,
+                    account_id,
+                    "vendor_cancelled.body",
+                    place=facility.name
+                    if facility
+                    else _alert(db, account_id, "vendor.the_stop"),
+                ),
                 f"/vendor/{vendor.id}",
                 gateway,
                 now=now,
@@ -648,8 +673,14 @@ def notify_published(db: Session, appearance: Appearance, gateway, now=None) -> 
                 account_id,
                 notify.NotificationTier.P1,
                 VENDOR_ALERT,
-                f"{vendor.name} published",
-                f"{facility.name if facility else 'A stop'} · {when:%a} from {when:%H:%M}",
+                _alert(db, account_id, "vendor_published.title", name=vendor.name),
+                _alert(
+                    db,
+                    account_id,
+                    "vendor_published.body",
+                    place=facility.name if facility else _alert(db, account_id, "vendor.a_stop"),
+                    when=f"{when:%a} from {when:%H:%M}",
+                ),
                 f"/vendor/{vendor.id}",
                 gateway,
                 now=now,

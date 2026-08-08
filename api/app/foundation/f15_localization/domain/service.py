@@ -67,6 +67,24 @@ def register_message(db: Session, key: str, locale: str, text: str) -> MessageCa
     return entry
 
 
+# AI-CONTEXT: findings N-01 and N-02 — the shape every producer of this catalogue wants.
+# Before N-01 there were NO producers: `register_message` was written, exported, and called
+# by nothing but this component's own test, so the "server catalog analog for F8-rendered
+# strings" this module's docstring describes had never rendered a string.
+#
+# Registration is a bulk upsert at boot rather than a migration, which is what makes a
+# corrected translation a code change: edit the compiled table, restart, done. That matters
+# because the phrasing in five of the six locales is authored by whoever wrote the feature
+# and wants a native-speaker pass afterwards.
+def register_catalogue(db: Session, prefix: str, catalogue: dict[str, dict[str, str]]) -> int:
+    written = 0
+    for key, by_locale in catalogue.items():
+        for locale, text in by_locale.items():
+            register_message(db, prefix + key, locale, text)
+            written += 1
+    return written
+
+
 def get_message(db: Session, key: str, locale: str, fallback_to_default: bool = True) -> str | None:
     entry = db.scalar(
         select(MessageCatalog).where(MessageCatalog.key == key, MessageCatalog.locale == locale)

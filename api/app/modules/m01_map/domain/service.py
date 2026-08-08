@@ -22,6 +22,7 @@ from app.foundation.f12_offline import public as offline
 from app.foundation.f13_flags import public as flags
 from app.foundation.f14_admin import public as admin
 
+from . import messages
 from .enums import NavProvider, Preset
 
 FLAG_KEY = "m01_map"
@@ -136,7 +137,22 @@ class ParkingPrediction:
     note: str
 
 
+# AI-CONTEXT: finding N-02 — an English literal title and body on a P1 sent to every
+# driver. F8 resolves the locale; the compiled English below is the fallback.
+def _alert(db: Session, account_id, key: str, **values) -> str:
+    return notify.localized_text(
+        db,
+        account_id,
+        messages.KEY_PREFIX + key,
+        messages.ALERT_MESSAGES[key][messages.DEFAULT_LOCALE_KEY],
+        **values,
+    )
+
+
 def register_module(db: Session) -> None:
+    from app.foundation.f15_localization import public as localization
+
+    localization.register_catalogue(db, messages.KEY_PREFIX, messages.ALERT_MESSAGES)
     flags.register_flag(db, FLAG_KEY, description="M1 Road Intelligence Map")
     flags.register_flag(
         db, WEIGH_STATION_FLAG, description="M1 Weigh-station layer (E3.1, OSM-sourced)"
@@ -568,14 +584,14 @@ def prompt_for_lot_status(db: Session, account_id, facility_id, gateway, now: da
         return None
     if _already_reported_today(db, account_id, facility_id, now):
         return None
-    name = fac.name or "this stop"
+    name = fac.name or _alert(db, account_id, "lot_status.this_stop")
     return notify.dispatch(
         db,
         account_id,
         notify.NotificationTier.P1,
         notify.LOT_STATUS_PROMPT_CLASS,
-        f"How's the lot at {name}?",
-        "One tap helps the next driver find a spot.",
+        _alert(db, account_id, "lot_status.title", name=name),
+        _alert(db, account_id, "lot_status.body"),
         # §13.5: the facility's own screen, where the same question is already a chip
         f"/facility/{facility_id}",
         gateway,

@@ -522,6 +522,35 @@ def digest(db: Session, account_id) -> list[Notification]:
     )
 
 
+# --- Driver-facing text, in the driver's language (finding N-02) ---
+# AI-CONTEXT: every `dispatch` call site passed an English literal title and body, so a
+# driver who reads none of it got M3's detention P0 — the product's most important alert —
+# in a language they had not chosen. PRD §7.15's coverage rule names notifications in the
+# same breath as UI and voice.
+#
+# THE LOOKUP LIVES HERE rather than in each module because F8 is what already knows the
+# account: ten call sites resolving a locale ten times is ten chances to resolve it
+# differently, and the one that forgot would be invisible. A module says WHAT to say; F8
+# decides which language to say it in, exactly as it already decides the channel and
+# whether quiet hours suppress it.
+#
+# A MISSING ROW FALLS BACK TO THE COMPILED ENGLISH, never to a blank or a raw key — the
+# same rule N-01 applies to voice, and F-17's third option before that. A notification is
+# the one surface where a silent failure IS the failure.
+def localized_text(db: Session, account_id, key: str, fallback: str, **values) -> str:
+    from app.foundation.f01_identity import public as identity
+    from app.foundation.f15_localization import public as localization
+
+    account = db.get(identity.Account, account_id)
+    locale = (
+        localization.get_user_locale(db, account)
+        if account is not None
+        else localization.DEFAULT_LOCALE
+    )
+    text = localization.get_message(db, key, locale) or fallback
+    return text.format(**values) if values else text
+
+
 # --- Template registry (versioned; counterparty always English, F15) ---
 def register_template(
     db: Session,

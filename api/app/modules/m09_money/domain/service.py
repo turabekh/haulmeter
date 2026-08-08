@@ -35,6 +35,7 @@ from app.modules.m03_detention import public as m3
 from app.modules.m04_accessorial import public as m4
 from app.modules.m07_fuel import public as m7
 
+from . import messages
 from .enums import DiscrepancyStatus
 from .models import Discrepancy, ExpenseReceipt, Settlement, SettlementLine
 
@@ -99,11 +100,27 @@ class ExpenseSummary:
     basis: dict = field(default_factory=dict)
 
 
+
+# AI-CONTEXT: finding N-02 — an English literal on a driver's push. F8 resolves the
+# locale; the compiled English below is the fallback so a missing row cannot silence it.
+def _alert(db: Session, account_id, key: str, **values) -> str:
+    return notify.localized_text(
+        db,
+        account_id,
+        messages.KEY_PREFIX + key,
+        messages.ALERT_MESSAGES[key][messages.DEFAULT_LOCALE_KEY],
+        **values,
+    )
+
+
 def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
     from app.foundation.f14_admin import public as admin
 
     flags.register_flag(db, FLAG_KEY, description="M9 Driver Money & Tax Tools")
+    from app.foundation.f15_localization import public as localization
+
+    localization.register_catalogue(db, messages.KEY_PREFIX, messages.ALERT_MESSAGES)
     admin.register_admin_view(db, "m09.audits", MODULE, "Settlement Audits", "/admin/m09/audits")
     if ai.get_active_prompt(db, SETTLEMENT_PROMPT) is None:
         ai.register_prompt(
@@ -410,8 +427,8 @@ def mark_receivable_paid(
         receivable.account_id,
         notify.NotificationTier.P0,
         CLAIM_PAID_CATEGORY,
-        f"Claim paid · {figure}",
-        "The claim was recorded as paid. Open it to see the record.",
+        _alert(db, receivable.account_id, "claim_paid.title", figure=figure),
+        _alert(db, receivable.account_id, "claim_paid.body"),
         deep_link,
         gateway,
         now=now,

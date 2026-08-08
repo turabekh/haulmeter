@@ -372,3 +372,56 @@ def test_the_driver_alert_is_recorded_apart_from_the_broker_notice(db):
 
     assert claim.driver_start_alert_at is not None
     assert claim.start_notice_sent_at is None  # the counterparty has not been told
+
+
+# --- N-02: the P0 in the driver's own language ---
+def test_the_detention_p0_reaches_a_spanish_driver_in_spanish(db):
+    # the product's most important driver-facing alert was an English literal
+    from app.foundation.f15_localization import public as localization
+    from app.modules.m03_detention.domain import messages as m03_messages
+
+    account, stop, claim = _claim(db)
+    m3.register_module(db)  # seeds the catalogue, as boot does
+    localization.set_user_locale(db, account, "es")
+    _arrive(db, account)
+    gw = notify.RecordingNotificationGateway()
+
+    sent = m3.dispatch_detention_start(db, claim, gw, EXPIRY + timedelta(minutes=1))
+
+    assert sent.tier == notify.NotificationTier.P0
+    assert sent.title == "Detention iniciada · $75/h"  # the RATE stays USD (F15)
+    assert sent.body == m03_messages.ALERT_MESSAGES["detention_started.body"]["es"].format(
+        action=m03_messages.ALERT_MESSAGES["detention_started.action_invoice"]["es"]
+    )
+
+
+def test_the_english_p0_is_byte_for_byte_unchanged(db):
+    # localizing must not quietly reword the English a driver already receives
+    account, stop, claim = _claim(db)
+    m3.register_module(db)
+    _arrive(db, account)
+    gw = notify.RecordingNotificationGateway()
+
+    sent = m3.dispatch_detention_start(db, claim, gw, EXPIRY + timedelta(minutes=1))
+
+    assert sent.title == "Detention started · $75/h"
+    assert sent.body == "Free time is used up at this stop. Notice ready to send."
+
+
+def test_a_company_driver_is_not_promised_a_notice_in_any_language(db):
+    # §12.6/M3-FR9: a company driver cannot bill anyone, so the invoice action would
+    # name something their mode does not have. The branch must survive translation.
+    from app.foundation.f15_localization import public as localization
+    from app.modules.m03_detention.domain import messages as m03_messages
+
+    account, stop, claim = _claim(db, authority=identity.AuthorityType.company)
+    m3.register_module(db)
+    localization.set_user_locale(db, account, "ru")
+    _arrive(db, account)
+    gw = notify.RecordingNotificationGateway()
+
+    sent = m3.dispatch_detention_start(db, claim, gw, EXPIRY + timedelta(minutes=1))
+
+    record = m03_messages.ALERT_MESSAGES["detention_started.action_record"]["ru"]
+    invoice = m03_messages.ALERT_MESSAGES["detention_started.action_invoice"]["ru"]
+    assert record in sent.body and invoice not in sent.body

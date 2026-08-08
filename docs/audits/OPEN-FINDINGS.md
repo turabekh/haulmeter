@@ -125,7 +125,7 @@ Not part of the 45, and deliberately **not** folded into the finding that surfac
 | ID | Severity | Status | One line |
 |---|---|---|---|
 | N-01 | High | **CLOSED** | Every spoken string comes from F15's `MessageCatalog`, keyed by the driver's locale, with each handoff intent carrying its own key rather than interpolating an English slug into a Spanish sentence. **A missing ROW falls back to compiled English** (F-17's third option — a strict lookup would turn one missing row into a silent copilot at speed); a missing KEY raises and is gated in CI, so a new intent cannot reach a truck mute. Money stays `$` and units imperial in every locale per F15. **114 rows across 19 keys seeded at boot on the real box**, and verified over HTTP: Spanish in → Spanish out, Russian while driving → Russian deferred confirmation with `audio_ref: audio://ru/…`. Session 120. |
-| N-02 | High | OPEN | **Driver notifications are English-only, everywhere.** Found while closing N-01, session 120. |
+| N-02 | High | **CLOSED** | Nine of the ten `notify.dispatch` sites take their title and body from F15's catalogue, keyed by the driver's locale. **The lookup lives in F8** (`localized_text`) because F8 is what already knows the account — ten call sites resolving a locale ten times is ten chances to resolve it differently, and the one that forgot would be invisible. **366 catalogue rows across 61 keys seeded at boot** on the real box. The tenth site is deliberate: `promotions.py` sends the vendor's OWN words as the body, which is data, not product copy. Session 120. |
 
 **N-01 in full.** `m11_voice/domain/service.py::_dispatch` returns hardcoded English:
 `"You have {pts} points."`, `"You're all paid up — nothing owed right now."`, `"I didn't
@@ -148,11 +148,32 @@ product** — `register_message` had been written, exported and called by nothin
 own test, the same built-and-inert shape as F-09's purge and F9's budget cap.
 
 **N-02 in full — the rest of the class, measured rather than assumed.** Closing N-01 meant
-grepping for the pattern, and it is much wider than voice: **10 `notify.dispatch` sites
-across 7 modules** (m01, m03 ×2, m05 ×2, m06, m09, m13 ×3) pass English literal titles and
+grepping for the pattern, and it was much wider than voice: **10 `notify.dispatch` sites
+across 7 modules** (m01, m03 ×2, m05 ×2, m06, m09, m13 ×3) passed English literal titles and
 bodies straight to a driver's push notification. M3's `detention_clock` P0 — *"Detention
 started · $75/hr"*, *"Free time is used up at this stop. Notice ready to send."* — is the
-product's most important driver-facing alert and it is English-only.
+product's most important driver-facing alert and it was English-only.
+
+**Closed in session 120, and two things in it are worth carrying forward.**
+
+**The interpolated LABELS were the real trap.** `Missing: {labels}` and `{label} expires in
+{offset} days` splice an enumerable English noun into the sentence, so translating only the
+sentence yields *"Falta: pickup photos"* — an English fragment inside a Spanish alert, the
+same defect N-01 fixed in the voice handoffs. **The first sabotage pass did not catch it:**
+replacing the localized labels with raw gap kinds passed all 135 tests, because
+`notify_protection_gap` had no test at all. It has one now, and the "the facility" fallback
+beside it needed a second one.
+
+**What is NOT translated, deliberately.** `promotions.py`'s body is the vendor's own
+promotional text and its title is the vendor's name — a person's words, not product copy,
+and machine-translating what a cook wrote about their own food would be inventing speech on
+their behalf. Facility and vendor names are left alone for the same reason. Money stays `$`
+and units imperial in every locale (F15's `UNIT_SYSTEM`).
+
+**Two residues, named rather than hidden:** the document-expiry date renders `%d %b` and the
+vendor-published body renders `%a`, so month and weekday abbreviations are still English.
+Localizing them needs a per-locale table or a dependency (babel), which is a decision rather
+than a fix.
 
 PRD §7.15's coverage rule names notifications in the same breath as voice: *"every
 driver-facing surface — UI, notifications (F8), voice (M11 via F9 STT/TTS), and help

@@ -20,6 +20,7 @@ from app.foundation.f05_load import public as loads
 from app.foundation.f06_documents import public as documents
 from app.foundation.f08_notifications import public as notify
 
+from . import messages
 from .enums import CONDITION_SEQUENCE, INSPECTION_DOC_TYPES, CapturePhase, StopPacketState
 from .models import ConditionCapture, Incident, OnTimeConsent, OnTimeProof, StopPacket
 
@@ -53,6 +54,9 @@ def register_module(db: Session) -> None:
     from app.foundation.f14_admin import public as admin
 
     flags.register_flag(db, FLAG_KEY, description="M5 Protection & Document Wallet")
+    from app.foundation.f15_localization import public as localization
+
+    localization.register_catalogue(db, messages.KEY_PREFIX, messages.ALERT_MESSAGES)
     # A1 req 1 — the checklist is configuration, so an operator has to be able to FIND
     # it. Declaring does not write a value: see ConfigDeclaration's AI-CONTEXT.
     flags.register_config(
@@ -432,17 +436,21 @@ def notify_protection_gap(
     if not gaps:
         return None
     now = now or datetime.now(UTC)
-    where = f" {facility_name}" if facility_name else " the facility"
+    where = (
+        f" {facility_name}"
+        if facility_name
+        else _alert(db, account_id, "protection_gap.the_facility")
+    )
     # §12.2: lead with the fact, name the consequence, one action. Never scold — the
     # driver did not forget on purpose, and most of the time they were rushed off.
-    labels = ", ".join(_GAP_LABELS.get(g, g) for g in gaps)
+    labels = ", ".join(_gap_label(db, account_id, g) for g in gaps)
     return notify.dispatch(
         db,
         account_id,
         notify.NotificationTier.P1,
         notify.PROTECTION_GAP_CLASS,
-        f"Missing: {labels}",
-        f"You've left{where}. This can't be captured there now — check the record.",
+        _alert(db, account_id, "protection_gap.title", labels=labels),
+        _alert(db, account_id, "protection_gap.body", where=where),
         f"/load/{stop.id}/evidence",
         gateway,
         now=now,
@@ -451,11 +459,31 @@ def notify_protection_gap(
     )
 
 
-_GAP_LABELS = {
-    "bol": "BOL",
-    "pickup_photos": "pickup photos",
-    "delivery_photos": "delivery photos",
-}
+# AI-CONTEXT: finding N-02 — these were a plain English dict spliced into the alert
+# title, so translating only the sentence would have produced "Falta: pickup photos".
+# An enumerable noun inside a translated sentence has to be translated with it.
+def _alert(db: Session, account_id, key: str, **values) -> str:
+    return notify.localized_text(
+        db,
+        account_id,
+        messages.KEY_PREFIX + key,
+        messages.ALERT_MESSAGES[key][messages.DEFAULT_LOCALE_KEY],
+        **values,
+    )
+
+
+def _gap_label(db: Session, account_id, gap: str) -> str:
+    key = f"gap.{gap}"
+    if key not in messages.ALERT_MESSAGES:
+        return gap.replace("_", " ")  # a gap kind added without a label still reads
+    return _alert(db, account_id, key)
+
+
+def _doc_label(db: Session, account_id, doc_type) -> str:
+    key = f"doc.{doc_type.value}"
+    if key not in messages.ALERT_MESSAGES:
+        return doc_type.value.replace("_", " ")
+    return _alert(db, account_id, key)
 
 
 # --- FR2/FR4 export + share (design-prd §17) ---
@@ -1257,7 +1285,7 @@ def dispatch_expiry_reminders(db: Session, gateway, as_of: date | None = None, n
         return []
     sent = []
     for document, offset in expiry_reminders_due(db, as_of):
-        label = document.doc_type.value.replace("_", " ")
+        label = _doc_label(db, document.account_id, document.doc_type)
         # AI-CONTEXT: `gateway` may be a gateway or a FACTORY taking (db, account_id),
         # exactly as `m3.dispatch_clock_alerts` takes one (§23 entry 111).
         #
@@ -1275,8 +1303,19 @@ def dispatch_expiry_reminders(db: Session, gateway, as_of: date | None = None, n
                 document.account_id,
                 notify.NotificationTier.P1,
                 "document_expiry",
-                f"{label} expires in {offset} days",
-                f"Renew it before {document.expires_on:%d %b} to stay road-legal.",
+                _alert(
+                    db,
+                    document.account_id,
+                    "document_expiry.title",
+                    label=label,
+                    offset=offset,
+                ),
+                _alert(
+                    db,
+                    document.account_id,
+                    "document_expiry.body",
+                    date=f"{document.expires_on:%d %b}",
+                ),
                 # §13.5: "every notification deep-links to the exact screen AND STATE it
                 # describes. No landing on tab roots." This was `/docs` — the tab root —
                 # so a driver told their med card expires in three days arrived at a

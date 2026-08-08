@@ -108,11 +108,10 @@ def register_voice_messages(db: Session) -> None:
     own test, which is the same built-and-inert shape as F-09's purge.
 
     Idempotent by `register_message`'s own upsert, so an edited string here is what the
-    box serves after the next boot rather than needing a migration.
+    box serves after the next boot rather than needing a migration. N-02 generalised the
+    loop into `f15.register_catalogue`, which every notification table now uses too.
     """
-    for key, by_locale in messages.VOICE_MESSAGES.items():
-        for locale, text in by_locale.items():
-            localization.register_message(db, messages.KEY_PREFIX + key, locale, text)
+    localization.register_catalogue(db, messages.KEY_PREFIX, messages.VOICE_MESSAGES)
 
 
 # --- Intent routing (M11-FR1) + motion policy (M11-FR2) ---

@@ -23,6 +23,7 @@ from app.foundation.f07_ledger import public as ledger
 from app.foundation.f08_notifications import public as notify
 from app.modules.m01_map import public as m1
 
+from . import messages
 from .enums import BookingState
 from .models import Booking, ParkingProperty, ParkingSpot
 
@@ -50,11 +51,27 @@ class BookableSpot:
     lon: float
 
 
+
+# AI-CONTEXT: finding N-02 — an English literal on a driver's push. F8 resolves the
+# locale; the compiled English below is the fallback so a missing row cannot silence it.
+def _alert(db: Session, account_id, key: str, **values) -> str:
+    return notify.localized_text(
+        db,
+        account_id,
+        messages.KEY_PREFIX + key,
+        messages.ALERT_MESSAGES[key][messages.DEFAULT_LOCALE_KEY],
+        **values,
+    )
+
+
 def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
     from app.foundation.f14_admin import public as admin
 
     flags.register_flag(db, FLAG_KEY, description="M6 Parking Marketplace")
+    from app.foundation.f15_localization import public as localization
+
+    localization.register_catalogue(db, messages.KEY_PREFIX, messages.ALERT_MESSAGES)
     for gate in GATES:
         flags.add_gate(db, FLAG_KEY, gate)
     admin.register_admin_view(
@@ -368,16 +385,16 @@ def _notify_driver_of_cancellation(db, booking, refund_cents, actor_account_id, 
     if refund_cents > 0:
         amount = refund_cents / 100
         figure = f"${amount:,.0f}" if refund_cents % 100 == 0 else f"${amount:,.2f}"
-        title = f"Booking canceled · {figure} refunded"
+        title = _alert(db, booking.driver_account_id, "booking_canceled.title", figure=figure)
     else:
-        title = "Booking canceled"
+        title = _alert(db, booking.driver_account_id, "booking_canceled.title_no_refund")
     return notify.dispatch(
         db,
         booking.driver_account_id,
         notify.NotificationTier.P0,
         BOOKING_CANCELED_CATEGORY,
         title,
-        f"{prop.name} canceled your spot. Book another nearby.",
+        _alert(db, booking.driver_account_id, "booking_canceled.body", name=prop.name),
         BOOKINGS_DEEP_LINK,
         gateway,
         now=now,

@@ -432,3 +432,71 @@ def test_the_reminder_lands_on_the_DOCUMENT_not_the_tab_root(db):
     assert sent, "nothing was dispatched"
     assert sent[0].deep_link != "/docs", "the reminder landed on a tab root"
     assert str(doc.id) in sent[0].deep_link
+
+
+# --- N-02: the gap alert, and the labels it splices into its own title ---
+def _gap_stop(db, locale=None, email="gapdriver@example.com"):
+    from app.foundation.f01_identity import public as identity
+    from app.foundation.f02_facility import public as facility
+    from app.foundation.f05_load import public as loads
+    from app.foundation.f15_localization import public as localization
+
+    account = identity.register_account(db, email, "pw-123456")
+    if locale is not None:
+        localization.set_user_locale(db, account, locale)
+    dock = facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, "Dock 9", 32.7767, -96.7970
+    )
+    load = loads.create_load(db, account.id)
+    stop = loads.add_stop(db, load, dock.id, loads.StopType.delivery)
+    return account, stop
+
+
+def test_the_protection_gap_alert_translates_the_labels_it_interpolates(db):
+    """audit N-02 — `Missing: {labels}` spliced an English dict into the title, so a
+    translated sentence would still have read "Falta: pickup photos".
+
+    This is the one the first sabotage pass MISSED: replacing `_gap_label` with the raw
+    gap kinds passed every other test here.
+    """
+    from app.foundation.f08_notifications import public as notify
+    from app.modules.m05_protection import public as m5
+    from app.modules.m05_protection.domain import messages as m05_messages
+    from app.modules.m05_protection.domain import service as m05_service
+
+    account, stop = _gap_stop(db, locale="es")
+    m5.register_module(db)
+    gaps = m05_service.irrecoverable_gaps(db, stop)
+    assert gaps, "the fixture must actually have unrecoverable gaps"
+
+    gw = notify.RecordingNotificationGateway()
+    sent = m05_service.notify_protection_gap(db, stop, account.id, gw)
+
+    assert sent is not None
+    assert sent.title.startswith(m05_messages.ALERT_MESSAGES["protection_gap.title"]["es"][:6])
+    for gap in gaps:
+        spanish = m05_messages.ALERT_MESSAGES[f"gap.{gap}"]["es"]
+        assert spanish in sent.title, f"{gap} not localized in {sent.title!r}"
+    # and the raw enum key never reaches the driver
+    assert "pickup_photos" not in sent.title
+    assert "delivery_photos" not in sent.title
+
+    # the BODY interpolates a fallback noun too, when no facility name is passed —
+    # the same class of splice, and it was the second thing sabotage caught nothing on
+    assert m05_messages.ALERT_MESSAGES["protection_gap.the_facility"]["es"].strip() in sent.body
+    assert "the facility" not in sent.body
+
+
+def test_the_english_gap_alert_is_unchanged(db):
+    from app.foundation.f08_notifications import public as notify
+    from app.modules.m05_protection import public as m5
+    from app.modules.m05_protection.domain import service as m05_service
+
+    account, stop = _gap_stop(db, email="engap@example.com")
+    m5.register_module(db)
+    gw = notify.RecordingNotificationGateway()
+    sent = m05_service.notify_protection_gap(db, stop, account.id, gw)
+
+    assert sent.title.startswith("Missing: ")
+    assert "pickup photos" in sent.title or "BOL" in sent.title
+    assert sent.body.endswith("check the record.")
