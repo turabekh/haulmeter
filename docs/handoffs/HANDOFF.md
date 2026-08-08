@@ -5,7 +5,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 
 ➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — read this first, every session.
 
-> **119** worked the 2026-08-07 audit queue: **sixteen findings closed, two partial**, and
+> **119** worked the 2026-08-07 audit queue: **nineteen findings closed, two partial**, and
 > answered one of the audit's three open questions. Three of
 > the eight criticals are closed (F-13, F-21, U-07) — **every critical that could be closed
 > without an owner decision now is.** Four are blocked on things nobody in this environment
@@ -49,8 +49,14 @@ results, exact next task, and blockers always live in the latest numbered handof
 > Dallas layover is ONE UTC day, so real claims were being **refused**. Cost a dependency;
 > the image went 4.61 → 4.83 GB, measured before deciding.
 >
-> **Stack UP · twenty commits UNPUSHED · nothing deployed.** `git fetch` still cannot run
-> here — **re-fetch before pushing.**
+> **And the counterparty send path (F-03, F-04, F-06):** every successful send in the
+> product's life returned the same provider ref `smtp-1`, the gateway production actually
+> uses was tested by nothing, and a failed send still wrote `sent_at` — so the row claimed
+> a delivery it never got. Real Message-IDs, a tested lazy gateway, and a five-minute
+> retry sweep that never re-presents a bad password to Gmail.
+>
+> **Stack UP · twenty-two commits UNPUSHED · nothing deployed.** `git fetch` still cannot
+> run here — **re-fetch before pushing.**
 
 ➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — the session before.
 

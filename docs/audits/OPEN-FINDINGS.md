@@ -32,14 +32,14 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 | Severity | Open | Blocked | Partial | Closed | Accepted | Total |
 |---|---|---|---|---|---|---|
 | Critical | 1 | 4 | 0 | 3 | 0 | **8** |
-| High | 6 | 0 | 1 | 10 | 0 | **17** |
+| High | 3 | 0 | 1 | 13 | 0 | **17** |
 | Medium | 9 | 0 | 1 | 2 | 0 | **12** |
 | Low | 5 | 0 | 0 | 2 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **21** | **4** | **2** | **17** | **1** | **45** |
+| **Total** | **18** | **4** | **2** | **20** | **1** | **45** |
 
-**Session 119 closed sixteen** — F-05, F-07, F-13, F-14, F-17, F-18, F-21, F-22, F-23, F-28,
-F-29, F-31, U-01, U-02, U-07, U-08 —
+**Session 119 closed nineteen** — F-03, F-04, F-05, F-06, F-07, F-13, F-14, F-17, F-18, F-21,
+F-22, F-23, F-28, F-29, F-31, U-01, U-02, U-07, U-08 —
 and left **two partial** (U-03, U-05) with the remainder named. F-24 was already closed by
 F-31 inside the audit itself; it is counted here for completeness and is not this session's
 work.
@@ -63,10 +63,10 @@ unobservable until the literal became a token. See §Blockers.
 |---|---|---|---|
 | F-01 | Critical | **BLOCKED** | Production email probably delivers to Mailpit on the VM. Blocked on one command on the box — no box credential in the dev environment. See §Blockers. |
 | F-02 | Critical | OPEN | Validation gates have never governed a flag. Needs the `default_on` vs `enabled` decision; must ship with F-12 or M3's detention clock goes silent. |
-| F-03 | High | OPEN | Every send returns the same provider ref. |
-| F-04 | High | OPEN | The gateway production uses is untested. |
+| F-03 | High | **CLOSED** | The ref is the message's real RFC 5322 Message-ID — unique, and findable in a mail provider's trace. Session 119. |
+| F-04 | High | **CLOSED** | `_LazyCounterpartyGateway` is tested. Confirmed rather than asserted: against the restored F-03 defect the new test fails while the direct-construction one passes. Session 119. |
 | F-05 | High | **CLOSED** | Ledger not idempotent → `uq_journal_entry_type_ref`, partial unique on `(entry_type, external_ref)`. Session 119. |
-| F-06 | High | OPEN | No retry, no dead letter on SMTP failure. |
+| F-06 | High | **CLOSED** | `sent_at` NULL means it did not go out; a 5-min worker sweep retries transient failures, bounded, and never retries auth errors. `to_ref` recorded — the DB had no record of the recipient at all. Session 119. |
 | F-07 | High | **CLOSED** | Throttled per identifier (5) and per IP (20) in a sliding 15-min window, in Postgres so it fails closed, checked BEFORE the hash runs; `VERIFY_SLOTS` caps concurrent Argon2 so a flood cannot starve the threadpool. Session 119. |
 | F-08 | — | **ACCEPTED** | Gmail as counterparty transport (owner decision, 2026-08-07). Two owner actions remain, neither a session: split dev from production, and Workspace on the domain for aligned SPF/DKIM/DMARC. |
 | F-09 | Medium | OPEN | Location pings are never purged. |

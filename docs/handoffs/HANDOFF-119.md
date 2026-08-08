@@ -1,9 +1,9 @@
 # HANDOFF-119 — the audit queue, worked: every critical that could be closed without an owner decision is closed
 
-> **Stack UP · twenty commits UNPUSHED · nothing deployed.** haulmeter.online still
+> **Stack UP · twenty-two commits UNPUSHED · nothing deployed.** haulmeter.online still
 > serves 112's code.
 >
-> Session 119 read the 2026-08-07 audit and worked it: **sixteen findings closed, two
+> Session 119 read the 2026-08-07 audit and worked it: **nineteen findings closed, two
 > partial**, and one of the audit's three unanswered questions answered. Three of the eight criticals are closed (F-13, F-21, U-07); four are blocked
 > on things nobody in this environment can supply, and the last one (F-02) needs a
 > decision before anyone starts.
@@ -22,10 +22,10 @@
 
 | | |
 |---|---|
-| Branch | `main`, **twenty** commits ahead of `origin/main` — 118's six plus this session's fourteen |
+| Branch | `main`, **twenty-two** commits ahead of `origin/main` — 118's six plus this session's sixteen |
 | `origin/main` | `113327e` — still **not re-verified**; `git fetch` has no credential here. **Re-fetch before pushing** |
-| Gates | **pytest 1444 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** |
-| Migrations | **`0063_f02_facility_timezone` (head)** — 0060–0063 are all new this session, each applied and round-tripped on the running stack |
+| Gates | **pytest 1456 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** |
+| Migrations | **`0064_f08_outbound_delivery` (head)** — 0060–0064 are all new this session, each applied and round-tripped on the running stack |
 | Working tree | clean; `longhaul.txt` and `split_dump.py` now **gitignored** at the owner's instruction |
 | Local stack | **UP** |
 | Dev data | Tampa `27.9506,-82.4572` intact, four DEV facilities at 88–125 m |
@@ -127,6 +127,16 @@ cost a dependency** — `timezonefinder`, offline because the lookup must work i
 zone — and the codebase's own "keep the image light" argument was *measured* rather than
 assumed: the API image was already 4.61 GB and is now 4.83 GB. 119 §5.4 has the reasoning.
 
+**F-03 + F-04 + F-06 — one send path, three ways it was not telling the truth.** The
+provider ref was an instance counter and `_pick()` builds a fresh instance per send, so
+**every successful send in the product's life returned `smtp-1`**; it is the message's
+real Message-ID now, which is what a mail provider logs and therefore searchable when a
+broker says the notice never came. `_LazyCounterpartyGateway` — the object every real
+send goes through — was tested by nothing, and that is *confirmed*: against the restored
+F-03 defect the new test fails while the direct-construction test passes. And a failed
+send wrote `sent_at` anyway, so the row claimed a delivery it never got; NULL now means it
+did not go, and a five-minute worker sweep retries the transient ones.
+
 **F-31** — the two empty migration downgrades now say why they are empty.
 
 ## 3. Everything was proved by sabotage, not by going green
@@ -146,6 +156,7 @@ test fail:
 | F-07, throttle present but AFTER the hash | **exactly 1 fails** — the plausible-but-wrong version, caught only by the test written for it |
 | F-23 | restored the unscoped comparison → both new tests fail |
 | F-14 + F-22 | restored the UTC calendar day → exactly the 3 tests written for it fail |
+| F-03 + F-06 | restored the counter and the unconditional `sent_at` → 5 fail, and the one that does NOT is the direct-construction test the audit says was hiding F-03 |
 
 **The F-21 row is the audit's own prediction, confirmed:** *"a fixture with one visit
 cannot distinguish the two implementations."* It is why nine sessions of green walked past
@@ -211,11 +222,14 @@ That unreality is part of what hid the defect.
 
 ### 5.3 Then
 
-What is left needing no decision is thinner than what has gone. The three notification-
-gateway findings are one session — **F-03** (every send returns the same provider ref),
-**F-04** (the gateway production uses is untested) and **F-06** (no retry, no dead letter) —
-and they pair naturally with **F-01** if the box ever answers. Then **F-30** (voice
-understands one of six languages) and **U-04**'s six remaining surfaces.
+Three High findings remain, and they are the ones a single session cannot finish:
+**F-30** (voice understands one of six languages — six locales of speech handling),
+**U-11** (there is no loading state, which is the §23 proposal's own subject), and
+**U-12** (the fixture ban and the nine fixtures it does not cover, which the loading-state
+entry also gates). After those it is Medium and Low: **F-09** (location pings never
+purged), **F-10** (worker scheduling is in-process only), **F-11** (the deploy path is
+outside every review), **F-15**, **F-19**, **F-25**, **F-32**, and **U-04**'s six
+remaining surfaces.
 
 ### 5.4 The dependency this session added, and why
 
