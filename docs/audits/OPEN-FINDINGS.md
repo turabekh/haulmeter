@@ -31,20 +31,23 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 
 | Severity | Open | Blocked | Partial | Closed | Accepted | Total |
 |---|---|---|---|---|---|---|
-| Critical | 3 | 4 | 0 | 1 | 0 | **8** |
-| High | 12 | 0 | 1 | 4 | 0 | **17** |
+| Critical | 1 | 4 | 0 | 3 | 0 | **8** |
+| High | 11 | 0 | 1 | 5 | 0 | **17** |
 | Medium | 10 | 0 | 1 | 1 | 0 | **12** |
 | Low | 5 | 0 | 0 | 2 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **30** | **4** | **2** | **8** | **1** | **45** |
+| **Total** | **27** | **4** | **2** | **11** | **1** | **45** |
 
-**Session 119 closed seven** — the four money races (F-05, F-13, F-28, F-29), F-31's two
-downgrade comments, and U-01 and U-02 — and left **two partial** (U-03, U-05) with the
-remainder named. F-24 was already closed by F-31 inside the audit itself; it is counted
-here for completeness and is not this session's work.
+**Session 119 closed ten** — F-05, F-13, F-21, F-28, F-29, F-31, U-01, U-02, U-07, U-08 —
+and left **two partial** (U-03, U-05) with the remainder named. F-24 was already closed by
+F-31 inside the audit itself; it is counted here for completeness and is not this session's
+work.
 
-**One critical of the eight is closed (F-13). Four are blocked, three are open** — and of
-the three open, F-21 and U-07 need no decision from anybody.
+**Three of the eight criticals are closed (F-13, F-21, U-07). Four are blocked on the
+missing §23 loading-state proposal or on a command nobody can run from here. One is open:
+F-02**, and it needs the `default_on` versus `enabled` decision before anyone starts.
+
+Every critical that could be closed without an owner decision now is.
 
 **Closing findings opened one.** U-01's fix made the map pin's foreground expressible in
 CI, and the first thing CI said was that white on `--marker-500` is **2.04:1** in dark
@@ -77,7 +80,7 @@ unobservable until the literal became a token. See §Blockers.
 | F-18 | Medium | OPEN | A budget is a lifetime cap, not a period cap. |
 | F-19 | Medium | OPEN | No merge-review queue. Already known. |
 | F-20 | Low | OPEN | The amendment describes a mechanism the code does not implement. |
-| F-21 | Critical | OPEN | §23 entry 73 still live in M4 — files layover claims that should not exist. |
+| F-21 | Critical | **CLOSED** | §23 entry 73's defect in M4 → `_arrival_departure` routed through `location.visit_window`, anchored on the stop's appointment. M4 was the last unscoped `list_events` caller, so the class is closed. Session 119. |
 | F-22 | High | OPEN | "Overnight" is measured in UTC. Pairs with F-14. |
 | F-23 | High | OPEN | Settlement audit compares scoped against unscoped. |
 | F-24 | Low | **CLOSED** | Migration downgrades — 57 of 59 real, 2 empty. Closed by F-31, which identified the two; not by session 119. |
@@ -101,8 +104,8 @@ unobservable until the literal became a token. See §Blockers.
 | U-04 | Medium | OPEN | Seven surfaces not in the layout harness. `load-worst-case` added (the U-04-adjacent item); the other six remain. |
 | U-05 | Medium | **PARTIAL** | `.filters-chip` 40→48 dp. `.cluster` measured at 36 dp with NO expanded hit area — below even §11.2's 44 dp map exemption; reported, not changed. Two portal controls untouched pending an owner call. Session 119. |
 | U-06 | Critical | **BLOCKED** | Money tab shows fabricated earnings on fetch failure. Blocked on the §23 loading-state entry — and the proposal file itself is missing. |
-| U-07 | Critical | OPEN | Offline queue silently discards server-rejected writes. Not blocked. |
-| U-08 | High | OPEN | A transient failure is treated as permanent. |
+| U-07 | Critical | **CLOSED** | Rejected writes are dead-lettered whole (path, body, opId) and counted on the status strip. Session 119. **Remaining, by design:** the strip says how many, not which — naming them needs a surface, which is a design question. |
+| U-08 | High | **CLOSED** | 429/5xx now retry on the next flush with a bounded attempt cap (head-of-line protection); only non-429 4xx dead-letters. Session 119. |
 | U-09 | Critical | **BLOCKED** | Six surfaces substitute invented data — including a CDL and truck stops. Same §23 blocker as U-06. |
 | U-10 | Critical | **BLOCKED** | Map renders fixture pins on every cold start, not only offline. Same §23 blocker. |
 | U-11 | High | OPEN | There is no loading state. The §23 proposal is about this. |

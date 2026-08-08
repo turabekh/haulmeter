@@ -3,7 +3,38 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — read this first, every session.
+➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — read this first, every session.
+
+> **119** worked the 2026-08-07 audit queue: **ten findings closed, two partial.** Three of
+> the eight criticals are closed (F-13, F-21, U-07) — **every critical that could be closed
+> without an owner decision now is.** Four are blocked on things nobody in this environment
+> can supply; the last, F-02, needs a decision before anyone starts.
+>
+> The four money races are closed **in Postgres**, because an application check reads rows a
+> concurrent transaction has not committed yet: a partial unique index on the ledger, an
+> EXCLUDE constraint on booking, a row lock before the points balance is read, and a log
+> row written whether or not the contribution paid. Migration **0060** refuses to apply
+> against data that already violates either constraint rather than failing mid-deploy.
+>
+> **F-21 was filing invoices for stops that never happened** — M4 kept the §23 entry 73 bug
+> M3 was cured of, and M4 uses that pair to decide whether a claim EXISTS, not merely what
+> it is worth. **U-07 was losing a driver's evidence and reporting "synced"** over it.
+>
+> **Closing a finding opened one.** Tokenising the map pin made its contrast checkable in CI
+> for the first time, and white on `--marker-500` is **2.04:1** in dark theme against a 3:1
+> floor — the "Some" pin and the OPEN weigh-station pin. It shipped that way; it was
+> unobservable while the colour was a literal. **Owner decision needed.**
+>
+> **Two of the audit's own claims did not survive contact with the code** and are corrected
+> in 119 §6 — the stale-pin symptom does not reproduce, and the worst-case Load stack puts
+> ONE card above the Meter, not three. Every fix here was proved by restoring the defect and
+> watching the new test fail, including the one where all seven pre-existing m04 tests still
+> passed against the bug.
+>
+> **Stack UP · thirteen commits UNPUSHED · nothing deployed.** `git fetch` still cannot run
+> here — **re-fetch before pushing.**
+
+➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — the session before.
 
 > **118** is a short session with **no source changes**: the owner asked for the stack to be
 > restarted, then for a handoff and a shutdown.
@@ -24,7 +55,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > session (no credential), so the ahead-count is arithmetic, not observation — **re-fetch
 > before pushing.** The next task is still the handset background-sensor test.
 
-➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — the session before.
+➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — two sessions before.
 
 > **117** did two things the owner asked for, and both turned up something under them.
 >
@@ -52,7 +83,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · four commits UNPUSHED · nothing deployed.** The next task is still the
 > handset background-sensor test.
 
-➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — two sessions before.
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — three sessions before.
 
 > **116** walked the stop auto-pilot end to end in a real browser, which is what two
 > sessions of building had never been subjected to. **It works.** A human adds a load,
@@ -81,7 +112,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > HANDOFF-116.md's own header contradicted, and its "everything from `a4e282c` onward
 > UNPUSHED" was overtaken by the 2026-08-03 push. Corrected in 117.)
 
-➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — the session before.
+➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — four sessions before.
 
 > **115** was scoped as a **surfacing rework** — the A1 automation is built and correct,
 > only the way its result reaches the driver is wrong. Re-grepping the seams before
