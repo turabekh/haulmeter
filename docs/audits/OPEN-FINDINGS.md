@@ -8,10 +8,10 @@ record and are never edited.
 `AUDIT-INDEX.md` both referenced it.
 
 Two other files the index lists as living in `docs/audits/` are real but elsewhere —
-**`WATCH.md` is at `docs/WATCH.md`** and **`split_dump.py` is at the repo root.** One is
-genuinely absent: **`S23-PROPOSAL-loading-state.md` does not exist anywhere in the tree**,
-and it is what three of the four blocked criticals are waiting on. The two kickoff briefs
-in `docs/kickoffs/` do exist.
+**`WATCH.md` is at `docs/WATCH.md`** and **`split_dump.py` is at the repo root.** The two
+kickoff briefs in `docs/kickoffs/` do exist. `S23-PROPOSAL-loading-state.md` was missing
+for most of session 119 and **now exists**, supplied by the owner and verified against the
+tree — it is **PROPOSED, not approved**, so the three criticals it gates are still blocked.
 
 ## Status vocabulary
 
@@ -127,10 +127,13 @@ decision — the index puts that kickoff fourth, ahead of everything blocked.
    `bool(host and port)`. Falling back to the recording gateway requires `SMTP_HOST` to be
    **blank**, not un-overridden. HANDOFF-118 §5.2 says the opposite; the handoff is wrong.
 2. **U-06, U-09, U-10 — the §23 loading-state entry.** A skeleton is a §22.2 component
-   pattern, so it cannot be improvised. `AUDIT-INDEX.md` says the proposal blocks three
-   criticals and tells you to read it "now" — but **`S23-PROPOSAL-loading-state.md` is not
-   in the tree.** It has to be written before it can be approved, so the blocker is one
-   step further back than the index thinks.
+   pattern, so it cannot be improvised. The proposal now exists at
+   `docs/audits/S23-PROPOSAL-loading-state.md` and is **awaiting the owner's decision on
+   three items plus one open question**. Its measurable claims were verified in session
+   119; one is materially understated — the fixture deletion is **16 exports across 10
+   importers**, not "nine fixtures imported by five surfaces", and three of those
+   importers are §18 portals rather than driver surfaces, which the proposal's wording
+   does not settle. See the VERIFICATION section appended to it.
 3. **F-02 + F-12 — the `default_on` versus `enabled` decision.** Must not be split.
 4. **NEW (session 119) — `--marker-500` fails the non-text contrast floor in dark theme.**
    A white pin glyph on it measures **2.04:1**; WCAG 1.4.11 and §16 require 3:1. That is
