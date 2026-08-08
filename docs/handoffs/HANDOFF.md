@@ -5,12 +5,13 @@ results, exact next task, and blockers always live in the latest numbered handof
 
 ➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — read this first, every session.
 
-> **121** was one instruction — *"approved, do the loading-state work"* — and it closed
-> **five findings: U-06, U-09, U-10 (criticals), U-11 and U-12**, which is every finding
-> the owner's decision was blocking. The proposal that had been PROPOSED since 2026-08-07
-> is **design-prd §23 entry 131**, and the four-state rule is on the **§22.3 DoD**.
-> **Open findings 7 → 5. Every High in both audits is now closed;** one critical is open
-> (F-02) and one blocked (F-01).
+> **121** was two instructions. *"Approved, do the loading-state work"* closed **five
+> findings — U-06, U-09, U-10 (criticals), U-11 and U-12** — every finding that decision was
+> blocking; the proposal PROPOSED since 2026-08-07 is **design-prd §23 entry 131** and the
+> four-state rule is now on the **§22.3 DoD**. Then *"proceed with the portal touch
+> targets"* closed **U-04 and U-05** (**entry 132**).
+> **Open findings 7 → 5, and NOTHING IS PARTIAL any more. Every High in both audits is
+> closed;** one critical is open (F-02) and one blocked (F-01).
 >
 > **All five were one defect.** Every fetching surface had two states, so `null` had to
 > mean either data or no-data and the codebase chose data — `livePins ?? SAMPLE_PINS`.
@@ -38,7 +39,23 @@ results, exact next task, and blockers always live in the latest numbered handof
 > driver's month. **`money.empty` was translated into all six locales and rendered by
 > nothing** — found by applying the four-state rule, which is that rule earning its place.
 >
-> **Stack UP · thirty-seven commits UNPUSHED · nothing deployed.** `git fetch` still cannot
+> **The portals were worse than the audit said and the harness nearly died proving it.**
+> U-05 described "two portal controls (40 dp)"; there were **seven** below §6.5's floor and
+> the worst was `.switch` at **233 × 20 dp** with no height declared at all. Registering the
+> two portals then found three reflow defects nothing had ever measured — a bookings table
+> at **437 px** dragging the page sideways, and `min-width: auto` on an `<input>` for the
+> **third session running**, plus its grid form (`1fr` → `minmax(0, 1fr)`).
+>
+> **And §8.2 is the section to read.** Generalising the harness's scroller exemption to walk
+> ancestors — which it had to, since a table is `table > thead > tr > th` — found
+> `overflow-x: auto` computed on `main.app-content`, above every element on every surface,
+> because **CSS promotes `visible` to `auto` when the other axis is not visible.** That
+> silently exempted **the entire app** from LAW 0's only mechanical check, and the full
+> 279-check sweep **went green over it.** Caught by restoring a defect and watching the test
+> pass when it should have failed. *A sabotage that comes back green is not a safe fix; it is
+> a check that does not exist.*
+>
+> **Stack UP · thirty-eight commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
 ➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — the session before.

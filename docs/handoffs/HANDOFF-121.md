@@ -1,6 +1,6 @@
 # HANDOFF-121 — the loading state exists, and the fixtures are gone
 
-> **Stack UP · thirty-seven commits UNPUSHED · nothing deployed.** haulmeter.online still
+> **Stack UP · thirty-eight commits UNPUSHED · nothing deployed.** haulmeter.online still
 > serves 112's code.
 >
 > The owner approved `S23-PROPOSAL-loading-state.md`, PROPOSED since 2026-08-07, and said
@@ -8,12 +8,17 @@
 > is on the **§22.3 DoD**. **Five findings closed — U-06, U-09, U-10 (criticals), U-11 and
 > U-12** — which is every finding that decision was blocking.
 >
-> **Open findings 7 → 5. Criticals: 3 closed, 1 open (F-02), 1 blocked (F-01). Every High
-> in both audits is now closed.**
+> Then a second instruction — *"proceed with the portal touch targets"* — closed **U-04
+> and U-05**, the last two PARTIAL findings. **§23 entry 132.**
 >
-> **Two things are worth reading over the rest: §4, where looking at a screenshot found a
-> defect that six automated checks had passed over; and §5, where removing the fixtures
-> revealed that nine unit tests and four harness states had been measuring them.**
+> **Open findings 7 → 5, and NOTHING IS PARTIAL any more.** Criticals: 3 closed, 1 open
+> (F-02), 1 blocked (F-01). **Every High in both audits is closed.**
+>
+> **Three things are worth reading over the rest. §4:** looking at a screenshot found a
+> defect six automated checks had passed over. **§5:** removing the fixtures revealed that
+> nine unit tests and four harness states had been measuring them. **§8.2:** a harness
+> change of mine silently exempted the entire app from LAW 0's only mechanical check, and
+> the full sweep went green over it.
 
 ---
 
@@ -21,9 +26,9 @@
 
 | | |
 |---|---|
-| Branch | `main`, **thirty-seven** commits ahead of `origin/main` — 120's thirty-five plus this session's two |
+| Branch | `main`, **thirty-eight** commits ahead of `origin/main` — 120's thirty-five plus this session's three |
 | `origin/main` | `113327e`, still **not re-verified**. `git fetch` fails here: *"could not read Username for 'https://github.com'"*. The ahead-count is arithmetic. **Re-fetch before pushing** |
-| Gates | **pytest 1538 · vitest 745 (39 files) · layout 271 · import-linter 30/30 · ruff clean** — all five measured on the final tree |
+| Gates | **pytest 1538 · vitest 746 (39 files) · layout 279 · import-linter 30/30 · ruff clean** — all five measured on the final tree |
 | Migrations | `0065_f14_job_schedule` (head) — unchanged, no migration this session |
 | Working tree | clean |
 | Local stack | **UP.** Seven containers, `/health` 200, UI 200 |
@@ -31,8 +36,8 @@
 | Email | **dev still points at live Gmail.** A send from dev is a real send |
 | Deploy | **not run.** The box has none of 113–121 |
 
-Baseline was vitest 714 / layout 257. **vitest +31, layout +14** (three skeleton states ×
-four variants, plus the two observation tests).
+Baseline was vitest 714 / layout 257. **vitest +32, layout +22** — three skeleton states
+and two portal states at four variants each, plus the two observation tests.
 
 **The stack was DOWN at session start despite 120 signing off "UP"** — no containers at
 all, not stopped, absent. Something removed them after 120 ended. The named volumes and
@@ -176,7 +181,7 @@ one now (`.dwell__figure`).
   path that does not match turns all four `map-loading` variants red with the right
   diagnosis.
 
-## 7. Sabotage — nine restorations, every one caught
+## 7. Sabotage — eleven restorations, and one that passed when it should not have
 
 | Fix | Sabotage result |
 |---|---|
@@ -189,13 +194,94 @@ one now (`.dwell__figure`).
 | `SkeletonPin` back to the invisible `--line-1` | 1 fail |
 | harness `hang` pointed at a non-matching path | 4 fail (the layout states) |
 | the burn-down, before any of it was true | 3 fail |
+| portal scroller switched off, BEFORE the shell fix | **0 fail — see below** |
+| portal scroller switched off, after it | 4 fail |
+| `.app-content`'s `overflow-x` declaration removed | 1 fail *(0 before the test stopped matching its own comment)* |
 
-**No `0 fail` row.** The burn-down was written first and watched failing, and its third
-assertion named all ten importers on the way down.
+**One row came back green, and it was the most valuable result of the session.** Switching
+off the owner table's scroller left the state passing, because the ancestor walk had found
+a computed `overflow-x: auto` on the app shell and exempted everything — §8.2. The two
+`0 fail` results here are both the same lesson 120 §5 drew: *a sabotage that comes back
+green is not a fix that is safe, it is a check that does not exist.*
 
-## 8. Exact next task
+The burn-down was written first and watched failing, and its third assertion named all ten
+importers on the way down.
 
-### 8.1 The owner decisions — three left, down from eight
+## 8. The portals — and the near-miss that matters more than the finding
+
+### 8.1 The decision, and what the audit had wrong
+
+The owner applied §6.5's floor to the §18 portals. **The documents settle it once read
+together:** §6.5 says *"Minimum target 48 × 48 dp"* with no qualification; §18 exempts
+portals from LAW 0, which is about mobile-**first** ORDER; and §18's only exemption
+sentence points the other way — *"Nothing in Section 18 ever justifies desktop-first
+thinking in the driver app"* protects the driver app FROM §18, not the portals from §6.
+§18 also says portals are *"responsive down to tablet/phone"*, so an owner on a phone is a
+case §18 **specifies**.
+
+**The audit said "two portal controls at 40 dp". There were seven, and the worst was 20.**
+
+| Control | Was | What it does |
+|---|---|---|
+| `.switch` (Fleet) | **233 × 20**, no height declared at all | changes which fleet the whole screen is about |
+| `.cta--sm` (Fleet) | 40 | opens a fleet from the picker |
+| `.spot__price-in` | 40 | **re-prices a spot** — the owner types into it |
+| `.pause` | 40, and **43 × 48 in Punjabi** | pause/resume a spot, and cancel a booking, which refunds money |
+| `.in` | 44 | the add-property fields |
+| `.add` / `.add--sm` | 44 / 40 | submit a property / a spot |
+
+Two failed on **width**, which is the half a short label breaks — "Pause" is ਰੋਕੋ. §6.5 is
+48 × 48 and `min-width` was missing. Not raised to §6.5's 56 dp primary height: that is a
+screen's one primary action, and these sit inside tables and lists.
+
+**Registering the portals found three reflow defects nothing had ever measured.** The
+bookings ledger ran to **437 px** at 360 dp and dragged the whole page sideways — fixed
+with an `overflow-x` container, not a new pattern, because the harness's own overflow rule
+already names *"the preset chip row, the portal rail"* as approved scrollers. At 200% text
+`.prop__head` did not wrap, and `.in--name` ran to **451 px**: a flex item defaults to
+`min-width: auto` and an `<input>`'s intrinsic ~20-character width **scales with the font
+size**. That is the **third session running** in which that exact defect has been found
+(U-04's scorecard search input, then twice here), and its grid form followed immediately —
+`.kpis` used `repeat(2, 1fr)`, and a grid TRACK has the same min-content floor, so the KPI
+row ran to 488 px. `minmax(0, 1fr)`.
+
+### 8.2 The near-miss: I switched off LAW 0 for the whole app and the sweep went green
+
+**Read this one.**
+
+The harness exempts elements inside a deliberate horizontal scroller from its 360 dp rule.
+That lookup checked only the **immediate parent**, which cannot work for a table — a table
+is `table > thead > tr > th`, so wrapping it in a scroller exempted the table and still
+reported every cell inside it. So I generalised the lookup to walk ancestors, which the
+rule's own comment already describes as its intent.
+
+Walking ancestors found `overflow-x: auto` computed on **`main.app-content`** — above every
+element on every surface. Nobody asked for it: **CSS promotes `visible` to `auto` on one
+axis when the other is not `visible`**, and the shell sets `overflow-y: auto`.
+
+So the generalisation silently exempted **the entire application** from the only mechanical
+check LAW 0 has ever had, and **the full 279-check sweep passed.** Nothing failed. The
+harness would have gone on reporting green over any horizontal overflow anywhere, for as
+long as anyone cared to look.
+
+It was caught by **restoring the defect and watching the test pass when it should have
+failed** — the scroller was switched off on the owner table, and the state stayed green.
+That is the whole value of the sabotage discipline in one instance: the fix was green, the
+sweep was green, and the check was dead.
+
+`.app-content` now declares `overflow-x: hidden`, which states what MF-2 always intended,
+and a **unit** test pins it so the computed-to-`auto` surprise cannot return inside a
+browser-only suite.
+
+**That test was also wrong first.** It matched the AI-CONTEXT comment above the
+declaration, which quotes `overflow-x: hidden` in prose — so removing the real declaration
+left it green. It strips comments now. Same shape as 120 §4's accent test that routed on a
+word other than the one it claimed to check: *a test that matches its own documentation
+asserts nothing about the code.*
+
+## 9. Exact next task
+
+### 9.1 The owner decisions — two left, down from eight
 
 119 §5.1's list is **half cleared**: items 5–8 were the loading-state proposal and are
 done. What remains:
@@ -203,10 +289,9 @@ done. What remains:
 | | |
 |---|---|
 | **`--marker-500` at 2.04:1 in dark** | against a 3:1 floor. The "Some" parking pin and the **OPEN** weigh-station pin. Pinned in `contrast.test.js` so it cannot drift; a palette colour is §22.2 never-improvise. **§4 above is an argument for taking this seriously** — that was also a token that was legitimate and still wrong on this exact surface |
-| **Two portal touch targets (40 dp)** | clearing it closes **U-04** and **U-05**'s remainders, and lets `FleetWorkspaceSurface` and `OwnerPortalSurface` into the harness |
-| **`.cluster` hit area 36 dp** | below §6.5's 48 and below §11.2's 44 dp map exemption |
+| **`.cluster` hit area 36 dp** | below §6.5's 48 and below §11.2's 44 dp map exemption. **It is a MAP finding, not a portal one** — §8.1 closed the portal half, and this is what is left of U-05's class |
 
-### 8.2 What is left in the queue
+### 9.2 What is left in the queue
 
 | | |
 |---|---|
@@ -215,15 +300,15 @@ done. What remains:
 | **F-19** | no merge-review queue — needs a judgement about intended behaviour |
 | **F-25** | the profit model assumes the product does not work — same |
 | **F-27** | fleet N+1. Latent, and inherits F-23's `owed` definition |
-| **U-04, U-05** | **PARTIAL**, both waiting on the portal touch-target decision above |
+| ~~U-04, U-05~~ | **CLOSED** — §8. Nothing in the queue is PARTIAL any more |
 
-### 8.3 Still open and untouched
+### 9.3 Still open and untouched
 
 The **handset background-sensor test** (v2.0 DoD #8), **ON_SITE has still not been walked
 in a browser** (117 §7), and **push, then decide on deploying**. A deploy needs production
 `SMTP_*` on the VM, which is F-01's question again.
 
-## 9. Things a later session will trip over
+## 10. Things a later session will trip over
 
 1. **`ui/src/core/fixtures.js` is deliberately empty and says so.** Do not add to it. The
    five alternatives are listed in the file.
@@ -247,8 +332,17 @@ in a browser** (117 §7), and **push, then decide on deploying**. A deploy needs
 9. **`--on-accent` is the only fill that works over a basemap in both themes.** §4.
 10. **`money.empty` is rendered now**; `system.loading` is still used by nothing, correctly
     — the skeletons are `aria-hidden` and carry no text.
+11. **`.app-content` declares `overflow-x: hidden` and must keep declaring it.** §8.2.
+    `overflow-y: auto` alone makes the other axis compute to `auto`, and the harness reads
+    that as a deliberate scroller. Pinned by a unit test.
+12. **A grid track needs `minmax(0, 1fr)`, not `1fr`,** for the same reason a flex item
+    needs `min-width: 0`. Both forms of one defect are now in three surfaces' history;
+    expect a fourth.
+13. **The §18 portals ARE in the layout harness.** They are exempt from LAW 0's ORDER, not
+    from §6's floors. `fleet-portal` needs the active fleet planted in
+    `longhaul.cache.active_fleet` or it measures the picker instead of the workspace.
 
-## 10. Restarting
+## 11. Restarting
 
 **`make ui-layout` is now 271 checks and ~2.7 min.** It runs ALONE.
 `make ui-layout-only STATE=map-loading` measures one state in ~45 s.
