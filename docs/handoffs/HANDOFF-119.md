@@ -1,12 +1,16 @@
 # HANDOFF-119 — the audit queue, worked: every critical that could be closed without an owner decision is closed
 
-> **Stack UP · twenty-two commits UNPUSHED · nothing deployed.** haulmeter.online still
+> **Stack DOWN · twenty-four commits UNPUSHED · nothing deployed.** haulmeter.online still
 > serves 112's code.
 >
-> Session 119 read the 2026-08-07 audit and worked it: **nineteen findings closed, two
-> partial**, and one of the audit's three unanswered questions answered. Three of the eight criticals are closed (F-13, F-21, U-07); four are blocked
-> on things nobody in this environment can supply, and the last one (F-02) needs a
-> decision before anyone starts.
+> Session 119 read the 2026-08-07 audit and worked it: **nineteen of forty-five findings
+> closed, two partial**, and one of the audit's three unanswered questions answered. Three
+> of the eight criticals are closed (F-13, F-21, U-07); four are blocked on things nobody
+> in this environment can supply, and the last (F-02) needs a decision before anyone starts.
+>
+> **Every finding that could be closed without an owner decision now is.** What is left is
+> §5.1 — eight decisions, none of them expensive, four of them on one proposal that would
+> unblock three criticals in a single session.
 >
 > **Closing a finding opened one.** Tokenising the map pin made its contrast checkable in
 > CI for the first time, and CI immediately said white on `--marker-500` is **2.04:1** in
@@ -22,12 +26,12 @@
 
 | | |
 |---|---|
-| Branch | `main`, **twenty-two** commits ahead of `origin/main` — 118's six plus this session's sixteen |
+| Branch | `main`, **twenty-four** commits ahead of `origin/main` — 118's six plus this session's eighteen |
 | `origin/main` | `113327e` — still **not re-verified**; `git fetch` has no credential here. **Re-fetch before pushing** |
 | Gates | **pytest 1456 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** |
 | Migrations | **`0064_f08_outbound_delivery` (head)** — 0060–0064 are all new this session, each applied and round-tripped on the running stack |
 | Working tree | clean; `longhaul.txt` and `split_dump.py` now **gitignored** at the owner's instruction |
-| Local stack | **UP** |
+| Local stack | **DOWN** — brought down at the owner's request at session end |
 | Dev data | Tampa `27.9506,-82.4572` intact, four DEV facilities at 88–125 m |
 | Email | **dev still points at live Gmail.** A send from dev is a real send |
 | Deploy | **not run.** The box has none of 113–119 |
@@ -194,7 +198,10 @@ That unreality is part of what hid the defect.
 
 ## 5. Exact next task
 
-### 5.1 Four owner decisions, all cheap, all blocking
+### 5.1 Eight owner decisions, all cheap, all blocking
+
+**Read this section first.** Nothing else in the queue is worth as much as clearing it: item
+5 alone unblocks four criticals and a High.
 
 1. **`--marker-500` fails the non-text contrast floor in dark theme — 2.04:1 against 3:1.**
    The "Some" parking pin, and by E3.1's inverted valence the **OPEN** weigh-station pin,
@@ -210,26 +217,54 @@ That unreality is part of what hid the defect.
 4. **`.cluster`'s hit area is 36 dp** and, unlike `.pin`, does **not** exceed its visual
    size — below §6.5's 48 and below §11.2's deliberate 44 dp map exemption too.
 
+**And four on the loading-state proposal** (`docs/audits/S23-PROPOSAL-loading-state.md`,
+supplied by the owner this session, **still PROPOSED**). It gates U-06, U-09, U-10 and
+U-11, and a skeleton is a §22.2 component pattern, so no session may start it unasked:
+
+5. **The component pattern** — a static skeleton in three shapes, composed from existing
+   tokens, no animation. The no-animation argument is the strongest part of the document: a
+   shimmer is forbidden twice over by §6.4, and `prefers-reduced-motion` needs no branch
+   because there is no motion to reduce.
+6. **The four-state rule** as a §22.3 DoD addition — every fetching surface declares
+   `loading` / `loaded+data` / `loaded+empty` / `failed`.
+7. **The fixture deletion, and how far it reaches.** This is the one real ambiguity. The
+   proposal says "all *driver-facing* fixtures", and **three of the ten importers are §18
+   web-first portals** (OwnerPortal, FleetWorkspace, PublicScorecard). §11.7's
+   driver-facing argument does not reach a portal on its own terms — but leaving them is
+   exactly the "one import away" condition §23 entry 81 was written about. **Decide both
+   halves together.**
+8. **The proposal's own open question — does `/dev` keep any fixtures?** Recommendation:
+   **no.** `/dev` already has one-click sign-in against a real seeded account, so it needs
+   no invented data, and a name-assertion burn-down test is the simpler guard.
+
+**Its claims were verified before being put to the owner**, and one is materially
+understated: *"nine fixtures imported by five surfaces"* is **sixteen exports across ten
+importers**. Six other claims hold exactly, including the two carrying the argument — zero
+skeleton components, and two of twenty-one surfaces tracking loading at all. The
+undercount does not weaken the case; it doubles the size of item 7's session. The full
+measurement is appended to the proposal under **VERIFICATION**.
+
 ### 5.2 Blocked on facts nobody here can get
 
 - **F-01 — what is `SMTP_HOST` on the box?** One command. The code half is confirmed and is
   worse than the audit's "probably": falling back to the recording gateway requires
   `SMTP_HOST` to be **blank**, not un-overridden. **HANDOFF-118 §5.2 says the opposite and
   is wrong.**
-- **U-06, U-09, U-10** wait on the §23 loading-state entry — and
-  `S23-PROPOSAL-loading-state.md` **does not exist in the tree**, so the blocker is one step
-  further back than `AUDIT-INDEX.md` thinks. It has to be written before it can be approved.
+- **U-06, U-09, U-10** wait on the §23 loading-state entry. The proposal was missing for
+  most of this session and **now exists** at `docs/audits/S23-PROPOSAL-loading-state.md`,
+  supplied by the owner. It is **PROPOSED, not approved** — see §5.1.
 
 ### 5.3 Then
 
-Three High findings remain, and they are the ones a single session cannot finish:
-**F-30** (voice understands one of six languages — six locales of speech handling),
-**U-11** (there is no loading state, which is the §23 proposal's own subject), and
-**U-12** (the fixture ban and the nine fixtures it does not cover, which the loading-state
-entry also gates). After those it is Medium and Low: **F-09** (location pings never
-purged), **F-10** (worker scheduling is in-process only), **F-11** (the deploy path is
-outside every review), **F-15**, **F-19**, **F-25**, **F-32**, and **U-04**'s six
-remaining surfaces.
+**Approve §5.1 item 5 and the next session is already scoped**: the skeleton primitive
+closes U-11 and, with it, U-06, U-09, U-10 and U-12 — four criticals and a High, in one
+session, against a proposal whose claims are already verified.
+
+Independent of that decision: **F-30** (voice understands one of six languages — six
+locales of speech handling) is the only remaining High that needs nothing from the owner.
+After it, Medium and Low: **F-09** (location pings never purged), **F-10** (worker
+scheduling is in-process only), **F-11** (the deploy path is outside every review),
+**F-15**, **F-19**, **F-25**, **F-32**, and **U-04**'s six remaining surfaces.
 
 ### 5.4 The dependency this session added, and why
 
@@ -243,6 +278,26 @@ worth someone's attention on its own.
 
 Still open and untouched from 118: the **handset background-sensor test** (v2.0 DoD #8),
 and **push, then decide on deploying**. A deploy needs production `SMTP_*` on the VM.
+
+### 5.5 Five things this session changed that a later session will trip over
+
+Not defects — decisions with reach beyond the finding that caused them.
+
+1. **`longhaul.active_stop` moved to `longhaul.cache.active_stop`** (U-02). The layout
+   harness plants that key directly and had to move with it. **Anything else that writes a
+   per-driver key must go under `CACHE_PREFIX`**, or logout will not sweep it.
+2. **`Job.flag_key` is now optional in `app/worker.py`.** `None` means always run.
+   `is_enabled` answers False for an unregistered flag, so giving a foundation safety net a
+   flag is how it becomes the sixth built-and-inert engine. `outbound_retry` uses it.
+3. **F1's registration moved to boot** (`module_registry.register_all`). It ran lazily
+   inside the `/auth/verify-authority` handler — §23 entry 105's m11 defect — so the login
+   throttle's three config knobs would have been invisible in `/admin/config` until someone
+   called an unrelated endpoint.
+4. **`register_all` now seeds an F9 budget for every module.** The invariant is "a module
+   has a budget", asserted in `test_module_flags`. A fourteenth module gets one for free.
+5. **`F2.Facility.timezone` is resolved lazily and stored.** The first caller to ask pays
+   for the lookup; everything after reads the column. A test that creates a facility and
+   asserts on `timezone` before anything asks will see `None`, and that is correct.
 
 ## 6. What I did NOT do, and two things the audit got wrong
 
@@ -285,7 +340,7 @@ and **push, then decide on deploying**. A deploy needs production `SMTP_*` on th
 ```
 make up                              # preflight, then the full stack
 make seed-where                      # the Tampa origin — paste into Sensors
-make test                            # 1411 pytest + 714 vitest — do NOT pipe it
+make test                            # 1456 pytest + 714 vitest — do NOT pipe it
 make lint                            # ruff + import-linter (30 contracts)
 make ui-layout                       # 229 checks, ~3 min, runs ALONE
 make down
@@ -296,8 +351,20 @@ send** — seeded `@bolt.example` counterparties are safe, that TLD does not res
 bodies locally: `SMTP_HOST=mailpit`, `SMTP_PORT=1038`, `SMTP_STARTTLS=false`, then recreate
 the api container.
 
-Migration 0060 **refuses to run against data that already violates either new constraint**,
-naming the offending rows, rather than failing with a raw Postgres error mid-deploy. Local
-data was clean and the constraints applied on the first attempt.
+**Five migrations are new this session (0060–0064)** and every one was applied AND
+downgraded AND re-applied on the running stack. Two are worth knowing about before a
+deploy:
 
-Nothing is waiting on a background job, an ingest, or a queue.
+- **0060** refuses to run against data that already violates either new money constraint,
+  naming the offending rows, rather than failing with a raw Postgres error mid-deploy.
+  Local data was clean and it applied first time.
+- **0062** renames `module_budget.budget_micros` to `monthly_budget_micros`. Nothing had
+  ever written a row, so there was nothing to migrate — but the name change is the point,
+  because the old one was read as a recurring allowance and behaved as a lifetime one.
+
+**The API image grew 4.61 GB → 4.83 GB** (`timezonefinder`, §5.4). A rebuild is required
+before the api container will start — `make up` does it.
+
+Nothing is waiting on a background job, an ingest, or a queue. The worker's new
+`outbound_retry` job runs every five minutes and was seen to run clean on a real boot:
+`worker: outbound_retry ok: {'retried': 0, 'sent': 0, 'abandoned': 0}`.

@@ -55,7 +55,12 @@ results, exact next task, and blockers always live in the latest numbered handof
 > a delivery it never got. Real Message-IDs, a tested lazy gateway, and a five-minute
 > retry sweep that never re-presents a bad password to Gmail.
 >
-> **Stack UP · twenty-two commits UNPUSHED · nothing deployed.** `git fetch` still cannot
+> **The loading-state §23 proposal now exists** (`docs/audits/S23-PROPOSAL-loading-state.md`,
+> owner-supplied, claims verified) and is **awaiting a decision**. Approving it unblocks
+> U-06, U-09, U-10, U-11 and U-12 — four criticals and a High — in one session. That, plus
+> seven other cheap decisions, is the whole of 119 §5.1 and the best thing to read first.
+>
+> **Stack DOWN · twenty-four commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
 ➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — the session before.
