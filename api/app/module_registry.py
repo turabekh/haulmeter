@@ -58,7 +58,21 @@ def register_all(db: Session) -> list[str]:
     that state is an owner decision and a deploy must never overrule it. That is why
     this compares before and after rather than simply setting `enabled=True`.
     """
+    from app.foundation.f01_identity import public as identity
     from app.foundation.f13_flags import public as flags
+
+    # AI-CONTEXT: F1's registration runs HERE, at boot, and it did not before.
+    #
+    # `register_authority_verification` was called lazily from inside the
+    # /auth/verify-authority handler — which is the exact pattern this file's own header
+    # records as the m11 defect: "m11 did it lazily, inside a request". It registers the
+    # verification flag and, since F-07, the three login-throttle config declarations.
+    # Left where it was, those knobs would be absent from /admin/config until somebody
+    # happened to call an unrelated endpoint, which is session 112's finding reappearing:
+    # a tunable nobody can find is not configuration. Foundation components are not
+    # flag-gated like modules, so it takes no part in the enable-on-first-registration
+    # rule below.
+    identity.register_authority_verification(db)
 
     known_before = {
         key for (key,) in db.query(flags.FeatureFlag.key).all()  # noqa: S608 - ORM

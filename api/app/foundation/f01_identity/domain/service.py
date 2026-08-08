@@ -1,7 +1,8 @@
 import secrets
+import threading
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .auth_methods import get_handler
@@ -11,6 +12,7 @@ from .models import (
     AuthMethod,
     AuthSession,
     DriverProfile,
+    LoginAttempt,
     Organization,
     OrgMembership,
     RoleAttachment,
@@ -22,6 +24,50 @@ INVOICING_AUTHORITIES = {AuthorityType.own_mc, AuthorityType.leased}
 
 # F13 flag gating the FMCSA verification seam (activation switch, PRD §6).
 AUTHORITY_VERIFICATION_FLAG = "f01_authority_verification"
+
+
+# AI-CONTEXT: authentication throttling (audit F-07). There was none — no limiter, no
+# lockout, no attempt counter anywhere in the application — against a live product with
+# real driver accounts on a single VM with no monitoring.
+#
+# The finding names TWO attacks, and they need two different defences:
+#
+#  1. CREDENTIAL STUFFING against an account. Bounded per identifier, and per client IP
+#     for the spray case. Compiled defaults below, overridable as F13 config so the
+#     numbers can be tuned on a live box without a deploy (the HANDOFF-041 pattern that
+#     m06's take rate and m10's earn rates already use).
+#
+#  2. CPU EXHAUSTION. `verify` runs Argon2, which is deliberately memory-hard and slow.
+#     A few hundred concurrent POSTs take the box down with NO credentials, so no
+#     per-identifier limit can help — the attacker simply uses a different email each
+#     time. `VERIFY_SLOTS` is the answer: it caps how many password verifications run
+#     at once, whatever they claim to be. Uvicorn runs sync endpoints in a threadpool,
+#     so without it every worker can end up inside Argon2 and the whole API stops
+#     answering — including the endpoints that have nothing to do with logging in.
+#     Capping it isolates the expensive operation instead of letting it starve the rest.
+LOGIN_WINDOW_SECONDS = 900  # 15 minutes, and the lockout expires WITH it
+LOGIN_MAX_PER_IDENTIFIER = 5
+LOGIN_MAX_PER_IP = 20  # higher: a carrier NAT can put many honest drivers on one address
+CONFIG_LOGIN_WINDOW = "f01_login_window_seconds"
+CONFIG_LOGIN_MAX_IDENTIFIER = "f01_login_max_per_identifier"
+CONFIG_LOGIN_MAX_IP = "f01_login_max_per_ip"
+
+# A SLIDING WINDOW, never a permanent lockout. A lockout would hand an attacker a
+# denial-of-service against the driver: fail five times against a competitor's email and
+# they cannot reach their own detention clock. This expires on its own.
+VERIFY_SLOTS = threading.BoundedSemaphore(8)
+
+
+class Throttled(Exception):
+    """Too many failed attempts. `retry_after` is seconds, for the HTTP header."""
+
+    def __init__(self, retry_after: int):
+        super().__init__(f"retry after {retry_after}s")
+        self.retry_after = retry_after
+
+
+class VerifierBusy(Exception):
+    """Every password-verification slot is in use — shed load rather than fall over."""
 
 
 class EmailAlreadyRegistered(Exception):
@@ -133,6 +179,78 @@ def add_auth_method(
     return method
 
 
+def _login_limits(db: Session) -> tuple[int, int, int]:
+    # live F13 config, falling back to the compiled defaults. Read per attempt so a box
+    # under attack can be tightened from the admin console without a deploy.
+    from app.foundation.f13_flags import public as flags
+
+    return (
+        int(flags.get_config(db, CONFIG_LOGIN_WINDOW, LOGIN_WINDOW_SECONDS)),
+        int(flags.get_config(db, CONFIG_LOGIN_MAX_IDENTIFIER, LOGIN_MAX_PER_IDENTIFIER)),
+        int(flags.get_config(db, CONFIG_LOGIN_MAX_IP, LOGIN_MAX_PER_IP)),
+    )
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def _failures_since(db: Session, column, value, since: datetime) -> tuple[int, datetime | None]:
+    row = db.execute(
+        select(func.count(), func.min(LoginAttempt.occurred_at)).where(
+            column == value, LoginAttempt.occurred_at >= since
+        )
+    ).one()
+    return int(row[0]), row[1]
+
+
+def check_login_allowed(db: Session, email: str, client_ip: str | None, now: datetime) -> None:
+    """Raise `Throttled` BEFORE any password is verified.
+
+    AI-CONTEXT: the ordering is the fix, not a detail. Checking after `authenticate`
+    would count the attempts correctly and still run Argon2 on every one of them — the
+    throttle would stop credential stuffing while leaving the CPU-exhaustion vector
+    exactly as it was. Nothing expensive may happen above this line.
+    """
+    window, max_identifier, max_ip = _login_limits(db)
+    now = _as_utc(now)
+    since = now - timedelta(seconds=window)
+
+    checks = [(LoginAttempt.identifier, _normalize_email(email), max_identifier)]
+    if client_ip:
+        checks.append((LoginAttempt.client_ip, client_ip, max_ip))
+
+    for column, value, limit in checks:
+        count, oldest = _failures_since(db, column, value, since)
+        if count < limit:
+            continue
+        # the window slides off the OLDEST attempt still counted, so the wait shrinks as
+        # attempts age out instead of resetting every time someone tries again
+        elapsed = (now - _as_utc(oldest)).total_seconds() if oldest else 0
+        raise Throttled(max(1, int(window - elapsed)))
+
+
+def record_failed_login(db: Session, email: str, client_ip: str | None, now: datetime) -> None:
+    window, _, _ = _login_limits(db)
+    normalized = _normalize_email(email)
+    # bounded on write, so this table can never become F-09 in a second place
+    db.execute(
+        delete(LoginAttempt).where(
+            LoginAttempt.occurred_at < _as_utc(now) - timedelta(seconds=window)
+        )
+    )
+    db.add(LoginAttempt(identifier=normalized, client_ip=client_ip, occurred_at=_as_utc(now)))
+    db.flush()
+
+
+def clear_failed_logins(db: Session, email: str) -> None:
+    # proving you are the account holder ends the lockout on it. The IP's own count is
+    # deliberately NOT cleared: one success does not vouch for every attempt from an
+    # address, which is the whole point of counting them separately.
+    db.execute(delete(LoginAttempt).where(LoginAttempt.identifier == _normalize_email(email)))
+    db.flush()
+
+
 def authenticate(db: Session, email: str, password: str) -> Account | None:
     normalized = _normalize_email(email)
     method = db.scalar(
@@ -144,7 +262,15 @@ def authenticate(db: Session, email: str, password: str) -> Account | None:
     if method is None:
         return None
     handler = get_handler(MethodType.password)
-    if not handler.verify(method.secret_ref, password):
+    # see VERIFY_SLOTS: bound the concurrent Argon2 work so a login flood cannot consume
+    # every threadpool worker and stop the endpoints that have nothing to do with auth
+    if not VERIFY_SLOTS.acquire(blocking=False):
+        raise VerifierBusy()
+    try:
+        verified = handler.verify(method.secret_ref, password)
+    finally:
+        VERIFY_SLOTS.release()
+    if not verified:
         return None
     account = db.get(Account, method.account_id)
     # a deactivated account fails CLOSED, and distinctly from a wrong password: the
@@ -234,6 +360,36 @@ def register_authority_verification(db: Session) -> None:
 
     flags.register_flag(
         db, AUTHORITY_VERIFICATION_FLAG, description="F1 Operating-authority verification (FMCSA)"
+    )
+    # AI-CONTEXT: DECLARED, not merely readable. Session 112's finding was that
+    # `/admin/config` listed only keys somebody had already set, so a tunable nobody had
+    # touched was invisible and guessing its name was the only way in. These three are
+    # the levers an operator reaches for while a box is being attacked — the moment when
+    # hunting for an undocumented key name is worst — so they are on the console before
+    # anyone needs them.
+    flags.register_config(
+        db,
+        CONFIG_LOGIN_WINDOW,
+        LOGIN_WINDOW_SECONDS,
+        description="Failed-login counting window, seconds. The lockout expires with it.",
+        scope="security",
+    )
+    flags.register_config(
+        db,
+        CONFIG_LOGIN_MAX_IDENTIFIER,
+        LOGIN_MAX_PER_IDENTIFIER,
+        description="Failed logins per email address within the window before 429.",
+        scope="security",
+    )
+    flags.register_config(
+        db,
+        CONFIG_LOGIN_MAX_IP,
+        LOGIN_MAX_PER_IP,
+        description=(
+            "Failed logins per client IP within the window. Higher than the per-address "
+            "limit: a carrier NAT can put many honest drivers on one address."
+        ),
+        scope="security",
     )
 
 

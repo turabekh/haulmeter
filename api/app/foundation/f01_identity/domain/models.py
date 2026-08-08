@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     String,
     UniqueConstraint,
     func,
@@ -106,6 +107,42 @@ class AuthSession(Base):
         ForeignKey(f"{SCHEMA}.account.id", ondelete="CASCADE"), nullable=True, index=True
     )
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LoginAttempt(Base):
+    """AI-CONTEXT: failed authentications, which nothing anywhere counted (audit F-07).
+
+    In POSTGRES rather than Redis, deliberately. `core/events.py` states the rule for
+    Redis in this codebase — it is not a system of record, and `publish` swallows a
+    failure so the product keeps working. That is right for a live channel and wrong
+    for a security control: a throttle that disappears when Redis is unreachable fails
+    OPEN, silently, which is the built-and-inert shape this project has now been taught
+    five times. This one survives a restart and cannot quietly stop counting.
+
+    Only FAILURES are stored. A successful login clears the identifier's rows, so the
+    table holds exactly the attempts an attacker is making and nothing about ordinary
+    use — and rows older than the window are deleted on write, because a table that
+    only grows is F-09 in a second place.
+
+    `identifier` is the SUBMITTED email, normalised, recorded whether or not an account
+    exists. Counting only real accounts would make the throttle itself an account-
+    existence oracle: "throttled after 5" versus "never throttled" answers the question
+    the 401 is careful not to.
+    """
+
+    __tablename__ = "login_attempt"
+    __table_args__ = (
+        Index("ix_login_attempt_identifier_time", "identifier", "occurred_at"),
+        Index("ix_login_attempt_ip_time", "client_ip", "occurred_at"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    identifier: Mapped[str] = mapped_column(String(320))
+    client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class Organization(Base):
