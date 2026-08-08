@@ -31,12 +31,12 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 
 | Severity | Open | Blocked | Partial | Closed | Accepted | Total |
 |---|---|---|---|---|---|---|
-| Critical | 1 | 4 | 0 | 3 | 0 | **8** |
-| High | 2 | 0 | 0 | 15 | 0 | **17** |
+| Critical | 1 | 1 | 0 | 6 | 0 | **8** |
+| High | 0 | 0 | 0 | 17 | 0 | **17** |
 | Medium | 3 | 0 | 2 | 7 | 0 | **12** |
 | Low | 1 | 0 | 0 | 6 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **7** | **4** | **2** | **31** | **1** | **45** |
+| **Total** | **5** | **1** | **2** | **36** | **1** | **45** |
 
 Findings opened *after* the audit are not in this scoreboard — they were never among the
 45. See **Opened after the audit**, below.
@@ -107,13 +107,13 @@ unobservable until the literal became a token. See §Blockers.
 | U-03 | High | **CLOSED** | 119 made the fallback loud (counted, warned in dev, per-locale counts at `/dev`) and measured **0** — narrow, because mocked data left the ~45 dynamic families unrendered. 120 closed the other half with the audit's *stronger* fix: `test_dynamic_key_families.py` enumerates the vocabulary **in Python** and asserts a label exists in all six locales. **It found four families broken — 13 keys missing from ALL SIX, including every one of the nine `facility.type.*`.** `resolve()` returns the raw key when a string is missing everywhere, so `money.state.acknowledged` was rendering as literal text on the Money tab **for every driver, in every language** — the JS parity test cannot see this, because six identical holes are perfect parity. Session 120. |
 | U-04 | Medium | **PARTIAL** | **Five of the seven registered** — ClaimSurface in three states (invoice / evidence-only / no-claim), AuditSurface, FuelSurface, BookingSurface, PublicScorecardSurface. Harness **229 → 257 checks**. **Registering them found three real defects on screens nothing had ever measured:** `ClaimSurface`'s back button was **40 dp — the ONLY one of the nine `.back` buttons in `surfaces/` that was**, and it is the screen every detention notification deep-links to; `FuelSurface`'s price row ran to **378 px at 200%**; the scorecard's search input to **468 px**, because a flex item's default `min-width: auto` will not let an `<input>` shrink. All three fixed with existing patterns. **The two remaining are BLOCKED, not skipped:** `FleetWorkspaceSurface` and `OwnerPortalSurface` carry the 40 dp controls that are §5.1 item 3's open owner decision — adding them would either fail CI or decide that question by writing CSS. Session 120. |
 | U-05 | Medium | **PARTIAL** | `.filters-chip` 40→48 dp. `.cluster` measured at 36 dp with NO expanded hit area — below even §11.2's 44 dp map exemption; reported, not changed. Two portal controls untouched pending an owner call. Session 119. |
-| U-06 | Critical | **BLOCKED** | Money tab shows fabricated earnings on fetch failure. Blocked on the §23 loading-state entry — and the proposal file itself is missing. |
+| U-06 | Critical | **CLOSED** | The Money tab shows no figure it does not have. `earnings` and `owed` are SEPARATE states because they fail separately, and the §23 entry's one hard rule is honoured: **The Meter gains no loading treatment** (§9, entry 52) — the CARD is replaced until `ddd_cents` is known, so The Meter renders once, with a real number. Rendering it against 0 would put a confident $0.00 in Mono over the driver's month. Closing it found §15.3's empty state MISSING: `money.empty` was translated into all six locales and rendered by nothing, so a driver owed nothing got a bare heading over an empty list. Session 121. |
 | U-07 | Critical | **CLOSED** | Rejected writes are dead-lettered whole (path, body, opId) and counted on the status strip. Session 119. **Remaining, by design:** the strip says how many, not which — naming them needs a surface, which is a design question. |
 | U-08 | High | **CLOSED** | 429/5xx now retry on the next flush with a bounded attempt cap (head-of-line protection); only non-429 4xx dead-letters. Session 119. |
-| U-09 | Critical | **BLOCKED** | Six surfaces substitute invented data — including a CDL and truck stops. Same §23 blocker as U-06. |
-| U-10 | Critical | **BLOCKED** | Map renders fixture pins on every cold start, not only offline. Same §23 blocker. |
-| U-11 | High | OPEN | There is no loading state. The §23 proposal is about this. |
-| U-12 | High | OPEN | The ban, the test, and the nine fixtures it does not cover. |
+| U-09 | Critical | **CLOSED** | All six surfaces read their endpoints and say so when they cannot. The wallet was the worst of them — `ref(SAMPLE_WALLET)` meant a fabricated CDL rendered from the moment the tab mounted, and M5 exists so a driver can produce a credential at a roadside. Its zero value is an EMPTY wallet rather than `null`, because the template reads `data.documents.length` in a dozen places and a null guard at each is a dozen chances to miss one; an empty shape asserts nothing, which is the whole distinction between a zero value and a fixture. Session 121. |
+| U-10 | Critical | **CLOSED** | `rawPins` is `livePins` and nothing else. This was the worst instance because it fired on EVERY cold open rather than only on failure — a driver could route to a truck stop that does not exist. `AbortError` still preserves the current pins (a pan supersedes an older fetch, and treating that as failure would flash the error banner on every drag); `serviceEmpty`/`foodEmpty` were NOT rewritten, only gated by chain position, because their expressions were always right and merely unreachable. **Verified against the running stack, not the suite:** 4 s overlay, 360x800, 6 skeleton pucks, 0 pins, no facility named — `docs/handoffs/assets/loading-map-360dp.png`. Session 121. |
+| U-11 | High | **CLOSED** | `SkeletonCard` / `SkeletonRow` / `SkeletonPin`, static, composed only from existing tokens — `tokens.scss` is untouched. The 200 ms delay and the DRIVING guard live in ONE shared gate (`core/skeleton.js`), not at each call site, because both are easy to state and easy to forget. All three measured at 360 dp in the same commit via the harness's new `hang` mechanism. Session 121. |
+| U-12 | High | **CLOSED** | Sixteen exports gone, ten importers converted, portals included. `fixtures.js` is kept as a TOMBSTONE carrying the reasoning and where to go instead — an absent file gets recreated without anyone reading why. Held by `test/loading-state.test.js`, which asserts the module exports nothing and that no file under `src/` imports it, and which was written first and watched failing. Session 121. |
 
 The five UI law violations in `KICKOFF-ui-comprehension-fixes.md` need no research and no
 decision — the index puts that kickoff fourth, ahead of everything blocked.
@@ -197,14 +197,14 @@ translations of existing copy are not new copy, so §22.2 is not engaged.
    `docker-compose.deploy.yml` runs a mailpit service on the box, and `configured` is
    `bool(host and port)`. Falling back to the recording gateway requires `SMTP_HOST` to be
    **blank**, not un-overridden. HANDOFF-118 §5.2 says the opposite; the handoff is wrong.
-2. **U-06, U-09, U-10 — the §23 loading-state entry.** A skeleton is a §22.2 component
-   pattern, so it cannot be improvised. The proposal now exists at
-   `docs/audits/S23-PROPOSAL-loading-state.md` and is **awaiting the owner's decision on
-   three items plus one open question**. Its measurable claims were verified in session
-   119; one is materially understated — the fixture deletion is **16 exports across 10
-   importers**, not "nine fixtures imported by five surfaces", and three of those
-   importers are §18 portals rather than driver surfaces, which the proposal's wording
-   does not settle. See the VERIFICATION section appended to it.
+2. ~~**U-06, U-09, U-10 — the §23 loading-state entry.**~~ **RESOLVED 2026-08-08.** The
+   owner approved the proposal; it is design-prd **§23 entry 131**, and the four-state
+   rule is now on the §22.3 DoD. Both open questions were settled in the entry rather
+   than deferred: the §18 portals lose their fixtures too (entry 81's argument is about
+   the DRAWER, not the screen — and `SAMPLE_FUEL_ANALYTICS` was exported and imported by
+   NOTHING, a fixture already halfway back), and `/dev` keeps none. All five findings
+   closed in session 121. 119's undercount was right to flag: 16 exports across 10
+   importers, and the work was about twice the size the proposal read as.
 3. **F-02 + F-12 — the `default_on` versus `enabled` decision.** Must not be split.
 4. **NEW (session 119) — `--marker-500` fails the non-text contrast floor in dark theme.**
    A white pin glyph on it measures **2.04:1**; WCAG 1.4.11 and §16 require 3:1. That is

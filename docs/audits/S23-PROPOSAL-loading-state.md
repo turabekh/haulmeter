@@ -1,6 +1,12 @@
 # §23 PROPOSAL — the loading state
 
-**Status:** PROPOSED. Owner approval required before any code.
+**Status:** **APPROVED 2026-08-08** by the owner, and **IMPLEMENTED in session 121** —
+design-prd **§23 entry 131**, with the four-state rule added to the §22.3 DoD. U-06, U-09,
+U-10, U-11 and U-12 are all closed. Both open questions below were settled in the entry:
+the §18 portals lose their fixtures too, and `/dev` keeps none.
+
+Kept as written, including the undercount the VERIFICATION section corrects, because what
+the owner approved is part of the record.
 **Category:** component pattern — a §22.2 never-improvise category.
 **Blocks:** UI audit U-06, U-09, U-10, U-11 (three of eight criticals across both audits).
 **Date raised:** 2026-08-07

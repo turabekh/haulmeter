@@ -3,7 +3,45 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — read this first, every session.
+➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — read this first, every session.
+
+> **121** was one instruction — *"approved, do the loading-state work"* — and it closed
+> **five findings: U-06, U-09, U-10 (criticals), U-11 and U-12**, which is every finding
+> the owner's decision was blocking. The proposal that had been PROPOSED since 2026-08-07
+> is **design-prd §23 entry 131**, and the four-state rule is on the **§22.3 DoD**.
+> **Open findings 7 → 5. Every High in both audits is now closed;** one critical is open
+> (F-02) and one blocked (F-01).
+>
+> **All five were one defect.** Every fetching surface had two states, so `null` had to
+> mean either data or no-data and the codebase chose data — `livePins ?? SAMPLE_PINS`.
+> That fired on **every cold open**, not only offline: the first thing a driver saw, every
+> time, was fabricated truck stops they could route to. Sixteen exports across ten
+> importers are gone, portals included; `fixtures.js` is kept as a tombstone because an
+> absent file gets recreated without anyone reading why.
+>
+> **Read §4.** The skeleton pins were `--line-1` — right on a card, invisible on a night
+> basemap of the same value. Six pucks in the DOM, `visibility: visible`, counted by the
+> layout harness, and **invisible to a human**. 745 unit tests, 271 layout checks and two
+> token-discipline sweeps all passed over it. It was found by throttling the network and
+> looking at the screenshot, which the kickoff said to do twice. *A colour can be a
+> legitimate token, correctly applied, and still be invisible where it is used.*
+>
+> **Read §5.** Removing the fixtures showed that **thirteen checks had been measuring
+> them**: nine unit tests (three of which stubbed an endpoint but never set a session, so
+> `apiGet` threw before the stub was consulted) and four harness states whose own comment
+> admitted it. The most useful is `facility`, which **did not** go red — it had no `ready`
+> selector, so it kept passing while measuring §15.4's error line under the facility's
+> name. *A state with no `ready` cannot tell a screen from its own error message.*
+>
+> **The Meter gained no loading state** (§9, entry 52): Money replaces the card, so The
+> Meter renders once with a real number rather than a confident **$0.00 in Mono** over the
+> driver's month. **`money.empty` was translated into all six locales and rendered by
+> nothing** — found by applying the four-state rule, which is that rule earning its place.
+>
+> **Stack UP · thirty-seven commits UNPUSHED · nothing deployed.** `git fetch` still cannot
+> run here — **re-fetch before pushing.**
+
+➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — the session before.
 
 > **120** was one instruction — *"read the latest handoff and restart the app"*, then
 > *"proceed using your best judgement"* — and it worked the audit queue to the end:
@@ -66,7 +104,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack UP · thirty-five commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — the session before.
+➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — two sessions before.
 
 > **119** worked the 2026-08-07 audit queue: **nineteen findings closed, two partial**, and
 > answered one of the audit's three open questions. Three of
@@ -126,7 +164,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · twenty-four commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — two sessions before.
+➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — three sessions before.
 
 > **118** is a short session with **no source changes**: the owner asked for the stack to be
 > restarted, then for a handoff and a shutdown.
@@ -147,7 +185,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > session (no credential), so the ahead-count is arithmetic, not observation — **re-fetch
 > before pushing.** The next task is still the handset background-sensor test.
 
-➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — three sessions before.
+➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — four sessions before.
 
 > **117** did two things the owner asked for, and both turned up something under them.
 >
@@ -175,7 +213,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · four commits UNPUSHED · nothing deployed.** The next task is still the
 > handset background-sensor test.
 
-➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — four sessions before.
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — five sessions before.
 
 > **116** walked the stop auto-pilot end to end in a real browser, which is what two
 > sessions of building had never been subjected to. **It works.** A human adds a load,
@@ -204,7 +242,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > HANDOFF-116.md's own header contradicted, and its "everything from `a4e282c` onward
 > UNPUSHED" was overtaken by the 2026-08-03 push. Corrected in 117.)
 
-➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — five sessions before.
+➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — six sessions before.
 
 > **115** was scoped as a **surfacing rework** — the A1 automation is built and correct,
 > only the way its result reaches the driver is wrong. Re-grepping the seams before
