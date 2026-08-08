@@ -134,12 +134,29 @@ def update_spot(
 
 # --- Instant booking (M6-FR2) ---
 def _overlaps(db: Session, spot_id, start_at, end_at) -> bool:
-    for booking in db.scalars(select(Booking).where(Booking.spot_id == spot_id)):
-        if booking.state not in _ACTIVE_STATES:
-            continue
-        if booking.start_at < end_at and start_at < booking.end_at:
-            return True
-    return False
+    # AI-CONTEXT: audit F-15 — this loaded EVERY booking the spot had ever taken and
+    # filtered in Python, so a spot with two years of history was scanned in full on
+    # every availability check, and `bookable_summary` calls this once per spot: an
+    # N+1 sitting on top of a full scan. The overlap test is unchanged; it is simply
+    # asked of the database, which is also the only place it can use an index.
+    #
+    # This is a PRE-CHECK, not the guarantee. `ex_booking_no_overlap` (F-13, migration
+    # 0060) is what actually prevents a double booking, because any Python read cannot
+    # see a row a concurrent transaction has not committed. Narrowing the pre-check
+    # cannot reopen that race — the constraint is what closes it.
+    return (
+        db.scalar(
+            select(Booking.id)
+            .where(
+                Booking.spot_id == spot_id,
+                Booking.state.in_(_ACTIVE_STATES),
+                Booking.start_at < end_at,
+                Booking.end_at > start_at,
+            )
+            .limit(1)
+        )
+        is not None
+    )
 
 
 def _ledger_accounts(db: Session, owner_account_id):

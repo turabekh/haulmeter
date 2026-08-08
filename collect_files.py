@@ -1,7 +1,13 @@
 import os
 import sys
 
-EXTENSIONS = (".py", ".vue", ".yml", ".yaml", ".txt", ".md", ".example")
+EXTENSIONS = (".py", ".vue", ".yml", ".yaml", ".txt", ".md", ".example", ".sh")
+
+# AI-CONTEXT: audit F-11 — the script that puts code on the box and the one enforcing
+# the LOCKED ports had never appeared in a dump anyone reviewed, because they have no
+# extension in EXTENSIONS (`.sh`) or no extension at all (`Makefile`). That is also why
+# HANDOFF-118's claim about `deploy.sh:46` could not be checked from the dump.
+FILENAMES = ("Makefile", "Dockerfile", "Caddyfile", ".env.example")
 
 SKIP_DIRS = {
     "__pycache__",
@@ -41,7 +47,7 @@ def collect_files(folder_name, output_file=None):
     for root, dirs, files in os.walk(folder_name):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
         for filename in files:
-            if filename.endswith(EXTENSIONS):
+            if filename.endswith(EXTENSIONS) or filename in FILENAMES:
                 collected.append(os.path.join(root, filename))
 
     if not collected:

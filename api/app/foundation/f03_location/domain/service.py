@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from geoalchemy2 import Geography
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import cast, delete, func, select
+from sqlalchemy import cast, delete, func, or_, select
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.orm import Session
 
@@ -88,21 +88,28 @@ def visit_window(
     (the driver was already inside) or, failing that, the next one to begin. Sessions
     that had already closed before `since` belong to an earlier load and are skipped.
     """
-    sessions = db.scalars(
+    # AI-CONTEXT: audit F-15 — this walked EVERY visit the driver had ever made to the
+    # dock to answer a question about one of them, skipping the closed ones in Python.
+    # The skip is now the WHERE clause and the loop is a LIMIT 1: same selection rule
+    # (a session still open at `since`, else the next one to begin), asked of the index.
+    floor = _as_utc(since)
+    session = db.scalar(
         select(GeofencePresence)
         .where(
             GeofencePresence.account_id == account_id,
             GeofencePresence.facility_id == facility_id,
+            or_(
+                GeofencePresence.exited_at.is_(None),
+                GeofencePresence.exited_at > floor,
+            ),
         )
         .order_by(GeofencePresence.entered_at)
+        .limit(1)
     )
-    floor = _as_utc(since)
-    for session in sessions:
-        if session.exited_at is not None and _as_utc(session.exited_at) <= floor:
-            continue
-        exited = _as_utc(session.exited_at) if session.exited_at is not None else None
-        return _as_utc(session.entered_at), exited
-    return None, None
+    if session is None:
+        return None, None
+    exited = _as_utc(session.exited_at) if session.exited_at is not None else None
+    return _as_utc(session.entered_at), exited
 
 
 def _emit(db, account_id, facility_id, event_type, occurred_at, lat, lon) -> GeofenceEvent:

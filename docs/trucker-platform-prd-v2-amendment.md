@@ -298,10 +298,18 @@ Requirements, in order — the order is the requirement:
    300-pin cap) and that cap will bind in every metro at national density — bulk reads in M3, M6 and
    M7 come first. Every `geom::geography` predicate needs a GiST index on the **expression**, not
    the column; run `EXPLAIN (ANALYZE)` before multiplying the table.
-5. **Dedupe at density.** geohash-7 blocking with 0.4 name similarity will produce more false merges
-   once metros are dense. An admin merge-review surface is required, and `/admin/facilities/*` must
-   resolve merged ids — today an admin URL and a driver URL for the same id answer about different
-   places.
+5. **Dedupe at density.** A 60 m `ST_DWithin` radius with 0.4 name similarity will produce more
+   false merges once metros are dense. An admin merge-review surface is required, and
+   `/admin/facilities/*` must resolve merged ids — today an admin URL and a driver URL for the same
+   id answer about different places.
+
+   *(Corrected 2026-08-08, audit F-20. This read "geohash-7 blocking", which the code has never
+   done: `find_duplicate_candidates` blocks on DISTANCE — `DEDUP_RADIUS_M = 60.0` — and
+   `Facility.geohash` is stored and indexed but unread by it. The two are not equivalent: a
+   geohash-7 cell is roughly 150 m × 150 m and carries the cell-boundary miss HANDOFF part 3 §288
+   measured, "every sampled one in a different cell". The 0.4 similarity figure was right. Recorded
+   rather than silently edited because this document is what a future session plans against, and
+   prose-versus-code drift is what the §23 "stopped believing the documents" sessions cost.)*
 6. **TPIMS live availability** is 1 state. Four are blocked on registration, two publish nothing,
    two are unreachable. This is forms and emails, not code; assign it to a person and a date.
 7. **Chain locators** remain a deliberate stub pending ToS review — **owner decision D6.** Never

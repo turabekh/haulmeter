@@ -208,3 +208,57 @@ def test_the_wallet_holds_the_drivers_documents_not_every_loads(client, db):
     assert paperwork["reference_number"] == "BRL-78426"
     assert paperwork["facility_name"] == "Harvest Foods DC"
     assert paperwork["doc_types"] == ["bol"]
+
+
+def test_a_hostile_filename_cannot_inject_a_content_disposition_parameter(client, db):
+    # audit F-16: the stored upload filename went straight into the header, so a `"`
+    # closed the quoting and the rest of the name became header parameters
+    import uuid
+
+    from app.foundation.f06_documents import public as documents
+    from app.modules.m05_protection import public as m5
+
+    account_id, headers = _auth(client)
+    documents.set_default_storage(documents.InMemoryObjectStorage())
+    doc = m5.capture_document(
+        db,
+        uuid.UUID(account_id),
+        "cdl",
+        b"bytes",
+        filename='evil"; attachment; filename="pwned.exe',
+    )
+
+    resp = client.get(f"/protection/documents/{doc.id}", headers=headers)
+    assert resp.status_code == 200
+    disposition = resp.headers["content-disposition"]
+
+    # the header must PARSE to exactly three parts: the disposition and two filename
+    # forms. Asserting the hostile text is absent would prove nothing — it is harmless
+    # INSIDE the quoted value, and the defect is whether it can escape that value.
+    parts = [p.strip() for p in disposition.split(";")]
+    assert len(parts) == 3, disposition
+    assert parts[0] == "inline"
+    assert parts[1].startswith('filename="') and parts[1].endswith('"')
+    assert parts[2].startswith("filename*=UTF-8''")
+    assert not any(p.startswith("attachment") for p in parts)
+
+
+def test_a_non_ascii_filename_survives_the_download(client, db):
+    # six launch locales: a Cyrillic or Gurmukhi filename was arriving mangled, because
+    # RFC 6266's quoted-string form is ASCII
+    import uuid
+
+    from app.foundation.f06_documents import public as documents
+    from app.modules.m05_protection import public as m5
+
+    account_id, headers = _auth(client)
+    documents.set_default_storage(documents.InMemoryObjectStorage())
+    doc = m5.capture_document(
+        db, uuid.UUID(account_id), "cdl", b"bytes", filename="права.jpg"
+    )
+
+    resp = client.get(f"/protection/documents/{doc.id}", headers=headers)
+    assert resp.status_code == 200
+    assert "filename*=UTF-8''%D0%BF%D1%80%D0%B0%D0%B2%D0%B0.jpg" in resp.headers[
+        "content-disposition"
+    ]

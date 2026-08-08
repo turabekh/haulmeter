@@ -6,6 +6,7 @@ are captures (F4 evidence). F8 gateway seam (recording) in dev.
 import base64
 import uuid
 from datetime import UTC, datetime
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from pydantic import BaseModel
@@ -34,6 +35,31 @@ router = APIRouter(prefix="/protection", tags=["protection"],
 # at send time, so the suite (SMTP_HOST blanked in conftest) and the app differ by
 # configuration alone.
 _GATEWAY = notify.counterparty_gateway()
+
+
+# AI-CONTEXT: audit F-16 — a stored upload filename was interpolated straight into
+# Content-Disposition, so a `"` in the name closed the quoting and let the rest of the
+# name inject header parameters. Newlines are rejected by the ASGI layer, so this was
+# parameter confusion rather than response splitting, and the route already refuses
+# another account's document — an attacker could only target themself.
+#
+# The `filename*=UTF-8''` form is what makes this a fix rather than an escape: RFC 6266
+# quoted-string is ASCII, and this product ships in six locales, so a Cyrillic or
+# Gurmukhi filename was already arriving mangled. The ASCII `filename=` stays as the
+# fallback for clients that do not read the extended form.
+def _content_disposition(filename: str, disposition: str = "inline") -> str:
+    # ALLOWLIST, not an escape list. Stripping `"` and `\` is the obvious fix and it is
+    # not enough: `;` separates parameters, so `evil; attachment; filename=x.exe`
+    # survives quote-stripping intact and still injects. Anything outside this set
+    # becomes `_` — a mangled ASCII fallback is fine, because the extended form beside
+    # it carries the real name.
+    ascii_fallback = "".join(
+        ch if (ch.isalnum() and ch.isascii()) or ch in "._- " else "_" for ch in filename
+    ).strip()
+    return (
+        f"{disposition}; filename=\"{ascii_fallback or 'document'}\"; "
+        f"filename*=UTF-8''{quote(filename, safe='')}"
+    )
 
 
 class OnTimeIn(BaseModel):
@@ -826,7 +852,7 @@ def view_document(
         content=content,
         media_type=doc.content_type or "application/octet-stream",
         headers={
-            "Content-Disposition": f'inline; filename="{doc.filename or doc.doc_type.value}"',
+            "Content-Disposition": _content_disposition(doc.filename or doc.doc_type.value),
             "Cache-Control": "private, max-age=31536000, immutable",
         },
     )

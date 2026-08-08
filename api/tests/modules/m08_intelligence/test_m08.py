@@ -137,3 +137,30 @@ def test_where_to_sleep_ranks_bookable_first_within_range(db):
     assert plan.stops[0].guaranteed_bookable is True  # a guaranteed spot leads
     assert plan.guaranteed is not None  # cheapest bookable surfaced
     assert plan.guaranteed.price_cents_per_night == 2400
+
+
+def test_no_loaded_miles_is_not_a_rate_of_zero(db):
+    # audit F-26: `round(net / loaded_miles) if loaded_miles else 0` rendered as a real
+    # rate of $0.00/mi. Absence dressed as a result — the §11.7 failure.
+    account = _account(db)
+    result = m8.true_profit(
+        db,
+        account.id,
+        revenue_cents=100000,
+        loaded_miles=0,
+        mpg=6.5,
+        tolls_cents=0,
+        receiver_facility_id=_receiver(db).id,
+        free_time_minutes=120,
+        rate_cents_per_hour=6000,
+        origin_lat=32.7,
+        origin_lon=-96.8,
+        heading_deg=90,
+        max_distance_m=100000,
+    )
+    assert result.rpm_after_cents is None
+    assert result.basis["rpm"] == "no_loaded_miles"
+    # the rest of the answer is still real — only the rate is undefined
+    assert result.net_cents == result.revenue_cents - result.fuel_cost_cents - (
+        result.tolls_cents + result.expected_detention_cents
+    )

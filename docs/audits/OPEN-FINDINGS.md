@@ -33,10 +33,10 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 |---|---|---|---|---|---|---|
 | Critical | 1 | 4 | 0 | 3 | 0 | **8** |
 | High | 2 | 0 | 1 | 14 | 0 | **17** |
-| Medium | 6 | 0 | 1 | 5 | 0 | **12** |
-| Low | 4 | 0 | 0 | 3 | 0 | **7** |
+| Medium | 4 | 0 | 1 | 7 | 0 | **12** |
+| Low | 1 | 0 | 0 | 6 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **13** | **4** | **2** | **25** | **1** | **45** |
+| **Total** | **8** | **4** | **2** | **30** | **1** | **45** |
 
 Findings opened *after* the audit are not in this scoreboard — they were never among the
 45. See **Opened after the audit**, below.
@@ -74,22 +74,22 @@ unobservable until the literal became a token. See §Blockers.
 | F-08 | — | **ACCEPTED** | Gmail as counterparty transport (owner decision, 2026-08-07). Two owner actions remain, neither a session: split dev from production, and Workspace on the domain for aligned SPF/DKIM/DMARC. |
 | F-09 | Medium | **CLOSED** | A daily unflagged `location_retention` worker job calls the purge that already existed. **The window is an F13 key** (`f03.ping_retention_days`, declared at boot so `/admin/config` shows it), not a constant — how long the product keeps a driver's movements is policy, and PRD §7.3 says "configurable retention". Default **365 days**, conservative by default-choosing rather than by necessity — **checked before wiring: a purge here cannot destroy a claim's evidence.** `render.py` states the rule ("the trace is drawn from EVIDENCE, not from raw location pings"), so every plotted point is a hash-chained F4 record, and `build_trace` — the one function that reads raw pings — has no caller outside its own test. This is a privacy-and-growth control, not evidence retention, and shortening the window is safe. **0 or less means never purge** — this is the only job in the worker that destroys data and the plausible operator accident is typing 0 meaning "off", which read as a cutoff would delete the whole table. Verified on a real worker boot: `location_retention ok: {'deleted': 0, 'retention_days': 365, 'purged': True}`. Session 120. |
 | F-10 | Medium | **CLOSED** | `f14.job_schedule` (migration **0065**) — the claim is an `UPDATE … WHERE due AND unleased`, so Postgres serialises the two racing workers and the loser's rowcount is 0. **Not an advisory lock, deliberately:** a session-level lock lives on a CONNECTION and every `db.commit()` in `_run_job` returns that connection to the pool, which would drop the lock mid-run. A **lease** (2× interval, floor 300 s) makes a crashed worker recoverable without a human; the floor exists because `detention_clock`'s interval is 60 s and a job slower than its own interval would otherwise be handed to a second worker. `next_run_at` and the failure streak persist, closing the second half — **verified on the box: the first boot ran all seven jobs (empty table, correct), the second restart ran only `detention_clock`, which was genuinely due.** Previously every restart refired everything. Session 120. |
-| F-11 | Medium | OPEN | The deploy path is outside every review — `deploy.sh`, `Makefile`, `check_ports.sh` are not in the dump. Adding `.sh` to `collect_files.py`'s `EXTENSIONS` is the cheapest fix in either audit. |
+| F-11 | Medium | **CLOSED** | `.sh` added to `EXTENSIONS`, plus a `FILENAMES` tuple for the extensionless ones (`Makefile`, `Dockerfile`, `Caddyfile`). **Measured: 11 infra files now collected** that never were — `deploy.sh`, `check_ports.sh`, `backup_db.sh`, `verify_restore.sh`, `ingest_remote.sh`, the `Makefile` and four Dockerfiles. No new secret exposure: `.env.example` matches, `.env` does not. 118 §4 ruled this file "not ours to commit or delete"; this edit is additive and was the owner's call. Session 120. |
 | F-12 | Medium | OPEN | Module gate and worker disagree on flag polarity. Ships with F-02. |
 | F-13 | Critical | **CLOSED** | Double-booking race posting money twice → `ex_booking_no_overlap` EXCLUDE constraint, and `book()` claims the row before any money moves. Session 119. |
 | F-14 | High | **CLOSED** | Nights counted in the lot's local calendar. Session 119. |
-| F-15 | Medium | OPEN | Unbounded history scans in two hot paths. |
-| F-16 | Low | OPEN | Filename interpolated into a response header. |
+| F-15 | Medium | **CLOSED** | Both are one `WHERE` clause from bounded and now are. `_overlaps` became a `SELECT … LIMIT 1` filtered on the time range and state — it was loading every booking a spot ever took, with `bookable_summary` calling it once per spot (an N+1 on a full scan). `visit_window`'s Python skip became the `WHERE`, with `LIMIT 1`. **The pre-check narrowing cannot reopen F-13's race** — `ex_booking_no_overlap` is what prevents a double booking, not this read. Tested by counting statements, not timing: a full scan is correctness-neutral, so the only thing that can fail is how much the database was asked for. Session 120. |
+| F-16 | Low | **CLOSED** | `_content_disposition` with an **allowlist** ASCII fallback plus `filename*=UTF-8''`. Stripping `"` and `\` is the obvious fix and is **not enough** — `;` separates parameters, so `evil; attachment; filename=x.exe` survives quote-stripping and still injects; the first version of this fix shipped that hole and the test caught it. The extended form is what makes it a fix rather than an escape: RFC 6266 quoted-string is ASCII and this product ships in six locales, so a Cyrillic filename was already arriving mangled. Session 120. |
 | F-17 | High | **CLOSED** | Every module seeded a cap at boot, and a module with no row falls back to the compiled default — there is no uncapped state, and no state where a missing row is an outage. `test_module_flags` asserts the invariant. Session 119. |
 | F-18 | Medium | **CLOSED** | Calendar-month cap; the column is `monthly_budget_micros` so it cannot be misread. Had to ship WITH F-17 — seeding budgets against a lifetime sum would have made each module go permanently dark. Composite `(module, created_at)` index. Session 119. |
 | F-19 | Medium | OPEN | No merge-review queue. Already known. |
-| F-20 | Low | OPEN | The amendment describes a mechanism the code does not implement. |
+| F-20 | Low | **CLOSED** | The amendment said "geohash-7 blocking"; the code has never done that — `find_duplicate_candidates` blocks on distance (`DEDUP_RADIUS_M = 60.0`) and `Facility.geohash` is stored, indexed and unread by it. Corrected in place with a dated note saying what it used to claim, because the governing document is what a future session plans against. The 0.4 similarity figure was right. Session 120. |
 | F-21 | Critical | **CLOSED** | §23 entry 73's defect in M4 → `_arrival_departure` routed through `location.visit_window`, anchored on the stop's appointment. M4 was the last unscoped `list_events` caller, so the class is closed. Session 119. |
 | F-22 | High | **CLOSED** | "Overnight" measured in the dock's local calendar — this was REFUSING real layover claims. Session 119. |
 | F-23 | High | **CLOSED** | `owed` is scoped to the settlement's own pay period. **Named limitation:** it scopes by the receivable's creation date as a proxy, because there is no settlement→load link — work in the period whose receivable is filed later still falls outside. The link is the audit's own deeper fix and is a schema change. Session 119. |
 | F-24 | Low | **CLOSED** | Migration downgrades — 57 of 59 real, 2 empty. Closed by F-31, which identified the two; not by session 119. |
 | F-25 | Medium | OPEN | The profit model assumes the product does not work. |
-| F-26 | Low | OPEN | Zero standing in for undefined. |
+| F-26 | Low | **CLOSED** | `rpm_after_cents` is `int | None`; no loaded miles yields `None` with `basis["rpm"] == "no_loaded_miles"` rather than a real-looking rate of $0.00/mi. Absence dressed as a result is the §11.7 failure this codebase treats as non-negotiable everywhere else. Session 120. |
 | F-27 | Low | OPEN | Fleet rollups are N+1 per member. |
 | F-28 | High | **CLOSED** | Points can be spent twice → `lock_account` row lock taken before the balance is read; `book_with_points` books before it redeems. Session 119. |
 | F-29 | Medium | **CLOSED** | The daily cap could be turned off by a pricing knob → every contribution is logged, `points > 0` gates only the ledger issue. Session 119. |

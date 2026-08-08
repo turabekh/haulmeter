@@ -89,7 +89,12 @@ class ProfitResult:
     tolls_cents: int
     expected_detention_cents: int
     net_cents: int
-    rpm_after_cents: int  # rate-per-mile after this receiver's dwell history
+    # rate-per-mile after this receiver's dwell history. NONE, not 0, when there are no
+    # loaded miles to divide by (audit F-26): zero renders as a real rate of $0.00/mi,
+    # which is absence dressed as a result — the §11.7 failure, and the same shape as
+    # the merged-facility crowd report that told a driver their submission landed.
+    # `basis["rpm"]` says which it is, because a caller must not have to infer it.
+    rpm_after_cents: int | None
     fuel_net_cents_per_gal: int | None
     basis: dict = field(default_factory=dict)
 
@@ -117,7 +122,7 @@ def true_profit(
         db, receiver_facility_id, free_time_minutes, rate_cents_per_hour
     )
     net = revenue_cents - fuel_cost - tolls_cents - det_cost
-    rpm = round(net / loaded_miles) if loaded_miles else 0
+    rpm = round(net / loaded_miles) if loaded_miles else None
     return ProfitResult(
         revenue_cents=revenue_cents,
         fuel_cost_cents=fuel_cost,
@@ -130,6 +135,7 @@ def true_profit(
             "fuel": fuel_basis,
             "detention_sample_size": det_n,
             "detention_confidence": confidence_for(det_n).value,
+            "rpm": "computed" if rpm is not None else "no_loaded_miles",
         },
     )
 

@@ -252,3 +252,59 @@ def test_one_drivers_position_is_never_anothers(db):
 
     assert location.last_known_position(db, a.id, timedelta(hours=6), now=T0) is not None
     assert location.last_known_position(db, b.id, timedelta(hours=6), now=T0) is None
+
+
+def test_visit_window_does_not_walk_every_visit_ever_made(db):
+    # audit F-15: this loaded every GeofencePresence row for the driver/facility pair
+    # and skipped the closed ones in Python. The skip is a WHERE clause now.
+    account = _account(db)
+    fac = _facility(db)
+    for day in range(10):
+        location.arm_geofence(db, account.id, fac.id)
+        location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0 + timedelta(days=day))
+        location.evaluate_ping(
+            db, account.id, *FAR, occurred_at=T0 + timedelta(days=day, hours=3)
+        )
+        location.disarm_geofence(
+            db, account.id, fac.id, occurred_at=T0 + timedelta(days=day, hours=3)
+        )
+
+    statements = []
+    from sqlalchemy import event
+
+    def record(conn, cursor, statement, params, context, executemany):
+        if "geofence_presence" in statement.lower():
+            statements.append(statement.lower())
+
+    event.listen(db.get_bind(), "before_cursor_execute", record)
+    try:
+        entered, exited = location.visit_window(db, account.id, fac.id, T0 + timedelta(days=9))
+    finally:
+        event.remove(db.get_bind(), "before_cursor_execute", record)
+
+    # the LAST visit, and the query asked for one row rather than all ten
+    assert entered == T0 + timedelta(days=9)
+    assert exited == T0 + timedelta(days=9, hours=3)
+    assert any("limit" in s for s in statements)
+
+
+def test_visit_window_still_picks_the_visit_belonging_to_the_load(db):
+    # §23 entry 73 is what this function exists for; the narrowing must not undo it
+    account = _account(db)
+    fac = _facility(db)
+    for day in (0, 5):
+        location.arm_geofence(db, account.id, fac.id)
+        location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0 + timedelta(days=day))
+        location.evaluate_ping(
+            db, account.id, *FAR, occurred_at=T0 + timedelta(days=day, hours=2)
+        )
+        location.disarm_geofence(
+            db, account.id, fac.id, occurred_at=T0 + timedelta(days=day, hours=2)
+        )
+
+    # a load whose appointment is on day 5 must not bill from the day-0 visit
+    entered, _ = location.visit_window(db, account.id, fac.id, T0 + timedelta(days=4))
+    assert entered == T0 + timedelta(days=5)
+    # and a load on day 0 still gets day 0
+    entered_first, _ = location.visit_window(db, account.id, fac.id, T0 - timedelta(hours=1))
+    assert entered_first == T0

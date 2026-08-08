@@ -143,3 +143,59 @@ def test_a_single_local_night_is_still_one_night(db):
     start = datetime(2026, 8, 7, 23, 0, tzinfo=UTC)  # 6pm Aug 7 Central
     end = datetime(2026, 8, 8, 11, 0, tzinfo=UTC)  # 6am Aug 8 Central
     assert m6.book(db, spot, driver.id, start, end).nights == 1
+
+
+def test_the_availability_precheck_does_not_scan_the_spots_whole_history(db):
+    """audit F-15 — `_overlaps` loaded EVERY booking the spot had ever taken and
+    filtered in Python, and `bookable_summary` calls it once per spot.
+
+    Counting ROWS FETCHED rather than timing it: a full scan is a correctness-neutral
+    defect, so the only thing that can fail here is how much the database was asked for.
+    """
+    _, driver, spot = _listing(db)
+    for week in range(12):
+        m6.book(
+            db,
+            spot,
+            driver.id,
+            T0 + timedelta(days=7 * week),
+            T0 + timedelta(days=7 * week + 1),
+        )
+
+    fetched = []
+    from sqlalchemy import event
+
+    def record(conn, cursor, statement, params, context, executemany):
+        if "booking" in statement.lower() and statement.lower().lstrip().startswith("select"):
+            fetched.append(statement)
+
+    event.listen(db.get_bind(), "before_cursor_execute", record)
+    try:
+        far_future = T0 + timedelta(days=365)
+        assert (
+            m6_service._overlaps(db, spot.id, far_future, far_future + timedelta(days=1))
+            is False
+        )
+    finally:
+        event.remove(db.get_bind(), "before_cursor_execute", record)
+
+    assert len(fetched) == 1
+    statement = fetched[0].lower()
+    assert "limit" in statement  # bounded
+    assert "end_at >" in statement or "end_at >=" in statement  # filtered on time
+
+
+def test_the_precheck_still_finds_a_real_overlap(db):
+    # the narrowing must not change the answer: the WHERE clause is the same test the
+    # Python loop applied
+    _, driver, spot = _listing(db)
+    m6.book(db, spot, driver.id, T0, T0 + timedelta(days=2))
+    assert (
+        m6_service._overlaps(db, spot.id, T0 + timedelta(days=1), T0 + timedelta(days=3))
+        is True
+    )
+    assert (
+        m6_service._overlaps(db, spot.id, T0 + timedelta(days=2), T0 + timedelta(days=4))
+        is False
+    )
+    assert m6_service._overlaps(db, spot.id, T0 - timedelta(days=2), T0) is False
