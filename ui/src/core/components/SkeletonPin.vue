@@ -46,11 +46,27 @@ const visible = useSkeletonGate();
   align-items: center;
   justify-content: center;
 }
+/* AI-CONTEXT: `--on-accent` here, and it was a DEFECT that got this far.
+ *
+ * The first version filled with `--line-1`, matching SkeletonCard and SkeletonRow. That
+ * is right on a CARD and wrong on a MAP: dark `--line-1` is #2A3644 against a night
+ * basemap of roughly the same value, so the pucks were in the DOM, `visibility: visible`,
+ * counted by the harness — and invisible to a human. `--ink-1` (#151C24) would have been
+ * worse. Caught by throttling the network and LOOKING at the screen, which is the one
+ * instruction the kickoff repeated twice; every automated check passed over it.
+ *
+ * `--on-accent` is theme-invariant white, and §23 entry 130 recorded that invariance as
+ * load-bearing for this exact surface: `.pin--stale` fills with it because "a fill that
+ * darkened with the theme would make a stale pin read as a filled one". A skeleton pin
+ * has the same requirement — legible over both basemaps, carrying no status.
+ *
+ * It does not collide with `.pin--stale`, which is a white puck with a COLOURED ring and
+ * a glyph. This is a white puck with a neutral ring and nothing inside it. */
 .skel__puck {
   width: 28px; /* the puck inside it, same as `.pin__puck` */
   height: 28px;
   border-radius: var(--r-pill);
-  background: var(--line-1);
+  background: var(--on-accent);
   border: 1px solid var(--line-1);
 }
 </style>

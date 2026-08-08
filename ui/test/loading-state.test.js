@@ -150,6 +150,46 @@ describe("§6.4 — the skeleton does not animate, and cannot start", () => {
   });
 });
 
+describe("SkeletonPin's fill is legible over a basemap, in both themes", () => {
+  // AI-CONTEXT: this guards a defect that reached a screenshot (§23 entry 131).
+  //
+  // SkeletonPin first filled with `--line-1`, matching the other two shapes. On a CARD
+  // that is correct. On a MAP it is invisible: dark `--line-1` is #2A3644 against a
+  // night basemap of about the same value, so six pucks rendered, `visibility: visible`,
+  // counted by the layout harness — and a human looking at the screen saw an empty map.
+  // Every automated check passed. It was found by throttling the network and looking.
+  //
+  // So the assertion is on the TOKEN CHOICE, which is the thing that was wrong, and it
+  // names its reason: `--on-accent` is theme-invariant white, and §23 entry 130 recorded
+  // that invariance as load-bearing for pins specifically. An ink or line token here is
+  // the bug returning.
+  it("fills with the theme-invariant white, never an ink or line step", () => {
+    const src = read("src/core/components/SkeletonPin.vue");
+    const fill = src.match(/\.skel__puck\s*\{[^}]*background:\s*var\((--[a-z0-9-]+)\)/);
+    expect(fill, "SkeletonPin must declare a background on .skel__puck").toBeTruthy();
+    expect(fill[1]).toBe("--on-accent");
+  });
+
+  it("keeps that fill identical in both themes, which is why it works on either basemap", () => {
+    // if a later session gives `--on-accent` a different light-theme value, the
+    // night/day basemap argument above quietly stops holding. tokens.scss declares it
+    // TWICE — once in the dark root and once in the light mixin — with the same value,
+    // so the check is that the values AGREE, not that the second declaration is absent.
+    // The first version of this test asserted absence and failed correctly.
+    const tokens = read("src/core/tokens.scss");
+    const declared = [...tokens.matchAll(/--on-accent:\s*([^;]+);/g)].map((m) => m[1].trim());
+    expect(declared.length).toBeGreaterThan(1); // both themes name it
+    expect(new Set(declared).size).toBe(1); // and they name the same colour
+  });
+
+  it("carries no status colour — a loading pin asserts no availability (§11.1)", () => {
+    const src = read("src/core/components/SkeletonPin.vue");
+    for (const status of ["--marker-500", "--ledger-500", "--alert-500", "--pin-color"]) {
+      expect(src).not.toContain(status);
+    }
+  });
+});
+
 describe("the skeleton adds nothing to the token system", () => {
   it("references only custom properties tokens.scss already defines", () => {
     // §22.2: a new token is a never-improvise category. This is the mechanical half of

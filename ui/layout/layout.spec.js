@@ -511,6 +511,55 @@ const CLAIM_EXPORT = { ...CLAIM_BASE, mode: "evidence_only", state: "exported" }
 // longest single line on the surface — which is the reason to measure it.
 const VERIFIED_ME = { verified: true, mc_number: "1234567", authority_type: "own_mc" };
 
+const FACILITY_ID = "00000000-0000-0000-0000-0000000000bb";
+// AI-CONTEXT: the facility profile, which four states used to get from a FIXTURE
+// (§23 entry 131). Their own comment said so — "deliberately renders from fixtures …
+// the surface falls back to its fixtures exactly as it does today" — so for the life of
+// this harness `facility`, `facility-prompt-mute`, `sheet-ask` and `sheet-review`
+// measured an invented facility with an invented dock-time median. Removing the fixture
+// turned all four into §15.4's failed line, which is what surfaced it.
+//
+// Shape copied from GET /facility/{id}/profile. `service-center` is explicitly NULL and
+// not `{}`: an unclaimed facility returns null (M13-FR7), and a truthy object with no
+// `services` array makes the surface's render THROW, which collapses every branch below
+// it. That cost a debugging round in this session's unit tests; it is written down here
+// so it does not cost another.
+const FACILITY_PROFILE = {
+  facility_id: FACILITY_ID,
+  name: "Dallas Cold Storage",
+  check_in_procedure: "Check in at guard shack; keep PPE on in the yard.",
+  overnight_parking: true,
+  restrooms: true,
+  dwell: {
+    overall: { median_seconds: 8100, p90_seconds: 15300, sample_size: 12 },
+    by_hour: { 6: { median_seconds: 5400, sample_size: 4 } },
+  },
+  ratings: { overall: 3.8, review_count: 2, per_aspect: {} },
+  detention_risk: { rate: null, sample_size: 0, basis: "m3_pending" },
+  reviews: [
+    { id: "r-1", ratings: { would_return: 4 }, text: "Quick unload at 6am, slow by afternoon.", created_at: "2026-08-01T10:00:00+00:00" },
+  ],
+};
+const FACILITY_MOCKS = {
+  [`/facility/${FACILITY_ID}/profile`]: FACILITY_PROFILE,
+  [`/intel/detention-risk/${FACILITY_ID}`]: { exceed_rate: 0.43, sample_size: 14, confidence: "high", basis: "tracked_stops" },
+  [`/intel/appointment-hours/${FACILITY_ID}`]: [{ hour: 6, median_seconds: 2400, sample_size: 9, confidence: "medium" }],
+  [`/community/questions/${FACILITY_ID}`]: [
+    { question_id: "q-1", text: "Is the north entrance still closed?",
+      answers: [{ text: "Open as of this morning.", presence_proven: true }] },
+  ],
+  [`/vendors/service-center/${FACILITY_ID}`]: null,
+};
+// M10-FR2's relay feed, which came from `sampleHandoffs()`. Without it the banner never
+// renders and `sheet-map-relay` has nothing to click — the sheet would have gone
+// unmeasured rather than failing, had the state not carried an `open` step.
+const HANDOFF_MOCKS = {
+  "/community/handoff/nearby": [
+    { handoff_id: "h-1", facility_name: "Love's Travel Stop #212", leaving_at: "2099-01-01T00:12:00+00:00", mine: false },
+    { handoff_id: "h-2", facility_name: "Rest Area — I-35 NB", leaving_at: "2099-01-01T00:25:00+00:00", mine: false },
+  ],
+};
+
 const SURFACES = [
   ["map", "/"],
   ["load", "/load"],
@@ -530,6 +579,26 @@ const SURFACES = [
   // failure as the run that measured Vite's error page six times.
   ["load-live", "/load", { stop: LIVE_STOP, mocks: LIVE_MOCKS, ready: ".rungs__item" }],
   ["money", "/money"],
+  // AI-CONTEXT: the three SKELETON shapes, measured at 360 dp in the commit that
+  // introduced them (§23 entry 131, v2.0 acceptance #3). A skeleton the harness cannot
+  // render is a skeleton that ships unmeasured — and these are the first thing a driver
+  // sees on every cold open, so "unmeasured" would mean the app's first frame at 360 dp
+  // was the one frame nothing checked.
+  //
+  // `hang` holds the fetch open so the state persists; see the route handler. Each
+  // `ready` selector names the SHAPE it is there to prove, so a state that stops
+  // rendering its skeleton fails loudly instead of quietly measuring the loaded screen
+  // under the loading state's name — the failure this file's fourth comment is about.
+  //
+  // Money covers TWO shapes in one load: the Meter card is replaced by SkeletonCard
+  // while `/money/earnings` is in flight, and the receivables list by SkeletonRow while
+  // `/accessorial/owed` is. `ready` is the card, because it is the one above the fold.
+  ["money-loading", "/money", {
+    hang: ["/money/earnings", "/accessorial/owed"],
+    ready: ".skel__card",
+  }],
+  ["docs-loading", "/docs", { hang: ["/protection/wallet"], ready: ".skel__row" }],
+  ["map-loading", "/", { hang: ["/map/overlay"], ready: ".skel__pin" }],
   // §23 entry 80: the sections collapse and start collapsed, so the grid is behind a
   // disclosure. Every state that reaches a document opens its section first —
   // otherwise the harness would measure three headings and report the surface covered.
@@ -608,16 +677,18 @@ const SURFACES = [
   ["sheet-login-language", "/login", { anon: true, open: [".lang-btn"], ready: ".lang" }],
   ["evidence", "/load/00000000-0000-0000-0000-0000000000aa/evidence"],
   ["condition", "/protection/condition"],
-  ["facility", "/facility/00000000-0000-0000-0000-0000000000bb"],
+  // `ready` is NEW. This state had none, so when the fixture went it kept passing while
+  // measuring §15.4's one-line error instead of the facility — a silent coverage loss of
+  // exactly the kind the note at the top of this file is about.
+  ["facility", `/facility/${FACILITY_ID}`, { mocks: FACILITY_MOCKS, ready: ".dwell__figure" }],
   // §23 entry 114 — "don't ask about this lot". A separate state rather than mocks on
   // `facility` above, which deliberately renders from fixtures: this row appears only
   // after the server answers, so it needs an intercepted route to exist at all. Every
   // other call 404s and the surface falls back to its fixtures exactly as it does today.
-  ["facility-prompt-mute", "/facility/00000000-0000-0000-0000-0000000000bb", {
+  ["facility-prompt-mute", `/facility/${FACILITY_ID}`, {
     mocks: {
-      "/map/facility/00000000-0000-0000-0000-0000000000bb/prompt-pref": {
-        facility_id: "00000000-0000-0000-0000-0000000000bb", muted: false,
-      },
+      ...FACILITY_MOCKS,
+      [`/map/facility/${FACILITY_ID}/prompt-pref`]: { facility_id: FACILITY_ID, muted: false },
     },
     ready: ".prompt-mute",
   }],
@@ -707,11 +778,11 @@ const SURFACES = [
   ["sheet-share", `/load/${EVIDENCE_STOP}/evidence`, {
     mocks: EVIDENCE_MOCKS, open: [".cta--secondary"], ready: "input[type='email']",
   }],
-  ["sheet-ask", "/facility/00000000-0000-0000-0000-0000000000bb", {
-    mocks: {}, open: [".cta--ghost"], ready: ".sheet__body",
+  ["sheet-ask", `/facility/${FACILITY_ID}`, {
+    mocks: FACILITY_MOCKS, open: [".cta--ghost"], ready: ".sheet__body",
   }],
-  ["sheet-review", "/facility/00000000-0000-0000-0000-0000000000bb", {
-    mocks: {}, open: [".add-review"], ready: ".sheet__body",
+  ["sheet-review", `/facility/${FACILITY_ID}`, {
+    mocks: FACILITY_MOCKS, open: [".add-review"], ready: ".sheet__body",
   }],
   ["sheet-map-report", "/", { mocks: {}, open: [".report-chip"], ready: ".sheet__body" }],
   ["sheet-map-voice", "/", { mocks: {}, open: [".voice-chip"], ready: ".sheet__body" }],
@@ -719,7 +790,7 @@ const SURFACES = [
   ["sheet-map-sleep", "/", {
     mocks: {}, open: [{ click: ".chip", nth: 1 }, ".sleep-cta"], ready: ".sheet__body",
   }],
-  ["sheet-map-relay", "/", { mocks: {}, open: [".relay-banner"], ready: ".sheet__body" }],
+  ["sheet-map-relay", "/", { mocks: HANDOFF_MOCKS, open: [".relay-banner"], ready: ".sheet__body" }],
   // §10.1's contextual CTA ladder, one state per rung it can land on
   ["sheet-facility", "/", {
     mocks: mapMocks(TRUCK_STOP_PIN), open: [pinOf(TRUCK_STOP_PIN)], ready: ".cta--nav",
@@ -974,6 +1045,15 @@ async function prepare(page, { theme, pseudo, live }) {
   if (live) {
     await page.route(`${API_BASE}/**`, (route) => {
       const path = new URL(route.request().url()).pathname;
+      // AI-CONTEXT: `hang` is how a LOADING state gets measured (§23 entry 131).
+      //
+      // A skeleton only exists while a fetch is in flight, so the only way to put one
+      // in front of these assertions is to never answer. The request is left PENDING —
+      // not delayed, because a delay resolves and the skeleton then vanishes before the
+      // checks run, and not a 404, because that is the FAILED state and a different
+      // screen. `settle()` knows to skip its networkidle wait for these states, since a
+      // pending request means the network is never idle by construction.
+      if (live.hang?.some((frag) => path.includes(frag))) return; // never fulfilled
       const body = live.mocks?.[path];
       if (!body) return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
       if (body.__binary) {
@@ -1038,8 +1118,13 @@ async function prepare(page, { theme, pseudo, live }) {
 }
 
 async function settle(page, live) {
-  await page.waitForLoadState("networkidle").catch(() => {});
-  // the map canvas initialises asynchronously and has no layout contribution here
+  // a state that deliberately holds a request open never reaches networkidle, so
+  // waiting for it would burn the timeout on every such state and then proceed anyway.
+  // The `ready` selector is what proves the skeleton rendered.
+  if (!live?.hang) await page.waitForLoadState("networkidle").catch(() => {});
+  // the map canvas initialises asynchronously and has no layout contribution here.
+  // 250 ms also clears the skeleton's own 200 ms delay (core/skeleton.js), which is
+  // why a hanging state needs no extra wait of its own.
   await page.waitForTimeout(250);
   // drive the surface into the state it names — opening a sheet, usually. CSS only,
   // never labels: three locales run per surface and a text step would stop matching
