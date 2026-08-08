@@ -117,3 +117,41 @@ def test_the_kill_switch_still_closes_the_gate(db):
     register_all(db)
     flags.kill(db, "m03_detention")
     assert flags.is_switched_off(db, "m03_detention") is True
+
+
+# --- F-17: the cost control that had never governed a call ---
+def test_every_module_gets_an_ai_budget_at_boot(db):
+    """`_check_budget` returned silently for a module with no ModuleBudget row, and
+    nothing in the product ever wrote one — `set_module_budget` had no caller outside
+    the tests. So F9's cap was a well-designed guard, tested in isolation, that had
+    never governed a single call: structurally the same finding as the twelve unflagged
+    modules this file already exists to prevent.
+
+    Seeded for ALL modules, not only the four calling F9 today, because a per-module
+    opt-in is a list someone must remember to extend and the cost of forgetting is
+    silent unlimited spend."""
+    from app.foundation.f09_ai_gateway import public as ai
+
+    register_all(db)
+    missing = [m.MODULE for m in MODULES if db.get(ai.ModuleBudget, m.MODULE) is None]
+    assert missing == [], f"modules that could spend with no cap: {missing}"
+
+
+def test_an_existing_budget_is_never_overruled_by_a_restart(db):
+    # the same rule register_all applies to flag state: the number is an operator's
+    # decision, and a deploy must not reset it
+    from app.foundation.f09_ai_gateway import public as ai
+
+    register_all(db)
+    ai.set_module_budget(db, "m03", monthly_budget_micros=7)
+    register_all(db)
+    assert db.get(ai.ModuleBudget, "m03").monthly_budget_micros == 7
+
+
+def test_the_default_budget_is_a_live_f13_config_knob(db):
+    from app.foundation.f09_ai_gateway import public as ai
+    from app.foundation.f13_flags import public as flags
+
+    flags.set_config(db, ai.CONFIG_MONTHLY_BUDGET, 123_456, scope="ai")
+    register_all(db)
+    assert db.get(ai.ModuleBudget, MODULES[0].MODULE).monthly_budget_micros == 123_456

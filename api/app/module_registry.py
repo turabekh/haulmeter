@@ -42,6 +42,44 @@ from app.modules.m13_vendor import public as m13
 MODULES = (m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13)
 
 
+def _register_ai_budgets(db: Session) -> None:
+    """Every module gets an F9 spend cap, at boot, before it can spend anything.
+
+    AI-CONTEXT: audit F-17 — `_check_budget` returned silently for a module with no
+    `ModuleBudget` row, and `set_module_budget` had no caller outside the tests. So F9's
+    cost control had never governed a single call: a well-designed guard, tested in
+    isolation, with nothing in the product wired to switch it on. Structurally the same
+    finding as F-02, which is why the audit named it a pattern rather than a bug.
+
+    Seeded for ALL modules rather than only the four that call F9 today (m02, m04, m09,
+    m11). A per-module opt-in is a list someone must remember to extend, and the failure
+    mode of forgetting is silent unlimited spend — the exact shape being fixed. The
+    invariant is simply "a module has a budget", and `test_module_flags` asserts it.
+
+    Existing rows are LEFT ALONE. The number is an operator's decision and a restart must
+    never overrule it, which is the same rule `register_all` applies to flag state below.
+    """
+    from app.foundation.f09_ai_gateway import public as ai
+    from app.foundation.f13_flags import public as flags
+
+    flags.register_config(
+        db,
+        ai.CONFIG_MONTHLY_BUDGET,
+        ai.DEFAULT_MONTHLY_BUDGET_MICROS,
+        description=(
+            "Default per-module AI spend cap, micros of USD per calendar month "
+            "(25000000 = $25). Applies to modules seeded after this is changed; "
+            "existing per-module rows are edited individually."
+        ),
+        scope="ai",
+    )
+    default = int(flags.get_config(db, ai.CONFIG_MONTHLY_BUDGET, ai.DEFAULT_MONTHLY_BUDGET_MICROS))
+    for module in MODULES:
+        if db.get(ai.ModuleBudget, module.MODULE) is None:
+            ai.set_module_budget(db, module.MODULE, default)
+    db.flush()
+
+
 def register_all(db: Session) -> list[str]:
     """Idempotent. Returns the flag keys that now exist, so a caller can assert on the
     result rather than trusting that a loop ran.
@@ -73,6 +111,7 @@ def register_all(db: Session) -> list[str]:
     # flag-gated like modules, so it takes no part in the enable-on-first-registration
     # rule below.
     identity.register_authority_verification(db)
+    _register_ai_budgets(db)
 
     known_before = {
         key for (key,) in db.query(flags.FeatureFlag.key).all()  # noqa: S608 - ORM

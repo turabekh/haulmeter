@@ -1,8 +1,22 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from app.foundation.f09_ai_gateway import public as ai
+
+
+# AI-CONTEXT: production seeds a budget for every module at boot
+# (`module_registry.register_all`), and F9 now REFUSES a module that has none rather than
+# waving it through — that fail-open branch was F-17. These tests exercise F9's
+# capabilities rather than the registry, so they get the same precondition production
+# has. `register_all` itself is not called here because it also ENABLES every module
+# flag on first registration, which several suites deliberately assert is off.
+@pytest.fixture(autouse=True)
+def _budgets(db):
+    for module in ("m02", "m03", "m04", "m09", "m11"):
+        ai.set_module_budget(db, module, monthly_budget_micros=ai.DEFAULT_MONTHLY_BUDGET_MICROS)
 
 
 def test_prompt_registry_returns_latest_active_version(db):
@@ -36,7 +50,7 @@ def test_missing_prompt_raises(db):
 def test_per_module_budget_enforced(db):
     ai.register_prompt(db, "draft", ai.AiTask.drafting, "draft {x}")
     provider = ai.FakeModelProvider()
-    ai.set_module_budget(db, "m03", budget_micros=1)  # effectively one call then blocked
+    ai.set_module_budget(db, "m03", monthly_budget_micros=1)  # one call, then blocked
     ai.complete(db, provider, "m03", "draft", {"x": "one"})
     assert ai.budget_used(db, "m03") >= 1
     with pytest.raises(ai.BudgetExceeded):
@@ -46,12 +60,72 @@ def test_per_module_budget_enforced(db):
 def test_budget_isolated_per_module(db):
     ai.register_prompt(db, "draft", ai.AiTask.drafting, "draft {x}")
     provider = ai.FakeModelProvider()
-    ai.set_module_budget(db, "m03", budget_micros=1)
+    ai.set_module_budget(db, "m03", monthly_budget_micros=1)
+    ai.set_module_budget(db, "m04", monthly_budget_micros=10_000_000)
     ai.complete(db, provider, "m03", "draft", {"x": "one"})
     with pytest.raises(ai.BudgetExceeded):
         ai.complete(db, provider, "m03", "draft", {"x": "two"})
-    # a different module with no budget is unaffected
+    # a module with its OWN budget is unaffected by another module exhausting theirs
     assert ai.complete(db, provider, "m04", "draft", {"x": "ok"}).startswith("[draft]")
+
+
+def test_a_module_with_no_budget_row_is_still_capped(db):
+    """This test used to assert the opposite, and that is the finding (F-17).
+
+    It read: "a different module with no budget is unaffected" — encoding the fail-open
+    branch as intended behaviour. `_check_budget` returned silently when no ModuleBudget
+    row existed, and nothing in the product ever created one (`set_module_budget` had no
+    caller outside this file), so F9's cost control had never governed a single call
+    while a green test said the isolation worked.
+
+    There is no uncapped state now: a module with no row falls back to the compiled
+    default. Refusing it outright was the other candidate and it is worse — boot
+    registration only warns on failure, so one bad startup would take every AI feature
+    dark on a box with no monitoring.
+    """
+    ai.register_prompt(db, "draft", ai.AiTask.drafting, "draft {x}")
+    provider = ai.FakeModelProvider()
+    assert db.get(ai.ModuleBudget, "m_unregistered") is None
+
+    # the default applies, so the call is allowed...
+    assert ai.complete(db, provider, "m_unregistered", "draft", {"x": "ok"}).startswith("[draft]")
+    # ...and it is a CAP, not an absence: spend up to the default and it closes
+    assert ai.budget_remaining(db, "m_unregistered") < ai.DEFAULT_MONTHLY_BUDGET_MICROS
+    ai.set_module_budget(db, "m_unregistered", monthly_budget_micros=1)
+    with pytest.raises(ai.BudgetExceeded):
+        ai.complete(db, provider, "m_unregistered", "draft", {"x": "blocked"})
+
+
+def test_the_budget_is_MONTHLY_and_renews(db):
+    """F-18: `budget_used` summed every call ever made, so the cap was a lifetime
+    ceiling with no reset — a module went permanently dark and nothing said whether that
+    was deliberate. "Budget" everywhere else in this codebase means a recurring
+    allowance, and now so does this one."""
+    ai.register_prompt(db, "draft", ai.AiTask.drafting, "draft {x}")
+    provider = ai.FakeModelProvider()
+    ai.set_module_budget(db, "m03", monthly_budget_micros=1)
+    ai.complete(db, provider, "m03", "draft", {"x": "one"})
+    with pytest.raises(ai.BudgetExceeded):
+        ai.complete(db, provider, "m03", "draft", {"x": "two"})
+
+    # age the spend into last month; the new month starts clear
+    last_month = ai.period_start(datetime.now(UTC)) - timedelta(days=1)
+    for call in db.scalars(select(ai.AiCall).where(ai.AiCall.module == "m03")):
+        call.created_at = last_month
+    db.flush()
+
+    assert ai.budget_used(db, "m03") == 0
+    assert ai.complete(db, provider, "m03", "draft", {"x": "next month"}).startswith("[draft]")
+
+
+def test_period_start_is_the_first_instant_of_the_utc_month(db):
+    assert ai.period_start(datetime(2026, 8, 8, 23, 59, 59, tzinfo=UTC)) == datetime(
+        2026, 8, 1, 0, 0, 0, tzinfo=UTC
+    )
+    # a naive datetime is read as UTC rather than silently taking the server's zone
+    assert ai.period_start(datetime(2026, 8, 8, 12, 0, 0)) == datetime(
+        2026, 8, 1, 0, 0, 0, tzinfo=UTC
+    )
 
 
 def test_structured_output_enforced(db):

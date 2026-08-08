@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -70,33 +72,81 @@ def list_fixtures(db: Session, prompt_key: str) -> list[PromptFixture]:
 
 
 # --- Cost tracking + per-module budgets ---
-def set_module_budget(db: Session, module: str, budget_micros: int) -> ModuleBudget:
+# AI-CONTEXT: the cap that had never governed a call (audit F-17), on a period that had
+# never been written down (F-18). The two had to be fixed together: seeding budgets while
+# `budget_used` still summed every call ever made would have turned an inert guard into a
+# time bomb — each module going permanently dark the first time it crossed its lifetime
+# number, on a box with no monitoring, looking exactly like a broken feature.
+#
+# Micros are millionths of a US dollar: COST_PER_INPUT/OUTPUT_TOKEN_MICROS are 3 and 15,
+# which is $3 and $15 per million tokens. So the default below is $25 per module per
+# calendar month — roughly 3,300 lumper-receipt extractions, generous enough that a real
+# driver in testing is never cut off, small enough that a runaway loop stops at the price
+# of a dinner rather than a mortgage payment. It is an F13 config key, so a box can be
+# retuned from the admin console without a deploy.
+DEFAULT_MONTHLY_BUDGET_MICROS = 25_000_000
+CONFIG_MONTHLY_BUDGET = "f09_default_monthly_budget_micros"
+
+
+def period_start(now: datetime) -> datetime:
+    """The first instant of `now`'s calendar month, UTC.
+
+    Calendar month rather than a rolling 30 days, because a cost control is read against
+    an invoice and invoices are monthly. A rolling window would put the reset on a
+    different day for every module.
+    """
+    at = now if now.tzinfo else now.replace(tzinfo=UTC)
+    at = at.astimezone(UTC)
+    return at.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def set_module_budget(db: Session, module: str, monthly_budget_micros: int) -> ModuleBudget:
     budget = db.get(ModuleBudget, module)
     if budget is None:
-        budget = ModuleBudget(module=module, budget_micros=budget_micros)
+        budget = ModuleBudget(module=module, monthly_budget_micros=monthly_budget_micros)
         db.add(budget)
     else:
-        budget.budget_micros = budget_micros
+        budget.monthly_budget_micros = monthly_budget_micros
     db.flush()
     return budget
 
 
-def budget_used(db: Session, module: str) -> int:
+def budget_used(db: Session, module: str, now: datetime | None = None) -> int:
+    """Spend THIS calendar month. It was every call ever made (F-18)."""
+    since = period_start(now or datetime.now(UTC))
     return db.scalar(
-        select(func.coalesce(func.sum(AiCall.cost_micros), 0)).where(AiCall.module == module)
+        select(func.coalesce(func.sum(AiCall.cost_micros), 0)).where(
+            AiCall.module == module, AiCall.created_at >= since
+        )
     )
 
 
-def budget_remaining(db: Session, module: str) -> int | None:
-    budget = db.get(ModuleBudget, module)
-    if budget is None:
-        return None
-    return budget.budget_micros - budget_used(db, module)
+def budget_micros(db: Session, module: str) -> int:
+    """The cap in force for `module` — its own row, or the compiled default.
+
+    AI-CONTEXT: there is NO state in which spend is uncapped, and that is the fix for
+    F-17. `_check_budget` used to return silently when no `ModuleBudget` row existed,
+    and nothing in the product ever wrote one, so the guard's own precondition was
+    something that never happened and the safest-looking branch was the one that spent
+    money.
+
+    Refusing an unbudgeted module was the other obvious answer and it is worse. Boot
+    registration in `main.py` only WARNS if it fails, so one bad startup would take every
+    AI feature in the product dark on a box with no monitoring — turning a missing
+    configuration row into an outage. Falling back to the default means a cap always
+    applies; seeding rows at boot is then about making the number VISIBLE and editable in
+    the admin console, not about whether a limit exists at all.
+    """
+    row = db.get(ModuleBudget, module)
+    return row.monthly_budget_micros if row is not None else DEFAULT_MONTHLY_BUDGET_MICROS
 
 
-def _check_budget(db: Session, module: str) -> None:
-    budget = db.get(ModuleBudget, module)
-    if budget is not None and budget_used(db, module) >= budget.budget_micros:
+def budget_remaining(db: Session, module: str, now: datetime | None = None) -> int:
+    return budget_micros(db, module) - budget_used(db, module, now)
+
+
+def _check_budget(db: Session, module: str, now: datetime | None = None) -> None:
+    if budget_used(db, module, now) >= budget_micros(db, module):
         raise BudgetExceeded(module)
 
 
