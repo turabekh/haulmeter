@@ -5,7 +5,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 
 ➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — read this first, every session.
 
-> **119** worked the 2026-08-07 audit queue: **eleven findings closed, two partial.** Three of
+> **119** worked the 2026-08-07 audit queue: **fourteen findings closed, two partial.** Three of
 > the eight criticals are closed (F-13, F-21, U-07) — **every critical that could be closed
 > without an owner decision now is.** Four are blocked on things nobody in this environment
 > can supply; the last, F-02, needs a decision before anyone starts.
@@ -36,7 +36,13 @@ results, exact next task, and blockers always live in the latest numbered handof
 > open — and checked BEFORE the Argon2 hash, which is the half that answers the
 > denial-of-service rather than only the credential stuffing.
 >
-> **Stack UP · fifteen commits UNPUSHED · nothing deployed.** `git fetch` still cannot run
+> **Also closed: F-17/F-18** (the AI cost cap had never governed a call and had no period —
+> and the fix that matters is the third option: a missing budget row falls back to the
+> default, so there is neither uncapped spend nor an outage caused by a missing row) and
+> **F-23** (the settlement audit compared one document's payments against every receivable
+> the driver had ever had).
+>
+> **Stack UP · eighteen commits UNPUSHED · nothing deployed.** `git fetch` still cannot run
 > here — **re-fetch before pushing.**
 
 ➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — the session before.

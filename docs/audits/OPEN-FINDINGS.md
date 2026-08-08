@@ -32,13 +32,14 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 | Severity | Open | Blocked | Partial | Closed | Accepted | Total |
 |---|---|---|---|---|---|---|
 | Critical | 1 | 4 | 0 | 3 | 0 | **8** |
-| High | 10 | 0 | 1 | 6 | 0 | **17** |
-| Medium | 10 | 0 | 1 | 1 | 0 | **12** |
+| High | 8 | 0 | 1 | 8 | 0 | **17** |
+| Medium | 9 | 0 | 1 | 2 | 0 | **12** |
 | Low | 5 | 0 | 0 | 2 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **26** | **4** | **2** | **12** | **1** | **45** |
+| **Total** | **23** | **4** | **2** | **15** | **1** | **45** |
 
-**Session 119 closed eleven** — F-05, F-07, F-13, F-21, F-28, F-29, F-31, U-01, U-02, U-07, U-08 —
+**Session 119 closed fourteen** — F-05, F-07, F-13, F-17, F-18, F-21, F-23, F-28, F-29, F-31,
+U-01, U-02, U-07, U-08 —
 and left **two partial** (U-03, U-05) with the remainder named. F-24 was already closed by
 F-31 inside the audit itself; it is counted here for completeness and is not this session's
 work.
@@ -76,13 +77,13 @@ unobservable until the literal became a token. See §Blockers.
 | F-14 | High | OPEN | Nights are counted in UTC. Blocked-adjacent: needs the F2 timezone-column answer (see §Questions). |
 | F-15 | Medium | OPEN | Unbounded history scans in two hot paths. |
 | F-16 | Low | OPEN | Filename interpolated into a response header. |
-| F-17 | High | OPEN | The AI budget cap is inert. Same shape as F-02: a guard whose precondition the product never creates. |
-| F-18 | Medium | OPEN | A budget is a lifetime cap, not a period cap. |
+| F-17 | High | **CLOSED** | Every module seeded a cap at boot, and a module with no row falls back to the compiled default — there is no uncapped state, and no state where a missing row is an outage. `test_module_flags` asserts the invariant. Session 119. |
+| F-18 | Medium | **CLOSED** | Calendar-month cap; the column is `monthly_budget_micros` so it cannot be misread. Had to ship WITH F-17 — seeding budgets against a lifetime sum would have made each module go permanently dark. Composite `(module, created_at)` index. Session 119. |
 | F-19 | Medium | OPEN | No merge-review queue. Already known. |
 | F-20 | Low | OPEN | The amendment describes a mechanism the code does not implement. |
 | F-21 | Critical | **CLOSED** | §23 entry 73's defect in M4 → `_arrival_departure` routed through `location.visit_window`, anchored on the stop's appointment. M4 was the last unscoped `list_events` caller, so the class is closed. Session 119. |
 | F-22 | High | OPEN | "Overnight" is measured in UTC. Pairs with F-14. |
-| F-23 | High | OPEN | Settlement audit compares scoped against unscoped. |
+| F-23 | High | **CLOSED** | `owed` is scoped to the settlement's own pay period. **Named limitation:** it scopes by the receivable's creation date as a proxy, because there is no settlement→load link — work in the period whose receivable is filed later still falls outside. The link is the audit's own deeper fix and is a schema change. Session 119. |
 | F-24 | Low | **CLOSED** | Migration downgrades — 57 of 59 real, 2 empty. Closed by F-31, which identified the two; not by session 119. |
 | F-25 | Medium | OPEN | The profit model assumes the product does not work. |
 | F-26 | Low | OPEN | Zero standing in for undefined. |

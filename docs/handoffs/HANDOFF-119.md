@@ -1,9 +1,9 @@
 # HANDOFF-119 — the audit queue, worked: every critical that could be closed without an owner decision is closed
 
-> **Stack UP · fifteen commits UNPUSHED · nothing deployed.** haulmeter.online still
+> **Stack UP · eighteen commits UNPUSHED · nothing deployed.** haulmeter.online still
 > serves 112's code.
 >
-> Session 119 read the 2026-08-07 audit and worked it: **eleven findings closed, two
+> Session 119 read the 2026-08-07 audit and worked it: **fourteen findings closed, two
 > partial.** Three of the eight criticals are closed (F-13, F-21, U-07); four are blocked
 > on things nobody in this environment can supply, and the last one (F-02) needs a
 > decision before anyone starts.
@@ -22,10 +22,10 @@
 
 | | |
 |---|---|
-| Branch | `main`, **fifteen** commits ahead of `origin/main` — 118's six plus this session's nine |
+| Branch | `main`, **eighteen** commits ahead of `origin/main` — 118's six plus this session's twelve |
 | `origin/main` | `113327e` — still **not re-verified**; `git fetch` has no credential here. **Re-fetch before pushing** |
-| Gates | **pytest 1423 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** |
-| Migrations | **`0061_f01_login_attempt` (head)** — 0060 and 0061 are both new this session, applied and round-tripped on the running stack |
+| Gates | **pytest 1431 · vitest 714 (38 files) · layout 229 checks · import-linter 30/30 · ruff clean** |
+| Migrations | **`0062_f09_monthly_budget` (head)** — 0060, 0061 and 0062 are all new this session, each applied and round-tripped on the running stack |
 | Working tree | clean; `longhaul.txt` and `split_dump.py` now **gitignored** at the owner's instruction |
 | Local stack | **UP** |
 | Dev data | Tampa `27.9506,-82.4572` intact, four DEV facilities at 88–125 m |
@@ -93,6 +93,26 @@ deployed API publishes no port. And attempts are recorded against the **submitte
 whether or not an account exists, or the throttle becomes an account-existence oracle
 answering what the 401 is careful not to.
 
+**F-17 + F-18 — the AI cost control had never governed a call, and had no period.**
+`_check_budget` returned silently for a module with no budget row and nothing in the
+product ever wrote one. The two had to ship together: seeding budgets while `budget_used`
+still summed *every call ever made* would have turned an inert guard into a time bomb, each
+module going permanently dark the first time it crossed its number.
+
+**The third option is the part worth remembering.** Refusing an unbudgeted module was the
+obvious counter to fail-open and it is worse — `main.py` only *warns* if boot registration
+fails, so one bad startup would take every AI feature dark on a box with no monitoring. A
+missing row now falls back to the compiled default: no uncapped state, and no state where a
+missing row is an outage. Seeded for all thirteen modules, not the four that call F9 today,
+because a per-module opt-in is a list someone must remember to extend.
+
+**F-23 — the settlement audit compared scoped against unscoped.** `paid` was one document;
+`owed` was every unsettled receivable ever. It told drivers their broker underpaid on money
+that broker had never been billed for, and re-flagged the same balance on every later
+settlement into a number adjacent to the North Star. Scoped to the settlement's own pay
+period. **The limitation is in the code, not hidden:** it scopes by the receivable's
+creation date as a proxy, because there is no settlement→load link.
+
 **F-31** — the two empty migration downgrades now say why they are empty.
 
 ## 3. Everything was proved by sabotage, not by going green
@@ -110,6 +130,7 @@ test fail:
 | F-21 | restored the unscoped resolver → the 2 new tests fail and **all 7 pre-existing m04 tests still pass** |
 | F-07, no throttle at all | 9 of 12 fail |
 | F-07, throttle present but AFTER the hash | **exactly 1 fails** — the plausible-but-wrong version, caught only by the test written for it |
+| F-23 | restored the unscoped comparison → both new tests fail |
 
 **The F-21 row is the audit's own prediction, confirmed:** *"a fixture with one visit
 cannot distinguish the two implementations."* It is why nine sessions of green walked past
@@ -175,10 +196,11 @@ That unreality is part of what hid the defect.
 
 ### 5.3 Then
 
-The largest remaining items that need no decision are **F-17** (the AI budget cap is inert
-— the same built-but-never-registered shape as F-02, and the audit notes one startup
-assertion would cover both) and **F-23** (the settlement audit compares scoped against
-unscoped).
+What is left needing no decision is smaller than what has gone: **F-03** (every send
+returns the same provider ref), **F-04** (the gateway production uses is untested), **F-06**
+(no retry, no dead letter on SMTP failure), **F-14 + F-22** (nights and "overnight" counted
+in UTC — both wait on the F2 timezone-column answer in §Questions), **F-30** (voice
+understands one of six languages), and the six remaining surfaces of **U-04**.
 
 Still open and untouched from 118: the **handset background-sensor test** (v2.0 DoD #8),
 and **push, then decide on deploying**. A deploy needs production `SMTP_*` on the VM.
