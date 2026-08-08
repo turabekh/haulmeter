@@ -4,18 +4,23 @@ UX layer: hands-free access to everything over the app's OWN structured data
 claims. A SCHEMA-LESS serving layer (F11/M8 precedent): no tables — it routes
 intents to the modules below it and drafts through F9.
 
-- Voice intents (M11-FR1): a deterministic keyword router over ≥15 intents that
-  dispatch to M1/M3/M4/M7/M8/M10 publics; STT/TTS is the F9 seam. The router is
-  the honest bootstrap; F9 classify is the upgrade path (both hit the same
-  eval-fixture accuracy target).
+- Voice intents (M11-FR1): a deterministic router over ≥15 intents that dispatch
+  to M1/M3/M4/M7/M8/M10 publics; STT/TTS is the F9 seam. The router is the
+  honest bootstrap; F9 classify is the upgrade path (both hit the same
+  eval-fixture accuracy target). ALL vocabulary and matching live in
+  `lexicon.py` — six locales, token-phrase matching, specificity scoring.
+  Nothing here classifies; this module only dispatches what came back.
 - Motion policy (M11-FR2): voice-first + audio while DRIVING; committing actions
   (start clock, book) defer their confirmation to on-screen-when-stopped.
 - Comms ghostwriter (M11-FR3): counterparty drafts via F9 with tone presets;
   the driver approves; outbound is ALWAYS English (F15) and sent via F8.
 - Claim assistant (M11-FR4): "what am I owed and the next action on each" over
   the M3/M4 receivable state.
-- Multilingual (M11-FR6): utterances transcribe in any launch locale; the
-  ghostwriter accepts any language and always outputs English.
+- Multilingual (M11-FR6): utterances transcribe in any launch locale and
+  CLASSIFY in it — the locale scopes the vocabulary, with English always in
+  scope for embedded trucking jargon. The ghostwriter accepts any language and
+  always outputs English. NOT yet true of the ANSWER: `_dispatch` speaks
+  English whatever it understood (finding N-01, `docs/audits/OPEN-FINDINGS.md`).
 
 Composes f08 + f09 + m04 + m07 + m08 + m10. Runs behind the F13 flag m11_voice.
 """
@@ -30,6 +35,8 @@ from app.modules.m04_accessorial import public as m4
 from app.modules.m07_fuel import public as m7
 from app.modules.m08_intelligence import public as m8
 from app.modules.m10_community import public as m10
+
+from . import lexicon
 
 FLAG_KEY = "m11_voice"
 MODULE = "m11"
@@ -55,26 +62,7 @@ _NEXT_ACTION = {
     "written_off": "closed",
 }
 
-# ordered classification rules — first match wins (deterministic, no ML)
-# each rule: (intent, required_all, any_of)
-_RULES: list[tuple[str, list[str], list[str]]] = [
-    ("start_detention", ["start"], ["detention", "clock", "meter"]),
-    ("detention_risk", ["risk"], ["detention", "hold"]),
-    ("detention_status", [], ["detention", "meter", "clock", "accruing"]),
-    ("fuel_savings", [], ["saved", "savings", "save"]),
-    ("fuel_nearby", [], ["fuel", "diesel", "gas"]),
-    ("book_parking", ["book"], ["parking", "spot", "lot", "reserve"]),
-    ("sleep_tonight", [], ["sleep", "rest tonight", "where do i sleep", "overnight"]),
-    ("parking_nearby", [], ["parking", "park", "spot", "lot"]),
-    ("best_hour", [], ["best time", "what time", "fastest", "best hour"]),
-    ("dwell_time", [], ["dwell", "how long", "unload"]),
-    ("facility_info", [], ["facility", "receiver", "shipper", "entrance", "dock"]),
-    ("next_action", [], ["next action", "what should i do", "next step"]),
-    ("money_owed", [], ["owed", "owe", "what am i owed", "money"]),
-    ("points_balance", [], ["points", "reward"]),
-    ("help", [], ["help", "what can you do"]),
-]
-INTENTS = [r[0] for r in _RULES] + ["unknown"]
+INTENTS = lexicon.INTENTS
 
 
 @dataclass
@@ -111,14 +99,8 @@ def register_module(db: Session) -> None:
 
 
 # --- Intent routing (M11-FR1) + motion policy (M11-FR2) ---
-def classify_intent(utterance: str) -> str:
-    u = utterance.lower()
-    for intent, required, any_of in _RULES:
-        if all(term in u for term in required) and (
-            not any_of or any(term in u for term in any_of)
-        ):
-            return intent
-    return "unknown"
+def classify_intent(utterance: str, locale: str = lexicon.DEFAULT_LOCALE) -> str:
+    return lexicon.classify(utterance, locale)
 
 
 def interaction_mode(driving: bool) -> str:
@@ -185,7 +167,7 @@ def route(
     provider=None,
 ) -> VoiceResponse:
     context = context or {}
-    intent = classify_intent(utterance)
+    intent = classify_intent(utterance, context.get("locale", lexicon.DEFAULT_LOCALE))
     needs_conf = intent in _CONFIRM_INTENTS
     if needs_conf and driving:
         # M11-FR2: never commit an action in motion — confirm on screen when stopped

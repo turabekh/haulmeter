@@ -1,33 +1,132 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f07_ledger import public as ledger
 from app.foundation.f09_ai_gateway import public as ai
 from app.foundation.f13_flags import public as flags
+from app.foundation.f15_localization import public as localization
 from app.modules.m07_fuel import public as m7
 from app.modules.m10_community import public as m10
 from app.modules.m11_voice import public as m11
+from app.modules.m11_voice.domain import lexicon
 
-# eval fixture set (M11-FR1 DoD: >=15 intents, >=95% routing accuracy)
-INTENT_FIXTURES = [
-    ("start my detention clock", "start_detention"),
-    ("what's my detention risk at this receiver", "detention_risk"),
-    ("how much detention am I at", "detention_status"),
-    ("how much have I saved on fuel", "fuel_savings"),
-    ("cheapest diesel ahead", "fuel_nearby"),
-    ("book a parking spot", "book_parking"),
-    ("where do I sleep tonight", "sleep_tonight"),
-    ("any parking near exit 42", "parking_nearby"),
-    ("best time to arrive at the receiver", "best_hour"),
-    ("how long to unload here", "dwell_time"),
-    ("is the north entrance open", "facility_info"),
-    ("what's the next action on my claims", "next_action"),
-    ("what am I owed", "money_owed"),
-    ("how many points do I have", "points_balance"),
-    ("what can you do", "help"),
-    ("banana helicopter purple", "unknown"),
-]
+# eval fixture set (M11-FR1/FR6 DoD: >=15 intents, >=95% routing accuracy
+# IN EACH LAUNCH LANGUAGE). Audit F-30: the English list below was the whole
+# fixture set, so five of six launch locales scored 0% and nothing measured it.
+EVAL_FIXTURES: dict[str, list[tuple[str, str]]] = {
+    "en": [
+        ("start my detention clock", "start_detention"),
+        ("what's my detention risk at this receiver", "detention_risk"),
+        ("how much detention am I at", "detention_status"),
+        ("how much have I saved on fuel", "fuel_savings"),
+        ("cheapest diesel ahead", "fuel_nearby"),
+        ("book a parking spot", "book_parking"),
+        ("where do I sleep tonight", "sleep_tonight"),
+        ("any parking near exit 42", "parking_nearby"),
+        ("best time to arrive at the receiver", "best_hour"),
+        ("how long to unload here", "dwell_time"),
+        ("is the north entrance open", "facility_info"),
+        ("what's the next action on my claims", "next_action"),
+        ("what am I owed", "money_owed"),
+        ("how many points do I have", "points_balance"),
+        ("what can you do", "help"),
+        ("banana helicopter purple", "unknown"),
+    ],
+    "es": [
+        ("inicia mi reloj de detencion", "start_detention"),
+        ("cual es el riesgo de detencion en este receptor", "detention_risk"),
+        ("cuanta detencion tengo", "detention_status"),
+        ("cuanto he ahorrado en combustible", "fuel_savings"),
+        ("diesel mas barato adelante", "fuel_nearby"),
+        ("reservar un lugar de estacionamiento", "book_parking"),
+        ("donde duermo esta noche", "sleep_tonight"),
+        ("hay estacionamiento cerca de la salida 42", "parking_nearby"),
+        ("mejor hora para llegar al receptor", "best_hour"),
+        ("cuanto tiempo para descargar aqui", "dwell_time"),
+        ("esta abierta la entrada norte", "facility_info"),
+        ("cual es el proximo paso de mis reclamos", "next_action"),
+        ("cuanto me deben", "money_owed"),
+        ("cuantos puntos tengo", "points_balance"),
+        ("que puedes hacer", "help"),
+        ("platano helicoptero morado", "unknown"),
+    ],
+    "ru": [
+        ("запусти счетчик простоя", "start_detention"),
+        ("какой риск простоя здесь", "detention_risk"),
+        ("сколько у меня простоя", "detention_status"),
+        ("сколько я сэкономил на топливе", "fuel_savings"),
+        ("где дешевый дизель впереди", "fuel_nearby"),
+        ("забронируй место на стоянке", "book_parking"),
+        ("где переночевать сегодня", "sleep_tonight"),
+        ("есть парковка рядом", "parking_nearby"),
+        ("во сколько лучше приехать", "best_hour"),
+        ("сколько времени на разгрузку", "dwell_time"),
+        ("ворота открыты", "facility_info"),
+        ("что делать дальше", "next_action"),
+        ("сколько мне должны", "money_owed"),
+        ("сколько у меня баллов", "points_balance"),
+        ("что ты умеешь", "help"),
+        ("банан вертолет фиолетовый", "unknown"),
+    ],
+    "uz": [
+        ("detention soatini boshla", "start_detention"),
+        ("bu yerda detention xavfi bormi", "detention_risk"),
+        ("mening detention qancha", "detention_status"),
+        ("yoqilg'ida qancha tejadim", "fuel_savings"),
+        ("eng arzon dizel qayerda", "fuel_nearby"),
+        ("to'xtash joyini band qil", "book_parking"),
+        ("bugun qayerda uxlashim mumkin", "sleep_tonight"),
+        ("yaqin atrofda to'xtash joyi bormi", "parking_nearby"),
+        ("qachon borish yaxshi", "best_hour"),
+        ("yuk tushirish qancha vaqt oladi", "dwell_time"),
+        ("darvoza ochiqmi", "facility_info"),
+        ("keyingi qadam nima", "next_action"),
+        ("menga qancha qarz", "money_owed"),
+        ("menda qancha ball bor", "points_balance"),
+        ("nima qila olasan", "help"),
+        ("banan vertolyot binafsha", "unknown"),
+    ],
+    "so": [
+        ("detention saacadda bilow", "start_detention"),
+        ("halkan khatarta detention", "detention_risk"),
+        ("immisa detention ayaan haystaa", "detention_status"),
+        ("immisa ayaan badbaadiyay shidaalka", "fuel_savings"),
+        ("shidaalka ugu jaban", "fuel_nearby"),
+        ("goobta ballan qabso", "book_parking"),
+        ("meesha aan seexdo caawa", "sleep_tonight"),
+        ("baarkin u dhow", "parking_nearby"),
+        ("goorma ayaa ugu fiican", "best_hour"),
+        ("intee in le'eg dejinta", "dwell_time"),
+        ("albaabka ma furan yahay", "facility_info"),
+        ("maxaan sameeyaa xiga", "next_action"),
+        ("immisa lacag ah ayaa la ii leeyahay", "money_owed"),
+        ("immisa dhibco ayaan haystaa", "points_balance"),
+        ("maxaad samayn kartaa", "help"),
+        ("moos helikobtar buluug", "unknown"),
+    ],
+    "pa": [
+        ("ਮੇਰਾ ਡਿਟੈਂਸ਼ਨ ਸ਼ੁਰੂ ਕਰੋ", "start_detention"),
+        ("ਇੱਥੇ ਡਿਟੈਂਸ਼ਨ ਦਾ ਜੋਖਮ", "detention_risk"),
+        ("ਮੇਰਾ ਡਿਟੈਂਸ਼ਨ ਕਿੰਨਾ ਹੈ", "detention_status"),
+        ("ਮੈਂ ਫਿਊਲ ਤੇ ਕਿੰਨੀ ਬਚਤ ਕੀਤੀ", "fuel_savings"),
+        ("ਸਸਤਾ ਡੀਜ਼ਲ ਕਿੱਥੇ ਹੈ", "fuel_nearby"),
+        ("ਥਾਂ ਬੁੱਕ ਕਰੋ", "book_parking"),
+        ("ਮੈਂ ਰਾਤ ਨੂੰ ਕਿੱਥੇ ਸੌਣਾ ਹੈ", "sleep_tonight"),
+        ("ਨੇੜੇ ਪਾਰਕਿੰਗ", "parking_nearby"),
+        ("ਕਦੋਂ ਪਹੁੰਚਣਾ ਵਧੀਆ ਹੈ", "best_hour"),
+        ("ਅਨਲੋਡ ਕਰਨ ਵਿੱਚ ਕਿੰਨਾ ਸਮਾਂ", "dwell_time"),
+        ("ਗੇਟ ਖੁੱਲ੍ਹਾ ਹੈ", "facility_info"),
+        ("ਅਗਲਾ ਕਦਮ ਕੀ ਹੈ", "next_action"),
+        ("ਮੈਨੂੰ ਕਿੰਨਾ ਬਕਾਇਆ ਹੈ", "money_owed"),
+        ("ਮੇਰੇ ਕਿੰਨੇ ਪੁਆਇੰਟ ਹਨ", "points_balance"),
+        ("ਮਦਦ", "help"),
+        ("ਕੇਲਾ ਹੈਲੀਕਾਪਟਰ ਜਾਮਨੀ", "unknown"),
+    ],
+}
+INTENT_FIXTURES = EVAL_FIXTURES["en"]
 T0 = datetime(2026, 7, 20, 18, 0, tzinfo=UTC)
 
 
@@ -46,6 +145,79 @@ def test_intent_routing_accuracy_meets_dob(db):
     assert accuracy >= 0.95, f"routing accuracy {accuracy:.2%} below 95%"
     # >=15 distinct intents exercised (DoD)
     assert len({e for _, e in INTENT_FIXTURES if e != "unknown"}) >= 15
+
+
+@pytest.mark.parametrize("locale", localization.LAUNCH_LOCALES)
+def test_intent_routing_accuracy_per_launch_language(db, locale):
+    # M11-FR6 + the DoD's "in each launch language" (audit F-30). Before this,
+    # es/pa/ru/uz/so scored 0% and no test could see it.
+    fixtures = EVAL_FIXTURES[locale]
+    misses = [
+        (utt, expected, m11.classify_intent(utt, locale))
+        for utt, expected in fixtures
+        if m11.classify_intent(utt, locale) != expected
+    ]
+    accuracy = 1 - len(misses) / len(fixtures)
+    assert accuracy >= 0.95, f"{locale} routing accuracy {accuracy:.2%} below 95%: {misses}"
+    assert len({e for _, e in fixtures if e != "unknown"}) >= 15
+
+
+def test_every_launch_locale_has_a_fixture_set(db):
+    assert set(EVAL_FIXTURES) == set(localization.LAUNCH_LOCALES)
+
+
+def test_substring_matching_does_not_route(db):
+    # the predecessor asked `term in utterance`: "gas" inside "Vegas" routed to
+    # fuel, "sleep" inside "sleeper" routed to sleep_tonight
+    assert m11.classify_intent("I am in Las Vegas") == "unknown"
+    assert m11.classify_intent("my sleeper berth heater is broken") == "unknown"
+
+
+def test_specificity_beats_rule_order(db):
+    # audit F-30's second note: fuel_nearby preceded parking_nearby, so this
+    # classified as fuel purely because of list position
+    assert m11.classify_intent("where can I park near a gas station") == "parking_nearby"
+
+
+def test_embedded_english_trucking_terms_route_in_any_locale(db):
+    # M11-FR6 mixed-language; F15 keeps trucking jargon English in all six
+    assert m11.classify_intent("empieza mi detention clock", "es") == "start_detention"
+    assert m11.classify_intent("detention soatini boshla", "uz") == "start_detention"
+    # the jargon M11 routes on is jargon F15 rules stays English
+    assert "detention" in localization.DEFAULT_GLOSSARY
+    for locale in localization.LAUNCH_LOCALES:
+        assert m11.classify_intent("detention", locale) == "detention_status"
+
+
+def test_russian_idle_time_is_not_the_word_simply(db):
+    # "простой" is idle time; "просто" is the everyday word "simply". A prefix
+    # rule would collapse them and route ordinary speech to a detention intent.
+    assert m11.classify_intent("сколько у меня простоя", "ru") == "detention_status"
+    assert m11.classify_intent("это просто тест", "ru") == "unknown"
+
+
+def test_gurmukhi_survives_tokenization(db):
+    # Python's re \w excludes combining marks, so the naive tokenizer shredded
+    # "ਮੇਰਾ" into "ਮ","ਰ" and Punjabi matched nothing at all
+    assert lexicon.tokenize("ਮੇਰਾ ਡਿਟੈਂਸ਼ਨ") == ("ਮੇਰਾ", "ਡਿਟੈਂਸ਼ਨ")
+    assert lexicon.tokenize("yoqilg'i") == ("yoqilg'i",)
+
+
+def test_accented_and_unaccented_spanish_both_route(db):
+    # STT and drivers both drop accents. The accented word must be the ONLY
+    # signal in these utterances — "inicia mi reloj de detención" routes on
+    # "inicia" and "reloj" and would pass under a broken fold, proving nothing.
+    assert m11.classify_intent("detención", "es") == "detention_status"
+    assert m11.classify_intent("detencion", "es") == "detention_status"
+    assert m11.classify_intent("cuánto he ahorrado", "es") == "fuel_savings"
+    assert lexicon.tokenize("Detención") == ("detencion",)
+
+
+def test_locale_scopes_the_vocabulary_rather_than_hinting_at_it(db):
+    # if this passes under BOTH locales the parameter is decorative and every
+    # test that claims to prove locale threading is proving nothing
+    assert m11.classify_intent("сколько мне должны", "ru") == "money_owed"
+    assert m11.classify_intent("сколько мне должны", "en") == "unknown"
 
 
 def test_motion_policy_defers_committing_actions(db):

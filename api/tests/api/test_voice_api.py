@@ -9,7 +9,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_db
+from app.foundation.f01_identity import public as identity
 from app.foundation.f07_ledger import public as ledger
+from app.foundation.f15_localization import public as localization
 from app.main import app
 
 
@@ -57,6 +59,33 @@ def test_ask_defers_action_while_driving(client):
     assert body["needs_confirmation"] is True
     assert body["mode"] == "voice"
     assert body["data"]["deferred"] is True
+
+
+def test_ask_uses_the_drivers_stored_locale(client, db):
+    # audit F-30: /voice/ask carried no locale at all, so a Spanish-speaking
+    # driver was routed as an English speaker no matter what F15 had stored
+    account_id, headers = _auth(client)
+    account = db.get(identity.Account, uuid.UUID(account_id))
+    localization.set_user_locale(db, account, "es")
+    ledger.create_receivable(db, uuid.UUID(account_id), ledger.ReceivableKind.detention, 15000)
+
+    resp = client.post("/voice/ask", json={"text": "cuanto me deben"}, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["intent"] == "money_owed"
+
+
+def test_ask_locale_in_the_body_overrides_the_profile(client, db):
+    account_id, headers = _auth(client)
+    account = db.get(identity.Account, uuid.UUID(account_id))
+    localization.set_user_locale(db, account, "es")
+
+    resp = client.post(
+        "/voice/ask",
+        json={"text": "где парковка", "locale": "ru"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["intent"] == "parking_nearby"
 
 
 def test_ghostwriter_draft_is_english(client):

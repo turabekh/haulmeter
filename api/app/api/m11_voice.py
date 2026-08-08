@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
 from app.foundation.f09_ai_gateway import public as ai
+from app.foundation.f15_localization import public as f15
 from app.modules.m11_voice import public as m11
 
 router = APIRouter(prefix="/voice", tags=["voice"],
@@ -25,6 +26,7 @@ class AskIn(BaseModel):
     text: str
     driving: bool = False
     context: dict = {}
+    locale: str | None = None
 
 
 class DraftIn(BaseModel):
@@ -50,11 +52,15 @@ def ask(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
+    # AI-CONTEXT: M11-FR6 — the classifier is locale-aware and this endpoint
+    # carried no locale at all, so every driver was routed as an English speaker.
+    # Precedence: explicit body > context > the driver's stored F15 locale.
+    locale = body.locale or body.context.get("locale") or f15.get_user_locale(db, account)
     resp = m11.route(
         db,
         account.id,
         body.text,
-        context=body.context,
+        context={**body.context, "locale": locale},
         driving=body.driving,
         provider=_PROVIDER,
     )

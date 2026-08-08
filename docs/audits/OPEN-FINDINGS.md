@@ -32,11 +32,14 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 | Severity | Open | Blocked | Partial | Closed | Accepted | Total |
 |---|---|---|---|---|---|---|
 | Critical | 1 | 4 | 0 | 3 | 0 | **8** |
-| High | 3 | 0 | 1 | 13 | 0 | **17** |
+| High | 2 | 0 | 1 | 14 | 0 | **17** |
 | Medium | 9 | 0 | 1 | 2 | 0 | **12** |
 | Low | 5 | 0 | 0 | 2 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **18** | **4** | **2** | **20** | **1** | **45** |
+| **Total** | **17** | **4** | **2** | **21** | **1** | **45** |
+
+Findings opened *after* the audit are not in this scoreboard — they were never among the
+45. See **Opened after the audit**, below.
 
 **Session 119 closed nineteen** — F-03, F-04, F-05, F-06, F-07, F-13, F-14, F-17, F-18, F-21,
 F-22, F-23, F-28, F-29, F-31, U-01, U-02, U-07, U-08 —
@@ -90,7 +93,7 @@ unobservable until the literal became a token. See §Blockers.
 | F-27 | Low | OPEN | Fleet rollups are N+1 per member. |
 | F-28 | High | **CLOSED** | Points can be spent twice → `lock_account` row lock taken before the balance is read; `book_with_points` books before it redeems. Session 119. |
 | F-29 | Medium | **CLOSED** | The daily cap could be turned off by a pricing knob → every contribution is logged, `points > 0` gates only the ledger issue. Session 119. |
-| F-30 | High | OPEN | Voice understands one of six languages. |
+| F-30 | High | **CLOSED** | Per-locale vocabulary for all six launch languages, English always in scope (M11-FR6 mixed-language; F15's glossary is the authority). **The root was deeper than the audit's "English-only":** matching was raw `term in utterance`, so `"I am in Las Vegas"` routed to fuel and `"my sleeper berth heater is broken"` to sleep — adding five languages on top of that would have multiplied the bug by six. Token-phrase matching with explicit `*` prefixes for Russian/Uzbek morphology, `casefold` + Latin-only diacritic folding (Gurmukhi vowel signs are meaning, not decoration), and specificity scoring replacing first-match-wins. `/voice/ask` accepted **no locale at all** and now resolves the driver's F15 locale. Accuracy is asserted **per language**, 16 fixtures × 6. Session 120. |
 | F-31 | Low | **CLOSED** | The two empty downgrades identified — `0033_f01_vendor_role` and `0058_a01_checklist_doc_types`, both adding enum values Postgres cannot drop. Each now carries an AI-CONTEXT line saying the `pass` is deliberate, which was the finding's whole ask. Session 119. |
 | F-32 | Medium | OPEN | A missing feed timestamp becomes a fresh reading. |
 | F-33 | Low | OPEN | A defensive branch that asserts. |
@@ -114,6 +117,33 @@ unobservable until the literal became a token. See §Blockers.
 
 The five UI law violations in `KICKOFF-ui-comprehension-fixes.md` need no research and no
 decision — the index puts that kickoff fourth, ahead of everything blocked.
+
+## Opened after the audit
+
+Not part of the 45, and deliberately **not** folded into the finding that surfaced them.
+
+| ID | Severity | Status | One line |
+|---|---|---|---|
+| N-01 | High | OPEN | **Voice ANSWERS in one language, whatever it understood.** Found while closing F-30, session 120. |
+
+**N-01 in full.** `m11_voice/domain/service.py::_dispatch` returns hardcoded English:
+`"You have {pts} points."`, `"You're all paid up — nothing owed right now."`, `"I didn't
+catch that — try 'parking ahead' or 'what am I owed'."` So a Russian driver's utterance
+now classifies correctly and is **answered in English** — and while driving that answer is
+spoken aloud (`_maybe_tts`), which is the one moment the driver cannot fall back to reading
+the screen. PRD §7.15's coverage rule names voice explicitly: *"every driver-facing surface
+— UI, notifications (F8), voice (M11 via F9 STT/TTS), and help content — renders in the
+user's language."*
+
+**Why it was not fixed with F-30.** F-30 is the classifier; this is the response path, and
+the two share nothing but a module. The fix needs F15 `MessageCatalog` rows for roughly ten
+spoken strings across six locales — `register_message` / `get_message` / `is_complete`
+already exist and `missing_locales` already gives it a CI gate, so the mechanism is built;
+what is missing is the strings and the wiring. That is a session, not a patch, and folding
+it into F-30 would have hidden a second defect inside the first one's commit.
+
+**Not a blocker.** It needs no owner decision — the strings are translations of existing
+copy, not new copy, so §22.2 is not engaged.
 
 ---
 
