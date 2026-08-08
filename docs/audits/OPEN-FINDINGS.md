@@ -32,11 +32,11 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 | Severity | Open | Blocked | Partial | Closed | Accepted | Total |
 |---|---|---|---|---|---|---|
 | Critical | 1 | 4 | 0 | 3 | 0 | **8** |
-| High | 2 | 0 | 1 | 14 | 0 | **17** |
+| High | 2 | 0 | 0 | 15 | 0 | **17** |
 | Medium | 4 | 0 | 1 | 7 | 0 | **12** |
 | Low | 1 | 0 | 0 | 6 | 0 | **7** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **8** | **4** | **2** | **30** | **1** | **45** |
+| **Total** | **8** | **4** | **1** | **31** | **1** | **45** |
 
 Findings opened *after* the audit are not in this scoreboard — they were never among the
 45. See **Opened after the audit**, below.
@@ -104,7 +104,7 @@ unobservable until the literal became a token. See §Blockers.
 |---|---|---|---|
 | U-01 | High | **CLOSED** | Map drew outside the token system → `--on-accent` composition plus new `--shadow-pin`/`--scrim` (§23 entry 130), and a `token-discipline` sweep that keeps literals out. **Opened a new finding:** white on `--marker-500` is 2.04:1 in dark theme — see §Blockers. Session 119. |
 | U-02 | High | **CLOSED** | Per-driver keys moved under `CACHE_PREFIX`, plus a third instance the audit missed (`vendor_appearances`) and the in-memory refs that outlived logout. Asserted on what driver B renders. Session 119. |
-| U-03 | High | **PARTIAL** | The fallback is now counted and warned in dev, with per-locale counts at `/dev` — kickoff steps 1–2 done. Measured **0** across es/pa/ru/uz/so on the five tab roots + Load-live, and the detector was proved by planting two missing keys. **The zero is narrow:** mocked/empty API data left most of the ~45 dynamic `t(\`ns.${...}\`)` families unrendered. Session 119. |
+| U-03 | High | **CLOSED** | 119 made the fallback loud (counted, warned in dev, per-locale counts at `/dev`) and measured **0** — narrow, because mocked data left the ~45 dynamic families unrendered. 120 closed the other half with the audit's *stronger* fix: `test_dynamic_key_families.py` enumerates the vocabulary **in Python** and asserts a label exists in all six locales. **It found four families broken — 13 keys missing from ALL SIX, including every one of the nine `facility.type.*`.** `resolve()` returns the raw key when a string is missing everywhere, so `money.state.acknowledged` was rendering as literal text on the Money tab **for every driver, in every language** — the JS parity test cannot see this, because six identical holes are perfect parity. Session 120. |
 | U-04 | Medium | OPEN | Seven surfaces not in the layout harness. `load-worst-case` added (the U-04-adjacent item); the other six remain. |
 | U-05 | Medium | **PARTIAL** | `.filters-chip` 40→48 dp. `.cluster` measured at 36 dp with NO expanded hit area — below even §11.2's 44 dp map exemption; reported, not changed. Two portal controls untouched pending an owner call. Session 119. |
 | U-06 | Critical | **BLOCKED** | Money tab shows fabricated earnings on fetch failure. Blocked on the §23 loading-state entry — and the proposal file itself is missing. |

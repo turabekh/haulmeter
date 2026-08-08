@@ -79,6 +79,14 @@ services:
       # alternative was a test that skips when the file is absent, and a check that
       # skips is a check that reports nothing while looking green.
       - ../Makefile:/repo/Makefile:ro
+      # AI-CONTEXT: read-only, and for the same reason as the Makefile above — audit
+      # U-03. The ~45 dynamic `t(`ns.${...}`)` families assemble their keys from
+      # vocabularies that live in PYTHON, so the JS completeness test cannot enumerate
+      # them: it proves the six catalogues agree with each other, which six identical
+      # holes also satisfy. `test_dynamic_key_families.py` reads these files from the
+      # side that owns the vocabulary. It FAILS rather than skips when the mount is
+      # absent — a check that skips is a check that reports nothing while looking green.
+      - ../ui/src/core/i18n:/repo/ui-i18n:ro
     depends_on:
       postgres:
         condition: service_healthy
