@@ -160,5 +160,5 @@ def test_a_successful_send_still_records_the_moment(client, db):
 
     resp = client.post(f"/load/{stop_id}/notice", headers=headers)
 
-    assert resp.json() == {"sent": True, "delivery": "sent"}
+    assert resp.json() == {"sent": True, "delivery": "sent", "phase": "start"}
     assert "notice_sent" in _timeline(client, headers, stop_id)

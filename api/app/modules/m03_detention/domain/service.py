@@ -353,6 +353,21 @@ DELIVERY_NO_EMAIL = "no_email"
 DELIVERY_NOT_SENT = "not_sent"
 
 
+def delivery_of(message) -> str | None:
+    """One message row's delivery state, or None when there is no row to read.
+
+    Split out because the PRE-DETENTION warning (F7) is a different message with the same
+    question asked of it, and two copies of this ladder would drift.
+    """
+    if message is None:
+        return None
+    if message.sent_at is not None:
+        return DELIVERY_SENT
+    if notify.is_retryable(message.provider_ref) and message.attempts < notify.MAX_SEND_ATTEMPTS:
+        return DELIVERY_RETRYING
+    return DELIVERY_FAILED
+
+
 def notice_delivery(db: Session, claim: DetentionClaim) -> str:
     """What actually happened to this claim's start notice, read off the F8 row.
 
@@ -365,15 +380,9 @@ def notice_delivery(db: Session, claim: DetentionClaim) -> str:
     """
     ref = claim.start_notice_message_ref
     if ref is not None:
-        message = db.get(notify.OutboundMessage, ref)
-        if message is not None:
-            if message.sent_at is not None:
-                return DELIVERY_SENT
-            if notify.is_retryable(message.provider_ref) and (
-                message.attempts < notify.MAX_SEND_ATTEMPTS
-            ):
-                return DELIVERY_RETRYING
-            return DELIVERY_FAILED
+        state = delivery_of(db.get(notify.OutboundMessage, ref))
+        if state is not None:
+            return state
     # nothing on file. Which of the two reasons is the difference between "tap Send" and
     # "there is nobody to send it to", and only the second is the driver's to fix.
     if _counterparty_email(db, claim) is None:
@@ -389,7 +398,9 @@ def send_pre_detention_notice(
         return None
     if state.free_time_remaining_seconds > PRE_DETENTION_THRESHOLD.total_seconds():
         return None
-    return _send_counterparty(
+    if claim.pre_notice_sent_at is not None:
+        return None  # one warning per stop; the window is half an hour, the job is not
+    message = _send_counterparty(
         db,
         claim,
         gateway,
@@ -398,6 +409,16 @@ def send_pre_detention_notice(
         body="Per the rate confirmation, free time is nearly used at this stop. "
         "Detention will begin accruing shortly.",
     )
+    if message is None:
+        return None  # no counterparty email (finding F4)
+    # AI-CONTEXT: its OWN column, deliberately. `start_notice_sent_at` means the broker was
+    # told the clock STARTED, which is the fact the `notice_sent` evidence record asserts
+    # and the fact a dispute turns on. A warning that detention is ABOUT to begin is not
+    # that fact, and writing it here would make the evidence pack claim a notice that was
+    # never sent — the exact defect F5 closes one function up.
+    claim.pre_notice_sent_at = now
+    db.flush()
+    return message
 
 
 def send_detention_start_notice(

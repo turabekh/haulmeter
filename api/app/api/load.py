@@ -839,11 +839,29 @@ def send_notice(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
-    # M3 counterparty notice — no-ops while still within free time (nothing owed yet)
+    # AI-CONTEXT: PHASE-AWARE (finding F7). `send_pre_detention_notice` — M3-FR3's "free
+    # time is nearly up" warning to the broker — was written, exported, unit-tested and
+    # called by NOTHING. The driver's own 30-minute warning has been wired since entry 106;
+    # the broker's half of the same moment never was, so the one notice that can still
+    # change the outcome (a dock that hurries when told the clock is about to start) was
+    # never sent by this product.
+    #
+    # DRIVER-INITIATED, not automatic, and that is the whole reason it lives on this
+    # endpoint rather than in the worker beside `dispatch_clock_alerts`. Mail to a third
+    # party should not leave without a human act — the shipped start notice already set
+    # that precedent, and a warning that fires itself would put us in a broker's inbox for
+    # every stop that ran long, which is how a driver gets a reputation they did not choose.
+    #
+    #   more than 30 min left -> the existing "too early" no-op
+    #   30 min or less        -> the WARNING, once
+    #   free time exhausted   -> the start notice, exactly as before
     stop = _owned_stop(db, stop_id, account)
     claim = _claim_or_409(db, stop)
     now = datetime.now(UTC)
-    message = m3.send_detention_start_notice(db, claim, _GATEWAY, now)
+    message = m3.send_pre_detention_notice(db, claim, _GATEWAY, now)
+    warned = message is not None
+    if message is None:
+        message = m3.send_detention_start_notice(db, claim, _GATEWAY, now)
     # AI-CONTEXT: finding F5 — this comment used to describe exactly this behaviour while
     # the line under it did something else. It read `if message is not None`, and
     # `send_counterparty_message` returns a message row for a FAILED send too (that is the
@@ -854,9 +872,15 @@ def send_notice(
     # `sent_at` is the only thing that means it went out. A record that goes into a legal
     # pack has to be conditioned on the fact, not on the attempt.
     sent = message is not None and message.sent_at is not None
-    if sent:
+    # ...and ONLY the start notice is that record. `notice_sent` means "the broker was told
+    # the clock had started"; a warning that it is about to start is a different fact, and
+    # filing it under this one would put a claim in the pack that nothing supports (F7).
+    if sent and not warned:
         loads.record_stop_event(db, stop, loads.EVENT_NOTICE_SENT, now)
-    return {"sent": sent, "delivery": m3.notice_delivery(db, claim)}
+    # the WARNING's delivery is that message's own; the claim's `notice_delivery` tracks
+    # the start notice, which this stop has not sent yet
+    delivery = m3.delivery_of(message) if warned else m3.notice_delivery(db, claim)
+    return {"sent": sent, "delivery": delivery, "phase": "warning" if warned else "start"}
 
 
 @router.post("/{stop_id}/claim", status_code=201)

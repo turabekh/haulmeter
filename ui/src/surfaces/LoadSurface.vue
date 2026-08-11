@@ -372,6 +372,9 @@ const noticeSent = computed(() => (live.value ? live.value.notice_sent : false))
 // above stays the boolean the CTA ladder reads — a notice that FAILED has not been sent,
 // so the rung must still offer it — while this is what the checklist row says out loud.
 const noticeDelivery = computed(() => live.value?.notice_delivery ?? "not_sent");
+// F7: the warning is once-only server-side (`pre_notice_sent_at`); this retires the rung
+// as soon as it has gone rather than waiting for the next meter poll.
+const preNoticeSent = ref(false);
 const photosCaptured = computed(() => live.value?.photos_captured ?? 0);
 // §10.2 specifies "photos 2/4". The DENOMINATOR is the feature: a bare count cannot
 // tell a driver whether they are finished, and FR5 exists to make a gap visible
@@ -457,6 +460,24 @@ const state = computed(() =>
 );
 const withinFree = computed(() => state.value.phase === "within_free_time");
 const accruing = computed(() => !!live.value && !preArrival.value && !withinFree.value);
+// AI-CONTEXT: finding F7 — the last half hour of free time, when warning the broker can
+// still change the outcome. The same 30-minute boundary the server uses
+// (`PRE_DETENTION_THRESHOLD`) and the same one the driver's own P1 is measured from, so
+// the three cannot disagree about when the window opens.
+const PRE_DETENTION_SECONDS = 30 * 60;
+// floor, not ceil, and `max(1, ...)` — the same shape the server's own P1 uses
+// (`dispatch_free_time_warning`). Rounding UP would tell a driver with 29:01 left that
+// they have 30 minutes, which is the one direction this figure must never err in.
+const freeMinutesLeft = computed(() =>
+  Math.max(1, Math.floor(state.value.freeTimeRemainingSeconds / 60)),
+);
+const warningWindow = computed(
+  () =>
+    !!live.value &&
+    !preArrival.value &&
+    withinFree.value &&
+    state.value.freeTimeRemainingSeconds <= PRE_DETENTION_SECONDS,
+);
 const noticeMsg = ref("");
 
 // a claim is filed once the SERVER says so (live.filed) — persists across tab
@@ -554,6 +575,11 @@ const rung = computed(() => {
   if (!bolCaptured.value) return "bol";
   if (accruing.value && !noticeSent.value) return "notice";
   if (claimable.value) return "claim";
+  // F7: inside the last half hour, warning the broker is the act that can still change
+  // what happens. It ranks BELOW the accruing notice and the claim deliberately — once
+  // money is owed, recording it outranks trying to prevent it — and above photos, which
+  // can be taken at any point while the truck is parked.
+  if (warningWindow.value && !preNoticeSent.value) return "warn";
   // AI-CONTEXT: §23 entry 127 — the ladder's missing middle. Arrived, BOL filed and
   // free time still running produced NO primary action at all, which is most of a
   // stop: the driver's remaining job was rendered only as body-sized checklist rows
@@ -609,7 +635,10 @@ async function onSendNotice() {
     // so a driver whose notice bounced was told "Broker notified — detention on record."
     // The server now says which of the five things happened; anything that is not a
     // delivery says so in its own words rather than borrowing the too-early message.
-    if (res && res.sent) noticeMsg.value = t("load.notice_ok");
+    if (res && res.phase === "warning") preNoticeSent.value = true;
+    if (res && res.sent) {
+      noticeMsg.value = res.phase === "warning" ? t("load.warn_ok") : t("load.notice_ok");
+    }
     else if (res && res.delivery && res.delivery !== "not_sent") {
       noticeMsg.value = t(`notice.delivery.${res.delivery}`);
     } else noticeMsg.value = t("load.notice_early");
@@ -623,6 +652,7 @@ async function endLoad() {
   history.value = []; // re-read on next open: this load just joined it
   const stopId = activeStopId.value;
   filed.value = null;
+  preNoticeSent.value = false; // a new stop has its own warning to give
   if (!stopId) {
     setActiveStop(null);
     clearLoad();
@@ -846,6 +876,9 @@ async function endLoad() {
       </button>
       <button v-else-if="rung === 'claim'" class="cta" type="button" @click="onGenerateClaim">
         {{ t("load.cta.claim") }}
+      </button>
+      <button v-else-if="rung === 'warn'" class="cta" type="button" @click="onSendNotice">
+        {{ t("load.cta.warn", { minutes: freeMinutesLeft }) }}
       </button>
       <button
         v-else-if="rung === 'photos'"
