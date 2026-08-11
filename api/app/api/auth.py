@@ -5,11 +5,11 @@ the driver role. Sessions are bearer tokens resolved by current_account.
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db
+from app.api.deps import bearer_token, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f13_flags import public as flags
 
@@ -108,6 +108,28 @@ def register(body: RegisterIn, db: Session = Depends(get_db)) -> TokenOut:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown authority") from None
     session = identity.create_session(db, account)
     return TokenOut(token=session.token, account_id=str(account.id))
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    account: identity.Account = Depends(current_account),
+    token: str = Depends(bearer_token),
+    db: Session = Depends(get_db),
+) -> Response:
+    """End THIS session, server-side (finding F1-2).
+
+    AI-CONTEXT: there was no logout route at all — the only revocation anywhere in the
+    product was the impersonation path. Signing out cleared `localStorage` and nothing
+    else, so the bearer stayed valid for the rest of its 30-day TTL: a driver handing a
+    phone to a mechanic, or signing out of a borrowed tablet, had not signed out of
+    anything a server would notice.
+
+    ONLY this token. "Sign out everywhere" is a different act with a different meaning, and
+    `revoke_sessions` makes it a one-line route the day someone asks for it — named as a
+    follow-up rather than guessed at here.
+    """
+    identity.revoke_sessions_for_token(db, account, token)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/login", response_model=TokenOut)

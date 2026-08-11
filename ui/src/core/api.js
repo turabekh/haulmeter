@@ -165,6 +165,17 @@ export function setToken(value) {
 }
 
 export function logout() {
+  // AI-CONTEXT: tell the server FIRST, and never wait for it (finding F1-2).
+  //
+  // There was no logout route at all, so signing out cleared localStorage and left the
+  // bearer valid for the rest of its 30-day TTL. It is called before the token is cleared
+  // because the request needs it — and it is deliberately NOT awaited and NOT branched on.
+  //
+  // A driver signing out in a dead zone must still be signed out on this device. If the
+  // call fails, the token dies at TTL instead of now; that is worse than immediate and far
+  // better than a sign-out button that hangs or refuses on a bad connection. Stated rather
+  // than pretended away: offline sign-out is local-only, and the server catches up never.
+  revokeCurrentSession();
   token.value = null;
   account.value = null;
   email.value = null;
@@ -181,6 +192,17 @@ export function logout() {
   activeStopFacilityId.value = null;
   activeFleetId.value = null;
   failedWrites.value = 0;
+}
+
+function revokeCurrentSession() {
+  // fire-and-forget: no await, no .then, and a swallowed rejection so an offline device
+  // does not surface an unhandled promise rejection on its way out
+  try {
+    if (!token.value || typeof fetch === "undefined") return;
+    fetch(`${API_BASE}/auth/logout`, { method: "POST", headers: headers() }).catch(() => {});
+  } catch {
+    /* nothing about signing out locally depends on this succeeding */
+  }
 }
 
 function _adopt(data, userEmail) {

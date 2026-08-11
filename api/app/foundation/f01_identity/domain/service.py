@@ -576,6 +576,31 @@ def revoke_sessions(
     return revoked
 
 
+def revoke_sessions_for_token(
+    db: Session, account: Account, token: str, now: datetime | None = None
+) -> bool:
+    """End ONE session — this account's, with this token. Returns whether it ended one.
+
+    Scoped to the account deliberately: a token is already resolved to its owner before
+    this is reached, and taking the account as well means a caller cannot end a session
+    belonging to somebody else even by mistake.
+    """
+    when = now or datetime.now(UTC)
+    session = db.scalar(
+        select(AuthSession).where(
+            AuthSession.account_id == account.id,
+            AuthSession.token == token,
+            AuthSession.ended_at.is_(None),
+        )
+    )
+    if session is None:
+        return False
+    session.ended_at = when
+    session.expires_at = when  # dead immediately, not merely marked
+    db.flush()
+    return True
+
+
 def deactivate_account(db: Session, account: Account, now: datetime | None = None) -> Account:
     """Blocks login and hides driver-facing presence. Every row the account points at
     survives — this is a door being locked, not a record being erased."""
