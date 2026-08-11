@@ -42,15 +42,108 @@ def facility_radius(db: Session, facility_id) -> float:
 def arm_geofence(
     db: Session, account_id, facility_id, radius_m: float | None = None
 ) -> GeofenceArming:
+    """Get-or-create. One active arming per (account, facility) (F3-1).
+
+    AI-CONTEXT: this wrote a NEW ROW on every call and nothing ever collapsed them, so an
+    account accumulated an arming per stop for the life of the account. Two costs, and the
+    second is the one that touches money:
+
+      · `evaluate_ping` loops every active arming and does a facility fetch plus a PostGIS
+        containment test per arming, so per-ping work grew with a driver's career;
+      · an arming that outlives its stop keeps minting real presence and event rows. A
+        drive-by within 150 m of a dock the driver delivered to last month creates an
+        ENTER, and `visit_window` can hand that arrival to the NEXT load as the moment its
+        detention clock started.
+
+    NO UNIQUE INDEX BACKS THIS, which is a deliberate and unusual choice — see migration
+    0068's note. Duplicate armings are what every existing box already contains, so a
+    constraint plus a refusing preflight would be undeployable by construction. The
+    consequence is an accepted race: two concurrent `arm_geofence` calls can still both
+    miss and both insert. It is harmless by construction rather than by luck — presence is
+    uniquely constrained, so a duplicate arming produces at most one visit, and
+    `reconcile_armings` collapses the pair on the next nightly run.
+    """
     if facility_registry.get_facility(db, facility_id) is None:
         raise FacilityNotFound(str(facility_id))
     if db.get(FacilityGeofence, facility_id) is None:
         db.add(FacilityGeofence(facility_id=facility_id, radius_m=DEFAULT_RADIUS_M))
         db.flush()
+    existing = db.scalar(
+        select(GeofenceArming)
+        .where(
+            GeofenceArming.account_id == account_id,
+            GeofenceArming.facility_id == facility_id,
+            GeofenceArming.disarmed_at.is_(None),
+        )
+        .order_by(GeofenceArming.armed_at, GeofenceArming.id)
+        .limit(1)
+    )
+    if existing is not None:
+        # a caller re-arming with a radius means it: the stop's fence may have been
+        # widened since. Silence (None) leaves whatever is on the row alone.
+        if radius_m is not None:
+            existing.radius_m = radius_m
+            db.flush()
+        return existing
     arming = GeofenceArming(account_id=account_id, facility_id=facility_id, radius_m=radius_m)
     db.add(arming)
     db.flush()
     return arming
+
+
+# AI-CONTEXT: what keeps a fence armed is F5's question, not F3's (F3-1).
+#
+# The predicate is INJECTED rather than imported, and import-linter is why: F3 sits below
+# F5 in the spine and may not read its internals — the first draft of this reached into
+# `f05_load.domain.models` and the contract caught it, correctly. A location component that
+# knew what a "stop" was would be F5 leaking downwards.
+#
+# So F3 owns the mechanism (which armings to disarm, and never to delete them) and the
+# caller owns the meaning (`f05.has_live_stop_at`). The default — no predicate — collapses
+# duplicates and disarms nothing, which is the honest behaviour for a caller that cannot
+# say what "live" means.
+def reconcile_armings(
+    db: Session, has_live_stop=None, account_id=None, now: datetime | None = None
+) -> dict:
+    """Disarm what no longer has a stop, and collapse duplicates. Idempotent.
+
+    AI-CONTEXT: the janitor for F3-1. Two jobs:
+
+      (i)  an active arming whose account has no live stop at that facility is DISARMED —
+           the stop it was created for is over, so the fence should not still be minting
+           arrivals. `has_live_stop(db, account_id, facility_id) -> bool` is supplied by
+           the caller (F5 owns the lifecycle); without one, nothing is orphaned;
+      (ii) duplicate actives for one (account, facility) collapse to the EARLIEST, which is
+           the one `arm_geofence`'s get-or-create would have returned.
+
+    It NEVER DELETES. `disarmed_at` is set and the row stays: an arming is part of the
+    record of why a presence exists, and a claim being argued next year may need it.
+
+    `account_id=None` means the whole box, which is how the nightly runner calls it.
+    """
+    now = now or datetime.now(UTC)
+    stmt = select(GeofenceArming).where(GeofenceArming.disarmed_at.is_(None))
+    if account_id is not None:
+        stmt = stmt.where(GeofenceArming.account_id == account_id)
+    armings = list(db.scalars(stmt.order_by(GeofenceArming.armed_at, GeofenceArming.id)))
+
+    orphaned = collapsed = 0
+    kept: set[tuple] = set()
+    for arming in armings:
+        key = (arming.account_id, arming.facility_id)
+        if key in kept:
+            arming.disarmed_at = now  # a duplicate of one we already kept
+            collapsed += 1
+            continue
+        if has_live_stop is not None and not has_live_stop(
+            db, arming.account_id, arming.facility_id
+        ):
+            arming.disarmed_at = now
+            orphaned += 1
+            continue
+        kept.add(key)
+    db.flush()
+    return {"scanned": len(armings), "orphaned": orphaned, "collapsed": collapsed}
 
 
 def _active_armings(db: Session, account_id) -> list[GeofenceArming]:

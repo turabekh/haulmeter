@@ -348,8 +348,18 @@ def run_location_retention(db: Session, commit: bool = True) -> dict:
     measure it — `deleted` is in the summary and lands in `f14.job_run`.
     """
     from app.foundation.f03_location import public as location
+    from app.foundation.f05_load import public as loads
 
     summary = location.purge_expired_pings(db)
+    # AI-CONTEXT: the arming reconcile PIGGYBACKS here rather than getting a job of its own
+    # (F3-1). It is the same shape of work — a nightly janitor over F3's own tables — and a
+    # second job would be a second thing to register, flag, lease and watch for one query.
+    #
+    # It is what makes production SELF-HEAL. Every box already carries an arming per stop
+    # since the Foundation, and the wiring at `depart_stop` only fixes accounts that depart
+    # a stop from now on; this reaches the ones that never will. Account-wide (`None`), so
+    # a driver who has abandoned the app is covered too.
+    summary["armings"] = location.reconcile_armings(db, loads.has_live_stop_at)
     if commit:
         db.commit()
     return summary

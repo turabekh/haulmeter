@@ -353,7 +353,23 @@ def depart_stop(db: Session, stop: Stop, occurred_at: datetime | None = None) ->
     # the moment the truck left, in the chain — half of every detention argument
     record_stop_event(db, stop, EVENT_DEPARTED, occurred_at)
     db.flush()
+    # AI-CONTEXT: sweep this account's OTHER armings too (F3-1). Departing disarms the
+    # fence for THIS facility and always has; what it never did is notice the fences left
+    # behind by stops the driver never departed — the tab closed, the app reinstalled, the
+    # load abandoned. Those stay armed forever and keep minting arrivals at docks the
+    # driver is merely driving past, which `visit_window` can hand to the NEXT load.
+    #
+    # Ordered after the status change deliberately: the predicate asks whether a live stop
+    # still needs each fence, and this stop has just stopped being one.
+    location.reconcile_armings(
+        db, has_live_stop_at, account_id=stop_account_id(db, stop), now=occurred_at
+    )
     return stop
+
+
+def stop_account_id(db: Session, stop: Stop):
+    load = db.get(Load, stop.load_id)
+    return load.account_id if load is not None else None
 
 
 def list_loads(db: Session, account_id, limit: int = 50) -> list[Load]:
@@ -375,6 +391,37 @@ def list_loads(db: Session, account_id, limit: int = 50) -> list[Load]:
     return list(db.scalars(stmt))
 
 
+# AI-CONTEXT: the live-stop set, named once so it cannot drift (F3-1).
+# `complete_load_if_finished` below asks the same question of one load's stops; F3's arming
+# reconcile asks it of a facility. Two literals would eventually disagree about whether an
+# `arrived` stop is still live, and the answer decides whether a geofence keeps minting
+# arrivals a driver's next load can inherit.
+LIVE_STOP_STATUSES = (StopStatus.pending, StopStatus.armed, StopStatus.arrived)
+
+
+def has_live_stop_at(db: Session, account_id, facility_id) -> bool:
+    """Does this account still have a stop under way at this facility?
+
+    Supplied to `location.reconcile_armings` as its predicate — F3 may not read F5's
+    internals (import-linter's f05-internals-are-private contract), and a location
+    component that knew what a stop was would be this module leaking downwards.
+    """
+    return (
+        db.scalar(
+            select(Stop.id)
+            .join(Load, Load.id == Stop.load_id)
+            .where(
+                Load.account_id == account_id,
+                Stop.facility_id == facility_id,
+                Stop.status.in_(LIVE_STOP_STATUSES),
+                Load.status != LoadStatus.canceled,
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
 def complete_load_if_finished(db: Session, load: Load) -> Load:
     """Mark a load completed once no stop is still live.
 
@@ -383,8 +430,7 @@ def complete_load_if_finished(db: Session, load: Load) -> Load:
     still `draft`. Ending a load departed the STOP and left the load untouched, which
     is why "completed" could not be listed even by something that wanted to.
     """
-    live = {StopStatus.pending, StopStatus.armed, StopStatus.arrived}
-    if any(s.status in live for s in load.stops):
+    if any(s.status in LIVE_STOP_STATUSES for s in load.stops):
         return load
     if load.status != LoadStatus.completed:
         set_load_status(db, load, LoadStatus.completed)
