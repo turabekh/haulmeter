@@ -10,6 +10,7 @@ m04_accessorial.
 from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.foundation.f02_facility import public as facility_registry
@@ -51,6 +52,24 @@ class MissingLumperAmount(Exception):
     pass
 
 
+class InvalidAmount(ValueError):
+    pass
+
+
+class AlreadyFiled(Exception):
+    """This target already has a claim of this kind. Carries it so the caller can say so.
+
+    AI-CONTEXT: M3 learned this one filing over (its `ClaimAlreadyFiled`): a retry after a
+    success — a double tap, or a queued request replayed when the truck comes back into
+    signal — is not an error the driver caused, and answering it as one invites them to
+    file again on a claim the broker already has.
+    """
+
+    def __init__(self, claim):
+        self.claim = claim
+        super().__init__(f"{claim.kind.value} already filed for this target")
+
+
 def _as_utc(value: datetime) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
@@ -67,6 +86,38 @@ def register_module(db: Session) -> None:
         )
 
 
+# AI-CONTEXT: D3 — the idempotency key each kind files under, or None for "no key".
+#
+# These ride `uq_receivable_external_ref`, the partial unique index migration 0067 added
+# for M3. TONU is once per LOAD (a truck is ordered-not-used once) and layover is once per
+# STOP (one overnight per dock visit), so both have a target that identifies them.
+#
+# LUMPER IS EXCLUDED ON PURPOSE, and the exclusion is the decision. Multiple lumper fees
+# per load are legitimate — one per stop — and the route carries no `stop_id`, so any key
+# that could be built here would be wrong in one of two directions: keyed on the load it
+# would silently refuse a driver's second real receipt, and keyed on anything else it
+# would not dedupe at all. A per-stop shape is the recorded follow-up. Pinned by a test so
+# this stays a decision rather than an oversight.
+def _external_ref(kind, load, stop_ref) -> str | None:
+    if kind is AccessorialKind.tonu:
+        return f"m04:tonu:{load.id}"
+    if kind is AccessorialKind.layover and stop_ref is not None:
+        return f"m04:layover:{stop_ref}"
+    return None
+
+
+def claim_for_external_ref(db: Session, external_ref: str):
+    """The claim that already holds this key — via the receivable that carries it."""
+    receivable = db.scalar(
+        select(ledger.Receivable).where(ledger.Receivable.external_ref == external_ref)
+    )
+    if receivable is None:
+        return None
+    return db.scalar(
+        select(AccessorialClaim).where(AccessorialClaim.receivable_ref == receivable.id)
+    )
+
+
 def _file(
     db,
     load,
@@ -78,6 +129,20 @@ def _file(
     subject="Invoice",
     body="Invoice per the rate confirmation.",
 ):
+    # AI-CONTEXT: the floor lives HERE as well as on the Pydantic inputs, because this is
+    # the layer every caller crosses — the worker, a future importer, and a test all reach
+    # it without touching a route. M3's `generate_pack` set the precedent by refusing to
+    # open a receivable for a claim worth nothing; M4 filed whatever it was handed, so a
+    # zero or a negative went to a broker as an invoice under the driver's name.
+    if amount_cents is None or amount_cents <= 0:
+        raise InvalidAmount("an accessorial claim must be worth more than zero")
+
+    external_ref = _external_ref(kind, load, stop_ref)
+    if external_ref is not None:
+        existing = claim_for_external_ref(db, external_ref)
+        if existing is not None:
+            raise AlreadyFiled(existing)
+
     claim = AccessorialClaim(
         account_id=load.account_id,
         load_ref=load.id,
@@ -87,18 +152,33 @@ def _file(
         amount_cents=amount_cents,
         document_ref=document_ref,
     )
-    db.add(claim)
-    db.flush()
-    receivable = m3.open_receivable(
-        db,
-        load.account_id,
-        _KIND_TO_RECEIVABLE[kind],
-        amount_cents,
-        counterparty_ref=load.counterparty_id,
-        gateway=gateway,
-        notice_subject=subject,
-        notice_body=body,
-    )
+    # AI-CONTEXT: claim AND receivable inside one SAVEPOINT. The unique index is the only
+    # thing that can catch the concurrent filing — an application read cannot see a row a
+    # parallel transaction has not committed — and without the savepoint the losing side
+    # would leave its CLAIM row behind after the receivable insert blew up: a filed-looking
+    # accessorial with no receivable, on the driver's own money screen.
+    try:
+        with db.begin_nested():
+            db.add(claim)
+            db.flush()
+            receivable = m3.open_receivable(
+                db,
+                load.account_id,
+                _KIND_TO_RECEIVABLE[kind],
+                amount_cents,
+                counterparty_ref=load.counterparty_id,
+                gateway=gateway,
+                notice_subject=subject,
+                notice_body=body,
+                external_ref=external_ref,
+            )
+    except IntegrityError:
+        db.expunge(claim)
+        won = claim_for_external_ref(db, external_ref) if external_ref else None
+        if won is None:
+            raise  # the constraint fired for some other reason — do not swallow it
+        raise AlreadyFiled(won) from None
+
     claim.receivable_ref = receivable.id
     claim.state = AccessorialState.invoiced
     db.flush()
