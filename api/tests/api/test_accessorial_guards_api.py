@@ -246,7 +246,9 @@ def test_a_second_stop_gets_its_own_layover(client, db):
     location.evaluate_ping(
         db, account.id, 32.80, -96.81, occurred_at=datetime(2026, 7, 22, 23, 0, tzinfo=UTC)
     )
-    location.evaluate_ping(db, account.id, *FAR, occurred_at=datetime(2026, 7, 23, 8, 0, tzinfo=UTC))
+    location.evaluate_ping(
+        db, account.id, *FAR, occurred_at=datetime(2026, 7, 23, 8, 0, tzinfo=UTC)
+    )
     db.flush()
 
     a = client.post(
