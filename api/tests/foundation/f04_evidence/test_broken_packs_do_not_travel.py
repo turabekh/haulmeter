@@ -162,8 +162,8 @@ def test_no_counterparty_body_claims_gps_is_verified():
         if needle.search(line)
     ]
 
-    assert offenders == [], "counterparty copy claims verification it cannot support:\n" + "\n".join(
-        offenders
+    assert offenders == [], (
+        "counterparty copy claims verification it cannot support:\n" + "\n".join(offenders)
     )
 
 

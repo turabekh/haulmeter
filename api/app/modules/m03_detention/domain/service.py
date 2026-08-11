@@ -1059,7 +1059,12 @@ def _dunning_body(db: Session, claim: DetentionClaim, now: datetime) -> str:
         pack = evidence.compose_pack(db, log, evidence.PackTemplate.detention_claim)
         try:
             shared = evidence.share_pack(
-                db, log, pack.template, render_pack_bytes(db, pack, claim), claim.account_id, now=now
+                db,
+                log,
+                pack.template,
+                render_pack_bytes(db, pack, claim),
+                claim.account_id,
+                now=now,
             )
         except evidence.ChainInvalid:
             # a chaser must not carry a link to a pack that failed its own check. The
