@@ -256,6 +256,12 @@ def _as_utc(value: datetime) -> datetime:
 
 ATTEMPT_LOGIN = "login"
 ATTEMPT_REGISTER = "register"
+# AI-CONTEXT: a THIRD counter, and it needs its own bucket for the same reason the second
+# one did. A driver mistyping their current password must not lock themselves out of LOGIN,
+# and a stolen-token attacker guessing at the current password must not be able to lock the
+# real driver out of signing in either. Both directions matter; `kind` is what keeps them
+# apart.
+ATTEMPT_PASSWORD_CHANGE = "password_change"
 
 
 def _attempts_since(
@@ -305,6 +311,100 @@ def _register_limits(db: Session) -> tuple[int, int, int]:
         int(flags.get_config(db, CONFIG_REGISTER_MAX_IDENTIFIER, REGISTER_MAX_PER_IDENTIFIER)),
         int(flags.get_config(db, CONFIG_REGISTER_MAX_IP, REGISTER_MAX_PER_IP)),
     )
+
+
+CHANGE_MAX_PER_IDENTIFIER = LOGIN_MAX_PER_IDENTIFIER
+CHANGE_MAX_PER_IP = LOGIN_MAX_PER_IP
+CONFIG_CHANGE_MAX_IDENTIFIER = "f01_password_change_max_per_identifier"
+CONFIG_CHANGE_MAX_IP = "f01_password_change_max_per_ip"
+
+
+def _change_limits(db: Session) -> tuple[int, int, int]:
+    from app.foundation.f13_flags import public as flags
+
+    return (
+        int(flags.get_config(db, CONFIG_LOGIN_WINDOW, LOGIN_WINDOW_SECONDS)),
+        int(flags.get_config(db, CONFIG_CHANGE_MAX_IDENTIFIER, CHANGE_MAX_PER_IDENTIFIER)),
+        int(flags.get_config(db, CONFIG_CHANGE_MAX_IP, CHANGE_MAX_PER_IP)),
+    )
+
+
+def check_password_change_allowed(
+    db: Session, email: str, client_ip: str | None, now: datetime
+) -> None:
+    """Bound the guesses at a CURRENT password (D2).
+
+    AI-CONTEXT: without this, an attacker holding a stolen bearer token gets unlimited
+    attempts at the current password, and the prize is permanent takeover — the session can
+    be revoked, a password they chose cannot. Same throttle-before-hash ordering login uses.
+    """
+    window, max_identifier, max_ip = _change_limits(db)
+    now = _as_utc(now)
+    since = now - timedelta(seconds=window)
+
+    checks = [(LoginAttempt.identifier, _normalize_email(email), max_identifier)]
+    if client_ip:
+        checks.append((LoginAttempt.client_ip, client_ip, max_ip))
+
+    for column, value, limit in checks:
+        count, oldest = _attempts_since(db, column, value, since, ATTEMPT_PASSWORD_CHANGE)
+        if count < limit:
+            continue
+        elapsed = (now - _as_utc(oldest)).total_seconds() if oldest else 0
+        raise Throttled(max(1, int(window - elapsed)))
+
+
+def record_failed_password_change(
+    db: Session, email: str, client_ip: str | None, now: datetime
+) -> None:
+    """FAILURES only, like login — a driver who succeeds has proved who they are."""
+    window, _, _ = _change_limits(db)
+    db.execute(
+        delete(LoginAttempt).where(
+            LoginAttempt.occurred_at < _as_utc(now) - timedelta(seconds=window)
+        )
+    )
+    db.add(
+        LoginAttempt(
+            identifier=_normalize_email(email),
+            kind=ATTEMPT_PASSWORD_CHANGE,
+            client_ip=client_ip,
+            occurred_at=_as_utc(now),
+        )
+    )
+    db.flush()
+
+
+def clear_failed_password_changes(db: Session, email: str) -> None:
+    db.execute(
+        delete(LoginAttempt).where(
+            LoginAttempt.identifier == _normalize_email(email),
+            LoginAttempt.kind == ATTEMPT_PASSWORD_CHANGE,
+        )
+    )
+    db.flush()
+
+
+def verify_current_password(db: Session, account: Account, password: str) -> bool:
+    """Does this plaintext match the account's stored credential?
+
+    AI-CONTEXT: goes through the HANDLER, never the hasher, so the concurrency bound that
+    lives inside `PasswordHandler.verify` applies here exactly as it does at login — and so
+    a route cannot forget it (the omission the auth-boundary session closed).
+
+    Deliberately NOT `authenticate`: that resolves an account from an email, records login
+    attempts, and upgrades stale hashes. This asks one question about an account already in
+    hand, and answering it must not touch login's counters.
+    """
+    method = db.scalar(
+        select(AuthMethod).where(
+            AuthMethod.account_id == account.id,
+            AuthMethod.method_type == MethodType.password,
+        )
+    )
+    if method is None:
+        return False
+    return get_handler(MethodType.password).verify(method.secret_ref, password)
 
 
 def check_registration_allowed(
@@ -699,6 +799,26 @@ def must_change_credential(db: Session, account: Account) -> bool:
         )
     )
     return bool(method and method.must_change)
+
+
+def other_live_sessions(db: Session, account: Account, except_token: str) -> int:
+    """How many of this account's sessions a revocation would end, excluding this one.
+
+    Read-only. Exists so a caller can tell the driver what happened without the revocation
+    primitive having to grow a second return value that only one caller wants.
+    """
+    return int(
+        db.scalar(
+            select(func.count())
+            .select_from(AuthSession)
+            .where(
+                AuthSession.account_id == account.id,
+                AuthSession.ended_at.is_(None),
+                AuthSession.token != except_token,
+            )
+        )
+        or 0
+    )
 
 
 def revoke_sessions(

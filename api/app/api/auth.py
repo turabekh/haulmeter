@@ -90,6 +90,9 @@ class RegisterIn(Credentials):
 class TokenOut(BaseModel):
     token: str
     account_id: str
+    # AI-CONTEXT: additive with a default, so `/register` (which shares this model and can
+    # never set it) is unchanged and no existing client breaks on the new key.
+    must_change_password: bool = False
 
 
 @router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
@@ -144,7 +147,11 @@ def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)) 
         except ValueError:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown authority") from None
     session = identity.create_session(db, account)
-    return TokenOut(token=session.token, account_id=str(account.id))
+    return TokenOut(
+        token=session.token,
+        account_id=str(account.id),
+        must_change_password=identity.must_change_credential(db, account),
+    )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -205,12 +212,98 @@ def login(body: Credentials, request: Request, db: Session = Depends(get_db)) ->
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid credentials")
     identity.clear_failed_logins(db, body.email)
     session = identity.create_session(db, account)
-    return TokenOut(token=session.token, account_id=str(account.id))
+    return TokenOut(
+        token=session.token,
+        account_id=str(account.id),
+        must_change_password=identity.must_change_credential(db, account),
+    )
 
 
 class VerifyAuthorityIn(BaseModel):
     mc_number: str | None = None
     dot_number: str | None = None
+
+
+class PasswordChangeIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class PasswordChangeOut(BaseModel):
+    changed: bool
+    # how many OTHER sessions ended. The driver is told, because a security action they
+    # cannot observe is one they cannot trust (D3).
+    other_sessions_ended: int
+
+
+@router.post("/password", response_model=PasswordChangeOut)
+def change_password(
+    body: PasswordChangeIn,
+    request: Request,
+    account: identity.Account = Depends(current_account),
+    token: str = Depends(bearer_token),
+    db: Session = Depends(get_db),
+) -> PasswordChangeOut:
+    """Change this account's password. ONE endpoint for both cases (D1).
+
+    AI-CONTEXT: there was no way for a driver to change their password at all —
+    `complete_credential_change` had zero production callers. That made three finished
+    pieces of work inert (revocation, the floor, the rehash) and inverted the property
+    `reset_credential`'s own docstring promises: an admin issued a temporary password, the
+    driver was never told to replace it and could not, so **the temporary became the
+    permanent one** and the admin knew a working credential indefinitely.
+
+    THE CURRENT PASSWORD IS REQUIRED, with no exception for the `must_change` case. A
+    stolen bearer token must not be enough to seize an account — this is the one control
+    standing between a leaked session and permanent takeover, and a driver holding a
+    temporary password knows it. "Authenticated, therefore allowed" would make the session
+    itself the credential.
+
+    The voluntary change and the forced post-reset change are the same operation with the
+    same requirements; two endpoints would drift.
+    """
+    now = datetime.now(UTC)
+    client_ip = _client_ip(request)
+    try:
+        identity.check_password_change_allowed(db, account.email, client_ip, now)
+    except identity.Throttled as exc:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "too many attempts",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+
+    # counted BEFORE the change, because that is the number `complete_credential_change`
+    # is about to end — asking afterwards would count what survived
+    others = identity.other_live_sessions(db, account, except_token=token)
+
+    try:
+        correct = identity.verify_current_password(db, account, body.current_password)
+    except identity.VerifierBusy as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "busy",
+            headers={"Retry-After": "1"},
+        ) from exc
+    if not correct:
+        identity.record_failed_password_change(db, account.email, client_ip, now)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "current password is incorrect")
+
+    try:
+        # `complete_credential_change` applies the floor, revokes every OTHER session and
+        # clears `must_change` — all three already existed and had no caller
+        identity.complete_credential_change(db, account, body.new_password, except_token=token)
+    except identity.WeakPassword as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    except identity.VerifierBusy as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "busy",
+            headers={"Retry-After": "1"},
+        ) from exc
+
+    identity.clear_failed_password_changes(db, account.email)
+    return PasswordChangeOut(changed=True, other_sessions_ended=others)
 
 
 @router.get("/me")
@@ -223,6 +316,11 @@ def me(
         "account_id": str(account.id),
         "email": account.email,
         "verification_enabled": flags.is_enabled(db, identity.AUTHORITY_VERIFICATION_FLAG),
+        # AI-CONTEXT: on `/me` as well as on the login response, and THIS is the one that
+        # mattered (D4). Sessions last 30 days, so a driver who signs in with a temporary
+        # password and reopens the app next morning never sees `/login` again — the flag
+        # reaching only the login response is why it never reached anyone at all.
+        "must_change_password": identity.must_change_credential(db, account),
         **_profile_out(profile),
     }
 
