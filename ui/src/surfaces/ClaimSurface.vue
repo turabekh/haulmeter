@@ -12,6 +12,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
 import { formatMoney, formatClock } from "../core/meter.js";
 import { fetchClaim, fetchMe } from "../core/api.js";
+import BrokerEmailField from "../core/components/BrokerEmailField.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -20,12 +21,19 @@ const claim = ref(null);
 const missing = ref(false);
 const me = ref(null); // F1: verified authority, shown on the invoice it backs
 
-onMounted(async () => {
+// extracted from onMounted so saving the broker's address can re-read: `notice_delivery`
+// is DERIVED server-side from the linked message and the address on file, so the only
+// honest way to show the new state is to ask again
+async function reload() {
   try {
     claim.value = await fetchClaim(route.params.stopId);
   } catch {
     missing.value = true;
   }
+}
+
+onMounted(async () => {
+  await reload();
   try {
     me.value = await fetchMe();
   } catch {
@@ -130,6 +138,19 @@ function evTime(iso) {
           <li class="ev">
             <Send :size="16" :stroke-width="2" class="ev__icon" :class="{ ok: noticeDelivered }" aria-hidden="true" />
             <span class="ev__label">{{ t(`notice.delivery.${noticeDelivery}`) }}</span>
+          </li>
+          <!-- AI-CONTEXT: the fix lives WHERE THE COMPLAINT IS. The line above says "No
+               broker email — add one to notify", and a copy that names a remedy the driver
+               then has to go and find somewhere else is only half a sentence. Saving
+               re-reads the claim, so the delivery state re-derives and Send becomes
+               available without leaving this screen. -->
+          <li v-if="noticeDelivery === 'no_email'" class="ev ev--fix">
+            <BrokerEmailField
+              variant="inline"
+              :load-id="claim.load_id"
+              :email="claim.counterparty_email"
+              @saved="reload"
+            />
           </li>
         </ul>
         <!-- AI-CONTEXT: label-then-figure, not "1 records". `t()` has no plural

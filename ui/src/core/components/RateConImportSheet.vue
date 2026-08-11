@@ -27,6 +27,7 @@ import { ref, reactive, computed } from "vue";
 import { Camera, TriangleAlert, Check } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { importRateCon, createActiveLoad, geocodeAddress } from "../api.js";
+import { contactEmailError, normalizeContactEmail } from "../contact.js";
 import { lastFix } from "../location.js";
 
 const emit = defineEmits(["created"]);
@@ -44,6 +45,12 @@ const failed = ref(false);
 // load-level terms only: the per-stop fields moved onto `stops` (§23 entry 68)
 const form = reactive({
   broker: "",
+  // AI-CONTEXT: where this load's detention notices go, collected at the one moment the
+  // driver is holding the rate con — which is the only place the address is written down.
+  // Optional by design: a driver who does not have the AP address must still be able to
+  // file the load and run the clock, and the claim screen's `no_email` state is what
+  // catches it later. An offer, not a gate.
+  brokerEmail: "",
   reference: "",
   freeMin: "",
   rateHr: "",
@@ -203,6 +210,9 @@ function usePosition(stop) {
 // every stop has to be somewhere: the geofence is armed on it, so a stop we cannot
 // place is a stop whose arrival can never be detected
 const routeReady = computed(() => stops.value.length > 0 && stops.value.every((s) => s.place));
+// the same rule the server applies, so a typo is caught while the driver is still looking
+// at the paper rather than as a 422 three taps later
+const brokerEmailError = computed(() => contactEmailError(form.brokerEmail));
 
 function stopSource(stop) {
   return stop.parsedStart && stop.apptStart === String(stop.parsedStart).slice(0, 16)
@@ -220,6 +230,7 @@ async function create() {
       // the address the driver confirmed, kept rather than discarded once geocoded
       address: stops.value[0].address || null,
       counterparty: form.broker || "Broker",
+      counterparty_email: normalizeContactEmail(form.brokerEmail),
       reference_number: form.reference || null,
       free_time_minutes: Number(form.freeMin) || null,
       rate_cents_per_hour: form.rateHr ? Math.round(Number(form.rateHr) * 100) : null,
@@ -355,6 +366,24 @@ async function create() {
         <span class="rc__label">{{ t("load.broker") }}</span>
         <input v-model="form.broker" class="rc__input" type="text" />
       </label>
+      <!-- labelled for its PURPOSE, not its type: "Email" on a load form could be
+           anyone's, and the one thing a driver needs to know is that this is the address
+           a detention notice is sent to. -->
+      <label class="rc__field">
+        <span class="rc__label">{{ t("load.broker_email") }}</span>
+        <input
+          v-model="form.brokerEmail"
+          class="rc__input"
+          type="email"
+          inputmode="email"
+          autocomplete="off"
+          autocapitalize="none"
+          spellcheck="false"
+        />
+        <span v-if="brokerEmailError" class="rc__error" role="alert">
+          {{ t(brokerEmailError) }}
+        </span>
+      </label>
       <!-- the money the load pays. Editable like every other parsed value, because a
            parse is a proposal and the driver is the one holding the paper. -->
       <label class="rc__field">
@@ -387,7 +416,12 @@ async function create() {
         </dl>
       </section>
 
-      <button class="rc__cta" type="button" :disabled="busy || !routeReady" @click="create">
+      <button
+        class="rc__cta"
+        type="button"
+        :disabled="busy || !routeReady || !!brokerEmailError"
+        @click="create"
+      >
         {{ t("load.create") }}
       </button>
       <p class="rc__hint">{{ t("load.rc_confirm_hint") }}</p>
@@ -558,6 +592,14 @@ async function create() {
 .rc__placed { color: var(--ledger-500); }
 .rc__placelabel { color: var(--text-2); }
 .rc__unplaced { color: var(--marker-500); }
+/* the same warning colour this card already uses for an unplaced stop — composed, not
+   invented (design-prd §22.2 never-improvise) */
+.rc__error {
+  display: block;
+  margin-top: var(--s-2);
+  color: var(--marker-500);
+  font-size: var(--type-label-size);
+}
 .rc__placeacts { display: flex; flex-wrap: wrap; gap: var(--s-3); }
 .rc__mini {
   min-height: 48px;

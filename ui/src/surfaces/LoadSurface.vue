@@ -44,6 +44,7 @@ import BottomSheet from "../core/components/BottomSheet.vue";
 import IncidentSheet from "../core/components/IncidentSheet.vue";
 import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
 import RateConImportSheet from "../core/components/RateConImportSheet.vue";
+import BrokerEmailField from "../core/components/BrokerEmailField.vue";
 import { useDriverState, observePresence } from "../core/state.js";
 import { useI18n } from "../core/i18n.js";
 import {
@@ -372,6 +373,9 @@ const noticeSent = computed(() => (live.value ? live.value.notice_sent : false))
 // above stays the boolean the CTA ladder reads — a notice that FAILED has not been sent,
 // so the rung must still offer it — while this is what the checklist row says out loud.
 const noticeDelivery = computed(() => live.value?.notice_delivery ?? "not_sent");
+// the address this load's notices go to, and the load to PATCH it on
+const loadId = computed(() => live.value?.load_id ?? null);
+const brokerEmail = computed(() => live.value?.counterparty_email ?? null);
 // F7: the warning is once-only server-side (`pre_notice_sent_at`); this retires the rung
 // as soon as it has gone rather than waiting for the next meter poll.
 const preNoticeSent = ref(false);
@@ -829,6 +833,16 @@ async function endLoad() {
             {{ t(`notice.delivery.${noticeDelivery}`) }}
           </li>
         </ul>
+        <!-- where those notices go. Directly under the notice row because that is the row
+             it explains — "Broker notified" and "No broker email" are one fact from two
+             sides — but OUTSIDE the list: a checklist item is a piece of evidence the
+             driver captured, and this is a property of the load. -->
+        <BrokerEmailField
+          class="checklist__email"
+          :load-id="loadId"
+          :email="brokerEmail"
+          @saved="loadMeter"
+        />
         <button
           v-if="live"
           class="card__link"
@@ -1333,6 +1347,9 @@ async function endLoad() {
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
   text-align: center;
+}
+.checklist__email {
+  margin-top: var(--s-3);
 }
 .notice-msg {
   margin: calc(var(--s-2) * -1) 0 0;

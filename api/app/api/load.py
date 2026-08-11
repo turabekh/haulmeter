@@ -724,6 +724,11 @@ def meter(
         "facility_id": str(stop.facility_id),
         "rate_cents": load.rate_cents if load else None,
         "counterparty": cp.name if cp else None,
+        # AI-CONTEXT: the address, and the load to PATCH it on. The claim screen tells the
+        # driver to add a broker email when it is missing; it cannot offer the fix without
+        # knowing which load owns the counterparty.
+        "load_id": str(load.id) if load else None,
+        "counterparty_email": cp.contact_email if cp else None,
         "appointment": stop.appointment_start.isoformat() if stop.appointment_start else None,
         "arrived": arrived,
         "free_time_minutes": free_time,
@@ -817,6 +822,11 @@ def claim_detail(
         "mode": claim.mode.value,
         "facility": fac.name if fac else None,
         "counterparty": cp.name if cp else None,
+        # AI-CONTEXT: the address, and the load to PATCH it on. The claim screen tells the
+        # driver to add a broker email when it is missing; it cannot offer the fix without
+        # knowing which load owns the counterparty.
+        "load_id": str(load.id) if load else None,
+        "counterparty_email": cp.contact_email if cp else None,
         "notice_sent": claim.start_notice_sent_at is not None,
         "notice_delivery": m3.notice_delivery(db, claim),
         "filed": claim.state.value != "open",

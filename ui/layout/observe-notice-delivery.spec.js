@@ -7,11 +7,16 @@
 // screen said "Broker notified — detention on record." over a message sitting in a
 // dead-letter queue.
 //
-// Three states, from the Load tab, at 360 × 800 dp:
+// Six states now. Three from the Load tab, at 360 × 800 dp:
 //   · retrying — the send failed and the sweep will try again
 //   · no_email — there is no address on file, which is the DEFAULT for every load
 //                created in this product today (nothing has ever written contact_email)
 //   · sent     — the one that is allowed to say the broker was notified
+//
+// ...and three for the address itself, which is what makes any of them deliverable:
+//   · the field offered when a load is created
+//   · the inline fix, in the claim screen's no_email state
+//   · the same claim once the address is saved and Send is available
 //
 // Same shape as `observe-loading.spec.js` and for the same reason: it runs inside
 // `make ui-layout`, because an observation nobody re-runs decays into a screenshot in an
@@ -115,4 +120,112 @@ test("a notice that did go out is the only state allowed to say so", async ({ pa
   expect(body).toContain("Broker notified");
   expect(body).not.toContain("retrying");
   console.log("OBSERVED — sent: the broker was notified, and the row may say it");
+});
+
+
+// --- the address, which is what the three states above are actually about ---
+const CLAIM = {
+  claim_id: "00000000-0000-0000-0000-0000000000d1",
+  load_id: "00000000-0000-0000-0000-0000000000e1",
+  amount_cents: 15000,
+  detention_seconds: 7200,
+  free_time_minutes: 120,
+  rate_cents_per_hour: 7500,
+  state: "invoiced",
+  mode: "invoice",
+  facility: "Dallas Cold Storage",
+  counterparty: "Acme Brokerage",
+  counterparty_email: null,
+  notice_sent: false,
+  notice_delivery: "no_email",
+  filed: true,
+  chain_valid: true,
+  record_count: 3,
+  artifact_count: 1,
+  timeline: [{ type: "GEOFENCE", occurred_at: "2026-08-11T10:00:00Z" }],
+};
+
+async function openClaim(page, claim) {
+  await page.route(`${API}/**`, (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const json = (body) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    if (path.includes("/claim")) return json(claim);
+    return json({});
+  });
+  await page.addInitScript((s) => {
+    localStorage.setItem("longhaul.session", JSON.stringify(s));
+    localStorage.setItem("longhaul.theme", "dark");
+  }, SESSION);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto(`/claim/${STOP}`);
+  await page.waitForSelector(".timeline", { state: "attached", timeout: 15_000 });
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+  await page.waitForTimeout(200);
+  return page.locator("body").innerText();
+}
+
+test("a load can be given the address its notices will go to", async ({ page }) => {
+  // driven through the real path: open the sheet, hand it a file, let the parse come back
+  // unreadable — which is the state this stack actually runs in with no model key — and
+  // land on the confirm form, which IS the manual form.
+  await page.route(`${API}/**`, (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const json = (body) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    if (path.endsWith("/load/import")) {
+      return json({ document_id: "doc-1", readable: false, parsed: {}, stops: [] });
+    }
+    return json({});
+  });
+  await page.addInitScript((s) => {
+    localStorage.setItem("longhaul.session", JSON.stringify(s));
+    localStorage.setItem("longhaul.theme", "dark");
+  }, SESSION);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto("/load");
+  await page.getByRole("button", { name: "Add a load" }).first().click();
+  await page.setInputFiles('input[type="file"]', {
+    name: "ratecon.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("not-a-real-rate-con"),
+  });
+  await page.getByRole("button", { name: "Read the rate con" }).click();
+  await page.waitForSelector('input[type="email"]', { state: "attached", timeout: 15_000 });
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+  await page.locator('input[type="email"]').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(200);
+  await shoot(page, "broker-email-create-360dp");
+
+  const body = await page.locator("body").innerText();
+  expect(body).toContain("Broker email");
+  // labelled for its PURPOSE — "Email" on a load form could be anyone's
+  expect(body).toContain("detention notices");
+  console.log("OBSERVED — creation: the broker email field is offered on the confirm form");
+});
+
+test("the claim screen offers the fix where it states the problem", async ({ page }) => {
+  const body = await openClaim(page, CLAIM);
+  await shoot(page, "broker-email-inline-fix-360dp");
+
+  expect(body).toContain("No broker email");
+  // the affordance is HERE, not a hint to go and find it
+  expect(await page.locator(".ev--fix input").count()).toBe(1);
+  console.log("OBSERVED — no_email: the input is inline, in the state that complains");
+});
+
+test("once the address is saved the claim is sendable and says nothing about email", async ({
+  page,
+}) => {
+  const fixed = {
+    ...CLAIM,
+    counterparty_email: "ap@acme.example",
+    notice_delivery: "not_sent",
+  };
+  const body = await openClaim(page, fixed);
+  await shoot(page, "broker-email-fixed-360dp");
+
+  expect(body).not.toContain("No broker email");
+  expect(await page.locator(".ev--fix").count()).toBe(0);
+  console.log("OBSERVED — fixed: the blocker is gone, the notice is merely unsent");
 });

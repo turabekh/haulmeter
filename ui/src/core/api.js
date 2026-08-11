@@ -641,6 +641,25 @@ export async function endActiveLoad(stopId) {
   return nextStopId;
 }
 
+export async function setCounterpartyEmail(loadId, email) {
+  // AI-CONTEXT: `copied` in the response is load-bearing, not decoration. Under the
+  // server's copy-on-write rule the load's counterparty CHANGES identity, so a client
+  // holding the old id would show a stale address after a successful save.
+  const resp = await fetch(`${API_BASE}/load/${loadId}/counterparty-email`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({ email }),
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    const err = new Error(`counterparty email failed: ${resp.status}`);
+    err.status = resp.status;
+    err.detail = body.detail ?? null;
+    throw err;
+  }
+  return resp.json();
+}
+
 export async function sendDetentionNotice(stopId) {
   const resp = await fetch(`${API_BASE}/load/${stopId}/notice`, {
     method: "POST",
