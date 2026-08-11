@@ -93,8 +93,29 @@ class LedgerPosting(Base):
 
 
 class Receivable(Base):
+    """AI-CONTEXT: `external_ref` identifies the real-world thing being billed, and it is
+    unique where present — the same rule `JournalEntry` above carries, for the same reason
+    (finding F2, migration 0067).
+
+    M3's `generate_pack` had no state guard, so filing a claim twice invoiced the broker
+    twice and opened a SECOND receivable for one detention. The claim's state guard
+    answers the ordinary double-tap; this index answers the concurrent one, because M3
+    derives the ref from the claim (`m03:<claim_id>`) rather than generating one per call.
+
+    Partial on NOT NULL because most openers still pass nothing — adopting it in M4 is a
+    named follow-up, not a silent expectation.
+    """
+
     __tablename__ = "receivable"
-    __table_args__ = {"schema": SCHEMA}
+    __table_args__ = (
+        Index(
+            "uq_receivable_external_ref",
+            "external_ref",
+            unique=True,
+            postgresql_where=text("external_ref IS NOT NULL"),
+        ),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     account_id: Mapped[uuid.UUID] = mapped_column(

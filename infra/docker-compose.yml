@@ -90,6 +90,26 @@ services:
       POSTGRES_HOST: postgres
     command: ["alembic", "upgrade", "head"]
     restart: "no"
+    # AI-CONTEXT: the SAME mount api and worker carry, and its absence broke the stack
+    # (finding N-04, the sequel to N-03).
+    #
+    # N-03 made the migration its own service so the worker could not boot against a
+    # pre-migration schema. In dev, api and worker run the MOUNTED tree while this ran
+    # the migrations BAKED INTO THE IMAGE — so a migration written after the last build
+    # was invisible here and silently did not apply, and the api served new code against
+    # an old schema. Worse on the second turn: once the database is stamped at a revision
+    # the image does not carry, `alembic upgrade head` fails with "Can't locate revision",
+    # and because api and worker wait on `service_completed_successfully`, NEITHER CAN
+    # START. One unbuilt migration takes the whole dev stack down.
+    #
+    # 121's N-03 proof could not have caught this: it downgraded and re-applied a
+    # migration that was already in the image. Only a NEWLY WRITTEN one reaches the bug.
+    #
+    # Deliberately dev-only. `docker-compose.deploy.yml` mounts no source anywhere — the
+    # image IS the code there, built at deploy time — so migrate reading the image is
+    # correct in production and would be wrong here.
+    volumes:
+      - ../api:/app
     depends_on:
       postgres:
         condition: service_healthy
