@@ -14,7 +14,7 @@ VALID = [
     "ap@acme.example",
     "  ap@acme.example  ",  # trimmed
     "first.last+detention@sub.acme.example",
-    "a@b.co",
+    "a@b.example",
 ]
 INVALID = [
     ("acme.example", "no @"),

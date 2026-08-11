@@ -48,7 +48,7 @@ describe("the client's address rule", () => {
   });
 
   it("names every error with a key that exists in the catalogue", () => {
-    for (const bad of ["acme.example", "ap@acme", "ap acme@x.com", "@a.example"]) {
+    for (const bad of ["acme.example", "ap@acme", "ap acme@x.example", "@a.example"]) {
       expect(en[contactEmailError(bad)]).toBeTruthy();
     }
   });
