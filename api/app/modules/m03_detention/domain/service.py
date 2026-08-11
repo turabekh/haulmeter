@@ -421,17 +421,60 @@ def send_pre_detention_notice(
     return message
 
 
+def _existing_start_notice(db: Session, claim: DetentionClaim):
+    """The message that stands in the way of a fresh send, or None if nothing does.
+
+    AI-CONTEXT: **a fresh send is allowed exactly when re-sending cannot double-notify.**
+    The previous session guarded only the QUEUED case, which left the delivered one open:
+    a claim whose notice had actually gone fell straight through and sent a SECOND email to
+    the broker — and, because the route appends `notice_sent` on synchronous success, wrote
+    a second record into the tamper-evident evidence log for one stop. The UI hid it (the
+    rung retires once `notice_sent`), so it needed a replayed request — which is exactly
+    what the offline write queue exists to produce.
+
+    The five cases, in one place:
+
+      no linked message              -> send        (nothing to double)
+      linked and DELIVERED           -> never       (the broker has it; this is the dispute
+                                                     anchor and it may not be re-anchored)
+      linked, failed, RETRYABLE,
+        and addressed to the address
+        now on file                  -> never       (`retry_unsent_messages` owns that row)
+      linked, failed PERMANENTLY,
+        or attempts exhausted        -> send fresh
+      linked, failed to a DIFFERENT
+        address than the one on file -> send fresh
+
+    The last case is what makes this session's whole point work. A broker whose address was
+    wrong produces `SMTPRecipientsRefused`, which is permanent and correctly never retried
+    — so without an address-aware rule, fixing the address would leave the notice
+    unsendable forever. The old row is left untouched as history; the claim relinks.
+    """
+    ref = claim.start_notice_message_ref
+    if ref is None:
+        return None
+    message = db.get(notify.OutboundMessage, ref)
+    if message is None:
+        return None  # the ref points at nothing — treat it as never sent
+    if message.sent_at is not None:
+        return message
+    retryable = notify.is_retryable(message.provider_ref) and (
+        message.attempts < notify.MAX_SEND_ATTEMPTS
+    )
+    if retryable and message.to_ref == _counterparty_email(db, claim):
+        return message
+    return None
+
+
 def send_detention_start_notice(
     db: Session, claim: DetentionClaim, gateway, now: datetime
 ) -> notify.OutboundMessage | None:
     state = clock(db, claim, now)
     if state.phase == DetentionPhase.within_free_time:
         return None  # nothing owed yet — no notice to send
-    if notice_delivery(db, claim) == DELIVERY_RETRYING:
-        # a retryable failure is already queued and `retry_unsent_messages` owns it.
-        # Sending again would put a SECOND notice in the broker's inbox for one stop the
-        # moment the transient failure cleared.
-        return db.get(notify.OutboundMessage, claim.start_notice_message_ref)
+    existing = _existing_start_notice(db, claim)
+    if existing is not None:
+        return existing
     message = _send_counterparty(
         db,
         claim,

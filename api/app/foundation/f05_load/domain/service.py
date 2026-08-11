@@ -15,6 +15,50 @@ class FacilityNotFound(Exception):
     pass
 
 
+class InvalidContactEmail(ValueError):
+    pass
+
+
+# AI-CONTEXT: the address every counterparty notice is sent to, and until this session
+# there was NOWHERE in the product to put one. `contact_email` has been on the model since
+# F5 shipped and nothing but tests ever wrote it, so every row carried NULL and M3
+# addressed an invented literal instead — the detention wedge could not deliver to anyone,
+# by construction (previous session, SESSION-REPORT.md §3.1).
+#
+# PRAGMATIC, NOT RFC-COMPLETE, and that is a decision rather than a shortcut. A real
+# address is whatever the receiving server accepts, so any client-side rule is a guess;
+# the useful job here is catching the typo a driver can see and fix ("acme.com" with no
+# `@`, a trailing name, a pasted sentence) before it becomes an
+# `SMTPRecipientsRefused` — which `PERMANENT_FAILURES` never retries, so a malformed
+# address costs the notice permanently. Anything stricter starts rejecting addresses that
+# work.
+MAX_CONTACT_EMAIL = 320  # the column's width
+
+
+def validate_contact_email(raw: str | None) -> str | None:
+    """Normalise and check. None/blank means an explicit CLEAR, not an error.
+
+    Raises `InvalidContactEmail` with a message a driver can act on.
+    """
+    if raw is None:
+        return None
+    email = raw.strip()
+    if not email:
+        return None  # "remove the address on file" is a legitimate thing to ask for
+    if len(email) > MAX_CONTACT_EMAIL:
+        raise InvalidContactEmail(f"email must be {MAX_CONTACT_EMAIL} characters or fewer")
+    if any(ch.isspace() for ch in email):
+        raise InvalidContactEmail("email cannot contain spaces")
+    if email.count("@") != 1:
+        raise InvalidContactEmail("email needs exactly one @")
+    local, _, domain = email.partition("@")
+    if not local or not domain:
+        raise InvalidContactEmail("email needs a name and a domain")
+    if "." not in domain or domain.startswith(".") or domain.endswith("."):
+        raise InvalidContactEmail("email domain needs a dot")
+    return email
+
+
 # --- Counterparty registry ---
 def create_counterparty(
     db: Session,
@@ -35,6 +79,56 @@ def create_counterparty(
     db.add(counterparty)
     db.flush()
     return counterparty
+
+
+def set_load_counterparty_email(
+    db: Session, load: Load, email: str | None
+) -> tuple[Counterparty, bool]:
+    """Set this load's broker address. Returns (counterparty, copied).
+
+    AI-CONTEXT: edit in place if and only if every load referencing this counterparty row
+    belongs to this load's account; otherwise COPY-ON-WRITE — a new row carrying the same
+    identity with the new address, and only this load repointed at it.
+
+    WHY, given that `create_counterparty` never dedupes and so each load gets its own row
+    today: nothing ENFORCES that. It is a property of one call site, not of the schema, and
+    the tests share rows freely. An unconditional in-place edit would therefore be correct
+    only by accident — and the failure mode if that accident ends is that one driver
+    editing their broker's address silently rewrites where another driver's detention
+    notices go. That is not a bug you find from a stack trace.
+
+    One query decides it. Safe now, safe if sharing ever appears, and it needs no migration
+    and no account column on the counterparty — both of which are recorded follow-ups for
+    the F5 section rather than this change.
+    """
+    counterparty = get_counterparty(db, load.counterparty_id) if load.counterparty_id else None
+    if counterparty is None:
+        raise InvalidContactEmail("this load has no counterparty to address")
+
+    others = db.scalar(
+        select(func.count())
+        .select_from(Load)
+        .where(
+            Load.counterparty_id == counterparty.id,
+            Load.account_id != load.account_id,
+        )
+    )
+    if others:
+        copy = create_counterparty(
+            db,
+            counterparty.name,
+            counterparty.kind,
+            mc_number=counterparty.mc_number,
+            contact_email=email,
+            contact_phone=counterparty.contact_phone,
+        )
+        load.counterparty_id = copy.id
+        db.flush()
+        return copy, True
+
+    counterparty.contact_email = email
+    db.flush()
+    return counterparty, False
 
 
 def record_payment_observation(

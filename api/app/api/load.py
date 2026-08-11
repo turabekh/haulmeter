@@ -194,11 +194,17 @@ def create_load(
     db: Session = Depends(get_db),
 ) -> dict:
     fac = _resolve_facility(db, body)
+    try:
+        email = loads.validate_contact_email(body.counterparty_email)
+    except loads.InvalidContactEmail as exc:
+        # a typo here is not cosmetic: a malformed address becomes SMTPRecipientsRefused,
+        # which PERMANENT_FAILURES never retries, so the notice is lost for good
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     cp = loads.create_counterparty(
         db,
         body.counterparty,
         loads.CounterpartyKind.broker,
-        contact_email=body.counterparty_email,
+        contact_email=email,
     )
     # unset terms fall back to the live F13-config detention defaults (M3 owns them)
     free_time = (
@@ -525,6 +531,54 @@ def arrive(
         "arrived": True,
         "on_time": proof.within_window,
         "notice_sent": proof.notice_sent,
+    }
+
+
+class CounterpartyEmailIn(BaseModel):
+    # null clears the address on file, which is a legitimate thing to ask for
+    email: str | None = None
+
+
+def _owned_load(db: Session, load_id: uuid.UUID, account: identity.Account):
+    load = loads.get_load(db, load_id)
+    if load is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "load not found")
+    if load.account_id != account.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your load")
+    return load
+
+
+@router.patch("/{load_id}/counterparty-email")
+def set_counterparty_email(
+    load_id: uuid.UUID,
+    body: CounterpartyEmailIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Where this load's detention notices go.
+
+    AI-CONTEXT: the missing half of the previous session's finding. `contact_email` has
+    been on the counterparty since F5 shipped and NOTHING ever wrote it, so every notice
+    this product has sent was addressed to an invented literal. Collecting it at load
+    creation covers new loads; this covers the one a driver is standing in front of when
+    the claim screen tells them the address is missing.
+
+    `copied` is in the response because the caller cannot infer it: under the
+    copy-on-write rule the load's counterparty id CHANGES, and a client holding the old
+    one would show a stale address. See `set_load_counterparty_email`.
+    """
+    load = _owned_load(db, load_id, account)
+    try:
+        email = loads.validate_contact_email(body.email)
+        counterparty, copied = loads.set_load_counterparty_email(db, load, email)
+    except loads.InvalidContactEmail as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return {
+        "load_id": str(load.id),
+        "counterparty_id": str(counterparty.id),
+        "counterparty": counterparty.name,
+        "counterparty_email": counterparty.contact_email,
+        "copied": copied,
     }
 
 
@@ -860,8 +914,16 @@ def send_notice(
     now = datetime.now(UTC)
     message = m3.send_pre_detention_notice(db, claim, _GATEWAY, now)
     warned = message is not None
+    # AI-CONTEXT: which message the claim was linked to BEFORE this call is what makes
+    # "did we just send one?" answerable. D2 returns the EXISTING message for a notice
+    # that has already been delivered or is queued for retry — so `message is not None`
+    # no longer means a send happened here, and conditioning the evidence record on it
+    # appended a second `notice_sent` for one stop the moment a request was replayed.
+    # A fresh send always relinks the claim; nothing else does.
+    linked_before = claim.start_notice_message_ref
     if message is None:
         message = m3.send_detention_start_notice(db, claim, _GATEWAY, now)
+    fresh = message is not None and (warned or message.id != linked_before)
     # AI-CONTEXT: finding F5 — this comment used to describe exactly this behaviour while
     # the line under it did something else. It read `if message is not None`, and
     # `send_counterparty_message` returns a message row for a FAILED send too (that is the
@@ -875,7 +937,7 @@ def send_notice(
     # ...and ONLY the start notice is that record. `notice_sent` means "the broker was told
     # the clock had started"; a warning that it is about to start is a different fact, and
     # filing it under this one would put a claim in the pack that nothing supports (F7).
-    if sent and not warned:
+    if sent and fresh and not warned:
         loads.record_stop_event(db, stop, loads.EVENT_NOTICE_SENT, now)
     # the WARNING's delivery is that message's own; the claim's `notice_delivery` tracks
     # the start notice, which this stop has not sent yet

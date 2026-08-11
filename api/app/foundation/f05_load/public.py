@@ -31,7 +31,9 @@ from .domain.service import (
     EVENT_ARRIVED,
     EVENT_DEPARTED,
     EVENT_NOTICE_SENT,
+    MAX_CONTACT_EMAIL,
     FacilityNotFound,
+    InvalidContactEmail,
     active_stop_for_account,
     add_stop,
     arm_stop,
@@ -50,8 +52,10 @@ from .domain.service import (
     record_claim,
     record_payment_observation,
     record_stop_event,
+    set_load_counterparty_email,
     set_load_status,
     set_stop_appointment,
+    validate_contact_email,
 )
 
 __all__ = [
@@ -78,6 +82,8 @@ __all__ = [
     "active_stop_for_account",
     "add_stop",
     "arm_stop",
+    "MAX_CONTACT_EMAIL",
+    "InvalidContactEmail",
     "create_counterparty",
     "create_load",
     "create_load_from_parsed_terms",
@@ -95,7 +101,9 @@ __all__ = [
     "list_stops",
     "record_claim",
     "record_stop_event",
+    "validate_contact_email",
     "record_payment_observation",
+    "set_load_counterparty_email",
     "set_load_status",
     "set_stop_appointment",
 ]
