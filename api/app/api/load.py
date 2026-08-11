@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db
+from app.api.m03_detention import already_filed
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
@@ -834,7 +835,12 @@ def generate_claim(
 ) -> dict:
     # close the loop: the running clock -> a GPS-backed, filed detention claim
     claim = _claim_or_409(db, _owned_stop(db, stop_id, account))
-    result = m3.generate_pack(db, claim, now=datetime.now(UTC), gateway=_GATEWAY)
+    try:
+        result = m3.generate_pack(db, claim, now=datetime.now(UTC), gateway=_GATEWAY)
+    except m3.ClaimAlreadyFiled as exc:
+        # a retry after a success is not a failure — 409 carries the first filing's
+        # receivable so the client reads it as "already filed" (finding F2)
+        raise already_filed(exc) from exc
     # F14: North Star funnel step 3 — the loop closes into a filed, GPS-backed claim
     admin.emit(db, "claim_sent", "m03", datetime.now(UTC), account_id=account.id)
     return {

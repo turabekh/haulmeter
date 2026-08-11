@@ -6,7 +6,7 @@ real transactional-email provider is wired at activation).
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -29,20 +29,61 @@ router = APIRouter(prefix="/detention", tags=["detention"],
 _GATEWAY = notify.counterparty_gateway()
 
 
+def already_filed(exc: m3.ClaimAlreadyFiled) -> HTTPException:
+    """409, carrying the receivable the FIRST filing opened (finding F2).
+
+    AI-CONTEXT: the status matters as much as the guard. A retry after a success — a
+    double-tap, a queued request replayed when the truck comes back into signal — is not
+    an error the driver did anything about, and reporting it as one invites them to try
+    again on a claim that is already with the broker. 409 plus the existing
+    `receivable_ref` lets the client say "already filed" and show the same money.
+    Imported by `app.api.load` too, so both callers cannot drift apart.
+    """
+    claim = exc.claim
+    return HTTPException(
+        status.HTTP_409_CONFLICT,
+        {
+            "error": "already_filed",
+            "claim_id": str(claim.id),
+            "state": claim.state.value,
+            "amount_cents": claim.amount_cents,
+            "receivable_ref": str(claim.receivable_ref) if claim.receivable_ref else None,
+        },
+    )
+
+
 class StartIn(BaseModel):
     stop_id: uuid.UUID
 
 
-@router.post("/start", status_code=201)
+@router.post("/start")
 def start(
     body: StartIn,
+    response: Response,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
+    """Start (or return) the detention claim for a stop.
+
+    AI-CONTEXT: finding F3 — this checked that the stop EXISTED and never that it was the
+    caller's, so any authenticated driver could open a claim against any stop in the
+    database and read its clock through `/detention/{id}/clock` after. Every other
+    stop-scoped route in the product goes through `_owned_stop`; this one did not, and the
+    web app never calls it, which is why nothing noticed.
+
+    201 only on a true creation, 200 for the claim that was already there — `start_claim`
+    is get-or-create now, and a caller that cannot tell the two apart cannot tell a
+    duplicate submission from a fresh one.
+    """
     stop = loads.get_stop(db, body.stop_id)
     if stop is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "stop not found")
+    load = loads.get_load(db, stop.load_id)
+    if load is None or load.account_id != account.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your stop")
+    existing = m3.open_claim_for_stop(db, stop.id)
     claim = m3.start_claim(db, stop)
+    response.status_code = status.HTTP_200_OK if existing else status.HTTP_201_CREATED
     return {"claim_id": str(claim.id), "mode": claim.mode.value}
 
 
@@ -79,7 +120,10 @@ def pack(
     db: Session = Depends(get_db),
 ) -> dict:
     claim = _load_claim(db, claim_id, account)
-    result = m3.generate_pack(db, claim, now=datetime.now(UTC), gateway=_GATEWAY)
+    try:
+        result = m3.generate_pack(db, claim, now=datetime.now(UTC), gateway=_GATEWAY)
+    except m3.ClaimAlreadyFiled as exc:
+        raise already_filed(exc) from exc
     return {
         "claim_id": str(claim.id),
         "amount_cents": claim.amount_cents,

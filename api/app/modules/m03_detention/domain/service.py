@@ -12,7 +12,8 @@ validation gates.
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.foundation.f01_identity import public as identity
@@ -121,6 +122,28 @@ def _default_mode(db: Session, account_id) -> ClaimMode:
     return ClaimMode.invoice if identity.can_invoice(profile) else ClaimMode.evidence_only
 
 
+class ClaimAlreadyFiled(Exception):
+    """This claim has left `open` — it cannot be filed a second time (finding F2).
+
+    Carries the claim so a caller can answer "already filed" with the receivable the
+    FIRST filing opened, rather than reporting a failure for work that succeeded.
+    """
+
+    def __init__(self, claim: DetentionClaim):
+        self.claim = claim
+        super().__init__(f"claim {claim.id} is {claim.state.value}, not open")
+
+
+def open_claim_for_stop(db: Session, stop_ref) -> DetentionClaim | None:
+    """The one open claim for this stop, which `uq_detention_claim_open_stop` guarantees."""
+    return db.scalar(
+        select(DetentionClaim).where(
+            DetentionClaim.stop_ref == stop_ref,
+            DetentionClaim.state == ClaimState.open,
+        )
+    )
+
+
 def start_claim(
     db: Session,
     stop,
@@ -128,6 +151,23 @@ def start_claim(
     trigger: DetentionTrigger = DetentionTrigger.arrival,
     started_at: datetime | None = None,
 ) -> DetentionClaim:
+    """Get-or-create. Returns this stop's open claim, creating one only if none exists.
+
+    AI-CONTEXT: finding F1. This created a claim unconditionally, and the arrival endpoint
+    wrapped it in `claim_for_stop(...) or start_claim(...)` — a check-then-act over rows a
+    concurrent transaction has not committed yet. Two arrivals for one stop both missed
+    and both inserted, and from then on `claim_for_stop`'s `db.scalar` RAISED on the pair
+    it found: every read of that stop's money broke, permanently, from one double-tap.
+
+    The database now refuses the second row, so the race is a caught `IntegrityError`
+    rather than a corrupted stop. The insert runs inside a SAVEPOINT because a failed
+    flush poisons the whole session otherwise, and the caller here — an arrival — has
+    already written a geofence event and a stop event it must not lose.
+    """
+    existing = open_claim_for_stop(db, stop.id)
+    if existing is not None:
+        return existing
+
     load = loads.get_load(db, stop.load_id)
     if not stop.geofence_armed:
         loads.arm_stop(db, stop)  # opens the F4 evidence log + arms the F3 geofence
@@ -144,8 +184,16 @@ def start_claim(
         evidence_log_ref=stop.evidence_log_id,
         clock_since=started_at or datetime.now(UTC),
     )
-    db.add(claim)
-    db.flush()
+    try:
+        with db.begin_nested():
+            db.add(claim)
+            db.flush()
+    except IntegrityError:
+        db.expunge(claim)
+        winner = open_claim_for_stop(db, stop.id)
+        if winner is None:
+            raise  # the constraint fired for some other reason — do not swallow it
+        return winner
     return claim
 
 
@@ -598,9 +646,14 @@ def open_receivable(
     notice_subject: str = "Invoice",
     notice_body: str = "Please find attached the GPS-verified evidence and invoice "
     "per the rate confirmation.",
+    external_ref: str | None = None,
 ):
+    # `external_ref` is the caller's idempotency key, unique where present
+    # (`uq_receivable_external_ref`). M3 passes `m03:<claim_id>`; M4 does not pass one
+    # yet, which is a named follow-up rather than a silent expectation.
     receivable = ledger.create_receivable(
-        db, account_id, kind, amount_cents, counterparty_ref=counterparty_ref
+        db, account_id, kind, amount_cents, counterparty_ref=counterparty_ref,
+        external_ref=external_ref,
     )
     cp = None
     if counterparty_ref is not None:
@@ -645,6 +698,17 @@ def _notice_body(db: Session, shared) -> str:
 
 # --- Claim pack on EXIT (M3-FR5 / FR9) ---
 def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=None) -> dict:
+    """File the claim: pack, share link, invoice, receivable. ONCE.
+
+    AI-CONTEXT: finding F2. There was no guard of any kind here, so `POST /load/{id}/claim`
+    twice re-invoiced the broker and opened a SECOND receivable for one detention — the
+    driver's own money surface then showing twice what they were owed, and the broker
+    holding two invoices for one stop. The state guard answers the double-tap;
+    `uq_receivable_external_ref` answers the concurrent one, because the ref is derived
+    from the claim rather than generated per call.
+    """
+    if claim.state != ClaimState.open:
+        raise ClaimAlreadyFiled(claim)
     accrue_events(db, claim)
     state = clock(db, claim, now)
     claim.detention_seconds = state.detention_seconds
@@ -674,17 +738,26 @@ def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=Non
 
     receivable = None
     if claim.mode == ClaimMode.invoice and claim.amount_cents > 0:
-        receivable = open_receivable(
-            db,
-            claim.account_id,
-            ledger.ReceivableKind.detention,
-            claim.amount_cents,
-            counterparty_ref=claim.counterparty_ref,
-            gateway=gateway,
-            now=now,
-            notice_subject="Detention invoice",
-            notice_body=_notice_body(db, shared),
-        )
+        try:
+            with db.begin_nested():
+                receivable = open_receivable(
+                    db,
+                    claim.account_id,
+                    ledger.ReceivableKind.detention,
+                    claim.amount_cents,
+                    counterparty_ref=claim.counterparty_ref,
+                    gateway=gateway,
+                    now=now,
+                    notice_subject="Detention invoice",
+                    notice_body=_notice_body(db, shared),
+                    external_ref=f"{MODULE}:{claim.id}",
+                )
+        except IntegrityError:
+            # the concurrent filing the state guard cannot see: another transaction has
+            # already opened this claim's receivable and committed. Re-read and answer
+            # "already filed" — the work succeeded, it just was not ours.
+            db.refresh(claim)
+            raise ClaimAlreadyFiled(claim) from None
         claim.receivable_ref = receivable.id
         claim.state = ClaimState.invoiced
     else:
@@ -715,7 +788,31 @@ def get_claim(db: Session, claim_id) -> DetentionClaim | None:
 
 
 def claim_for_stop(db: Session, stop_ref) -> DetentionClaim | None:
-    return db.scalar(select(DetentionClaim).where(DetentionClaim.stop_ref == stop_ref))
+    """This stop's claim: the open one if there is one, else the most recent.
+
+    AI-CONTEXT: finding F1's second half. This was `db.scalar(select(...))` over an
+    UNORDERED set, which does two wrong things at once. With several claims it raises
+    `MultipleResultsFound` rather than answering — every caller here is a read on the
+    driver's money, so the Meter, the claim screen and the Load tab all break together.
+    With one it answers, but which one is whatever Postgres returns first, so a stop the
+    driver has visited twice could show either visit's figure between two page loads.
+
+    Open first, then newest, because every caller wants the claim that is RUNNING and
+    only falls back to history when nothing is.
+    """
+    return db.scalars(
+        select(DetentionClaim)
+        .where(DetentionClaim.stop_ref == stop_ref)
+        .order_by(
+            case((DetentionClaim.state == ClaimState.open, 0), else_=1),
+            DetentionClaim.created_at.desc(),
+            # `created_at` is `now()`, which is TRANSACTION time — two claims written in
+            # one transaction share it exactly. The id breaks that tie so the order is
+            # total and this function cannot return different rows for the same question.
+            DetentionClaim.id.desc(),
+        )
+        .limit(1)
+    ).first()
 
 
 def claim_for_receivable(db: Session, receivable_ref) -> DetentionClaim | None:

@@ -655,6 +655,17 @@ export async function generateClaim(stopId) {
     method: "POST",
     headers: headers(),
   });
+  // AI-CONTEXT: 409 means ALREADY FILED, which is a success arriving twice — a double
+  // tap, or a queued request replayed when the truck came back into signal. The server
+  // answers it with the FIRST filing's claim, amount and receivable, so it is returned
+  // as the result rather than thrown. Throwing sent it to the caller's offline catch,
+  // which left the tab reading "not filed" over a claim already with the broker, and
+  // the Meter running on money that had been invoiced.
+  if (resp.status === 409) {
+    const body = await resp.json().catch(() => ({}));
+    const detail = body.detail ?? {};
+    return { ...detail, already_filed: true };
+  }
   if (!resp.ok) throw new Error(`claim failed: ${resp.status}`);
   return resp.json();
 }
