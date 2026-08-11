@@ -147,7 +147,7 @@ def ping(
         # an unknown mode is not worth refusing a position over — the fix is still
         # true, and dropping it would lose an arrival to a typo
         mode = location.LocationMode.significant_change
-    events = location.evaluate_ping(
+    result = location.evaluate_ping(
         db,
         account.id,
         body.lat,
@@ -162,7 +162,7 @@ def ping(
     # M5-FR5's EXIT carve-out. This is the composition point — the same shape as
     # `/load/{stop}/arrive`, which already joins F3, M3 and M5 — because a foundation
     # must not reach up into a module to tell it something happened.
-    for event in events:
+    for event in result.events:
         if event.event_type is location.GeofenceEventType.EXIT:
             _warn_of_unrecoverable_gaps(db, account, event.facility_id, now)
             # A1: leaving a dock DRAFTS the paperwork packet. It does not send it —
@@ -189,12 +189,18 @@ def ping(
         "recorded_at": now.isoformat(),
         "client_skew_ms": skew_ms,
         "present": location.is_present_anywhere(db, account.id),
+        # AI-CONTEXT: a ping can be RECORDED and not evaluated — out of order, from a
+        # device whose clock is wrong, or (with the gate on) too vague to reason about.
+        # An offline queue flushing a week of pings deserves to know which, instead of
+        # reading an empty `events` list as "nothing was there".
+        "evaluated": result.evaluated,
+        "skipped_reason": result.skipped_reason,
         "events": [
             {
                 "event_type": e.event_type.value,
                 "facility_id": str(e.facility_id),
                 "occurred_at": e.occurred_at.isoformat(),
             }
-            for e in events
+            for e in result.events
         ],
     }

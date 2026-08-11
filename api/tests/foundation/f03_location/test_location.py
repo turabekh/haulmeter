@@ -47,7 +47,7 @@ def test_enter_emitted_once_then_suppressed(db):
     assert [e.event_type for e in first] == [location.GeofenceEventType.ENTER]
 
     again = location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=1))
-    assert again == []
+    assert again.events == []
 
 
 def test_dwell_tick_after_interval(db):
@@ -75,7 +75,7 @@ def test_no_enter_when_outside_radius(db):
     fac = _facility(db)
     location.arm_geofence(db, account.id, fac.id)
     events = location.evaluate_ping(db, account.id, *FAR, occurred_at=T0)
-    assert events == []
+    assert events.events == []
 
 
 def test_polygon_geofence_overrides_radius(db):
@@ -102,7 +102,7 @@ def test_disarm_stops_evaluation_and_closes_presence(db):
 
     location.disarm_geofence(db, account.id, fac.id, occurred_at=T0 + timedelta(minutes=5))
     after = location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=30))
-    assert after == []
+    assert after.events == []
 
 
 def test_confirmed_arrivals_feedback_increments(db):

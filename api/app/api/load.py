@@ -515,7 +515,12 @@ def arrive(
     stop = _owned_stop(db, stop_id, account)
     fac = facility.get_facility(db, stop.facility_id)
     lat, lon = facility.coordinates(db, fac)
-    # a geofence ENTER at the stop is the arrival the detention clock triggers on
+    # a geofence ENTER at the stop is the arrival the detention clock triggers on.
+    # AI-CONTEXT: the result is deliberately not inspected. This is the manual "I've
+    # arrived" fallback — the path a driver takes precisely when the background sensor did
+    # not fire — and it must not fail because the synthesised ping was, say, out of order
+    # behind a queue that just flushed. The stop event below is recorded either way, and
+    # `is_present` is what the screen reads.
     location.evaluate_ping(db, account.id, lat, lon, occurred_at=datetime.now(UTC))
     # the arrival, in the chain: the pack used to say an event occurred and not which
     loads.record_stop_event(db, stop, loads.EVENT_ARRIVED, datetime.now(UTC))

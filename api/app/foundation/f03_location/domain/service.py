@@ -1,15 +1,18 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from geoalchemy2 import Geography
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import cast, delete, func, or_, select
+from sqlalchemy import cast, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import aggregate_order_by
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.foundation.f02_facility import public as facility_registry
 
 from .enums import GeofenceEventType, LocationMode
 from .models import (
+    EvaluationCursor,
     FacilityGeofence,
     GeofenceArming,
     GeofenceEvent,
@@ -219,10 +222,16 @@ def _emit(db, account_id, facility_id, event_type, occurred_at, lat, lon) -> Geo
 
 
 def _increment_confirmed_arrivals(db: Session, facility_id) -> None:
-    config = db.get(FacilityGeofence, facility_id)
-    if config is not None:
-        config.confirmed_arrivals += 1
-        db.flush()
+    # AI-CONTEXT: an atomic UPDATE, not a read-modify-write. Two drivers arriving at one
+    # dock in the same instant both read the old count and both wrote old+1, so the
+    # facility's arrival count drifted DOWN over exactly the busy docks it is meant to
+    # describe. The database can add one without being told what the value was.
+    db.execute(
+        update(FacilityGeofence)
+        .where(FacilityGeofence.facility_id == facility_id)
+        .values(confirmed_arrivals=FacilityGeofence.confirmed_arrivals + 1)
+    )
+    db.flush()
 
 
 # AI-CONTEXT: where a driver most recently was, IF that is still worth believing.
@@ -287,6 +296,118 @@ def record_ping(
     return ping
 
 
+# AI-CONTEXT: the two knobs that make the state machine tolerant of a real phone (F3-4).
+#
+# BOTH SHIP INERT. `exit_confirm_pings = 1` is exactly today's single-ping exit and
+# `accuracy_gate_m = 0` is off, so with defaults every existing behaviour test passes
+# unmodified — which is asserted directly, not hoped for. Turning either one MOVES MONEY
+# TIMING: a later EXIT is a longer detention clock. That makes the numbers an owner's
+# decision, and this session deliberately does not make it. §23 entries 73, 93 and 107 are
+# all the same story of something adjacent to the clock being changed and the money going
+# wrong; the retention knob's "0 means off" discipline is the template followed here.
+#
+# WHY THEY EXIST AT ALL. `accuracy_m` has been recorded on every ping since F3 was written
+# and read by nothing, and a single bad fix outside the radius closed the visit on the
+# spot — the clock stopped early and the driver was undercounted, with no debounce and no
+# gate. The mechanism is the hard part and it is now built and tested; choosing thresholds
+# needs a real accuracy distribution from real handsets, which this fleet does not yet have.
+CONFIG_EXIT_CONFIRM_PINGS = "f03.exit_confirm_pings"
+DEFAULT_EXIT_CONFIRM_PINGS = 1
+CONFIG_ACCURACY_GATE_M = "f03.accuracy_gate_m"
+DEFAULT_ACCURACY_GATE_M = 0
+
+
+def _exit_confirm_pings(db: Session) -> int:
+    from app.foundation.f13_flags import public as flags
+
+    # below 1 would mean "never exit", which is a visit that never ends and a clock that
+    # never stops — the one setting that must not be reachable by typing 0
+    return max(1, int(flags.get_config(db, CONFIG_EXIT_CONFIRM_PINGS, DEFAULT_EXIT_CONFIRM_PINGS)))
+
+
+def _accuracy_gate_m(db: Session) -> float:
+    from app.foundation.f13_flags import public as flags
+
+    return float(flags.get_config(db, CONFIG_ACCURACY_GATE_M, DEFAULT_ACCURACY_GATE_M))
+
+
+# AI-CONTEXT: how far this account's evaluated time has reached (F3-3).
+#
+# `FUTURE_TOLERANCE` is a constant rather than a knob on purpose: it is not a policy about
+# money, it is the width of ordinary clock skew on a handset. Five minutes forgives a phone
+# whose clock drifted; it does not forgive a phone that thinks it is 2031.
+FUTURE_TOLERANCE = timedelta(minutes=5)
+
+SKIP_STALE_ORDER = "stale_order"
+SKIP_FUTURE = "future"
+SKIP_LOW_ACCURACY = "low_accuracy"
+
+
+@dataclass
+class PingResult:
+    """What `evaluate_ping` did — which is not always "evaluated it".
+
+    AI-CONTEXT: this returned a bare list of events, so "no events" meant both "nothing
+    happened" and "we refused to look", and no caller could tell them apart. The ingestion
+    route now reports which, because a client flushing an offline queue deserves to know
+    its pings were recorded and skipped rather than silently ignored.
+    """
+
+    events: list
+    evaluated: bool = True
+    skipped_reason: str | None = None
+
+    # AI-CONTEXT: iterable over its own events, so this stayed a PURE ADDITION. Every
+    # caller and every test that treated the return as a list still does, which is what
+    # makes "the pre-existing suite passes UNMODIFIED" a real proof that the state machine
+    # is unchanged rather than a claim about tests that were edited to agree with it.
+    def __iter__(self):
+        return iter(self.events)
+
+    def __len__(self):
+        return len(self.events)
+
+    def __getitem__(self, index):
+        return self.events[index]
+
+
+
+def _lock_cursor(db: Session, account_id) -> EvaluationCursor:
+    """The account's evaluation cursor, locked for the rest of this transaction.
+
+    AI-CONTEXT: this is the mechanism that makes per-account evaluation SERIAL, and it is
+    what actually kills F3-2's duplicate-presence race — the unique index catches the case
+    the lock cannot cover (no row yet, two connections), but a caught IntegrityError is a
+    recovery, not a design. Ordinary concurrency should never reach it.
+
+    Created on first use. The insert races with itself for a brand-new account, which is
+    why the `IntegrityError` path re-reads rather than assuming it won.
+    """
+    cursor = db.scalar(
+        select(EvaluationCursor)
+        .where(EvaluationCursor.account_id == account_id)
+        .with_for_update()
+    )
+    if cursor is not None:
+        return cursor
+    cursor = EvaluationCursor(
+        account_id=account_id, last_evaluated_at=datetime.min.replace(tzinfo=UTC)
+    )
+    try:
+        with db.begin_nested():
+            db.add(cursor)
+            db.flush()
+    except IntegrityError:
+        if cursor in db:
+            db.expunge(cursor)
+        cursor = db.scalar(
+            select(EvaluationCursor)
+            .where(EvaluationCursor.account_id == account_id)
+            .with_for_update()
+        )
+    return cursor
+
+
 def evaluate_ping(
     db: Session,
     account_id,
@@ -298,10 +419,52 @@ def evaluate_ping(
     accuracy_m: float | None = None,
     speed_mps: float | None = None,
     mode: LocationMode = LocationMode.significant_change,
-) -> list[GeofenceEvent]:
+    now: datetime | None = None,
+) -> PingResult:
+    """Record the ping, then apply it to the geofence state machine — if it may be applied.
+
+    AI-CONTEXT: THE TRAIL IS RECORDED EITHER WAY. A ping we refuse to evaluate is still
+    where the driver was, and dropping it would make the map and the retention window lie
+    about the same journey the state machine declined to reason about. Only the state
+    machine is skipped.
+
+    Three refusals, in order:
+
+      · out of ORDER (F3-3). The offline outbox exists precisely to deliver pings late, and
+        the machine applied every one to CURRENT state at the ping's own timestamp — so a
+        late inside-ping arriving after its visit's EXIT re-opened a presence that never
+        closes, and a late outside-ping after an ENTER closed the visit at a moment before
+        it began. Both put a wrong `entered_at`/`exited_at` under a detention claim.
+      · from the FUTURE. Trail-recorded, not evaluated, and deliberately does NOT advance
+        the cursor: a device that thinks it is next year would otherwise set the mark ahead
+        and silently discard every real ping that followed.
+      · too INACCURATE, when the gate is on. Off by default — see `CONFIG_ACCURACY_GATE_M`.
+    """
+    now = _as_utc(now or datetime.now(UTC))
+    occurred = _as_utc(occurred_at)
     record_ping(
         db, account_id, lat, lon, occurred_at, client_skew_ms, gps_time, accuracy_m, speed_mps, mode
     )
+
+    if occurred > now + FUTURE_TOLERANCE:
+        return PingResult([], evaluated=False, skipped_reason=SKIP_FUTURE)
+
+    gate = _accuracy_gate_m(db)
+    if gate > 0 and accuracy_m is not None and accuracy_m > gate:
+        return PingResult([], evaluated=False, skipped_reason=SKIP_LOW_ACCURACY)
+
+    cursor = _lock_cursor(db, account_id)
+    if occurred <= _as_utc(cursor.last_evaluated_at):
+        return PingResult([], evaluated=False, skipped_reason=SKIP_STALE_ORDER)
+
+    events = _apply_to_state(db, account_id, lat, lon, occurred_at)
+    cursor.last_evaluated_at = occurred
+    db.flush()
+    return PingResult(events)
+
+
+def _apply_to_state(db: Session, account_id, lat: float, lon: float, occurred_at: datetime) -> list:
+    confirm = _exit_confirm_pings(db)
     events: list[GeofenceEvent] = []
     for arming in _active_armings(db, account_id):
         facility = facility_registry.get_facility(db, arming.facility_id)
@@ -312,16 +475,9 @@ def evaluate_ping(
         presence = _active_presence(db, account_id, arming.facility_id)
 
         if inside and presence is None:
-            db.add(
-                GeofencePresence(
-                    account_id=account_id,
-                    facility_id=arming.facility_id,
-                    entered_at=occurred_at,
-                    last_tick_at=occurred_at,
-                    active=True,
-                )
-            )
-            db.flush()
+            presence = _open_presence(db, account_id, arming.facility_id, occurred_at)
+            if presence is None:
+                continue  # a concurrent ENTER won; its session is the visit
             events.append(
                 _emit(
                     db,
@@ -335,6 +491,7 @@ def evaluate_ping(
             )
             _increment_confirmed_arrivals(db, arming.facility_id)
         elif inside and presence is not None:
+            presence.outside_streak = 0  # a fix inside ends any run of outside ones
             if _as_utc(occurred_at) - _as_utc(presence.last_tick_at) >= DWELL_TICK_INTERVAL:
                 presence.last_tick_at = occurred_at
                 db.flush()
@@ -349,7 +506,15 @@ def evaluate_ping(
                         lon,
                     )
                 )
+            else:
+                db.flush()
         elif not inside and presence is not None:
+            presence.outside_streak += 1
+            if presence.outside_streak < confirm:
+                # not yet confirmed: no event, the visit stays open, and `last_tick_at` is
+                # deliberately untouched so a bad fix cannot masquerade as a dwell tick
+                db.flush()
+                continue
             presence.active = False
             presence.exited_at = occurred_at
             db.flush()
@@ -365,6 +530,36 @@ def evaluate_ping(
                 )
             )
     return events
+
+
+def _open_presence(db: Session, account_id, facility_id, occurred_at) -> GeofencePresence | None:
+    """Open a visit, or return None if a concurrent evaluation already opened it.
+
+    AI-CONTEXT: the cursor lock should make this unreachable — it serialises evaluation per
+    account — so this is the backstop for the one case a lock cannot cover: two connections
+    for an account whose cursor row does not exist yet. `uq_geofence_presence_active` is
+    what turns that into a caught error instead of a second open session whose stale
+    `entered_at` a later load inherits.
+    """
+    presence = GeofencePresence(
+        account_id=account_id,
+        facility_id=facility_id,
+        entered_at=occurred_at,
+        last_tick_at=occurred_at,
+        active=True,
+    )
+    try:
+        with db.begin_nested():
+            db.add(presence)
+            db.flush()
+    except IntegrityError:
+        # the SAVEPOINT rollback has already detached it; expunging again raises. Guarded
+        # rather than assumed, because the same shape in m03 leaves the object attached and
+        # the difference is not visible from the call site.
+        if presence in db:
+            db.expunge(presence)
+        return None
+    return presence
 
 
 def disarm_geofence(db: Session, account_id, facility_id, occurred_at: datetime | None = None):
@@ -514,6 +709,30 @@ DEFAULT_PING_RETENTION_DAYS = 365
 def register_location_retention(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
 
+    flags.register_config(
+        db,
+        CONFIG_EXIT_CONFIRM_PINGS,
+        DEFAULT_EXIT_CONFIRM_PINGS,
+        description=(
+            "Consecutive pings outside a geofence before EXIT fires and the detention "
+            "clock stops. 1 is today's behaviour: one stray fix ends the visit. Raising it "
+            "ignores a bad GPS reading but DELAYS every exit, lengthening detention "
+            "claims — an owner decision. Below 1 reads as 1."
+        ),
+        scope="location",
+    )
+    flags.register_config(
+        db,
+        CONFIG_ACCURACY_GATE_M,
+        DEFAULT_ACCURACY_GATE_M,
+        description=(
+            "Ignore pings whose reported accuracy is worse than this many metres when "
+            "deciding presence. 0 disables the gate — today's behaviour, every ping "
+            "trusted however vague. Pings reporting no accuracy are never gated. Set too "
+            "low, a truck in a canyon stops being tracked: an owner decision."
+        ),
+        scope="location",
+    )
     flags.register_config(
         db,
         CONFIG_PING_RETENTION_DAYS,
