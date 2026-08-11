@@ -16,6 +16,7 @@ import AuditSurface from "./surfaces/AuditSurface.vue";
 import ConditionSurface from "./surfaces/ConditionSurface.vue";
 import ClaimSurface from "./surfaces/ClaimSurface.vue";
 import StopPacketsSurface from "./surfaces/StopPacketsSurface.vue";
+import LoadRecordSurface from "./surfaces/LoadRecordSurface.vue";
 import EvidenceSurface from "./surfaces/EvidenceSurface.vue";
 import AuthSurface from "./surfaces/AuthSurface.vue";
 import MoreSurface from "./surfaces/MoreSurface.vue";
@@ -82,6 +83,13 @@ export const routes = [
     component: StopPacketsSurface,
     meta: { driving: "withdraws" },
   },
+  // AI-CONTEXT: a finished load's record — what it CONTAINS, before it is downloaded
+  // or sent (§23 entry 137). A screen rather than a step inside the Past loads sheet
+  // (owner decision): it carries photo thumbnails and a per-dock breakdown, the sheet
+  // it would have lived in is already 1 deep (§8), and a route gives it Android back
+  // and a deep link. `withdraws` — the record stays readable at speed, the two acting
+  // controls do not.
+  { path: "/load/:loadId/record", name: "load-record", component: LoadRecordSurface, meta: { driving: "withdraws" } },
   { path: "/load/:stopId/evidence", name: "evidence", component: EvidenceSurface, meta: { driving: "withdraws" } },
   { path: "/docs", name: "docs", component: DocsSurface, meta: { driving: "withdraws" } },
   { path: "/bookings", name: "bookings", component: BookingsSurface, meta: { driving: "withdraws" } },

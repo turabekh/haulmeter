@@ -842,6 +842,107 @@ def claim_detail(
     }
 
 
+@router.get("/{load_id}/record")
+def load_record(
+    load_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """AI-CONTEXT: what a finished load's record CONTAINS, before it is downloaded or
+    sent (owner request, 2026-08-11).
+
+    Past loads offered exactly two things: open one stop's evidence, or "Export whole
+    load" — a PDF download, blind. A driver could send nothing and could only see the
+    document by first putting it on their phone. `load_pack` composes every stop's
+    photos into one document and `/protection/load/{id}/share` has always accepted
+    `kind="load"`, so **the whole-load pack could always be emailed and nothing ever
+    called it** — the same built-and-inert shape HANDOFF-122 names, an eighth time.
+
+    THIS IS A READ OF THE SAME SOURCE THE PACK IS BUILT FROM. `load_pack` groups by
+    stop over `stop_evidence`; so does this. If the two ever disagree, the screen is
+    lying about what the broker will receive, which is the one thing this endpoint
+    exists to prevent — so the grouping and the ordering are deliberately identical
+    rather than re-derived.
+
+    The counterparty rides along because the send needs a default recipient, and
+    HANDOFF-122 §3 means it is very often NULL — the screen has to be able to say so
+    before the driver taps Send rather than after.
+    """
+    load = loads.get_load(db, load_id)
+    if load is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "load not found")
+    if load.account_id != account.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your load")
+    stops = loads.list_stops(db, load)
+    cp = (
+        loads.get_counterparty(db, load.counterparty_id)
+        if load.counterparty_id is not None
+        else None
+    )
+    out_stops = []
+    for stop in stops:
+        fac = facility.get_facility(db, stop.facility_id)
+        ev = evidence.stop_evidence(db, stop.id)
+        claim = m3.claim_for_stop(db, stop.id)
+        out_stops.append(
+            {
+                "stop_id": str(stop.id),
+                "sequence": stop.sequence,
+                "stop_type": stop.stop_type.value,
+                "facility_name": fac.name if fac is not None else None,
+                "detention_cents": claim.amount_cents if claim and claim.amount_cents else None,
+                # the photos THEMSELVES, so the screen can show what was captured
+                # rather than a count. `artifact_id` is what the existing per-stop
+                # photo route serves, so no new image endpoint is needed.
+                # `stop_evidence` already serialises these (ids stringified, timestamps
+                # isoformatted), so they pass through — re-converting here is how the
+                # two views start to disagree about the same artifact.
+                "photos": ev.get("photos", []),
+                "document_types": sorted(
+                    {d.doc_type.value for d in documents.documents_for_subject(db, "stop", stop.id)}
+                ),
+                # the GPS trail, as a COUNT of what the chain holds for this dock. The
+                # events themselves are the per-stop evidence screen's job; here the
+                # question is only "is the arrival in this document".
+                "gps_events": sum(
+                    1 for e in ev.get("timeline", []) if e.get("type") == "GEOFENCE"
+                ),
+                # §11.7: the integrity of what is about to be sent, stated. A pack that
+                # fails its own verification cannot be shared (evidence-integrity
+                # session), so a driver must learn that here and not from a refused tap.
+                "chain_valid": bool(ev.get("chain_valid", True)),
+            }
+        )
+    claims = [c for c in (m3.claim_for_stop(db, s.id) for s in stops) if c is not None]
+    earned = [c for c in claims if c.amount_cents]
+    return {
+        "load_id": str(load.id),
+        "reference_number": load.reference_number,
+        "created_at": load.created_at.isoformat(),
+        "status": load.status.value,
+        "origin_name": (
+            f.name if stops and (f := facility.get_facility(db, stops[0].facility_id)) else None
+        ),
+        "destination_name": (
+            f.name
+            if len(stops) > 1 and (f := facility.get_facility(db, stops[-1].facility_id))
+            else None
+        ),
+        "stop_count": len(stops),
+        "counterparty_name": getattr(cp, "name", None),
+        "counterparty_email": getattr(cp, "contact_email", None),
+        "detention_cents": sum(c.amount_cents for c in earned) or None,
+        "claim_state": (
+            max(earned, key=lambda c: _CLAIM_STATE_ORDER[c.state]).state.value if earned else None
+        ),
+        "photo_count": sum(len(s["photos"]) for s in out_stops),
+        "document_types": sorted({d for s in out_stops for d in s["document_types"]}),
+        "gps_events": sum(s["gps_events"] for s in out_stops),
+        "chain_valid": all(s["chain_valid"] for s in out_stops),
+        "stops": out_stops,
+    }
+
+
 @router.get("/{stop_id}/evidence")
 def evidence_detail(
     stop_id: uuid.UUID,

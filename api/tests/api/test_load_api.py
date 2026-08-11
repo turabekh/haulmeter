@@ -717,3 +717,120 @@ class TestEvidenceTimelineSaysWhatHappened:
             for e in client.get(f"/load/{stop_id}/evidence", headers=headers).json()["timeline"]
         ]
         assert "notice_sent" not in events
+
+
+# AI-CONTEXT: the load RECORD — what a finished load contains, before it is downloaded
+# or sent (owner request, 2026-08-11).
+#
+# Past loads offered two things: open ONE stop's evidence, or "Export whole load", a
+# blind PDF download. There was no way to see what the document held without first
+# putting it on the phone, and no way to send it to anybody — while
+# `/protection/load/{id}/share` has accepted `kind="load"` since the whole-route pack
+# was written, called by nothing.
+#
+# The load-bearing property is that this endpoint and `load_pack` read the SAME source
+# in the SAME order. A screen that disagrees with the document is worse than no screen:
+# it tells a driver they are sending something they are not.
+def _multi_stop_load(client, headers, db):
+    """A pickup and a delivery, because every read built before §23 entry 78 assumed
+    one stop and this is the shape that catches that."""
+    from app.foundation.f02_facility import public as facility
+    from app.foundation.f05_load import public as loads
+
+    stop_id = _create(client, headers)
+    stop = loads.get_stop(db, uuid.UUID(stop_id))
+    load = loads.get_load(db, stop.load_id)
+    second = facility.create_facility(
+        db, facility.FacilityType.shipper_receiver, "Kroger DC", 41.8, -87.6
+    )
+    loads.add_stop(db, load, second.id, loads.StopType.delivery)
+    return load, stop
+
+
+def test_the_record_reports_the_WHOLE_route(db, client):
+    headers = _auth(client)
+    load, _ = _multi_stop_load(client, headers, db)
+
+    body = client.get(f"/load/{load.id}/record", headers=headers).json()
+
+    assert body["stop_count"] == 2
+    assert len(body["stops"]) == 2, "a two-stop load reported one stop"
+    assert body["destination_name"] == "Kroger DC", "the far end of the route was dropped"
+    assert [s["sequence"] for s in body["stops"]] == [0, 1], "stops out of route order"
+
+
+def test_the_record_names_the_photos_it_will_send(db, client):
+    """Not a COUNT. The screen shows what was captured, so the read has to carry the
+    artifact ids the existing photo route serves."""
+    from app.foundation.f05_load import public as loads
+    from app.modules.m05_protection import public as m5
+
+    headers = _auth(client)
+    load, stop = _multi_stop_load(client, headers, db)
+    loads.arm_stop(db, stop)
+    cap = m5.start_condition_capture(db, stop, load.account_id, m5.CapturePhase.pickup)
+    m5.add_condition_photo(db, cap, "trailer_exterior", content=b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+
+    body = client.get(f"/load/{load.id}/record", headers=headers).json()
+
+    first = next(s for s in body["stops"] if s["stop_id"] == str(stop.id))
+    assert first["photos"], "a captured photo did not reach the record"
+    assert first["photos"][0]["artifact_id"], "no artifact id — the screen cannot show it"
+    assert body["photo_count"] == 1
+
+
+def test_the_record_carries_the_recipient_so_the_screen_can_say_there_is_none(db, client):
+    """HANDOFF-122 §3: nothing in this product had ever written `contact_email`, so on
+    most real loads there is nobody to send to — and a driver must learn that BEFORE
+    tapping Send, not from a refusal afterwards."""
+    headers = _auth(client)
+    load, _ = _multi_stop_load(client, headers, db)
+
+    body = client.get(f"/load/{load.id}/record", headers=headers).json()
+
+    assert "counterparty_email" in body
+    assert body["counterparty_name"] == "Acme Brokerage"
+
+
+def test_the_record_agrees_with_the_DOCUMENT_it_describes(db, client):
+    """The one that matters. `load_pack` groups by stop over `stop_evidence`; so does
+    this. If they diverge the screen is lying about what the broker receives."""
+    from app.foundation.f05_load import public as loads
+    from app.modules.m05_protection import public as m5
+
+    headers = _auth(client)
+    load, stop = _multi_stop_load(client, headers, db)
+    loads.arm_stop(db, stop)
+    cap = m5.start_condition_capture(db, stop, load.account_id, m5.CapturePhase.pickup)
+    m5.add_condition_photo(db, cap, "seals", content=b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+
+    body = client.get(f"/load/{load.id}/record", headers=headers).json()
+    pack = m5.load_pack(db, load.id)
+
+    # the pack's artifacts are the photos it will print; the screen's count is the same
+    # photos counted one layer up. An unconditional assertion, not a guarded one — a
+    # comparison that can skip itself proves nothing (HANDOFF-122's revert-check lesson).
+    assert body["photo_count"] == len(pack.artifacts), "the screen and the document disagree"
+    assert body["chain_valid"] == pack.verification["chain_valid"]
+
+
+def test_one_driver_cannot_read_anothers_record(db, client):
+    headers = _auth(client)
+    load, _ = _multi_stop_load(client, headers, db)
+    other = client.post(
+        "/auth/register", json={"email": "thief@example.com", "password": "pw-123456"}
+    )
+    theirs = {"Authorization": f"Bearer {other.json()['token']}"}
+
+    assert client.get(f"/load/{load.id}/record", headers=theirs).status_code == 403
+
+
+def test_the_record_requires_auth(db, client):
+    headers = _auth(client)
+    load, _ = _multi_stop_load(client, headers, db)
+    assert client.get(f"/load/{load.id}/record").status_code == 401
+
+
+def test_an_unknown_load_is_404_not_500(client):
+    headers = _auth(client)
+    assert client.get(f"/load/{uuid.uuid4()}/record", headers=headers).status_code == 404

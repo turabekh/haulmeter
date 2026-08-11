@@ -3073,10 +3073,12 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
     expect(rows[0].text()).toContain("$87.50"); // Mono, like every money figure
     expect(rows[0].text()).toContain("Invoiced");
 
-    // the stop id is back, so the evidence pack has a route weeks later
+    // §23 entry 137: the row opens the LOAD's record — where the driver can read what
+    // the document holds before downloading or sending it. It used to jump straight to
+    // one stop's evidence, which was the only reachable half of a multi-stop load.
     await rows[0].find(".hist__main").trigger("click");
     await flushPromises();
-    expect(router.currentRoute.value.path).toBe("/load/s-1/evidence");
+    expect(router.currentRoute.value.path).toBe("/load/l-1/record");
   });
 
   it("a load that produced nothing says so rather than rendering empty rows", async () => {
@@ -3111,10 +3113,14 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
     expect(route).toContain("BRL-78426");
   });
 
-  it("opens a route's row to its stops, so every photo is reachable (\u00a723 entry 78)", async () => {
-    // the row linked to stops[0] and there was no other way in, so a driver who
-    // photographed a pickup AND a delivery had eight photos in the system and could
-    // open four -- whichever four the row happened to point at.
+  it("gives EVERY row one destination, whatever shape the load was (\u00a723 entry 137)", async () => {
+    // entry 78 made a route's stops reachable by EXPANDING the row in place, and that
+    // expansion also carried an "Export whole load" control which downloaded a PDF the
+    // driver had never seen. So one row did three different things depending on the
+    // load -- navigate, expand, or download -- and the loudest of them put a document
+    // on the phone sight-unseen. Every row is one tap to the record now; the stops, the
+    // photographs, the download and the send all live there, behind a screen that says
+    // what the document contains first.
     const router = testRouter();
     const w = mount(LoadSurface, { global: { plugins: [router] } });
     await flushPromises();
@@ -3122,24 +3128,19 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
     await flushPromises();
 
     const rows = w.findAll(".hist__row");
-    expect(rows[2].findAll(".hist__stop")).toHaveLength(0); // closed to begin with
+    // nothing expands in place, and the blind download is gone from the sheet entirely
+    expect(w.findAll(".hist__stop")).toHaveLength(0);
+    expect(w.findAll(".hist__export")).toHaveLength(0);
+
+    // the MULTI-stop load: entry 78's reachability is preserved, one screen along
     await rows[2].find(".hist__main").trigger("click");
     await flushPromises();
-
-    const stops = w.findAll(".hist__row")[2].findAll(".hist__stop");
-    expect(stops).toHaveLength(3); // two stops + export the whole load
-    expect(stops[0].text()).toContain("1 · Pickup · Harvest Foods DC");
-    expect(stops[0].text()).toContain("4 photos");
-    expect(stops[1].text()).toContain("2 · Delivery · Metro Market Warehouse");
-    expect(stops[1].text()).toContain("no detention");
-
-    // and the delivery's own evidence is now reachable, which it was not
-    await stops[1].trigger("click");
-    await flushPromises();
-    expect(router.currentRoute.value.path).toBe("/load/s-3b/evidence");
+    expect(router.currentRoute.value.path).toBe("/load/l-3/record");
   });
 
-  it("sends a one-stop load straight to its evidence rather than opening nothing", async () => {
+  it("sends a one-stop load to the same place as a two-stop one", async () => {
+    // the shape difference used to reach the driver as two different behaviours from
+    // two identical-looking rows. One row, one tap, one screen.
     const router = testRouter();
     const w = mount(LoadSurface, { global: { plugins: [router] } });
     await flushPromises();
@@ -3148,7 +3149,7 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
 
     await w.findAll(".hist__row")[0].find(".hist__main").trigger("click");
     await flushPromises();
-    expect(router.currentRoute.value.path).toBe("/load/s-1/evidence");
+    expect(router.currentRoute.value.path).toBe("/load/l-1/record");
   });
 
   it("labels a company driver's claim state rather than printing its key", async () => {

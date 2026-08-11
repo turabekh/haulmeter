@@ -463,6 +463,66 @@ const WALLET_MOCKS = {
   [`/protection/documents/${DOC_ID}`]: binary("image/png", PNG_1PX),
 };
 
+// AI-CONTEXT: the load RECORD (§23 entry 137) — what a finished load contains, read
+// before it is downloaded or sent. Shape-matched to `GET /load/{id}/record`.
+//
+// TWO stops with photos on BOTH, deliberately: every read built before entry 78 assumed
+// one stop, and a mock with a single stop would measure a screen that cannot show the
+// defect this screen exists to fix. The names are long on purpose — at 360 dp under
+// xx-XL (+40%) the route header is what wraps first.
+const RECORD_ID = "00000000-0000-0000-0000-0000000000cc";
+const LOAD_RECORD = {
+  load_id: RECORD_ID,
+  reference_number: "BRL-78426",
+  created_at: "2026-08-07T12:00:00+00:00",
+  status: "closed",
+  origin_name: "Midwest Distribution Center — Dock 4",
+  destination_name: "Metro Market Warehouse",
+  stop_count: 2,
+  counterparty_name: "Bolt Logistics",
+  counterparty_email: "accountspayable@boltlogistics.example",
+  detention_cents: 18750,
+  claim_state: "invoiced",
+  photo_count: 5,
+  document_types: ["bol", "pod"],
+  gps_events: 2,
+  chain_valid: true,
+  stops: [
+    {
+      stop_id: "00000000-0000-0000-0000-0000000000c1",
+      sequence: 0,
+      stop_type: "pickup",
+      facility_name: "Midwest Distribution Center — Dock 4",
+      detention_cents: null,
+      photos: [1, 2, 3].map((n) => ({
+        artifact_id: `aaaaaaaa-0000-0000-0000-00000000000${n}`,
+        prompt: "trailer_exterior",
+        captured_at: "2026-08-07T13:00:00+00:00",
+        has_image: true,
+      })),
+      document_types: ["bol"],
+      gps_events: 1,
+      chain_valid: true,
+    },
+    {
+      stop_id: "00000000-0000-0000-0000-0000000000c2",
+      sequence: 1,
+      stop_type: "delivery",
+      facility_name: "Metro Market Warehouse",
+      detention_cents: 18750,
+      photos: [4, 5].map((n) => ({
+        artifact_id: `aaaaaaaa-0000-0000-0000-00000000000${n}`,
+        prompt: "seals",
+        captured_at: "2026-08-08T09:00:00+00:00",
+        has_image: true,
+      })),
+      document_types: ["pod"],
+      gps_events: 1,
+      chain_valid: true,
+    },
+  ],
+};
+
 // AI-CONTEXT: shape-matched to the endpoint (api/m05_protection.py::stop_packets).
 // `contents` and `claim` were added the day the review card shipped; a mock missing
 // them renders the sheet with no contents list and no claim section — measuring the
@@ -780,6 +840,25 @@ const SURFACES = [
   // glyph coverage that has to survive the +40% pseudo-locale.
   ["sheet-login-language", "/login", { anon: true, open: [".lang-btn"], ready: ".lang" }],
   ["evidence", "/load/00000000-0000-0000-0000-0000000000aa/evidence"],
+  // the record itself: two docks, five thumbnails, a Primary and a Secondary. `ready`
+  // proves the DOCKS rendered rather than the shell — waiting on `.cta` alone would go
+  // green against the empty state, which also has a header and no docks.
+  ["load-record", `/load/${RECORD_ID}/record`, {
+    mocks: { [`/load/${RECORD_ID}/record`]: LOAD_RECORD },
+    ready: ".rec:has(.stop__open)",
+  }],
+  // the send sheet over it, with the longest realistic AP address in the field
+  ["load-record-send", `/load/${RECORD_ID}/record`, {
+    mocks: { [`/load/${RECORD_ID}/record`]: LOAD_RECORD },
+    open: [".cta:not(.cta--outline)"],
+    ready: ".send__input",
+  }],
+  // §11.7: a pack that fails its own verification cannot be shared, so the screen says
+  // so and the Primary is dead. The banner is the longest string on the surface.
+  ["load-record-broken", `/load/${RECORD_ID}/record`, {
+    mocks: { [`/load/${RECORD_ID}/record`]: { ...LOAD_RECORD, chain_valid: false } },
+    ready: ".rec__broken",
+  }],
   ["condition", "/protection/condition"],
   // `ready` is NEW. This state had none, so when the fixture went it kept passing while
   // measuring §15.4's one-line error instead of the facility — a silent coverage loss of

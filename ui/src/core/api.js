@@ -560,6 +560,14 @@ export async function fetchLoadHistory() {
   return apiGet("/load/history", "load_history");
 }
 
+// AI-CONTEXT: what a finished load's record CONTAINS, so a driver can look at it before
+// downloading or sending it. Cached like every other GET the app depends on (§15.1): a
+// driver arguing with a broker from a truck stop is exactly the reader of this screen,
+// and "no signal" must not mean "no record".
+export async function fetchLoadRecord(loadId) {
+  return apiGet(`/load/${loadId}/record`, `load_record_${loadId}`);
+}
+
 export async function arriveAtStop(stopId) {
   const resp = await fetch(`${API_BASE}/load/${stopId}/arrive`, {
     method: "POST",

@@ -173,7 +173,7 @@ function photoLabel(prompt) {
 <template>
   <div class="ev">
     <header class="ev__head">
-      <button class="back" type="button" :aria-label="t('facility.navigate')" @click="router.back()">
+      <button class="back" type="button" :aria-label="t('nav.back')" @click="router.back()">
         <ArrowLeft :size="22" :stroke-width="2" aria-hidden="true" />
       </button>
       <h1 class="ev__title">{{ t("evidence.title") }}</h1>

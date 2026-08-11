@@ -38,6 +38,7 @@ const SOURCE = {
   condition: "ConditionSurface",
   claim: "ClaimSurface",
   evidence: "EvidenceSurface",
+  "load-record": "LoadRecordSurface",
   docs: "DocsSurface",
   bookings: "BookingsSurface",
   more: "MoreSurface",

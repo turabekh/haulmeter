@@ -83,7 +83,7 @@ async function onCancel(booking) {
       <button
         class="back"
         type="button"
-        :aria-label="t('bookings.back')"
+        :aria-label="t('nav.back')"
         @click="router.back()"
       >
         <ArrowLeft :size="22" :stroke-width="2" aria-hidden="true" />
