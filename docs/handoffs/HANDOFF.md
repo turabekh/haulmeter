@@ -3,7 +3,40 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — read this first, every session.
+➡️ **[HANDOFF-122.md](HANDOFF-122.md)** — read this first, every session.
+
+> **122** was six owner-supplied work contracts run back to back, each with its own report at
+> the repo root: **M3 detention**, **wedge delivery**, **location integrity**, **evidence
+> integrity**, **auth boundary**, **credential control**. Gates went **pytest 1558 → 1813,
+> vitest 746 → 796, layout 283 → 289**, all green, with three migrations (**0067, 0068, 0069**).
+>
+> **Stack UP · 43 commits UNPUSHED · NOTHING DEPLOYED.** `haulmeter.online` still serves **121
+> at `0066`**, so three migrations are pending on the box.
+>
+> **The finding that repeated in six different subsystems: a mechanism built, correct, exported
+> — and reached by nothing.** The dunning cadence, the broker's pre-detention warning,
+> `needs_rehash`, `build_trace`, `complete_credential_change`, `must_change`. All tested, all
+> green, none with a caller. The built-and-inert tally is now **six**.
+>
+> **Three were worse than their findings said.** Nothing in the product had ever written
+> `contact_email`, so the detention wedge could not deliver to anybody *by construction* —
+> a second, independent mechanism beside F-01. A pack whose own PDF says "HASH CHAIN BROKEN —
+> do not rely on this pack" was being pinned, linked and emailed to brokers. And an
+> admin-issued temporary password silently became the permanent one, because `must_change`
+> reached only the admin console and the change endpoint did not exist.
+>
+> **And the twin lesson, in the tests: six consecutive passes caught a revert-check that proved
+> nothing** — *the test arranged the appearance of the condition rather than the condition*.
+> A monkeypatched name over a shared object; a flood below the ceiling it meant to breach; a
+> race planted inside one session; an identity map answering for Postgres; and, finally, a
+> shell variable that made six reverts silently not happen.
+>
+> **The owner's two actions come first and neither is code:** the `SMTP_HOST` edit on the VM
+> (F-01, open since 121) and the push + deploy. Then the first live send should be a rehearsal
+> to an owner-controlled inbox — two independent blockers lift at once and that is the only
+> test covering both. **122 §4.**
+
+➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — the session before.
 
 > **121** was two instructions. *"Approved, do the loading-state work"* closed **five
 > findings — U-06, U-09, U-10 (criticals), U-11 and U-12** — every finding that decision was
@@ -103,7 +136,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > logged zero errors where it had failed all seven jobs — then observed on production, where
 > `migrate` exits before api and worker start. **HANDOFF-121 §11.**
 
-➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — the session before.
+➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — two sessions before.
 
 > **120** was one instruction — *"read the latest handoff and restart the app"*, then
 > *"proceed using your best judgement"* — and it worked the audit queue to the end:
@@ -166,7 +199,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack UP · thirty-five commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — two sessions before.
+➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — three sessions before.
 
 > **119** worked the 2026-08-07 audit queue: **nineteen findings closed, two partial**, and
 > answered one of the audit's three open questions. Three of
@@ -226,7 +259,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · twenty-four commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — three sessions before.
+➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — four sessions before.
 
 > **118** is a short session with **no source changes**: the owner asked for the stack to be
 > restarted, then for a handoff and a shutdown.
@@ -247,7 +280,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > session (no credential), so the ahead-count is arithmetic, not observation — **re-fetch
 > before pushing.** The next task is still the handset background-sensor test.
 
-➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — four sessions before.
+➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — five sessions before.
 
 > **117** did two things the owner asked for, and both turned up something under them.
 >
@@ -275,7 +308,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · four commits UNPUSHED · nothing deployed.** The next task is still the
 > handset background-sensor test.
 
-➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — five sessions before.
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — six sessions before.
 
 > **116** walked the stop auto-pilot end to end in a real browser, which is what two
 > sessions of building had never been subjected to. **It works.** A human adds a load,
@@ -304,7 +337,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > HANDOFF-116.md's own header contradicted, and its "everything from `a4e282c` onward
 > UNPUSHED" was overtaken by the 2026-08-03 push. Corrected in 117.)
 
-➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — six sessions before.
+➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — seven sessions before.
 
 > **115** was scoped as a **surfacing rework** — the A1 automation is built and correct,
 > only the way its result reaches the driver is wrong. Re-grepping the seams before
