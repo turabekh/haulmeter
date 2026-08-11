@@ -970,6 +970,33 @@ const SURFACES = [
     stop: LIVE_STOP,
     ready: ".packet-card__cta",
   }],
+  // AI-CONTEXT: paperwork waiting, NO load running — and every packet state above this
+  // one mocks a LIVE load, which is why nothing had ever measured it.
+  //
+  // It is not an exotic combination: it is where a driver stands every single time they
+  // finish a run, and it shipped with TWO full-bleed Primaries (the packet's and the
+  // empty state's "Add a load") separated by a resting Meter reading "No load —" under
+  // a card announcing the dock just left. Reported from a real screenshot.
+  //
+  // The `ready` selector proves the SEQUENCED shape rather than any one element: the
+  // packet card present AND the Meter absent. Waiting on `.packet-card__cta` alone
+  // would go green against the old stacked screen, which is this file's recurring
+  // failure — a state that can pass having rendered the defect it was added to catch.
+  ["load-packet-no-load", "/load", {
+    mocks: { ...NO_LOAD_MOCKS, "/protection/stop-packets": [PACKET_ROW] },
+    ready: ".load:has(.packet-card__cta):not(:has(.meter-card))",
+  }],
+  // the same state with no address on the packet, which is what HANDOFF-122 §3 says
+  // most real loads look like: nothing in the product had ever written `contact_email`.
+  // The warning line is `marker` text plus an icon at 360 dp under xx-XL — the longest
+  // string on the card and the one that wraps first.
+  ["load-packet-no-email", "/load", {
+    mocks: {
+      ...NO_LOAD_MOCKS,
+      "/protection/stop-packets": [{ ...PACKET_ROW, recipient: null }],
+    },
+    ready: ".load:has(.packet-card__to--missing)",
+  }],
   // the sheet, bundled: two labelled sections and one Send (owner decision 2026-08-02).
   // The CLAIM section is the taller of the two shapes — it adds a Mono figure — so the
   // bundled state is the one measured rather than the packet-only one.

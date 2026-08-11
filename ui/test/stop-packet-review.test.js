@@ -323,6 +323,191 @@ describe("The review sheet — over the Load tab, never away from it (NAV-3)", (
 });
 
 
+// AI-CONTEXT: the state the owner photographed, which NOTHING had ever measured.
+//
+// Every packet state in the layout harness — `load-packet-ready`, `load-packet-review`,
+// `load-worst-case` — mocks a LIVE load beside the packet. "Paperwork waiting, no load
+// running" is where a driver stands every time they finish a run, and it had no harness
+// state and no assertion, so this shipped:
+//
+//   [ You left Harvest Foods DC. Your paperwork is ready. ]
+//   [           Review & send            ]  <- filled Primary
+//   [              No load                              ]
+//   [                 —                                 ]
+//   [            Add a load              ]  <- a SECOND filled Primary
+//
+// Two identical full-bleed Primaries with nothing to rank them (§8 allows one), and a
+// resting Meter reading "No load —" directly under a card announcing the dock just
+// left. The em-dash sits where this product puts money, so the screen a driver opens
+// straight after a drop could read as their detention having disappeared.
+//
+// These assertions are about the COMBINATION. The blocks were each correct alone,
+// which is exactly why measuring them one at a time went green over this.
+describe("Paperwork waiting with no load — one job at a time (§8, §22.2)", () => {
+  afterEach(() => {
+    __resetStateForTests();
+    lastEvents.value = [];
+  });
+
+  // filled Primary = `.cta` that is neither the text nor the outline grade (§8).
+  function primaries(w) {
+    return w.findAll(".cta").filter((b) => {
+      const c = b.classes();
+      return !c.includes("cta--text") && !c.includes("cta--outline");
+    });
+  }
+
+  it("puts exactly ONE filled Primary on the screen", async () => {
+    setToken("tok");
+    const w = mountLoad(packetsOnly([PACKET]));
+    await flushPromises();
+
+    const filled = primaries(w);
+    expect(filled.length).toBe(1);
+    expect(filled[0].classes()).toContain("packet-card__cta");
+  });
+
+  it("does not say 'No load' underneath the dock the driver just left", async () => {
+    setToken("tok");
+    const w = mountLoad(packetsOnly([PACKET]));
+    await flushPromises();
+
+    expect(w.find(".packet-card").exists()).toBe(true);
+    expect(w.find(".meter-card").exists()).toBe(false);
+    expect(w.text()).not.toContain(en["load.empty_title"]);
+    expect(w.text()).not.toContain(en["load.empty_hint"]);
+  });
+
+  it("keeps both destinations, one grade quieter", async () => {
+    // the fix is a RANKING, not a removal: a driver who wants to start the next load
+    // before sending the last one's paperwork must still be able to.
+    setToken("tok");
+    const w = mountLoad(packetsOnly([PACKET]));
+    await flushPromises();
+
+    const row = w.find(".rungs--empty");
+    expect(row.exists()).toBe(true);
+    expect(row.text()).toContain(en["load.rc_add"]);
+    expect(row.text()).toContain(en["load.history"]);
+    expect(row.findAll(".rungs__item").length).toBe(2);
+  });
+
+  it("still opens the import sheet from the quiet control", async () => {
+    // a control that is quieter must not be a control that is dead (§23's dead-control
+    // pattern) — the tertiary grade changes the weight, never the wiring.
+    setToken("tok");
+    const w = mountLoad(packetsOnly([PACKET]));
+    await flushPromises();
+
+    await w.findAll(".rungs--empty .rungs__item")[0].trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain(en["load.rc_lead"]); // the import sheet's own first line
+  });
+
+  it("hands the Meter and the Primary back the moment the packet is sent", async () => {
+    // the two states are SEQUENCED, so the second must actually arrive. A fix that
+    // hid the empty state permanently would be worse than the collision it replaced.
+    setToken("tok");
+    const stub = vi.fn((url, opts) =>
+      String(url).includes("/send") && opts?.method === "POST"
+        ? jsonOk({ id: "p-1", state: "sent" })
+        : String(url).includes("/protection/stop-packets")
+          ? jsonOk([PACKET])
+          : jsonOk({}),
+    );
+    const w = mountLoad(stub);
+    await flushPromises();
+    expect(w.find(".meter-card").exists()).toBe(false);
+
+    await w.find(".packet-card__cta").trigger("click");
+    await flushPromises();
+    await w.find(".review__send").trigger("click");
+    await flushPromises();
+
+    expect(w.find(".packet-card").exists()).toBe(false);
+    expect(w.find(".meter-card").exists()).toBe(true);
+    expect(w.find(".rungs--empty").exists()).toBe(false);
+    expect(primaries(w).length).toBe(1);
+    expect(primaries(w)[0].text()).toContain(en["load.rc_add"]);
+    expect(w.text()).toContain(en["load.empty_hint"]);
+  });
+
+  it("leaves the DRIVING glance card exactly as §10.2 specifies", async () => {
+    // §10.2 at speed: "collapses to Meter-only glance card + voice hint". The collision
+    // this fixes is a decision between two buttons, and there are no buttons at speed —
+    // so the Meter must NOT stand down here.
+    setToken("tok");
+    const w = mountLoad(packetsOnly([PACKET]));
+    await flushPromises();
+
+    observeMotion({ speedMps: 25, now: T0 });
+    observeMotion({ speedMps: 25, now: T0 + DRIVING_SUSTAIN_MS });
+    await flushPromises();
+
+    expect(w.find(".meter-card").exists()).toBe(true);
+    expect(w.find(".rungs--empty").exists()).toBe(false);
+  });
+});
+
+// AI-CONTEXT: HANDOFF-122 §3 — nothing in this product had ever written
+// `contact_email`, so on most real loads this packet has nowhere to go. That fact was
+// reachable only by tapping through to the sheet, where the driver met "No email on
+// file" as a surprise. §12.4 wants what happened and what to do, while they can act.
+describe("Where the paperwork is going, said before the tap (§12.4)", () => {
+  afterEach(() => {
+    __resetStateForTests();
+    lastEvents.value = [];
+  });
+
+  it("names the address on the card", async () => {
+    setToken("tok");
+    const w = mountLoad(packetsOnly([PACKET]));
+    await flushPromises();
+
+    const to = w.find(".packet-card__to");
+    expect(to.exists()).toBe(true);
+    expect(to.text()).toContain("ap@bolt.example");
+    expect(to.classes()).not.toContain("packet-card__to--missing");
+  });
+
+  it("says so when there is no address, rather than waiting for the sheet", async () => {
+    setToken("tok");
+    const w = mountLoad(packetsOnly([{ ...PACKET, recipient: null }]));
+    await flushPromises();
+
+    const to = w.find(".packet-card__to");
+    expect(to.text()).toContain(en["packet.needs_email"]);
+    // §16: colour is never the sole signal — the icon and the label carry it too.
+    expect(to.classes()).toContain("packet-card__to--missing");
+    expect(to.find("svg").exists()).toBe(true);
+  });
+
+  it("labels the reference instead of printing a bare code", async () => {
+    // "BL-77" alone is a code with no noun: a driver cannot tell their own load number
+    // from a tracking number the app invented.
+    setToken("tok");
+    const w = mountLoad(packetsOnly([PACKET]));
+    await flushPromises();
+
+    const ref = w.find(".packet-card__ref");
+    expect(ref.text()).toBe(en["packet.ref"].replace("{ref}", "BL-77"));
+    expect(ref.text()).not.toBe("BL-77");
+  });
+
+  it("says none of it at speed — the card is a line of text there", async () => {
+    setToken("tok");
+    const w = mountLoad(packetsOnly([PACKET]));
+    await flushPromises();
+
+    observeMotion({ speedMps: 25, now: T0 });
+    observeMotion({ speedMps: 25, now: T0 + DRIVING_SUSTAIN_MS });
+    await flushPromises();
+
+    expect(w.find(".packet-card__to").exists()).toBe(false);
+    expect(w.find(".packet-card__cta").exists()).toBe(false);
+  });
+});
+
 // AI-CONTEXT: §15.1 — offline is a mode, not an error.
 //
 // The packet is drafted SERVER-side on EXIT, and a dock is where signal dies. Reading

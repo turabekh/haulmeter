@@ -149,6 +149,33 @@ const packetHeadline = computed(() => {
   return facility ? t("packet.ready", { place: facility }) : t("packet.ready_nowhere");
 });
 const packetReference = computed(() => nextPacket.value?.reference ?? "");
+// where this paperwork goes, said BEFORE the tap rather than inside the sheet. §12.4
+// asks an error to state what happened and what to do while the driver can still act,
+// and a missing address is the one thing on this card they have to solve — HANDOFF-122
+// §3: nothing in this product had ever written `contact_email`, so on most real loads
+// the honest answer here is that there is no address yet.
+const packetRecipient = computed(() => nextPacket.value?.recipient || "");
+// AI-CONTEXT: §8's "one Primary per screen", applied to the state that had TWO.
+//
+// With paperwork waiting and no load running, this tab rendered the packet card's
+// Primary and the empty state's "Add a load" Primary as two identical full-bleed
+// buttons ~200 dp apart, over a resting Meter reading "No load —" directly beneath a
+// card saying "You left <dock>". Three defects in one screen: nothing said which
+// action was the one to take, the screen contradicted itself, and the em-dash sat
+// exactly where this product puts money, so "No load —" right after a drop reads as
+// the detention having vanished.
+//
+// The two states are SEQUENCED rather than stacked. While paperwork waits it is the
+// tab's single job; the Meter at rest, its hint and the second Primary stand down to
+// the tertiary row below. Sending empties the queue and the ordinary §10.2 empty state
+// returns with "Add a load" as the Primary. Nothing is removed — §22.2's first and
+// fourth heuristics (remove rather than add · one action rather than two).
+//
+// NOT while DRIVING: §10.2 specifies the Meter-only glance card at speed, and the
+// packet card is already a line of text with no control there (Forbidden #11).
+const paperworkFirst = computed(
+  () => !isDriving.value && !live.value && waitingPackets.value.length > 0,
+);
 const reviewContents = computed(() => reviewPacket.value?.contents ?? []);
 const reviewClaim = computed(() => reviewPacket.value?.claim ?? null);
 
@@ -709,14 +736,42 @@ async function endLoad() {
          65 mph. The packet is durable; it waits. -->
     <section v-if="waitingPackets.length" class="card packet-card">
       <h2 class="packet-card__title">{{ packetHeadline }}</h2>
-      <p v-if="packetReference" class="packet-card__ref">{{ packetReference }}</p>
+      <!-- the reference is LABELLED. A bare "BRL-78426" under a headline is a code with
+           no noun attached: a driver cannot tell their own load number from a tracking
+           number the app invented. §12.5 forbids concatenated fragments, so it is one
+           ICU message rather than a label glued to a value. -->
+      <p v-if="packetReference" class="packet-card__ref">
+        {{ t("packet.ref", { ref: packetReference }) }}
+      </p>
       <p v-if="isDriving" class="packet-card__driving">{{ t("packet.ready_driving") }}</p>
-      <button v-else class="cta packet-card__cta" type="button" @click="openReview">
-        {{ t("packet.review") }}
-      </button>
+      <template v-else>
+        <!-- §16: colour AND icon AND label. The missing case takes `marker` — the same
+             token `.late` already uses for a fact that needs attention without being an
+             alarm — because the driver did not cause it and can fix it in the sheet. -->
+        <p
+          class="packet-card__to"
+          :class="{ 'packet-card__to--missing': !packetRecipient }"
+        >
+          <TriangleAlert
+            v-if="!packetRecipient"
+            :size="16"
+            :stroke-width="2"
+            aria-hidden="true"
+          />
+          {{ packetRecipient ? t("packet.goes_to", { email: packetRecipient }) : t("packet.needs_email") }}
+        </p>
+        <button class="cta packet-card__cta" type="button" @click="openReview">
+          {{ t("packet.review") }}
+        </button>
+      </template>
     </section>
 
-    <section class="card meter-card">
+    <!-- the Meter at rest is §23 entry 52's own fix and it stays everywhere except the
+         one state where it contradicts the card above it: "No load —" directly under
+         "You left <dock>". Entry 52 was about never showing money the driver had not
+         earned; a zero-looking figure under a just-left-the-dock headline is the same
+         family of misread from the other side. It returns the moment the packet goes. -->
+    <section v-if="!paperworkFirst" class="card meter-card">
       <TheMeter :label="meterLabel" :figure="meterFigure" :variant="variant" :status="meterStatus" />
     </section>
     <!-- AI-CONTEXT: §15.5's degraded-location card, which became load-bearing the
@@ -733,8 +788,10 @@ async function endLoad() {
       </button>
     </section>
 
-    <!-- §15.3: one sentence of what this is, then one action to start. -->
-    <p v-if="!live && !isDriving" class="hint">{{ t("load.empty_hint") }}</p>
+    <!-- §15.3: one sentence of what this is, then one action to start. It explains the
+         Meter, so it stands down with the Meter — a sentence about a card that is not
+         on screen is the noise §10.2 keeps this tab clear of. -->
+    <p v-if="!live && !isDriving && !paperworkFirst" class="hint">{{ t("load.empty_hint") }}</p>
     <!-- §10.2 DRIVING: "collapses to Meter-only glance card + voice hint". The hint
          names a real destination — VoiceSheet lives on the Map tab — so this is a
          label pointing somewhere, not the dead-control pattern §23 forbids. It is
@@ -983,21 +1040,39 @@ async function endLoad() {
       </div>
       <p v-if="noticeMsg" class="notice-msg">{{ noticeMsg }}</p>
 
-      <!-- §10.2's empty state: "Add a load (rate-con photo import) as the ONE action".
-           PRD §108 calls the parsed rate con the primary way a load is created; the
-           manual form lives inside that sheet as the fallback for a rate con the
-           parse cannot read, rather than competing with it out here. -->
-      <button v-if="!live" class="cta" type="button" @click="importing = true">
-        {{ t("load.rc_add") }}
-      </button>
+      <!-- §10.2's empty state, in its two shapes. Same two destinations either way —
+           this grades them, it does not remove one.
 
-      <!-- §23-approved: history lives on the Load tab, because a load is what this tab
-           is about — tertiary, so §10.2's one empty-state action stays the loud thing.
-           §10.2 is silent on history and navigation is a never-improvise category
-           (§22), so the shape was the owner's decision rather than a reading. -->
-      <button v-if="!live" class="cta cta--text" type="button" @click="openHistory">
-        {{ t("load.history") }}
-      </button>
+           PAPERWORK FIRST: both step down to the tertiary row the ladder already uses
+           (§8 Tertiary: text, auto width, wrapping, 48 dp), so the packet card holds
+           the screen's only Primary. Reusing `.rungs` rather than declaring a second
+           row is the point — it is the same pattern doing the same job, and a new one
+           would be a §22.2 invention where an existing rule already answers.
+
+           OTHERWISE: exactly what shipped — "Add a load" as the one loud action (PRD
+           §108: the parsed rate con is the primary way a load is created; the manual
+           form is the fallback INSIDE that sheet), with history tertiary beneath it. -->
+      <div v-if="paperworkFirst" class="rungs rungs--empty">
+        <button class="rungs__item" type="button" @click="importing = true">
+          {{ t("load.rc_add") }}
+        </button>
+        <button class="rungs__item" type="button" @click="openHistory">
+          {{ t("load.history") }}
+        </button>
+      </div>
+      <template v-else-if="!live">
+        <button class="cta" type="button" @click="importing = true">
+          {{ t("load.rc_add") }}
+        </button>
+        <!-- §23-approved: history lives on the Load tab, because a load is what this
+             tab is about — tertiary, so §10.2's one empty-state action stays the loud
+             thing. §10.2 is silent on history and navigation is a never-improvise
+             category (§22), so the shape was the owner's decision rather than a
+             reading. -->
+        <button class="cta cta--text" type="button" @click="openHistory">
+          {{ t("load.history") }}
+        </button>
+      </template>
 
       <!-- AI-CONTEXT: the review sheet — A1 req 5 and req 6, over the Load tab.
            Two labelled SECTIONS under ONE Send (owner decision, 2026-08-02): the
@@ -1220,6 +1295,27 @@ async function endLoad() {
   color: var(--text-2);
   font-size: var(--type-caption-size);
   line-height: var(--type-body-line);
+}
+/* where it goes, before the tap. `overflow-wrap: anywhere` because an AP address has
+   no spaces to break at and Forbidden #5 rules out truncating it — at 360 dp under
+   xx-XL (+40%) a long one has to wrap rather than push the card sideways. */
+.packet-card__to {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin: var(--s-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+  overflow-wrap: anywhere;
+}
+/* `marker`, the same token `.late` uses: a fact that needs attention and is not an
+   alarm. The icon carries it too — §16, colour is never the sole signal. */
+.packet-card__to--missing {
+  color: var(--marker-500);
+}
+.packet-card__to--missing svg {
+  flex-shrink: 0;
 }
 /* Forbidden #11: at speed this is a line of text, never a control. */
 .packet-card__driving {
@@ -1584,6 +1680,12 @@ async function endLoad() {
   justify-content: center;
   gap: var(--s-1) var(--s-3);
   margin-top: var(--s-2);
+}
+/* the same row, under a card rather than under the Primary it usually follows, so it
+   takes the card gap instead of the button gap. No second pattern, just the spacing
+   step that belongs where it sits. */
+.rungs--empty {
+  margin-top: var(--s-3);
 }
 .rungs__item {
   min-height: 48px;
