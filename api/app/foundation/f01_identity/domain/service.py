@@ -1,10 +1,10 @@
 import secrets
-import threading
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from . import security as _security
 from .auth_methods import get_handler
 from .enums import AuthorityType, MethodType, OrgType, Role, VerifyStatus
 from .models import (
@@ -52,10 +52,31 @@ CONFIG_LOGIN_WINDOW = "f01_login_window_seconds"
 CONFIG_LOGIN_MAX_IDENTIFIER = "f01_login_max_per_identifier"
 CONFIG_LOGIN_MAX_IP = "f01_login_max_per_ip"
 
+# AI-CONTEXT: registration's own counters (finding F1-6/F1-7). Deliberately NOT login's.
+#
+# Sharing the bucket would mean a registration flood from a carrier NAT locking honest
+# drivers out of LOGIN on the same address — the exact false positive `LOGIN_MAX_PER_IP`'s
+# comment above exists to avoid. `kind` on `login_attempt` is what keeps them apart.
+#
+# THE DEFAULTS ARE A FIRST GUESS WITH NO TRAFFIC BEHIND THEM. Nobody has watched real
+# signup volume, so these are chosen to be obviously generous for a human and obviously
+# expensive for a script: three accounts from one address in fifteen minutes is already
+# unusual, and one identifier retrying registration more than three times is a person who
+# has learned it is taken. They are F13 keys precisely so the first week of real data can
+# correct them from the console without a deploy.
+REGISTER_MAX_PER_IDENTIFIER = 3
+REGISTER_MAX_PER_IP = 10
+CONFIG_REGISTER_MAX_IDENTIFIER = "f01_register_max_per_identifier"
+CONFIG_REGISTER_MAX_IP = "f01_register_max_per_ip"
+
 # A SLIDING WINDOW, never a permanent lockout. A lockout would hand an attacker a
 # denial-of-service against the driver: fail five times against a competitor's email and
 # they cannot reach their own detention clock. This expires on its own.
-VERIFY_SLOTS = threading.BoundedSemaphore(8)
+# the pools and `VerifierBusy` moved to `security.py`, beside the operations they bound.
+# Re-exported here so every existing caller and test keeps its import path.
+VERIFY_SLOTS = _security.VERIFY_SLOTS
+HASH_SLOTS = _security.HASH_SLOTS
+VerifierBusy = _security.VerifierBusy
 
 
 class Throttled(Exception):
@@ -64,10 +85,6 @@ class Throttled(Exception):
     def __init__(self, retry_after: int):
         super().__init__(f"retry after {retry_after}s")
         self.retry_after = retry_after
-
-
-class VerifierBusy(Exception):
-    """Every password-verification slot is in use — shed load rather than fall over."""
 
 
 class EmailAlreadyRegistered(Exception):
@@ -195,10 +212,18 @@ def _as_utc(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
-def _failures_since(db: Session, column, value, since: datetime) -> tuple[int, datetime | None]:
+ATTEMPT_LOGIN = "login"
+ATTEMPT_REGISTER = "register"
+
+
+def _attempts_since(
+    db: Session, column, value, since: datetime, kind: str
+) -> tuple[int, datetime | None]:
     row = db.execute(
         select(func.count(), func.min(LoginAttempt.occurred_at)).where(
-            column == value, LoginAttempt.occurred_at >= since
+            column == value,
+            LoginAttempt.kind == kind,
+            LoginAttempt.occurred_at >= since,
         )
     ).one()
     return int(row[0]), row[1]
@@ -221,13 +246,76 @@ def check_login_allowed(db: Session, email: str, client_ip: str | None, now: dat
         checks.append((LoginAttempt.client_ip, client_ip, max_ip))
 
     for column, value, limit in checks:
-        count, oldest = _failures_since(db, column, value, since)
+        count, oldest = _attempts_since(db, column, value, since, ATTEMPT_LOGIN)
         if count < limit:
             continue
         # the window slides off the OLDEST attempt still counted, so the wait shrinks as
         # attempts age out instead of resetting every time someone tries again
         elapsed = (now - _as_utc(oldest)).total_seconds() if oldest else 0
         raise Throttled(max(1, int(window - elapsed)))
+
+
+def _register_limits(db: Session) -> tuple[int, int, int]:
+    from app.foundation.f13_flags import public as flags
+
+    return (
+        int(flags.get_config(db, CONFIG_LOGIN_WINDOW, LOGIN_WINDOW_SECONDS)),
+        int(flags.get_config(db, CONFIG_REGISTER_MAX_IDENTIFIER, REGISTER_MAX_PER_IDENTIFIER)),
+        int(flags.get_config(db, CONFIG_REGISTER_MAX_IP, REGISTER_MAX_PER_IP)),
+    )
+
+
+def check_registration_allowed(
+    db: Session, email: str, client_ip: str | None, now: datetime
+) -> None:
+    """Raise `Throttled` BEFORE any hashing — the same ordering rule login follows.
+
+    AI-CONTEXT: registration runs Argon2 for an unauthenticated caller, at a cost per
+    request at least equal to a verify, and nothing counted it (F1-6). `check_login_allowed`
+    exists because "nothing expensive may happen above this line"; the route beside it had
+    no such line at all.
+    """
+    window, max_identifier, max_ip = _register_limits(db)
+    now = _as_utc(now)
+    since = now - timedelta(seconds=window)
+
+    checks = [(LoginAttempt.identifier, _normalize_email(email), max_identifier)]
+    if client_ip:
+        checks.append((LoginAttempt.client_ip, client_ip, max_ip))
+
+    for column, value, limit in checks:
+        count, oldest = _attempts_since(db, column, value, since, ATTEMPT_REGISTER)
+        if count < limit:
+            continue
+        elapsed = (now - _as_utc(oldest)).total_seconds() if oldest else 0
+        raise Throttled(max(1, int(window - elapsed)))
+
+
+def record_registration_attempt(
+    db: Session, email: str, client_ip: str | None, now: datetime
+) -> None:
+    """EVERY attempt, successful or not — unlike login, which records only failures.
+
+    AI-CONTEXT: what is being rationed here is the Argon2 work and the probing, and a
+    successful registration costs exactly as much CPU as a failed one. Recording only
+    failures would let an attacker create accounts without limit and would leave the
+    409-as-oracle (F1-7) just as free as it was.
+    """
+    window, _, _ = _register_limits(db)
+    db.execute(
+        delete(LoginAttempt).where(
+            LoginAttempt.occurred_at < _as_utc(now) - timedelta(seconds=window)
+        )
+    )
+    db.add(
+        LoginAttempt(
+            identifier=_normalize_email(email),
+            kind=ATTEMPT_REGISTER,
+            client_ip=client_ip,
+            occurred_at=_as_utc(now),
+        )
+    )
+    db.flush()
 
 
 def record_failed_login(db: Session, email: str, client_ip: str | None, now: datetime) -> None:
@@ -239,7 +327,14 @@ def record_failed_login(db: Session, email: str, client_ip: str | None, now: dat
             LoginAttempt.occurred_at < _as_utc(now) - timedelta(seconds=window)
         )
     )
-    db.add(LoginAttempt(identifier=normalized, client_ip=client_ip, occurred_at=_as_utc(now)))
+    db.add(
+        LoginAttempt(
+            identifier=normalized,
+            kind=ATTEMPT_LOGIN,
+            client_ip=client_ip,
+            occurred_at=_as_utc(now),
+        )
+    )
     db.flush()
 
 
@@ -247,7 +342,14 @@ def clear_failed_logins(db: Session, email: str) -> None:
     # proving you are the account holder ends the lockout on it. The IP's own count is
     # deliberately NOT cleared: one success does not vouch for every attempt from an
     # address, which is the whole point of counting them separately.
-    db.execute(delete(LoginAttempt).where(LoginAttempt.identifier == _normalize_email(email)))
+    db.execute(
+        delete(LoginAttempt).where(
+            LoginAttempt.identifier == _normalize_email(email),
+            # only the LOGIN rows: a successful sign-in says nothing about how many
+            # accounts this address has been used to create
+            LoginAttempt.kind == ATTEMPT_LOGIN,
+        )
+    )
     db.flush()
 
 
@@ -262,14 +364,10 @@ def authenticate(db: Session, email: str, password: str) -> Account | None:
     if method is None:
         return None
     handler = get_handler(MethodType.password)
-    # see VERIFY_SLOTS: bound the concurrent Argon2 work so a login flood cannot consume
-    # every threadpool worker and stop the endpoints that have nothing to do with auth
-    if not VERIFY_SLOTS.acquire(blocking=False):
-        raise VerifierBusy()
-    try:
-        verified = handler.verify(method.secret_ref, password)
-    finally:
-        VERIFY_SLOTS.release()
+    # AI-CONTEXT: the slot is acquired INSIDE `handler.verify` now (F1-6). Acquiring here
+    # as well would deadlock — `BoundedSemaphore` is not reentrant — which is why this is a
+    # move rather than a belt-and-braces addition.
+    verified = handler.verify(method.secret_ref, password)
     if not verified:
         return None
     account = db.get(Account, method.account_id)

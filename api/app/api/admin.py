@@ -876,6 +876,14 @@ def create_account(
         account, temporary = identity.admin_create_account(db, body.email, role, body.display_name)
     except identity.EmailAlreadyRegistered as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, "email already registered") from exc
+    except identity.VerifierBusy as exc:
+        # this route hashes TWICE (register + reset), so it is the heaviest creation path
+        # in the product. A busy pool is a 503, never a 500 (F1-6).
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "account creation is busy",
+            headers={"Retry-After": "1"},
+        ) from exc
     admin.record_action(
         db,
         "account_create",
@@ -929,7 +937,14 @@ def reset_credential(
     db: Session = Depends(get_db),
 ) -> dict:
     account = _load_account(db, account_id)
-    temporary = identity.reset_credential(db, account)
+    try:
+        temporary = identity.reset_credential(db, account)
+    except identity.VerifierBusy as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "account creation is busy",
+            headers={"Retry-After": "1"},
+        ) from exc
     admin.record_action(
         db,
         "account_credential_reset",

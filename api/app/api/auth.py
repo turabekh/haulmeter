@@ -93,11 +93,46 @@ class TokenOut(BaseModel):
 
 
 @router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
-def register(body: RegisterIn, db: Session = Depends(get_db)) -> TokenOut:
+def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)) -> TokenOut:
+    """AI-CONTEXT: throttled and slot-bounded, like the route beside it (F1-6, F1-7).
+
+    This took no `Request` at all, so it could not throttle by IP even if it had wanted to,
+    and `build_secret_ref` ran Argon2 for an unauthenticated caller with no bound. That is
+    the CPU-exhaustion vector audit F-07 hardened `/login` against, on the next route down.
+
+    THE ATTEMPT IS RECORDED WHETHER OR NOT IT SUCCEEDS, unlike login. What is rationed here
+    is the hashing and the probing, and a successful registration costs exactly as much CPU
+    as a failed one.
+
+    THE 409 STAYS, and that is a considered decision rather than an oversight. It makes
+    registration an account-existence oracle, which login goes to real lengths not to be —
+    but the honest alternative ("we've emailed you if that address exists") requires an
+    email-verification step, and no verification at signup is owner-LOCKED. A product that
+    cannot send that email must not imply it did. So the oracle stays and stops being FREE:
+    the throttle above makes enumeration cost attempts. Closing it properly is downstream
+    of the owner's verification decision, not a problem this route can solve.
+    """
+    now = datetime.now(UTC)
+    client_ip = _client_ip(request)
+    try:
+        identity.check_registration_allowed(db, body.email, client_ip, now)
+    except identity.Throttled as exc:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "too many registration attempts",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    identity.record_registration_attempt(db, body.email, client_ip, now)
     try:
         account = identity.register_account(db, body.email, body.password)
     except identity.EmailAlreadyRegistered as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, "email already registered") from exc
+    except identity.VerifierBusy as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "account creation is busy",
+            headers={"Retry-After": "1"},
+        ) from exc
     identity.attach_role(db, account, identity.Role.driver)
     if body.authority:
         try:

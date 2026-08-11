@@ -184,13 +184,19 @@ def test_a_saturated_verifier_sheds_load_rather_than_falling_over(
     # the CPU-exhaustion answer. Uvicorn runs sync endpoints in a threadpool; without a
     # cap every worker can end up inside Argon2 and the whole API stops answering,
     # including endpoints with nothing to do with logging in. 503 beats a dead box.
+    # the PATCH TARGET moved with the mechanism: the slot is acquired inside
+    # `PasswordHandler.verify` now rather than in `authenticate`, so the bound protects
+    # every caller instead of the one that remembered it. The assertion is unchanged —
+    # a saturated verifier still sheds load with 503 rather than taking the box down.
     import threading
 
-    monkeypatch.setattr(identity_service, "VERIFY_SLOTS", threading.BoundedSemaphore(1))
-    identity_service.VERIFY_SLOTS.acquire()
+    from app.foundation.f01_identity.domain import security
+
+    monkeypatch.setattr(security, "VERIFY_SLOTS", threading.BoundedSemaphore(1))
+    security.VERIFY_SLOTS.acquire()
     try:
         resp = _login(client, password=PASSWORD)
         assert resp.status_code == 503
         assert resp.headers["Retry-After"] == "1"
     finally:
-        identity_service.VERIFY_SLOTS.release()
+        security.VERIFY_SLOTS.release()

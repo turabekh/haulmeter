@@ -11,7 +11,7 @@ so the shape is fixed and callers fail cleanly rather than silently.
 from typing import Protocol
 
 from .enums import MethodType
-from .security import hash_password, verify_password
+from . import security
 
 
 class AuthHandler(Protocol):
@@ -21,13 +21,28 @@ class AuthHandler(Protocol):
 
 
 class PasswordHandler:
+    """AI-CONTEXT: the concurrency bound is acquired HERE, not by the caller (F1-6).
+
+    `authenticate` used to acquire it around its own `verify` call, which protected exactly
+    one call site — and `build_secret_ref`, reached unauthenticated from registration at a
+    cost per request at least equal to a verify, had no bound at all. Putting it on the
+    operation instead of the caller is what makes that class of omission impossible.
+
+    Creation and verification draw on SEPARATE pools so a registration flood sheds only
+    registrations; see `security.py` for why that matters more than it sounds.
+    """
+
     def build_secret_ref(self, credential: str) -> str | None:
-        return hash_password(credential)
+        # resolved through the module, not bound at import: the pool is a live object a
+        # test (or a future config path) must be able to substitute
+        with security.slot(security.HASH_SLOTS):
+            return security.hash_password(credential)
 
     def verify(self, secret_ref: str | None, credential: str) -> bool:
         if secret_ref is None:
             return False
-        return verify_password(secret_ref, credential)
+        with security.slot(security.VERIFY_SLOTS):
+            return security.verify_password(secret_ref, credential)
 
 
 class _NotImplementedHandler:
