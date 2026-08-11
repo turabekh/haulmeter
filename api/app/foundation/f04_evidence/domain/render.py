@@ -371,6 +371,13 @@ def _detail(payload) -> str:
         return ""
     if payload.get("prompt"):
         return f"prompted: {str(payload['prompt']).replace('_', ' ')}"
+    # AI-CONTEXT: `pack_opened` is a LEGACY record and must not read as a human act
+    # (finding F4-1). It is no longer written — a link open is a URL being fetched, and
+    # mail-security scanners fetch URLs before anyone reads the mail — but chains already
+    # carrying it are append-only and are never rewritten. So the row renders as what was
+    # actually measured: the link was reached, by someone or something.
+    if (payload or {}).get("event") == "pack_opened":
+        return "link first accessed (may include automated scanners)"
     for key in ("event", "kind", "status"):
         if payload.get(key):
             return str(payload[key]).replace("_", " ")

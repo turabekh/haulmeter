@@ -17,14 +17,18 @@ Three consequences follow, and each is deliberate:
   but revocation then needs a denylist — and we are storing a row anyway for the
   hash and the storage key, so a lookup costs nothing and revocation is one column.
   No signing secret to manage, which also keeps `.env` honest.
-· **The first open is written into the chain.** "They opened it on the 12th" is
-  itself evidence in a dispute. Only the FIRST: a clerk refreshing four times is not
-  four facts, and an append-only log should not carry noise.
+· **The first open is recorded on the SHARE, not in the chain.** "They opened it on
+  the 12th" reads as a fact about a person, and a link open is not one: mail-security
+  scanners prefetch URLs, so the chain was immortalising automated fetches as human
+  acts and later packs carried that to the broker. `opened_count`,
+  `first_opened_at` and `last_opened_at` still record every open — they simply no
+  longer claim to be evidence of who did it. See `open_share`.
 
 The chain grows after a share — which is exactly why the share was pinned.
 """
 
 import hashlib
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -36,6 +40,8 @@ from app.foundation.f13_flags import public as flags
 
 from .enums import RecordType
 from .models import EvidenceLog, SharedPack
+
+_log = logging.getLogger(__name__)
 
 # AI-CONTEXT: how long a shared pack stays reachable, and why 90 was not enough.
 #
@@ -53,6 +59,17 @@ from .models import EvidenceLog, SharedPack
 # caller that does not exist yet is the bug class this project keeps producing.
 CONFIG_SHARE_DAYS = "f04_share_link_days"
 DEFAULT_SHARE_DAYS = 365
+
+
+class ChainInvalid(Exception):
+    """This log's chain does not verify, so nothing built from it may be shared.
+
+    Carries the verification so a caller can say WHY without recomputing it.
+    """
+
+    def __init__(self, verification):
+        self.verification = verification
+        super().__init__(f"evidence chain invalid: {verification.reason}")
 
 
 class ShareNotFound(Exception):
@@ -96,6 +113,33 @@ def share_pack(
     """Pin these bytes and hand back the record. The caller renders — F4 does not
     decide what a pack should contain — and this fixes what was sent."""
     now = now or datetime.now(UTC)
+
+    # AI-CONTEXT: A PACK THAT FAILS ITS OWN VERIFICATION DOES NOT TRAVEL (finding F4-3).
+    #
+    # The render has always printed "HASH CHAIN BROKEN — do not rely on this pack" when
+    # verification failed, and nothing stopped that PDF being pinned, given a link and
+    # emailed to a broker under the driver's name. The document said do not rely on me and
+    # we sent it anyway.
+    #
+    # The gate is HERE rather than in each caller because this is the chokepoint every
+    # path crosses — M3's claim pack, M5's incident pack, and A1's stop packet — so one
+    # check covers three modules and any fourth that arrives. Callers translate the
+    # refusal into something a driver can read; F4's job is to refuse.
+    from .service import verify_chain
+
+    verification = verify_chain(db, log)
+    if not verification.valid:
+        # ERROR, and deliberately NOT a new alert channel. A12 has exactly one, adding a
+        # second is an owner decision, and a broken chain is rare enough that a log line
+        # an operator finds beats a channel nobody agreed to. Recorded in the follow-ups.
+        _log.error(
+            "evidence pack refused: chain invalid for log %s (reason=%s, broken_at=%s)",
+            log.id,
+            verification.reason,
+            verification.broken_at,
+        )
+        raise ChainInvalid(verification)
+
     storage = storage or documents.default_storage()
     content_hash = hashlib.sha256(content).hexdigest()
     key = f"packs/{log.id}/{content_hash}.pdf"
@@ -149,22 +193,26 @@ def open_share(db: Session, token: str, now: datetime | None = None, storage=Non
     shared = resolve_share(db, token, now=now)
     storage = storage or documents.default_storage()
 
-    first = shared.opened_count == 0
+    # AI-CONTEXT: a link open is NOT written into the chain any more (finding F4-1).
+    #
+    # It used to append `pack_opened` on the first GET, and a later pack carried that to
+    # the broker as "they opened it on the 12th" — a claim about a person. A link open is
+    # not one. Mail-security scanners prefetch URLs before a human ever sees the mail, and
+    # Starlette runs the handler for HEAD as well as GET, so the chain was immortalising
+    # automated fetches as human acts. In an append-only log that assertion can never be
+    # withdrawn, which is what made it worth removing rather than caveating.
+    #
+    # Everything is still RECORDED — `opened_count`, `first_opened_at`, `last_opened_at`
+    # keep updating on every open. They simply live on the share, where they are metadata
+    # about a URL, instead of in the chain, where they were evidence about a party. The
+    # first-open double-append race disappears with the append.
+    #
+    # Records already in existing chains are untouched (§2: history is sacred) and render
+    # with a caveated label — see the render's `_record_label`.
+    if shared.opened_count == 0:
+        shared.first_opened_at = now
     shared.opened_count += 1
     shared.last_opened_at = now
-    if first:
-        shared.first_opened_at = now
-        log = db.get(EvidenceLog, shared.log_id)
-        if log is not None:
-            from .service import append_record
-
-            append_record(
-                db,
-                log,
-                RecordType.SYSTEM,
-                {"event": "pack_opened", "content_hash": shared.content_hash},
-                occurred_at=now,
-            )
     db.flush()
     return storage.get(shared.storage_key)
 

@@ -83,13 +83,13 @@ def test_a_whole_gps_trail_of_them_verifies_together(db):
 def test_the_probe_is_not_vacuous(db):
     """Proves the round trip actually happens — without this the file is decoration.
 
-    `expire_all()` is what forces the payload to be re-SELECTed instead of served from the
-    identity map. If it ever stopped doing that, every test above would still pass while
-    testing nothing at all, which is the exact failure mode this codebase keeps finding.
-    So: fetch a genuinely fresh row and assert the value came back as a `float` whose
-    `repr` is unchanged — the two properties the hash depends on.
+    `expire_all()` is NOT enough on its own, which a revert-check showed: delete it and
+    every test above still passes, because SQLAlchemy can serve the payload from the
+    identity map and never ask Postgres at all. So this reads the stored JSONB back with
+    RAW SQL, bypassing the ORM entirely, and asserts the property the hash depends on —
+    that the value Postgres holds still `repr`s to exactly what was hashed.
     """
-    from app.foundation.f04_evidence.domain.models import EvidenceRecord
+    from sqlalchemy import text as sql_text
 
     log = _log(db, label="probe-vacuity")
     value = -96.79699999999998
@@ -97,12 +97,13 @@ def test_the_probe_is_not_vacuous(db):
         db, log, evidence.RecordType.GEOFENCE, {"lat": value}
     ).id
     db.flush()
-    db.expire_all()
 
-    fresh = db.get(EvidenceRecord, record_id)
+    stored = db.execute(
+        sql_text("SELECT payload->>'lat' AS lat FROM f04.evidence_record WHERE id = :id"),
+        {"id": record_id},
+    ).one()
 
-    assert isinstance(fresh.payload["lat"], float)
-    assert repr(fresh.payload["lat"]) == repr(value)
+    assert repr(float(stored.lat)) == repr(value)
 
 
 def test_the_canonical_encoder_is_what_makes_this_work(db):

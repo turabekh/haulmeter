@@ -32,6 +32,7 @@ from .domain.service import (
 from .domain.sharing import (
     CONFIG_SHARE_DAYS,
     DEFAULT_SHARE_DAYS,
+    ChainInvalid,
     ShareNotFound,
     extend_share,
     open_share,
@@ -48,6 +49,7 @@ __all__ = [
     "EvidenceLog",
     "EvidenceRecord",
     "SharedPack",
+    "ChainInvalid",
     "ShareNotFound",
     "CONFIG_SHARE_DAYS",
     "DEFAULT_SHARE_DAYS",

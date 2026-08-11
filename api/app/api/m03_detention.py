@@ -122,6 +122,14 @@ def pack(
     claim = _load_claim(db, claim_id, account)
     try:
         result = m3.generate_pack(db, claim, now=datetime.now(UTC), gateway=_GATEWAY)
+    except m3.EvidenceCheckFailed as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "error": "evidence_check_failed",
+                "reason": exc.verification.reason if exc.verification else None,
+            },
+        ) from exc
     except m3.ClaimAlreadyFiled as exc:
         raise already_filed(exc) from exc
     return {

@@ -531,14 +531,23 @@ def share(
     if kind not in ("load", "stop", "condition", "incident"):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown pack kind")
     pack = _pack_for(db, account, kind, ref)
-    shared = m5.share_pack(
-        db,
-        pack.log_id,
-        pack,
-        account.id,
-        recipient=body.recipient,
-        context=_context_for(db, kind, ref),
-    )
+    try:
+        shared = m5.share_pack(
+            db,
+            pack.log_id,
+            pack,
+            account.id,
+            recipient=body.recipient,
+            context=_context_for(db, kind, ref),
+        )
+    except evidence.ChainInvalid as exc:
+        # finding F4-3: the PDF itself says "do not rely on this pack", and we were
+        # pinning it and handing out a link anyway. 409 rather than 500 — nothing is
+        # broken about the request, the evidence is
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"error": "evidence_check_failed", "reason": exc.verification.reason},
+        ) from exc
     return {
         "share_id": str(shared.id),
         # §17: counterparty mail is plain, short, professional, ONE link, no images

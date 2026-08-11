@@ -1,5 +1,5 @@
 """AI-CONTEXT: M3 Detention Tracker & Recovery (PRD §8.3) — the differentiator.
-Zero-effort GPS-verified detention: the driver drives to the stop and does
+Zero-effort GPS-evidenced detention: the driver drives to the stop and does
 nothing; the app proves arrival, runs the clock, warns the broker, invoices the
 moment detention accrues, and opens a receivable. Composes foundation publics
 only: F1 (invoicing gate), F3 (geofence events), F4 (hash-chained evidence +
@@ -120,6 +120,20 @@ def _alert(db: Session, account_id, key: str, **values) -> str:
 def _default_mode(db: Session, account_id) -> ClaimMode:
     profile = db.get(identity.DriverProfile, account_id)
     return ClaimMode.invoice if identity.can_invoice(profile) else ClaimMode.evidence_only
+
+
+class EvidenceCheckFailed(Exception):
+    """This claim's evidence chain does not verify, so nothing was sent (finding F4-3).
+
+    AI-CONTEXT: F4 refuses at `share_pack` — the chokepoint every pack path crosses — and
+    this is M3 turning that refusal into something a driver can read. It is deliberately
+    NOT a silent no-op: a claim that cannot be filed is the one fact the driver most needs,
+    because the alternative is a Meter frozen on money nobody was ever told about.
+    """
+
+    def __init__(self, verification=None):
+        self.verification = verification
+        super().__init__("evidence chain invalid — the pack was not sent")
 
 
 class ClaimAlreadyFiled(Exception):
@@ -782,7 +796,7 @@ def open_receivable(
     gateway=None,
     now: datetime | None = None,
     notice_subject: str = "Invoice",
-    notice_body: str = "Please find attached the GPS-verified evidence and invoice "
+    notice_body: str = "Please find attached the GPS evidence and invoice "
     "per the rate confirmation.",
     external_ref: str | None = None,
 ):
@@ -828,9 +842,9 @@ def _notice_body(db: Session, shared) -> str:
     the moment a second caller needed it, which is the whole of §23 entry 94's lesson."""
     link = evidence.share_link(shared)
     where = (
-        f"The GPS-verified detention evidence is here: {link}"
+        f"The GPS evidence for this detention is here: {link}"
         if link
-        else "The GPS-verified detention evidence pack is available on request."
+        else "The GPS evidence pack for this detention is available on request."
     )
     return (
         f"{where}\n\n"
@@ -869,14 +883,20 @@ def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=Non
     # shipped. This is M3's wedge document, so it is the worst place in the product for
     # prose to be describing a behaviour nobody checked (§23 entry 116, addressed to a
     # counterparty instead of a developer).
-    shared = evidence.share_pack(
-        db,
-        log,
-        pack.template,
-        render_pack_bytes(db, pack),
-        claim.account_id,
-        now=now,
-    )
+    try:
+        shared = evidence.share_pack(
+            db,
+            log,
+            pack.template,
+            render_pack_bytes(db, pack),
+            claim.account_id,
+            now=now,
+        )
+    except evidence.ChainInvalid as exc:
+        # nothing is pinned, no link is minted and no email goes out — and the claim is
+        # left OPEN rather than marked filed, so the driver's money is still claimable
+        # once whatever broke the chain is understood
+        raise EvidenceCheckFailed(exc.verification) from exc
 
     receivable = None
     if claim.mode == ClaimMode.invoice and claim.amount_cents > 0:
@@ -1015,15 +1035,22 @@ def _dunning_body(db: Session, claim: DetentionClaim, now: datetime) -> str:
     """
     stop = loads.get_stop(db, claim.stop_ref)
     log = db.get(evidence.EvidenceLog, claim.evidence_log_ref)
-    where = "The GPS-verified detention evidence pack is available on request."
+    where = "The GPS evidence pack for this detention is available on request."
     if log is not None:
         pack = evidence.compose_pack(db, log, evidence.PackTemplate.detention_claim)
-        shared = evidence.share_pack(
-            db, log, pack.template, render_pack_bytes(db, pack), claim.account_id, now=now
-        )
-        link = evidence.share_link(shared)
+        try:
+            shared = evidence.share_pack(
+                db, log, pack.template, render_pack_bytes(db, pack), claim.account_id, now=now
+            )
+        except evidence.ChainInvalid:
+            # a chaser must not carry a link to a pack that failed its own check. The
+            # dunning notice still goes — the invoice is owed either way — and it simply
+            # does not offer evidence it cannot stand behind. The refusal is logged at the
+            # chokepoint; raising here would silence a legitimate follow-up.
+            shared = None
+        link = evidence.share_link(shared) if shared is not None else None
         if link:
-            where = f"The GPS-verified detention evidence is here: {link}"
+            where = f"The GPS evidence for this detention is here: {link}"
     amount = f"${claim.amount_cents / 100:,.2f}"
     served = claim.clock_since.date().isoformat() if claim.clock_since else "the service date"
     # the LOAD REFERENCE, not a facility id — A1's subject line already established that
@@ -1130,7 +1157,7 @@ def claim_for_receivable(db: Session, receivable_ref) -> DetentionClaim | None:
 
 def claim_evidence(db: Session, claim: DetentionClaim) -> dict:
     # read-only view of the claim's F4 evidence chain — what's IN the pack, so the
-    # driver can see the GPS-verified proof behind their claim (M3-FR5)
+    # driver can see the GPS evidence behind their claim (M3-FR5)
     log = db.get(evidence.EvidenceLog, claim.evidence_log_ref) if claim.evidence_log_ref else None
     if log is None:
         return {"chain_valid": True, "record_count": 0, "artifact_count": 0, "timeline": []}

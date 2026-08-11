@@ -970,6 +970,17 @@ def generate_claim(
     claim = _claim_or_409(db, _owned_stop(db, stop_id, account))
     try:
         result = m3.generate_pack(db, claim, now=datetime.now(UTC), gateway=_GATEWAY)
+    except m3.EvidenceCheckFailed as exc:
+        # finding F4-3: the pack's own verification failed, so F4 refused to pin, link or
+        # send it. 409 rather than 500 — the request is fine, the evidence is not — and the
+        # claim stays OPEN so the driver's money is still claimable.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "error": "evidence_check_failed",
+                "reason": exc.verification.reason if exc.verification else None,
+            },
+        ) from exc
     except m3.ClaimAlreadyFiled as exc:
         # a retry after a success is not a failure — 409 carries the first filing's
         # receivable so the client reads it as "already filed" (finding F2)

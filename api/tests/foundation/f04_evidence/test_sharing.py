@@ -122,14 +122,20 @@ def test_unknown_revoked_and_expired_are_indistinguishable(db, storage):
             evidence.resolve_share(db, token)
 
 
-def test_the_share_and_the_first_open_are_written_into_the_chain(db, storage):
-    """Sharing is an event in the life of the evidence, and so is the counterparty
-    receiving it. Only the FIRST open: a clerk refreshing is not new information."""
+def test_the_share_is_in_the_chain_and_the_open_is_not(db, storage):
+    """REPLACES a test that asserted the old `pack_opened` append (finding F4-1).
+
+    That test was correct about what the code did and the code was making a claim it could
+    not support: an open is a URL being fetched, and mail-security scanners fetch URLs
+    before a human sees the mail. Sharing IS an act someone took, so it stays in the chain;
+    opening is metadata on the share.
+    """
     account = _account(db, "chained@example.com")
     log, pack = _log_with_pack(db, account)
     shared = evidence.share_pack(
         db, log, pack.template, evidence.render_pack_pdf(pack), account.id, storage=storage
     )
+    before = len(evidence.compose_pack(db, log, evidence.PackTemplate.cargo_condition).timeline)
 
     evidence.open_share(db, shared.token, storage=storage)
     evidence.open_share(db, shared.token, storage=storage)
@@ -138,10 +144,12 @@ def test_the_share_and_the_first_open_are_written_into_the_chain(db, storage):
     after = evidence.compose_pack(db, log, evidence.PackTemplate.cargo_condition)
     events = [r["payload"].get("event") for r in after.timeline]
     assert events.count("pack_shared") == 1
-    assert events.count("pack_opened") == 1
+    assert events.count("pack_opened") == 0
+    assert len(after.timeline) == before  # no number of opens grows the chain
+    # ...and every open is still RECORDED, on the share where it belongs
     assert shared.opened_count == 3
     assert shared.first_opened_at is not None
-    # and the chain still verifies with those records in it
+    assert shared.last_opened_at is not None
     assert after.verification["chain_valid"] is True
 
 
