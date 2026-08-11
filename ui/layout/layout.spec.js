@@ -364,9 +364,24 @@ const RATE_CON_DRAFT = {
   ],
 };
 const MONEY_MOCKS = {
+  // AI-CONTEXT: shape-matched to `money_owed` after §23 entry 142 — the rows carry WHO
+  // owes it, the dock, and the chasers that actually went out. A mock missing `history`
+  // would measure a claim sheet with no story in it, which is the thing the sheet is for.
+  // The names are long on purpose: at 360 dp under xx-XL the broker is what wraps.
   "/accessorial/owed": [
-    { receivable_id: "r-1", kind: "detention", amount_cents: 8750, state: "invoiced", aging_days: 12, is_reimbursement: false },
-    { receivable_id: "r-2", kind: "lumper", amount_cents: 12500, state: "disputed", aging_days: 31, is_reimbursement: true },
+    { receivable_id: "r-1", kind: "detention", amount_cents: 8750, state: "invoiced",
+      aging_days: 12, is_reimbursement: false, counterparty_name: "Bolt Logistics LLC",
+      facility_name: "Midwest Distribution Center — Dock 4", stop_id: "00000000-0000-0000-0000-0000000000aa",
+      history: [{ event: "invoiced", at: "2026-07-30T12:00:00+00:00" }] },
+    { receivable_id: "r-2", kind: "lumper", amount_cents: 12500, state: "disputed",
+      aging_days: 31, is_reimbursement: true, counterparty_name: "Blue Road Logistics LLC",
+      facility_name: "Metro Market Warehouse", stop_id: null,
+      history: [{ event: "invoiced", at: "2026-07-11T12:00:00+00:00" },
+                { event: "nudged", at: "2026-07-14T09:00:00+00:00" },
+                { event: "firmed", at: "2026-07-21T09:00:00+00:00" }] },
+    { receivable_id: "r-3", kind: "tonu", amount_cents: 25000, state: "recovered",
+      aging_days: 64, is_reimbursement: false, counterparty_name: "TQL",
+      facility_name: "Old Dock", stop_id: null, history: [] },
   ],
   "/money/earnings": {
     recovered_cents: 42500,
@@ -987,15 +1002,25 @@ const SURFACES = [
     open: [".rungs__item--more", { click: ".more__item", nth: 1 }],
     ready: ".chips",
   }],
+  // AI-CONTEXT: §23 entry 142 moved BOTH of these. The ghostwriter and the mark-paid
+  // control used to be text links at the bottom of the tab, reached here by `.audit-cta`
+  // nth:1 and nth:2; they belong to a CLAIM now and are reached through its sheet. Only
+  // ONE `.audit-cta` remains, so the nth indices are gone with the buttons.
   ["sheet-ghostwriter", "/money", {
-    // TWO controls carry `.audit-cta` — the settlement auditor routes away, the
-    // ghostwriter opens the sheet. First-match would have measured /money/audit.
-    mocks: MONEY_MOCKS, open: [{ click: ".audit-cta", nth: 1 }], ready: ".tone",
+    mocks: MONEY_MOCKS,
+    open: [".rows .row", { click: ".cm .cta", nth: 0 }],
+    ready: ".tone",
   }],
-  // AI-CONTEXT: the mark-paid sheet is the THIRD `.audit-cta` on /money and renders
-  // only when something is payable — both mocked receivables above are, so nth:2 is
-  // stable. Measured here because a list of money figures at 200% is exactly the
-  // T-5/T-6 reflow case, and 360 dp is where a two-column row runs out of width.
+  // the claim sheet itself: a money figure, a broker, a history and three graded acts.
+  // Measured because a list of money figures at 200% is exactly the T-5/T-6 reflow case,
+  // and 360 dp is where a two-column row runs out of width.
+  ["sheet-claim-money", "/money", {
+    mocks: MONEY_MOCKS, open: [".rows .row"], ready: ".cm__hist",
+  }],
+  // the settled section, opened: rows that are records rather than controls
+  ["money-settled", "/money", {
+    mocks: MONEY_MOCKS, open: [".settled-toggle"], ready: ".row--settled",
+  }],
   ["bookings", "/bookings", {
     mocks: {
       "/parking/bookings": { bookings: [
@@ -1008,9 +1033,6 @@ const SURFACES = [
       ] },
     },
     ready: ".row",
-  }],
-  ["sheet-mark-paid", "/money", {
-    mocks: MONEY_MOCKS, open: [{ click: ".audit-cta", nth: 2 }], ready: ".paid__submit",
   }],
   ["sheet-share", `/load/${EVIDENCE_STOP}/evidence`, {
     mocks: EVIDENCE_MOCKS, open: [".cta--secondary"], ready: "input[type='email']",

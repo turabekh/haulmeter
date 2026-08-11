@@ -9,10 +9,11 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
+import { ChevronRight } from "lucide-vue-next";
 import TheMeter from "../core/components/TheMeter.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import GhostwriterSheet from "../core/components/GhostwriterSheet.vue";
-import MarkPaidSheet from "../core/components/MarkPaidSheet.vue";
+import ClaimMoneySheet from "../core/components/ClaimMoneySheet.vue";
 import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
@@ -46,7 +47,6 @@ const owedFailure = ref(null);
 const earningsState = ref(LoadState.LOADING);
 const earningsFailure = ref(null);
 const drafting = ref(false);
-const marking = ref(false);
 const me = ref(null); // F1: verified operating authority, shown as a trust pill
 
 async function loadOwed() {
@@ -96,8 +96,65 @@ function stateLabel(state) {
 const PAYABLE_STATES = ["invoiced", "acknowledged", "disputed", "escalated"];
 const payable = computed(() => rows.value.filter((r) => PAYABLE_STATES.includes(r.state)));
 
+// AI-CONTEXT: "Money owed" listed money that was NOT owed (§23 entry 142).
+//
+// `money_owed` returns EVERY receivable — `recovered` and `written_off` included, newest
+// first — and this tab rendered all of them under a heading that says they are owed. So a
+// driver's paid claims piled up above the ones a broker was sitting on, and the list a
+// driver is meant to act on was padded with claims that need nothing.
+//
+// Two lists now, and the ORDER is the point: outstanding first, OLDEST first, because the
+// claim nobody has paid for 63 days is the one that needs a person and the one a
+// newest-first list buries.
+const SETTLED_STATES = ["recovered", "written_off"];
+const outstanding = computed(() =>
+  rows.value
+    .filter((r) => !SETTLED_STATES.includes(r.state))
+    .slice()
+    .sort((a, b) => (b.aging_days ?? 0) - (a.aging_days ?? 0)),
+);
+const settled = computed(() => rows.value.filter((r) => SETTLED_STATES.includes(r.state)));
+const settledOpen = ref(false);
+// the figure a driver opens this tab to learn, and it is a SUM OF THE LIST BELOW IT —
+// which is the property the old hero did not have.
+const owedCents = computed(() => outstanding.value.reduce((n, r) => n + r.amount_cents, 0));
+const owedBrokers = computed(
+  () => new Set(outstanding.value.map((r) => r.counterparty_name).filter(Boolean)).size,
+);
+const owedFrom = computed(() =>
+  owedBrokers.value === 1 ? t("money.owed_from_one") : t("money.owed_from", { n: owedBrokers.value }),
+);
+
+// the row a driver tapped, and the acts it offers
+const openRow = ref(null);
+function daysLabel(r) {
+  return r.aging_days === 1 ? t("money.days_one") : t("money.days", { n: r.aging_days });
+}
+function chasedLabel(r) {
+  const n = (r.history ?? []).filter((e) => e.event !== "invoiced").length;
+  if (n === 0) return t("money.chased_none");
+  if (n === 1) return t("money.chased_one");
+  return t("money.chased_many", { n });
+}
+async function onSheetPaid() {
+  const row = openRow.value;
+  openRow.value = null;
+  if (row) await onMarkPaid(row.receivable_id);
+}
+function onSheetChase() {
+  // M11-FR3's ghostwriter, reached from the claim it is about rather than from an
+  // unnamed button at the bottom of the tab. The driver reads and sends it themselves,
+  // so this never becomes a second automatic mail beside the dunning cadence.
+  openRow.value = null;
+  drafting.value = true;
+}
+function onSheetEvidence() {
+  const row = openRow.value;
+  openRow.value = null;
+  if (row?.stop_id) router.push(`/load/${row.stop_id}/evidence`);
+}
+
 async function onMarkPaid(receivableId) {
-  marking.value = false;
   try {
     await markReceivablePaid(receivableId);
   } catch {
@@ -128,11 +185,25 @@ async function onMarkPaid(receivableId) {
       {{ earningsFailure === Failure.OFFLINE ? t("system.load_offline") : t("money.earnings_failed") }}
       <button class="money__retry" type="button" @click="loadEarnings">{{ t("system.retry") }}</button>
     </p>
-    <!-- North Star: Driver Dollars Delivered (§238 month summary, Meter) -->
+    <!-- AI-CONTEXT: the hero is WHAT YOU ARE OWED (owner decision, §23 entry 142).
+         It replaced "Delivered to you", which was wrong three ways at once:
+
+           · it summed `recovered + fuel_saved + flagged`, and §10.3 asks for
+             "recovered + saved" — `flagged` is money an AUDIT SUSPECTS is owed and
+             nobody has paid, sitting inside a figure captioned as delivered;
+           · it was a LIFETIME total (`money_owed` has no date filter) presented where
+             §10.3 specifies a month summary;
+           · so the biggest, greenest number on the screen told a driver they had
+             received $1,432.50 when they had received $987.
+
+         This one is a sum of the list directly beneath it, which is the property that
+         makes it checkable — and it is the question a driver opens this tab to ask.
+         `ledger` variant: it is money, and it is real. -->
     <section v-else class="card meter-card">
       <TheMeter
-        :label="t('money.delivered')"
-        :figure="formatMoney(earnings.ddd_cents)"
+        :label="t('money.owed_label')"
+        :figure="formatMoney(owedCents)"
+        :status="owedBrokers ? owedFrom : ''"
         variant="accruing"
       />
     </section>
@@ -148,7 +219,7 @@ async function onMarkPaid(receivableId) {
          than rendering three confident $0.00 rows in Mono while one is in flight -->
     <ul v-if="earningsState === LoadState.LOADED" class="breakdown">
       <li class="breakdown__row">
-        <span>{{ t("money.recovered") }}</span>
+        <span>{{ t("money.paid_so_far") }}</span>
         <span class="mono">{{ formatMoney(earnings.recovered_cents) }}</span>
       </li>
       <li class="breakdown__row">
@@ -161,7 +232,7 @@ async function onMarkPaid(receivableId) {
       </li>
     </ul>
 
-    <h1 class="money__title">{{ t("money.title") }}</h1>
+    <h1 class="money__title">{{ t("money.waiting") }}</h1>
     <SkeletonRow v-if="owedState === LoadState.LOADING" :count="3" />
     <p v-else-if="owedState === LoadState.FAILED" class="money__failed">
       {{ owedFailure === Failure.OFFLINE ? t("system.load_offline") : t("money.load_failed") }}
@@ -175,23 +246,59 @@ async function onMarkPaid(receivableId) {
          and `system.loading` beside it. It says what the tab is FOR and names the one
          action that starts it, which is both halves of §15.3. -->
     <p v-else-if="!rows.length" class="money__empty">{{ t("money.empty") }}</p>
+    <!-- everything filed has been paid: a different sentence from "nothing here yet",
+         and the one a driver has earned the right to read. -->
+    <p v-else-if="!outstanding.length" class="money__empty">{{ t("money.all_paid") }}</p>
     <ul v-else class="rows">
-      <li v-for="r in rows" :key="r.receivable_id" class="row">
-        <div class="row__main">
-          <span class="row__kind">{{ kindLabel(r.kind) }}</span>
-          <span
-            class="pill"
-            :style="{ '--pill-color': `var(${receivableStatusToken(r.state)})` }"
-          >
-            {{ stateLabel(r.state) }}
+      <!-- AI-CONTEXT: the row is a CONTROL now (§10.3's per-receivable next action,
+           specified since §10.3 was written and never built). It said
+           "Detention · Invoiced · $187.50 · 12d" and did nothing when tapped, while the
+           only way to record a payment was a button at the bottom of the tab asking
+           "which claim did the broker pay?" — so a driver looking straight at the claim
+           had to go and find it again in a list. -->
+      <li v-for="r in outstanding" :key="r.receivable_id">
+        <button class="row" type="button" @click="openRow = r">
+          <span class="row__main">
+            <span class="row__kind">{{ kindLabel(r.kind) }}</span>
+            <span class="row__who">{{ r.counterparty_name || t("money.no_broker") }}</span>
           </span>
-        </div>
-        <div class="row__right">
-          <span class="row__amount">{{ formatMoney(r.amount_cents) }}</span>
-          <span class="row__aging">{{ r.aging_days }}d</span>
-        </div>
+          <span class="row__right">
+            <span class="row__amount">{{ formatMoney(r.amount_cents) }}</span>
+            <span class="row__aging">{{ daysLabel(r) }}</span>
+          </span>
+          <!-- what has been TRIED, in words. "Invoiced · 63d" told a driver the state of
+               a database row; this tells them whether anyone has chased it. -->
+          <span class="row__foot">
+            <span class="row__chased">{{ chasedLabel(r) }}</span>
+            <ChevronRight :size="18" :stroke-width="2" class="row__go" aria-hidden="true" />
+          </span>
+        </button>
       </li>
     </ul>
+
+    <!-- settled claims, out of the way but not gone: the wins are worth seeing, and a
+         driver checking what a broker actually paid should not have to leave this tab. -->
+    <template v-if="settled.length">
+      <button class="settled-toggle" type="button" :aria-expanded="settledOpen" @click="settledOpen = !settledOpen">
+        {{ settledOpen ? t("money.settled_hide") : t("money.settled_show") }}
+        <span class="settled-toggle__count">{{ settled.length }}</span>
+      </button>
+      <ul v-if="settledOpen" class="rows">
+        <li v-for="r in settled" :key="r.receivable_id" class="row row--settled">
+          <span class="row__main">
+            <span class="row__kind">{{ kindLabel(r.kind) }}</span>
+            <span class="row__who">{{ r.counterparty_name || t("money.no_broker") }}</span>
+          </span>
+          <span class="row__right">
+            <span class="row__amount">{{ formatMoney(r.amount_cents) }}</span>
+            <span
+              class="pill"
+              :style="{ '--pill-color': `var(${receivableStatusToken(r.state)})` }"
+            >{{ stateLabel(r.state) }}</span>
+          </span>
+        </li>
+      </ul>
+    </template>
 
     <!-- AI-CONTEXT: §10.3 SPECIFIES this tab's DRIVING behaviour — "read-only;
          actions deferred" — and it was never implemented, so both flows opened at
@@ -202,41 +309,39 @@ async function onMarkPaid(receivableId) {
          the flow itself are two different things to guard, which is exactly how the
          Docs capture sheet stayed open at speed. -->
     <template v-if="!isDriving">
-      <!-- M9-FR1: the settlement auditor — the company-driver wedge (NAV-5) -->
+      <!-- AI-CONTEXT: THREE identical blue text links used to sit here — "Audit a
+           settlement", "Ghostwriter" and "Mark a claim paid" — at equal weight, two of
+           them named after internal machinery rather than after anything a driver wants.
+           The last two belong to a CLAIM and live in its sheet now (§23 entry 142), so
+           what remains is the one act that is about a settlement rather than a claim,
+           said in the driver's words. -->
       <button class="audit-cta" type="button" @click="router.push('/money/audit')">
-        {{ t("audit.title") }}
-      </button>
-      <!-- M11-FR3: the comms ghostwriter — draft the firm message that unsticks pay -->
-      <button class="audit-cta" type="button" @click="drafting = true">
-        {{ t("ghost.title") }}
-      </button>
-      <!-- §23 entry 108: the ending a claim never had. Rendered only when something
-           is actually payable, so the Money tab of a driver owed nothing stays quiet. -->
-      <button
-        v-if="payable.length"
-        class="audit-cta"
-        type="button"
-        @click="marking = true"
-      >
-        {{ t("money.paid.cta") }}
+        {{ t("money.audit_cta") }}
       </button>
     </template>
     <p v-else class="driving-note">{{ t("driving.paused") }}</p>
+
+    <!-- the claim a driver tapped. Withdrawn at speed like every other acting surface
+         on this tab (§10.3: read-only while DRIVING). -->
+    <BottomSheet
+      :open="!!openRow && !isDriving"
+      :title="openRow ? kindLabel(openRow.kind) : ''"
+      @close="openRow = null"
+    >
+      <ClaimMoneySheet
+        v-if="openRow"
+        :row="openRow"
+        :payable="PAYABLE_STATES.includes(openRow.state)"
+        @chase="onSheetChase"
+        @paid="onSheetPaid"
+        @evidence="onSheetEvidence"
+      />
+    </BottomSheet>
 
     <BottomSheet :open="drafting && !isDriving" :title="t('ghost.title')" @close="drafting = false">
       <GhostwriterSheet />
     </BottomSheet>
 
-    <!-- guarded with `!isDriving` like the ghostwriter above: §10.3 defers ACTIONS at
-         speed, and a sheet left open across a state change is how the Docs capture
-         flow stayed live in a moving truck. -->
-    <BottomSheet
-      :open="marking && !isDriving"
-      :title="t('money.paid.cta')"
-      @close="marking = false"
-    >
-      <MarkPaidSheet :rows="payable" @submit="onMarkPaid" />
-    </BottomSheet>
   </div>
 </template>
 
@@ -252,6 +357,44 @@ async function onMarkPaid(receivableId) {
 }
 /* §15.3's empty line and §15.4's failed line share the body treatment: both are one
    quiet sentence about this list, and neither is an event. Composition only. */
+/* the row is a control: full width, its own target height, and it ends in a chevron
+   because §23 entry 128 says a row that DOES something does. */
+.row__who {
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+}
+/* its own line under the figure: `.row` wraps, so a full basis is what puts it there
+   without a second layout system inside one card. */
+.row__chased {
+  min-width: 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+}
+.row__go {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+.row--settled {
+  opacity: 0.75;
+}
+.settled-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  min-height: 48px;
+  margin-top: var(--s-2);
+  padding: 0 var(--s-4);
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-label-size);
+  font-weight: 500;
+}
+.settled-toggle__count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
 .money__empty {
   margin: 0 var(--s-4);
   color: var(--text-2);
@@ -290,20 +433,30 @@ async function onMarkPaid(receivableId) {
   gap: var(--s-2);
 }
 .row {
+  /* §6.5's list-row height, and it is a real target now: the row became a control when
+     §10.3's per-receivable action finally existed (§23 entry 142). */
   min-height: 64px;
+  width: 100%;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s-3);
+  gap: var(--s-1) var(--s-3);
   padding: var(--s-3) var(--s-4);
   background: var(--ink-1);
   border: 1px solid var(--line-1);
   border-radius: var(--r-card);
+  text-align: left;
 }
 .row__main {
   display: flex;
-  align-items: center;
-  gap: var(--s-2);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  /* `flex: 1 1 auto` with `min-width: 0` is what keeps the amount on the SAME line as
+     the kind: without it a long broker name pushes the figure onto its own row, which
+     is what "Blue Road Logistics LLC" did. The NAME wraps; the money never does. */
+  flex: 1 1 auto;
   min-width: 0;
 }
 .row__kind {
@@ -328,6 +481,15 @@ async function onMarkPaid(receivableId) {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  flex: 0 0 auto;
+}
+/* the row's second line: what has been tried, and the affordance that says it opens */
+.row__foot {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
 }
 .row__amount {
   font-family: var(--font-mono);

@@ -339,9 +339,79 @@ def money_owed(db: Session, account_id, now: datetime | None = None) -> list[dic
                 # outstanding"; this answers "which period does it belong to".
                 "created_at": _as_utc(r.created_at),
                 "is_reimbursement": r.kind == ledger.ReceivableKind.lumper,
+                # AI-CONTEXT: WHO owes it (§23 entry 142). The Money tab listed
+                # "Detention · Invoiced · $187.50 · 12d" and never said who was sitting
+                # on it — so the one screen about being paid could not name the person
+                # who had not paid. `counterparty_ref` has been on this row since F7.
+                "counterparty_name": _counterparty_name(db, r),
+                # WHERE it happened, which is how a driver recognises their own claim:
+                # a broker's name is a company, a dock is a memory.
+                "facility_name": _receivable_facility(db, r),
+                # the stop this money came from, so the driver can open the evidence
+                # that argues it. §13.5's rule for notifications, applied to a row.
+                "stop_id": _receivable_stop_id(db, r),
+                # WHAT HAS ALREADY BEEN SENT. The chasers are recorded as timestamps on
+                # the claim and were read by nothing outside the dunning job itself, so
+                # a driver could not tell a claim that had been chased twice from one
+                # nobody had touched — which is the whole difference between "wait" and
+                # "do something".
+                "history": _receivable_history(db, r),
             }
         )
     return rows
+
+
+def _counterparty_name(db: Session, receivable) -> str | None:
+    if receivable.counterparty_ref is None:
+        return None
+    cp = loads.get_counterparty(db, receivable.counterparty_ref)
+    return getattr(cp, "name", None)
+
+
+def _receivable_stop_id(db: Session, receivable):
+    """The stop behind this money, through whichever module opened the receivable."""
+    claim = claim_for_receivable(db, receivable.id)
+    stop_ref = getattr(claim, "stop_ref", None)
+    if stop_ref is None:
+        m3_claim = m3.claim_for_receivable(db, receivable.id)
+        stop_ref = getattr(m3_claim, "stop_ref", None)
+    return str(stop_ref) if stop_ref is not None else None
+
+
+def _receivable_facility(db: Session, receivable) -> str | None:
+    """The dock this money came from — a broker's name is a company, a dock is a memory."""
+    stop_ref = _receivable_stop_id(db, receivable)
+    if stop_ref is None:
+        return None
+    stop = loads.get_stop(db, stop_ref)
+    if stop is None:
+        return None
+    fac = facility_registry.get_facility(db, stop.facility_id)
+    return getattr(fac, "name", None)
+
+
+def _receivable_history(db: Session, receivable) -> list[dict]:
+    """What has already gone to this counterparty, oldest first.
+
+    AI-CONTEXT: read off the claim's own dunning columns rather than stored again. They
+    are set by `run_dunning` at dispatch and were, until this, consulted only by the job
+    that writes them — a driver looking at a 63-day-old claim had no way to know whether
+    anyone had chased it. Absent columns mean absent chasers, which is exactly what a
+    NULL says; nothing here invents a step that did not happen.
+    """
+    out = [{"event": "invoiced", "at": _as_utc(receivable.created_at)}]
+    claim = m3.claim_for_receivable(db, receivable.id)
+    if claim is None:
+        return out
+    for event, column in (
+        ("nudged", "dunning_nudge_sent_at"),
+        ("firmed", "dunning_firm_sent_at"),
+        ("escalation_offered", "dunning_escalation_offer_sent_at"),
+    ):
+        at = getattr(claim, column, None)
+        if at is not None:
+            out.append({"event": event, "at": _as_utc(at)})
+    return sorted(out, key=lambda e: e["at"])
 
 
 def claim_for_receivable(db: Session, receivable_ref) -> AccessorialClaim | None:

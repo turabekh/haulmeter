@@ -695,19 +695,23 @@ describe("FuelSurface — pump-code flow (M7, NAV-3 / §8.7 one net price)", () 
 });
 
 describe("MoneySurface — Driver Dollars Delivered (M9-FR4, design-prd §238)", () => {
-  it("leads with the DDD North Star figure + breakdown", async () => {
+  it("leads with what is OWED, and keeps the streams named beneath it", async () => {
+    // AI-CONTEXT: §23 entry 142. The hero was `recovered + fuel_saved + flagged`
+    // labelled "Delivered to you" — a LIFETIME total that included money an audit
+    // merely SUSPECTS is owed, so the largest figure on the screen told a driver they
+    // had received more than they had. The hero is now a sum of the list below it,
+    // which is the property that makes it checkable; the three streams keep their own
+    // rows, each named for what it actually is.
     stubMoney();
-    const w = mount(MoneySurface);
+    const w = mount(MoneySurface, { global: { plugins: [testRouter()] } });
     await flushPromises();
-    // hero Meter = recovered + fuel saved + flagged = $587.50 (fixture DDD)
-    expect(w.find(".meter__figure").text()).toBe("$587.50");
-    // breakdown carries the three streams, fuel saved among them
+
+    // outstanding only: invoiced 15000 + disputed 30000. The recovered lumper is not owed.
+    expect(w.find(".meter__figure").text()).toBe("$450.00");
     const breakdown = w.find(".breakdown").text();
-    expect(breakdown).toContain("$125.00"); // recovered 12500c
+    expect(breakdown).toContain("$125.00"); // paid to you 12500c
     expect(breakdown).toContain("$362.50"); // fuel saved 36250c
-    expect(breakdown).toContain("$100.00"); // audit-flagged 10000c
-    // the receivables list is unchanged — still exactly three rows
-    expect(w.findAll(".row")).toHaveLength(3);
+    expect(breakdown).toContain("$100.00"); // audit-flagged 10000c, still labelled as such
     w.unmount();
   });
 });
@@ -3170,15 +3174,21 @@ describe("LoadSurface — past loads (§23-approved history)", () => {
 });
 
 describe("MoneySurface (M4 Money tab, design-prd §10.3)", () => {
-  it("lists receivables with Mono amounts + status pills", async () => {
+  it("lists what is OUTSTANDING, in Mono, oldest first", async () => {
+    // §23 entry 142: the third fixture row is `recovered` and is not owed, so it is not
+    // in this list. Ordering is by age — the claim a broker has ignored longest is the
+    // one that needs a person, and the API's newest-first order buried it.
     stubMoney();
-    const w = mount(MoneySurface);
+    const w = mount(MoneySurface, { global: { plugins: [testRouter()] } });
     await flushPromises();
-    expect(w.findAll(".row")).toHaveLength(3);
+
+    const rows = w.findAll(".rows .row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].text()).toContain("TONU"); // 11 days, above the 3-day detention
     const text = w.text();
     expect(text).toContain("$150.00"); // detention 15000c, tabular
     expect(text).toContain("Detention"); // jargon stays English (§12.3)
-    expect(text).toContain("11d"); // aging in Mono
+    expect(text).toContain(en["money.days"].replace("{n}", "11"));
   });
 });
 
@@ -4008,32 +4018,23 @@ describe("MoneySurface — marking a claim paid (§23 entry 108)", () => {
     useDriverState().setState(DriverState.IDLE);
   });
 
-  it("offers the control and lists only what the ledger could accept", async () => {
+  it("offers a payment control only where the ledger could accept one", async () => {
+    // AI-CONTEXT: §23 entry 142 moved this. It used to be a picker sheet listing the
+    // claims a driver could mark paid; now the CLAIM ITSELF carries the act, and F7's
+    // ALLOWED_TRANSITIONS travels with it — `recovered` is terminal, so offering it
+    // would promise something the API refuses.
     stubMoney();
-    const w = mount(MoneySurface);
+    const w = mount(MoneySurface, { global: { plugins: [testRouter()] } });
     await flushPromises();
 
-    expect(w.text()).toContain(en["money.paid.cta"]);
-    await w.findAll(".audit-cta").at(-1).trigger("click");
+    await w.findAll(".rows .row")[0].trigger("click");
     await flushPromises();
+    expect(w.find(".cm").text()).toContain(en["money.act_paid"]);
 
-    // the fixture holds invoiced + disputed + recovered; `recovered` is terminal in
-    // F7's transition table, so offering it would promise something the API refuses
-    const choices = w.findAll(".paid__row");
-    expect(choices).toHaveLength(2);
-    expect(w.find(".paid__list").text()).not.toContain("Lumper");
-  });
-
-  it("will not submit until a claim is chosen", async () => {
-    stubMoney();
-    const w = mount(MoneySurface);
+    // and the settled section's rows are not controls at all
+    await w.find(".settled-toggle").trigger("click");
     await flushPromises();
-    await w.findAll(".audit-cta").at(-1).trigger("click");
-    await flushPromises();
-
-    expect(w.find(".paid__submit").attributes("disabled")).toBeDefined();
-    await w.findAll(".paid__row")[0].trigger("click");
-    expect(w.find(".paid__submit").attributes("disabled")).toBeUndefined();
+    expect(w.findAll(".row--settled")[0].element.tagName).not.toBe("BUTTON");
   });
 
   it("posts the chosen receivable and re-reads the money that moved", async () => {
@@ -4047,20 +4048,17 @@ describe("MoneySurface — marking a claim paid (§23 entry 108)", () => {
       if (u.includes("/paid")) return jsonOk({ receivable_id: "r-1", state: "recovered" });
       return jsonOk({});
     }));
-    const w = mount(MoneySurface);
+    const w = mount(MoneySurface, { global: { plugins: [testRouter()] } });
     await flushPromises();
-    await w.findAll(".audit-cta").at(-1).trigger("click");
+    await w.findAll(".rows .row")[0].trigger("click");
     await flushPromises();
-    await w.findAll(".paid__row")[0].trigger("click");
-    await w.find(".paid__submit").trigger("click");
+    await w.findAll(".cm .cta--text").find((b) => b.text().includes(en["money.act_paid"])).trigger("click");
     await flushPromises();
 
-    expect(calls.some((c) => c.startsWith("POST") && c.includes("/money/receivable/r-1/paid"))).toBe(
-      true,
-    );
-    // the North Star figure is derived from recovered money, so it must be re-read
+    expect(calls.some((c) => c.startsWith("POST") && c.includes("/paid"))).toBe(true);
+    // the recovered figure is derived from paid money, so it must be re-read
     expect(calls.filter((c) => c.includes("/money/earnings")).length).toBeGreaterThan(1);
-    expect(w.find(".paid__list").exists()).toBe(false); // the sheet closes behind it
+    expect(w.find(".cm").exists()).toBe(false); // the sheet closes behind it
   });
 
   it("withdraws the control at speed (§10.3 — actions deferred)", async () => {
