@@ -33,6 +33,11 @@ onMounted(async () => {
   }
 });
 
+// finding F5: the server derives this from the F8 message row — `sent` only when that
+// row carries `sent_at`. An older payload without the field reads as "not sent", which
+// is the honest fallback: never claim a delivery this client cannot see evidence of.
+const noticeDelivery = computed(() => claim.value?.notice_delivery ?? "not_sent");
+const noticeDelivered = computed(() => noticeDelivery.value === "sent");
 const owed = computed(() => claim.value?.mode === "invoice");
 const rateHr = computed(() => (claim.value ? Math.round(claim.value.rate_cents_per_hour / 100) : 0));
 
@@ -117,9 +122,14 @@ function evTime(iso) {
             <span class="ev__label">{{ evLabel(e.type) }}</span>
             <span class="ev__time mono">{{ evTime(e.occurred_at) }}</span>
           </li>
+          <!-- AI-CONTEXT: finding F5 — this was one bit, and delivery has five states.
+               A driver whose notice bounced saw exactly what a driver who never tapped
+               Send saw: "Broker not notified", with nothing to say the difference between
+               "you have not done this yet" and "this was attempted and failed". The
+               server derives the state from the F8 message row; this only renders it. -->
           <li class="ev">
-            <Send :size="16" :stroke-width="2" class="ev__icon" :class="{ ok: claim.notice_sent }" aria-hidden="true" />
-            <span class="ev__label">{{ claim.notice_sent ? t("claim.notice_sent") : t("claim.notice_not_sent") }}</span>
+            <Send :size="16" :stroke-width="2" class="ev__icon" :class="{ ok: noticeDelivered }" aria-hidden="true" />
+            <span class="ev__label">{{ t(`notice.delivery.${noticeDelivery}`) }}</span>
           </li>
         </ul>
         <!-- AI-CONTEXT: label-then-figure, not "1 records". `t()` has no plural

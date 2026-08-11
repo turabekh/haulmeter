@@ -368,6 +368,10 @@ const stopName = computed(() => live.value?.facility_name ?? "");
 // value came from (M5-FR1). Printing it twice was the other half of the defect.
 const stopMeta = computed(() => live.value?.counterparty ?? "");
 const noticeSent = computed(() => (live.value ? live.value.notice_sent : false));
+// finding F5: five states, derived server-side from the F8 message row. `notice_sent`
+// above stays the boolean the CTA ladder reads — a notice that FAILED has not been sent,
+// so the rung must still offer it — while this is what the checklist row says out loud.
+const noticeDelivery = computed(() => live.value?.notice_delivery ?? "not_sent");
 const photosCaptured = computed(() => live.value?.photos_captured ?? 0);
 // §10.2 specifies "photos 2/4". The DENOMINATOR is the feature: a bare count cannot
 // tell a driver whether they are finished, and FR5 exists to make a gap visible
@@ -601,7 +605,14 @@ async function onSendNotice() {
   if (!activeStopId.value) return;
   try {
     const res = await sendDetentionNotice(activeStopId.value); // M3 counterparty notice
-    noticeMsg.value = res && res.sent ? t("load.notice_ok") : t("load.notice_early");
+    // finding F5: "sent" was `message !== null`, which an SMTP failure also satisfies —
+    // so a driver whose notice bounced was told "Broker notified — detention on record."
+    // The server now says which of the five things happened; anything that is not a
+    // delivery says so in its own words rather than borrowing the too-early message.
+    if (res && res.sent) noticeMsg.value = t("load.notice_ok");
+    else if (res && res.delivery && res.delivery !== "not_sent") {
+      noticeMsg.value = t(`notice.delivery.${res.delivery}`);
+    } else noticeMsg.value = t("load.notice_early");
     await loadMeter();
   } catch {
     noticeMsg.value = t("load.notice_early");
@@ -785,7 +796,7 @@ async function endLoad() {
           </li>
           <li class="checklist__item">
             <Send :size="20" :stroke-width="2" :class="{ ok: noticeSent }" aria-hidden="true" />
-            {{ noticeSent ? t("load.notice_sent_ok") : t("load.notice_sent") }}
+            {{ t(`notice.delivery.${noticeDelivery}`) }}
           </li>
         </ul>
         <button

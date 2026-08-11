@@ -467,6 +467,10 @@ def test_notice_flags_notice_sent_on_the_meter(client, db):
             "lat": DALLAS[0],
             "lon": DALLAS[1],
             "counterparty": "Broker",
+            # finding F4: this test used to omit the address and pass anyway, because the
+            # notice was addressed to the literal `counterparty@unknown`. A notice with no
+            # recipient is not a sent notice, so the address is what the case needs.
+            "counterparty_email": "ap@broker.example",
             "free_time_minutes": 0,  # accrues immediately
         },
         headers=headers,
@@ -476,6 +480,7 @@ def test_notice_flags_notice_sent_on_the_meter(client, db):
     assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["notice_sent"] is False
     sent = client.post(f"/load/{stop_id}/notice", headers=headers)
     assert sent.status_code == 201 and sent.json()["sent"] is True
+    assert sent.json()["delivery"] == "sent"
     assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["notice_sent"] is True
 
 
@@ -643,6 +648,9 @@ class TestEvidenceTimelineSaysWhatHappened:
                 "lat": DALLAS[0],
                 "lon": DALLAS[1],
                 "counterparty": "Broker",
+                # without an address there is no notice and no `notice_sent` record —
+                # which is finding F5's fix, asserted separately below
+                "counterparty_email": "ap@broker.example",
                 "free_time_minutes": 0,  # detention accrues at once, so a notice sends
             },
             headers=headers,

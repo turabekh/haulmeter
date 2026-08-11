@@ -121,7 +121,7 @@ describe("actionable rows look actionable (§23 entry 128)", () => {
   it("and none on rows that merely state a fact", async () => {
     const { w } = await mountAtDock({ notice_sent: false });
     const rows = w.findAll("li.checklist__item");
-    const notice = rows.find((li) => li.text().includes(en["load.notice_sent"]));
+    const notice = rows.find((li) => li.text().includes(en["notice.delivery.not_sent"]));
     // sending a broker notice is a §12.2 money act and belongs behind the CTA, never
     // behind a row a thumb brushes past on the way somewhere else
     expect(notice.find("button").exists()).toBe(false);

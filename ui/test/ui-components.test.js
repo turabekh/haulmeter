@@ -1650,7 +1650,11 @@ describe("ClaimSurface — claim contents (M3-FR5)", () => {
         ? jsonOk({
             claim_id: "c1", amount_cents: 15000, detention_seconds: 7200, free_time_minutes: 120,
             rate_cents_per_hour: 7500, state: "invoiced", mode: "invoice",
-            facility: "Perth Dock", counterparty: "Acme Brokerage", notice_sent: true, filed: true,
+            facility: "Perth Dock", counterparty: "Acme Brokerage", notice_sent: true,
+            // finding F5: the row reads the DERIVED delivery state now, because
+            // `notice_sent` alone could not tell a bounce from a claim nobody
+            // had tapped Send on
+            notice_delivery: "sent", filed: true,
             created_at: "2026-07-21T10:00:00Z", chain_valid: true, record_count: 3, artifact_count: 1,
             timeline: [{ type: "GEOFENCE", occurred_at: "2026-07-21T10:00:00Z" }, { type: "PHOTO", occurred_at: "2026-07-21T10:05:00Z" }],
           })

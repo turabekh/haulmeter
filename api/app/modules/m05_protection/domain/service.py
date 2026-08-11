@@ -94,20 +94,24 @@ def file_on_time_proof(
     )
 
     notice_sent = False
-    if notify_counterparty and within and gateway is not None:
+    # finding F4: this fell back to an invented unknown-counterparty address, which is not
+    # an address anywhere, and then recorded `notice_sent=True` over the bounce. No
+    # address, no send, and the proof says so — the artifact is filed either way, which is
+    # the half that matters to a dispute.
+    if notify_counterparty and within and gateway is not None and counterparty_email:
         hhmm = _as_utc(checked_in_at).strftime("%H:%M")
         thread = notify.create_thread(
             db, account_id, subject="On-time arrival", counterparty_ref=counterparty_ref
         )
-        notify.send_counterparty_message(
+        message = notify.send_counterparty_message(
             db,
             thread,
             f"Driver checked in on time at {hhmm} per the appointment.",
             gateway,
-            counterparty_email or "counterparty@unknown",
+            counterparty_email,
             now=checked_in_at,
         )
-        notice_sent = True
+        notice_sent = message.sent_at is not None
 
     proof = OnTimeProof(
         account_id=account_id,
@@ -941,7 +945,14 @@ def send_stop_packet(
         else "The stop paperwork is available on request."
     )
     cp = loads.get_counterparty(db, counterparty_ref) if counterparty_ref is not None else None
-    to_ref = recipient or (cp.contact_email if cp is not None else None) or "counterparty@unknown"
+    to_ref = recipient or (cp.contact_email if cp is not None else None)
+    # finding F4, and the same shape as the missing link two lines above: a packet with
+    # no recipient reaches nobody. `counterparty@unknown` made that a bounce the F8 row
+    # then called delivered, and `send_drafted_packet` marked the packet SENT over it —
+    # so the driver's paperwork was gone with no way back. Refused, draft preserved; A1
+    # requirement 6's editable recipient is the driver's route out of it.
+    if not to_ref:
+        raise ValueError("no recipient on file for this packet; add the broker's email")
     thread = notify.create_thread(
         db, account_id, subject=subject, counterparty_ref=counterparty_ref
     )

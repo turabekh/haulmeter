@@ -329,6 +329,58 @@ def _counterparty_email(db: Session, claim: DetentionClaim) -> str | None:
     return cp.contact_email if cp is not None else None
 
 
+# --- What "sent" means (finding F5) ---
+#
+# AI-CONTEXT: the rule this section installs, in one line: **"sent" means the linked
+# message row has `sent_at` — never merely that a message object came back.**
+#
+# `POST /load/{stop_id}/notice` returned `{"sent": message is not None}`, set
+# `start_notice_sent_at`, and appended a `notice_sent` record into the TAMPER-EVIDENT
+# EVIDENCE LOG — all of it on the strength of an object existing. `send_counterparty_message`
+# always returns one: on an SMTP failure it returns a row with a `smtp-failed-…` ref and
+# `sent_at = NULL`, because a gateway may never fail its caller (F-06). So the three
+# assertions fired over a mail that never left, and the worst of them is the evidence
+# record — "we notified the broker at 10:05" is the fact a detention dispute turns on, and
+# it was going into the legal pack for an email sitting in a dead-letter queue.
+#
+# The five states below are DERIVED from the message row on every read rather than
+# cached, so a send that fails now and succeeds later on the retry sweep tells the truth
+# without anything having to remember to update the claim.
+DELIVERY_SENT = "sent"
+DELIVERY_RETRYING = "retrying"
+DELIVERY_FAILED = "failed"
+DELIVERY_NO_EMAIL = "no_email"
+DELIVERY_NOT_SENT = "not_sent"
+
+
+def notice_delivery(db: Session, claim: DetentionClaim) -> str:
+    """What actually happened to this claim's start notice, read off the F8 row.
+
+    ACCEPTED ASYMMETRY, stated rather than discovered: a send that fails now and succeeds
+    later via `retry_unsent_messages` will read `sent` here — this is computed live — but
+    gains no `notice_sent` evidence record, because nothing re-enters that code path. So
+    the evidence pack UNDERSTATES what happened. That is the correct direction for a legal
+    document: a pack that omits a notice the broker did receive costs the driver an
+    argument, while a pack that asserts one they did not costs them the claim.
+    """
+    ref = claim.start_notice_message_ref
+    if ref is not None:
+        message = db.get(notify.OutboundMessage, ref)
+        if message is not None:
+            if message.sent_at is not None:
+                return DELIVERY_SENT
+            if notify.is_retryable(message.provider_ref) and (
+                message.attempts < notify.MAX_SEND_ATTEMPTS
+            ):
+                return DELIVERY_RETRYING
+            return DELIVERY_FAILED
+    # nothing on file. Which of the two reasons is the difference between "tap Send" and
+    # "there is nobody to send it to", and only the second is the driver's to fix.
+    if _counterparty_email(db, claim) is None:
+        return DELIVERY_NO_EMAIL
+    return DELIVERY_NOT_SENT
+
+
 def send_pre_detention_notice(
     db: Session, claim: DetentionClaim, gateway, now: datetime
 ) -> notify.OutboundMessage | None:
@@ -354,6 +406,11 @@ def send_detention_start_notice(
     state = clock(db, claim, now)
     if state.phase == DetentionPhase.within_free_time:
         return None  # nothing owed yet — no notice to send
+    if notice_delivery(db, claim) == DELIVERY_RETRYING:
+        # a retryable failure is already queued and `retry_unsent_messages` owns it.
+        # Sending again would put a SECOND notice in the broker's inbox for one stop the
+        # moment the transient failure cleared.
+        return db.get(notify.OutboundMessage, claim.start_notice_message_ref)
     message = _send_counterparty(
         db,
         claim,
@@ -363,13 +420,30 @@ def send_detention_start_notice(
         body="Per the rate confirmation, free time has been exceeded at this stop; "
         "detention is now accruing at the contracted rate.",
     )
-    claim.start_notice_sent_at = now  # record it so the Meter/evidence reflect it
+    if message is None:
+        return None  # no counterparty email — nothing was addressed, nothing was sent
+    # the ref records that we DECIDED to send, on every attempt; the timestamp records
+    # that it WENT, and only the message row knows that (finding F5)
+    claim.start_notice_message_ref = message.id
+    if message.sent_at is not None:
+        claim.start_notice_sent_at = now
     db.flush()
     return message
 
 
 def _send_counterparty(db, claim, gateway, now, subject, body):
-    to_ref = _counterparty_email(db, claim) or "counterparty@unknown"
+    """None when there is no counterparty email — no thread, no row, no gateway call.
+
+    AI-CONTEXT: finding F4. This addressed an invented `counterparty@unknown`, which is not
+    an address anywhere. Against the recording gateway it looked like a send; against real
+    SMTP it is an `SMTPRecipientsRefused`, which `PERMANENT_FAILURES` correctly refuses to
+    retry — so the notice was unrecoverable — while the driver-facing path reported
+    success over it. Refusing BEFORE the gateway leaves nothing on file, which is what
+    lets `notice_delivery` say `no_email` and name the one thing that fixes it.
+    """
+    to_ref = _counterparty_email(db, claim)
+    if not to_ref:
+        return None
     thread = notify.create_thread(
         db, claim.account_id, subject=subject, counterparty_ref=claim.counterparty_ref
     )
@@ -660,8 +734,12 @@ def open_receivable(
         cp = loads.get_counterparty(db, counterparty_ref)
         if cp is not None:
             loads.record_claim(db, cp)
-    if gateway is not None and counterparty_ref is not None:
-        to_ref = (cp.contact_email if cp is not None else None) or "counterparty@unknown"
+    to_ref = cp.contact_email if cp is not None else None
+    # finding F4: no address, no send. The receivable is still opened — the driver is
+    # owed the money whether or not we hold an email for the broker — but an invoice
+    # addressed to `counterparty@unknown` is a bounce that the F8 row then reported as
+    # delivered. The claim screen's `no_email` state is what tells the driver to add it.
+    if gateway is not None and counterparty_ref is not None and to_ref:
         thread = notify.create_thread(
             db, account_id, subject=notice_subject, counterparty_ref=counterparty_ref
         )

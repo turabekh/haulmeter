@@ -72,6 +72,21 @@ class CreateLoadIn(BaseModel):
     lon: float
     address: str | None = None
     counterparty: str
+    # AI-CONTEXT: where the broker's notices go, and until now there was NOWHERE to put it
+    # (finding F4, and it is worse than the finding said).
+    #
+    # `create_counterparty` has accepted `contact_email` since F5 shipped and NOTHING in
+    # the product ever passed one — not this route, the only route that creates a broker,
+    # and no screen anywhere. So every counterparty a driver has ever created carries
+    # NULL, and M3 addressed the literal `counterparty@unknown` instead. Against real SMTP
+    # that is `SMTPRecipientsRefused`, which `PERMANENT_FAILURES` correctly never retries,
+    # while the driver's screen said "Broker notified". The detention wedge could not
+    # deliver to anybody, by construction.
+    #
+    # Optional, because a driver who does not have the AP address must still be able to
+    # file a load and accrue the clock; the claim screen's `no_email` state is what says
+    # the notice cannot go. The driver-facing INPUT is a named follow-up.
+    counterparty_email: str | None = None
     appointment: datetime | None = None
     # omit to use the live F13-config detention terms (default 2h free / $75/h)
     free_time_minutes: int | None = None
@@ -179,7 +194,12 @@ def create_load(
     db: Session = Depends(get_db),
 ) -> dict:
     fac = _resolve_facility(db, body)
-    cp = loads.create_counterparty(db, body.counterparty, loads.CounterpartyKind.broker)
+    cp = loads.create_counterparty(
+        db,
+        body.counterparty,
+        loads.CounterpartyKind.broker,
+        contact_email=body.counterparty_email,
+    )
     # unset terms fall back to the live F13-config detention defaults (M3 owns them)
     free_time = (
         body.free_time_minutes
@@ -659,6 +679,9 @@ def meter(
         "detention_seconds": detention_seconds,
         "detention_cents": detention_cents,
         "notice_sent": bool(claim is not None and claim.start_notice_sent_at is not None),
+        # finding F5: `notice_sent` is one bit and delivery has five states. A driver whose
+        # notice bounced saw exactly what a driver who never tapped Send saw.
+        "notice_delivery": m3.notice_delivery(db, claim) if claim else "not_sent",
         "filed": filed,
         "photos_captured": m5.condition_photo_count(db, stop.id),
         # §10.2 specifies "photos 2/4". The denominator IS the feature: a bare count
@@ -741,6 +764,7 @@ def claim_detail(
         "facility": fac.name if fac else None,
         "counterparty": cp.name if cp else None,
         "notice_sent": claim.start_notice_sent_at is not None,
+        "notice_delivery": m3.notice_delivery(db, claim),
         "filed": claim.state.value != "open",
         "created_at": claim.created_at.isoformat() if claim.created_at else None,
         **m3.claim_evidence(db, claim),
@@ -820,11 +844,19 @@ def send_notice(
     claim = _claim_or_409(db, stop)
     now = datetime.now(UTC)
     message = m3.send_detention_start_notice(db, claim, _GATEWAY, now)
-    # recorded only when one actually went out: "we told them at 10:05" is the fact a
-    # dispute turns on, and logging an attempt that no-oped would assert it falsely
-    if message is not None:
+    # AI-CONTEXT: finding F5 — this comment used to describe exactly this behaviour while
+    # the line under it did something else. It read `if message is not None`, and
+    # `send_counterparty_message` returns a message row for a FAILED send too (that is the
+    # F-06 contract: a gateway may never fail its caller, the ref carries the outcome). So
+    # every SMTP failure appended `notice_sent` to the hash-chained evidence log and told
+    # the driver the broker had been notified.
+    #
+    # `sent_at` is the only thing that means it went out. A record that goes into a legal
+    # pack has to be conditioned on the fact, not on the attempt.
+    sent = message is not None and message.sent_at is not None
+    if sent:
         loads.record_stop_event(db, stop, loads.EVENT_NOTICE_SENT, now)
-    return {"sent": message is not None}
+    return {"sent": sent, "delivery": m3.notice_delivery(db, claim)}
 
 
 @router.post("/{stop_id}/claim", status_code=201)
