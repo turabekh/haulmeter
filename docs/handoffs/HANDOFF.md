@@ -3,7 +3,46 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-122.md](HANDOFF-122.md)** — read this first, every session.
+➡️ **[HANDOFF-123.md](HANDOFF-123.md)** — read this first, every session.
+
+> **123** was driven entirely by the owner looking at real screens on a real phone and
+> saying what was confusing. Nine commits, **§23 entries 135–143**. Gates went
+> **pytest 1813 → 1842, vitest 796 → 885, layout 289 → 325**, plus a new `make ui-pwa`
+> in `make ci`.
+>
+> **Stack DOWN · everything PUSHED · DEPLOYED.** `haulmeter.online` is **CURRENT at
+> `0070`** — four migrations applied (`0067`→`0070`), backup taken first and verified
+> offsite, and the deployed PWA confirmed installable and offline-capable by driving a
+> real browser against the live domain.
+>
+> **THE PATTERN, and it is 122's twin turned inside out.** 122 found mechanisms *built,
+> correct, exported and reached by nothing*. **123 found things the governing documents
+> SPECIFY that had never been built at all** — §8's button loading state, §7.2's
+> bottom-anchored primary action, §10.3's per-receivable next action, and an installable
+> PWA. **Three times the comment asserting the capability sat directly above the code
+> that made it impossible.** index.html says *"iOS requires an INSTALLED PWA for push at
+> all"* four lines above a manifest with `"icons": []` — so **the app has never been
+> installable and Web Push on iOS has never been reachable.**
+>
+> **Two figures were lying to drivers.** The Money tab's hero summed
+> `recovered + fuel_saved + flagged` under the words **"Delivered to you"** — a lifetime
+> total including money an audit merely *suspects* is owed — telling a driver they had
+> received **$1,432.50 when they had received $987**. And `arrive` wrote a GPS ping at
+> **the facility's own coordinates**, so the position fix a detention claim rests on, on
+> the path a driver takes *because the sensor did not fire*, was a reading of where the
+> warehouse is.
+>
+> **And the twin lesson, in the tests: a SELECTOR standing in for an IDEA stops standing
+> for it the moment the page grows** — `.cta:not(.cta--text)` was read everywhere as "the
+> filled Primary" and counted the first Secondary as a rival. Worse, **the mocks: every
+> packet harness state mocked a LIVE load, every live Load state mocked `accruing`** — so
+> the two states a driver is in most often had never been rendered by anything.
+>
+> **The owner's one action is unchanged and this deploy did not fix it:** the `SMTP_HOST`
+> edit on the VM (F-01, open since 121). The post-deploy worker log names the scale —
+> `dunning … skipped_no_email: 11` of 14. **123 §3.**
+
+➡️ **[HANDOFF-122.md](HANDOFF-122.md)** — the session before.
 
 > **122** was six owner-supplied work contracts run back to back, each with its own report at
 > the repo root: **M3 detention**, **wedge delivery**, **location integrity**, **evidence
@@ -36,7 +75,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > to an owner-controlled inbox — two independent blockers lift at once and that is the only
 > test covering both. **122 §4.**
 
-➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — the session before.
+➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — two sessions before.
 
 > **121** was two instructions. *"Approved, do the loading-state work"* closed **five
 > findings — U-06, U-09, U-10 (criticals), U-11 and U-12** — every finding that decision was
@@ -136,7 +175,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > logged zero errors where it had failed all seven jobs — then observed on production, where
 > `migrate` exits before api and worker start. **HANDOFF-121 §11.**
 
-➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — two sessions before.
+➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — three sessions before.
 
 > **120** was one instruction — *"read the latest handoff and restart the app"*, then
 > *"proceed using your best judgement"* — and it worked the audit queue to the end:
@@ -199,7 +238,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack UP · thirty-five commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — three sessions before.
+➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — four sessions before.
 
 > **119** worked the 2026-08-07 audit queue: **nineteen findings closed, two partial**, and
 > answered one of the audit's three open questions. Three of
@@ -259,7 +298,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · twenty-four commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — four sessions before.
+➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — five sessions before.
 
 > **118** is a short session with **no source changes**: the owner asked for the stack to be
 > restarted, then for a handoff and a shutdown.
@@ -280,7 +319,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > session (no credential), so the ahead-count is arithmetic, not observation — **re-fetch
 > before pushing.** The next task is still the handset background-sensor test.
 
-➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — five sessions before.
+➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — six sessions before.
 
 > **117** did two things the owner asked for, and both turned up something under them.
 >
@@ -308,7 +347,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · four commits UNPUSHED · nothing deployed.** The next task is still the
 > handset background-sensor test.
 
-➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — six sessions before.
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — seven sessions before.
 
 > **116** walked the stop auto-pilot end to end in a real browser, which is what two
 > sessions of building had never been subjected to. **It works.** A human adds a load,
@@ -337,7 +376,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > HANDOFF-116.md's own header contradicted, and its "everything from `a4e282c` onward
 > UNPUSHED" was overtaken by the 2026-08-03 push. Corrected in 117.)
 
-➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — seven sessions before.
+➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — eight sessions before.
 
 > **115** was scoped as a **surfacing rework** — the A1 automation is built and correct,
 > only the way its result reaches the driver is wrong. Re-grepping the seams before
