@@ -8,8 +8,10 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -79,8 +81,31 @@ class FacilityGeofence(Base):
 
 
 class GeofencePresence(Base):
+    """AI-CONTEXT: ONE active presence per (account, facility), enforced in Postgres.
+
+    The ENTER branch is check-then-act — it reads `_active_presence` and inserts if it
+    finds none — over rows a concurrent transaction has not committed yet. Two first-pings
+    arriving together (two devices, or two parallel offline flushes) therefore both missed
+    and both inserted. EXIT closes one; the other keeps its old `entered_at` forever, and
+    `visit_window` can hand that stale arrival to a LATER load as the moment its detention
+    clock starts. Migration 0068.
+
+    `evaluation_cursor`'s row lock is what normally prevents this; the index is the backstop
+    for the one case a lock cannot cover — a cursor row that does not exist yet on two
+    connections at once.
+    """
+
     __tablename__ = "geofence_presence"
-    __table_args__ = {"schema": SCHEMA}
+    __table_args__ = (
+        Index(
+            "uq_geofence_presence_active",
+            "account_id",
+            "facility_id",
+            unique=True,
+            postgresql_where=text("active"),
+        ),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     account_id: Mapped[uuid.UUID] = mapped_column(
@@ -93,6 +118,11 @@ class GeofencePresence(Base):
     last_tick_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     exited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    # AI-CONTEXT: consecutive pings observed OUTSIDE the fence (F3-4). The exit debounce
+    # counts them and fires EXIT only at `f03.exit_confirm_pings`; an inside ping resets it.
+    # The config ships at 1, which is exactly today's single-ping exit, so this column
+    # changes nothing until an operator decides otherwise.
+    outside_streak: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class GeofenceEvent(Base):
@@ -116,3 +146,32 @@ class GeofenceEvent(Base):
     geom: Mapped[object] = mapped_column(
         Geometry(geometry_type="POINT", srid=4326, spatial_index=True)
     )
+
+
+class EvaluationCursor(Base):
+    """AI-CONTEXT: the high-water mark of evaluated time, per account (F3-3).
+
+    Two jobs in one row, and both matter.
+
+    SERIALISATION. `evaluate_ping` takes this row `FOR UPDATE` before it touches the state
+    machine, so an account's pings are evaluated one at a time however many connections are
+    flushing them. That is the mechanism that kills the duplicate-presence race at its
+    source rather than catching it afterwards.
+
+    ORDERING. The offline outbox exists precisely to deliver pings LATE, and the machine
+    applied every ping to current state at the ping's own timestamp — so a late inside-ping
+    arriving after its visit's EXIT re-opened a presence that never closes, and a late
+    outside-ping after an ENTER closed the visit at a moment before it began. A ping at or
+    before `last_evaluated_at` is now recorded to the trail and not evaluated.
+
+    A ping from the FUTURE deliberately does not advance this. A device with a broken clock
+    would otherwise set the mark years ahead and silently discard every real ping after it.
+    """
+
+    __tablename__ = "evaluation_cursor"
+    __table_args__ = {"schema": SCHEMA}
+
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="CASCADE"), primary_key=True
+    )
+    last_evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
