@@ -4,7 +4,6 @@ from datetime import UTC, datetime, timedelta
 from geoalchemy2 import Geography
 from geoalchemy2.elements import WKTElement
 from sqlalchemy import cast, delete, func, or_, select, update
-from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -644,29 +643,35 @@ def list_events(db: Session, account_id, facility_id=None) -> list[GeofenceEvent
     return list(db.scalars(stmt.order_by(GeofenceEvent.occurred_at)))
 
 
-def build_trace(db: Session, account_id, since: datetime, until: datetime) -> str | None:
-    count = db.scalar(
-        select(func.count())
-        .select_from(LocationPing)
-        .where(
-            LocationPing.account_id == account_id,
-            LocationPing.occurred_at >= since,
-            LocationPing.occurred_at <= until,
-        )
-    )
-    if count is None or count < 2:
-        return None
-    return db.scalar(
-        select(
-            func.ST_AsText(
-                func.ST_MakeLine(aggregate_order_by(LocationPing.geom, LocationPing.occurred_at))
-            )
-        ).where(
-            LocationPing.account_id == account_id,
-            LocationPing.occurred_at >= since,
-            LocationPing.occurred_at <= until,
-        )
-    )
+# AI-CONTEXT: `build_trace` WAS HERE, and it is gone deliberately (finding F3-6).
+#
+# WHAT IT WAS. `build_trace(db, account_id, since, until) -> str | None` returned a
+# PostGIS `ST_MakeLine` over the account's raw `location_ping` rows in a window, as WKT,
+# or None below two points. It was exported from `public.py`, covered by two tests, and
+# called by NOTHING in the tree for the whole life of the project — the ping-retention
+# comment below says so itself, and relied on it.
+#
+# WHY IT WENT rather than being wired into the evidence pack, which was the alternative
+# considered. `render.py` CAN draw a polyline — `_trace` already does, from
+# `_located_points` — so the obstacle was never rendering machinery. The obstacle is that
+# file's governing rule, stated in its own docstring:
+#
+#     "The trace is drawn from EVIDENCE, not from raw location pings. Every plotted point
+#      is a hash-chained record or a geotagged artifact, so the map cannot show a position
+#      the verification block does not cover."
+#
+# A `location_ping` is neither hash-chained nor permanent — it is purged on the retention
+# window declared immediately below. Wiring this in would have plotted positions the
+# verification block cannot vouch for, and made a claim's pack render DIFFERENTLY before
+# and after a purge, which is exactly the property the retention wiring was justified by.
+#
+# WHAT IT WOULD TAKE TO BRING IT BACK: make the points evidence first — append the visit's
+# pings to the stop's F4 chain as located records at pack time, so `_located_points` picks
+# them up through the existing path and the verification block covers them. That is
+# evidence machinery, not location machinery, and it belongs to the F4 session that owns
+# device-truth. Until then, an unwired path-from-raw-pings is an inert engine, and this
+# codebase has removed four of those for the same reason: a deferral that cannot fail is
+# indistinguishable from a finished feature.
 
 
 def purge_pings_older_than(db: Session, cutoff: datetime) -> int:

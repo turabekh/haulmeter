@@ -114,21 +114,25 @@ def test_confirmed_arrivals_feedback_increments(db):
     assert config.confirmed_arrivals == 1
 
 
-def test_build_trace_makes_linestring(db):
+# AI-CONTEXT: two `build_trace` tests were here and went with the function (F3-6). They
+# asserted a LINESTRING came back and that one point produced None — both true, both about
+# a function with no caller anywhere in the tree. The tombstone in `service.py` records
+# what it was, why it went, and what wiring it back would take. Deleting the tests with it
+# is deliberate: a test that keeps an unreachable function green is what let it look
+# finished for the life of the project.
+def test_the_raw_ping_trail_is_still_recorded_and_readable(db):
+    """What `build_trace` was built on, and what actually has callers.
+
+    The pings themselves are not what went — the trail feeds retention, `stationary_since`
+    and `last_known_position`. Only the unwired path-builder over them did.
+    """
     account = _account(db)
     location.record_ping(db, account.id, 32.7000, -96.8000, occurred_at=T0)
     location.record_ping(db, account.id, 32.7100, -96.8100, occurred_at=T0 + timedelta(minutes=5))
-    location.record_ping(db, account.id, 32.7200, -96.8200, occurred_at=T0 + timedelta(minutes=10))
-    trace = location.build_trace(db, account.id, T0 - timedelta(hours=1), T0 + timedelta(hours=1))
-    assert trace is not None
-    assert trace.startswith("LINESTRING")
 
-
-def test_build_trace_none_for_single_point(db):
-    account = _account(db)
-    location.record_ping(db, account.id, *DALLAS, occurred_at=T0)
-    trace = location.build_trace(db, account.id, T0 - timedelta(hours=1), T0 + timedelta(hours=1))
-    assert trace is None
+    assert location.last_known_position(
+        db, account.id, timedelta(hours=1), now=T0 + timedelta(minutes=6)
+    ) is not None
 
 
 def test_purge_pings_retention(db):
