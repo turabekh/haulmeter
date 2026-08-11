@@ -37,7 +37,7 @@ def test_the_dunning_job_is_actually_scheduled():
 
 
 def _invoiced(db, email="ap@acme.com", invoiced_at=FILED, amount_email=True):
-    account = identity.register_account(db, f"oo-{invoiced_at.isoformat()}@example.com", "pw-1234")
+    account = identity.register_account(db, f"oo-{invoiced_at.isoformat()}@example.com", "pw-12345")
     identity.upsert_driver_profile(db, account, authority_type=identity.AuthorityType.own_mc)
     dock = facility.create_facility(db, facility.FacilityType.shipper_receiver, "Dock", *DALLAS)
     broker = loads.create_counterparty(

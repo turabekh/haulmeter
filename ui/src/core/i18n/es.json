@@ -159,6 +159,7 @@
   "auth.login": "Iniciar sesión",
   "auth.logout": "Cerrar sesión",
   "auth.password": "Contraseña",
+  "auth.password_too_short": "Usa al menos 8 caracteres.",
   "auth.register": "Crear cuenta",
   "auth.tagline": "Estacionamiento, combustible y cobrar — una app.",
   "auth.to_login": "¿Ya tienes cuenta? Inicia sesión",

@@ -159,6 +159,7 @@
   "auth.login": "Gal",
   "auth.logout": "Ka bax",
   "auth.password": "Furaha sirta",
+  "auth.password_too_short": "Isticmaal ugu yaraan 8 xaraf.",
   "auth.register": "Samee akoon",
   "auth.tagline": "Baabuur-dhigasho, shidaal iyo lacag — hal app.",
   "auth.to_login": "Akoon ma leedahay? Gal",

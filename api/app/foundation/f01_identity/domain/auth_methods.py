@@ -10,8 +10,8 @@ so the shape is fixed and callers fail cleanly rather than silently.
 
 from typing import Protocol
 
-from .enums import MethodType
 from . import security
+from .enums import MethodType
 
 
 class AuthHandler(Protocol):

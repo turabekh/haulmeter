@@ -159,6 +159,7 @@
   "auth.login": "Log in",
   "auth.logout": "Log out",
   "auth.password": "Password",
+  "auth.password_too_short": "Use at least 8 characters.",
   "auth.register": "Create account",
   "auth.tagline": "Parking, fuel, and getting paid — one app.",
   "auth.to_login": "Have an account? Log in",

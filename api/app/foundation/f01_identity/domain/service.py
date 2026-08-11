@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from . import security
 from . import security as _security
 from .auth_methods import get_handler
 from .enums import AuthorityType, MethodType, OrgType, Role, VerifyStatus
@@ -87,6 +88,43 @@ class Throttled(Exception):
         self.retry_after = retry_after
 
 
+# AI-CONTEXT: a length floor, no composition rules, and NEVER retroactive (finding F1-8).
+#
+# There was no minimum anywhere — `Credentials.password: str` and nothing else.
+#
+# LENGTH, NOT COMPOSITION. Requiring an uppercase, a digit and a symbol buys a predictable
+# transformation of a short word and costs a driver typing on a phone keyboard in a cab.
+# Eight characters is the floor because it is the point below which a password is guessable
+# rather than merely weak, and because every seed and bootstrap credential in this repo
+# already clears it — checked before the number was picked, not after.
+#
+# NEVER RETROACTIVE, and this is the part that must not drift. It is checked where a
+# password is SET, never where one is verified, so an account created before this exists
+# keeps working with whatever it has and meets the floor the next time its holder chooses
+# one. A floor that applied at login would lock out live drivers to enforce a rule they
+# were never given a chance to satisfy.
+MIN_PASSWORD_LENGTH = 8
+
+
+class WeakPassword(ValueError):
+    """Raised where a password is SET. Never raised on a verification path."""
+
+    def __init__(self, message: str | None = None):
+        super().__init__(message or f"password must be at least {MIN_PASSWORD_LENGTH} characters")
+
+
+def validate_password(password: str) -> str:
+    """The ONE floor, used by all three paths that set a credential.
+
+    A single validator rather than three Pydantic constraints, because three constraints
+    drift: the day one of them is relaxed, the other two keep asserting a rule the product
+    no longer has.
+    """
+    if password is None or len(password) < MIN_PASSWORD_LENGTH:
+        raise WeakPassword()
+    return password
+
+
 class EmailAlreadyRegistered(Exception):
     pass
 
@@ -147,6 +185,7 @@ def _normalize_email(email: str) -> str:
 
 
 def register_account(db: Session, email: str, password: str) -> Account:
+    validate_password(password)
     normalized = _normalize_email(email)
     existing = db.scalar(select(Account).where(Account.email == normalized))
     if existing is not None:
@@ -370,6 +409,7 @@ def authenticate(db: Session, email: str, password: str) -> Account | None:
     verified = handler.verify(method.secret_ref, password)
     if not verified:
         return None
+    _upgrade_hash_if_stale(db, method, password)
     account = db.get(Account, method.account_id)
     # a deactivated account fails CLOSED, and distinctly from a wrong password: the
     # console and the logs must be able to tell "switched off" from "bad credentials"
@@ -378,6 +418,31 @@ def authenticate(db: Session, email: str, password: str) -> Account | None:
     method.last_used_at = datetime.now(UTC)
     db.flush()
     return account
+
+
+def _upgrade_hash_if_stale(db: Session, method: AuthMethod, password: str) -> bool:
+    """Re-hash a verified password when its stored parameters have gone stale (F1-3).
+
+    AI-CONTEXT: `needs_rehash` was exported and called by NOTHING since it was written —
+    the sixth built-and-inert engine in this codebase's tally — which meant Argon2
+    parameters could never be raised for anyone who already had an account. Raising them in
+    `PasswordHasher` would have protected new accounts and silently left every existing one
+    on the old cost.
+
+    OPPORTUNISTIC, and that is the whole safety property. The upgrade happens on a
+    successful login, when the plaintext is in hand and correct — the only moment it can —
+    but a full creation pool SKIPS it and completes the login anyway. A missed rehash is
+    harmless and self-correcting: the next sign-in tries again. A refused login is neither.
+    """
+    if not security.needs_rehash(method.secret_ref):
+        return False
+    handler = get_handler(MethodType.password)
+    try:
+        method.secret_ref = handler.build_secret_ref(password)
+    except VerifierBusy:
+        return False  # the pool is for people signing in; they come first
+    db.flush()
+    return True
 
 
 def create_session(
@@ -612,6 +677,7 @@ def complete_credential_change(
             AuthMethod.account_id == account.id, AuthMethod.method_type == MethodType.password
         )
     )
+    validate_password(new_password)
     handler = get_handler(MethodType.password)
     method.secret_ref = handler.build_secret_ref(new_password)
     method.must_change = False

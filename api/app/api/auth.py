@@ -127,6 +127,8 @@ def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)) 
         account = identity.register_account(db, body.email, body.password)
     except identity.EmailAlreadyRegistered as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, "email already registered") from exc
+    except identity.WeakPassword as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     except identity.VerifierBusy as exc:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,

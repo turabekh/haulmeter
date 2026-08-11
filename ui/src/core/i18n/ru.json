@@ -159,6 +159,7 @@
   "auth.login": "Войти",
   "auth.logout": "Выйти",
   "auth.password": "Пароль",
+  "auth.password_too_short": "Не менее 8 символов.",
   "auth.register": "Создать аккаунт",
   "auth.tagline": "Парковка, топливо и оплата — одно приложение.",
   "auth.to_login": "Уже есть аккаунт? Войти",

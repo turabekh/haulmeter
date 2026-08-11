@@ -159,6 +159,7 @@
   "auth.login": "ਲੌਗ ਇਨ",
   "auth.logout": "ਲੌਗ ਆਊਟ",
   "auth.password": "ਪਾਸਵਰਡ",
+  "auth.password_too_short": "ਘੱਟੋ-ਘੱਟ 8 ਅੱਖਰ ਵਰਤੋ।",
   "auth.register": "ਖਾਤਾ ਬਣਾਓ",
   "auth.tagline": "ਪਾਰਕਿੰਗ, ਤੇਲ ਅਤੇ ਭੁਗਤਾਨ — ਇੱਕ ਐਪ।",
   "auth.to_login": "ਖਾਤਾ ਹੈ? ਲੌਗ ਇਨ ਕਰੋ",

@@ -159,6 +159,7 @@
   "auth.login": "Kirish",
   "auth.logout": "Chiqish",
   "auth.password": "Parol",
+  "auth.password_too_short": "Kamida 8 ta belgi ishlating.",
   "auth.register": "Hisob yaratish",
   "auth.tagline": "Parkovka, yoqilg'i va to'lov — bitta ilova.",
   "auth.to_login": "Hisobingiz bormi? Kiring",

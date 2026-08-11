@@ -20,6 +20,7 @@ from .domain.models import (
 from .domain.service import (
     AUTHORITY_VERIFICATION_FLAG,
     IMPERSONATION_TTL,
+    MIN_PASSWORD_LENGTH,
     AccountInactive,
     AuthMethodNotEnabled,
     EmailAlreadyRegistered,
@@ -27,6 +28,7 @@ from .domain.service import (
     InvalidVin,
     Throttled,
     VerifierBusy,
+    WeakPassword,
     add_auth_method,
     add_membership,
     admin_create_account,
@@ -59,6 +61,7 @@ from .domain.service import (
     set_display_name,
     start_impersonation,
     upsert_driver_profile,
+    validate_password,
     validate_vin,
     verify_authority,
 )
@@ -124,6 +127,9 @@ __all__ = [
     "register_authority_verification",
     "resolve_session",
     "upsert_driver_profile",
+    "MIN_PASSWORD_LENGTH",
+    "WeakPassword",
+    "validate_password",
     "validate_vin",
     "verify_authority",
     "AuthorityVerifier",
