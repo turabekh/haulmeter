@@ -40,6 +40,7 @@ import {
 } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
+import Spinner from "../core/components/Spinner.vue";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import IncidentSheet from "../core/components/IncidentSheet.vue";
 import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
@@ -66,6 +67,7 @@ import {
   endActiveLoad,
   sendDetentionNotice,
   generateClaim,
+  discardStopPacket,
   correctAppointment,
   exportProtectionPack,
   isAuthenticated,
@@ -125,6 +127,12 @@ const reviewPacket = ref(null);
 const reviewRecipient = ref("");
 const reviewError = ref("");
 const sending = ref(false);
+// the confirm STEP inside the review sheet, and the write's own state. Separate from
+// `sending` because the two buttons must be able to disable each other without either
+// borrowing the other's spinner.
+const confirmingDiscard = ref(false);
+const discarding = ref(false);
+const discardError = ref("");
 
 // AI-CONTEXT: the NEWEST draft, and the difference is not cosmetic.
 //
@@ -185,7 +193,30 @@ function openReview() {
   reviewPacket.value = packet;
   reviewRecipient.value = packet.recipient || "";
   reviewError.value = "";
+  // a sheet that reopened on the confirm step would put a destructive button under a
+  // driver who tapped Review — the step belongs to one visit, not to the packet.
+  confirmingDiscard.value = false;
+  discardError.value = "";
   reviewing.value = true;
+}
+
+async function onDiscardPacket() {
+  const packet = reviewPacket.value;
+  if (!packet || discarding.value) return;
+  discarding.value = true;
+  discardError.value = "";
+  try {
+    await discardStopPacket(packet.id);
+    waitingPackets.value = waitingPackets.value.filter((p) => p.id !== packet.id);
+    reviewing.value = false;
+  } catch {
+    // §12.4, and NOT the offline wording Send uses. A discard is not queued (see
+    // api.js), so telling a driver it will go out later would be a promise nothing
+    // keeps — the packet is simply still here and the tap can be repeated.
+    discardError.value = t("packet.discard_failed");
+  } finally {
+    discarding.value = false;
+  }
 }
 
 async function loadPackets() {
@@ -245,7 +276,10 @@ function openRow(h) {
   expanded.value = next;
 }
 
+const exporting = ref(null); // which load's pack is being built
 async function exportLoad(h) {
+  if (exporting.value) return;
+  exporting.value = h.load_id;
   try {
     const pack = await exportProtectionPack("load", h.load_id);
     if (pack && typeof document !== "undefined") {
@@ -262,6 +296,8 @@ async function exportLoad(h) {
     // a control that runs, fails, and leaves the screen exactly as it was.
     loadExportFailed.value = h.load_id;
     setTimeout(() => (loadExportFailed.value = null), 6000);
+  } finally {
+    exporting.value = null;
   }
 }
 
@@ -637,8 +673,19 @@ const rung = computed(() => {
   return null; // arrived, BOL filed, off the geofence, and nothing owed yet
 });
 
+// AI-CONTEXT: the CTA ladder's rung had no busy state of any kind (owner request,
+// 2026-08-11) — no spinner, no label change and, worse, NO GUARD.
+//
+// §8 has always said "Loading state = inline spinner replacing label, width locked" and
+// nothing in this product implemented it. On these four the omission was not only
+// feedback: a driver at a dock with two bars taps a button that looks exactly like an
+// untapped button, so they tap it again — and `onSendNotice` genuinely sends a second
+// notice to the broker. `rungBusy` names which rung is working, so one ref disables the
+// Primary and its twin in the secondary row without four more booleans.
+const rungBusy = ref("");
 async function onArrive() {
-  if (!activeStopId.value) return;
+  if (!activeStopId.value || rungBusy.value) return;
+  rungBusy.value = "arrive";
   try {
     await arriveAtStop(activeStopId.value);
     // the server writes a real geofence ENTER for this tap (api/load.py: arrive), so
@@ -651,21 +698,29 @@ async function onArrive() {
     await loadMeter();
   } catch {
     /* offline / queued in a later F12 pass */
+  } finally {
+    rungBusy.value = "";
   }
 }
 async function onGenerateClaim() {
   // `claimable` also gates the controls; this is the same rule at the point of action,
   // so a stale render or a double tap cannot file a claim worth nothing.
-  if (!activeStopId.value || filed.value || !claimable.value) return;
+  if (!activeStopId.value || filed.value || !claimable.value || rungBusy.value) return;
+  rungBusy.value = "claim";
   try {
     filed.value = await generateClaim(activeStopId.value); // arrive->accrue->FILE (freezes Meter)
     await loadMeter();
   } catch {
     /* offline / queued in a later F12 pass */
+  } finally {
+    rungBusy.value = "";
   }
 }
 async function onSendNotice() {
-  if (!activeStopId.value) return;
+  // the guard that matters most on this surface: a notice is a real email to a broker,
+  // and a second tap on a slow connection sent a second one.
+  if (!activeStopId.value || rungBusy.value) return;
+  rungBusy.value = "notice";
   try {
     const res = await sendDetentionNotice(activeStopId.value); // M3 counterparty notice
     // finding F5: "sent" was `message !== null`, which an SMTP failure also satisfies —
@@ -682,10 +737,14 @@ async function onSendNotice() {
     await loadMeter();
   } catch {
     noticeMsg.value = t("load.notice_early");
+  } finally {
+    rungBusy.value = "";
   }
 }
 
 async function endLoad() {
+  if (rungBusy.value) return;
+  rungBusy.value = "end";
   history.value = []; // re-read on next open: this load just joined it
   const stopId = activeStopId.value;
   filed.value = null;
@@ -693,6 +752,7 @@ async function endLoad() {
   if (!stopId) {
     setActiveStop(null);
     clearLoad();
+    rungBusy.value = "";
     return;
   }
   // durable: departs the stop server-side, and hands back the next one if the route
@@ -703,6 +763,7 @@ async function endLoad() {
   await loadPackets();
   if (next) await loadMeter();
   else clearLoad();
+  rungBusy.value = "";
 }
 </script>
 
@@ -942,20 +1003,52 @@ async function endLoad() {
 
       <!-- §10.2: ONE state-dependent CTA. The ladder picks the rung; the rungs it
            passes over stay reachable below as secondary text controls. -->
-      <button v-if="rung === 'arrive'" class="cta" type="button" @click="onArrive">
-        {{ t("load.arrive") }}
+      <button
+        v-if="rung === 'arrive'"
+        class="cta"
+        type="button"
+        :disabled="!!rungBusy"
+        @click="onArrive"
+      >
+        <Spinner v-if="rungBusy === 'arrive'" />
+        {{ rungBusy === "arrive" ? t("busy.saving") : t("load.arrive") }}
       </button>
       <button v-else-if="rung === 'bol'" class="cta" type="button" @click="openCapture({ item: 'bol' })">
         {{ t("load.cta.bol") }}
       </button>
-      <button v-else-if="rung === 'notice'" class="cta" type="button" @click="onSendNotice">
-        {{ noticeDelivery === "failed" ? t("load.cta.notice_again") : t("load.cta.notice") }}
+      <button
+        v-else-if="rung === 'notice'"
+        class="cta"
+        type="button"
+        :disabled="!!rungBusy"
+        @click="onSendNotice"
+      >
+        <Spinner v-if="rungBusy === 'notice'" />
+        {{ rungBusy === "notice"
+          ? t("busy.sending")
+          : noticeDelivery === "failed"
+            ? t("load.cta.notice_again")
+            : t("load.cta.notice") }}
       </button>
-      <button v-else-if="rung === 'claim'" class="cta" type="button" @click="onGenerateClaim">
-        {{ t("load.cta.claim") }}
+      <button
+        v-else-if="rung === 'claim'"
+        class="cta"
+        type="button"
+        :disabled="!!rungBusy"
+        @click="onGenerateClaim"
+      >
+        <Spinner v-if="rungBusy === 'claim'" />
+        {{ rungBusy === "claim" ? t("busy.filing") : t("load.cta.claim") }}
       </button>
-      <button v-else-if="rung === 'warn'" class="cta" type="button" @click="onSendNotice">
-        {{ t("load.cta.warn", { minutes: freeMinutesLeft }) }}
+      <button
+        v-else-if="rung === 'warn'"
+        class="cta"
+        type="button"
+        :disabled="!!rungBusy"
+        @click="onSendNotice"
+      >
+        <Spinner v-if="rungBusy === 'notice'" />
+        {{ rungBusy === "notice" ? t("busy.sending") : t("load.cta.warn", { minutes: freeMinutesLeft }) }}
       </button>
       <button
         v-else-if="rung === 'photos'"
@@ -995,17 +1088,21 @@ async function endLoad() {
           v-if="accruing && !noticeSent && !isFiled && rung !== 'notice'"
           class="rungs__item"
           type="button"
+          :disabled="!!rungBusy"
           @click="onSendNotice"
         >
-          {{ t("load.cta.notice") }}
+          <Spinner v-if="rungBusy === 'notice'" />
+          {{ rungBusy === "notice" ? t("busy.sending") : t("load.cta.notice") }}
         </button>
         <button
           v-if="claimable && !isFiled && rung !== 'claim'"
           class="rungs__item"
           type="button"
+          :disabled="!!rungBusy"
           @click="onGenerateClaim"
         >
-          {{ t("load.cta.claim") }}
+          <Spinner v-if="rungBusy === 'claim'" />
+          {{ rungBusy === "claim" ? t("busy.filing") : t("load.cta.claim") }}
         </button>
         <!-- AI-CONTEXT: §5's ON_SITE, narrowed to this tab by the owner (§23 entry 64).
              §5 asks for capture actions "one tap from anywhere via a persistent action
@@ -1084,10 +1181,40 @@ async function endLoad() {
            bundle for the same reason. -->
       <BottomSheet
         :open="reviewing"
-        :title="t('packet.review_title')"
+        :title="confirmingDiscard ? t('packet.discard_title') : t('packet.review_title')"
         @close="reviewing = false"
       >
-        <div v-if="reviewPacket" class="review">
+        <!-- AI-CONTEXT: the confirm STEP, inside this sheet rather than over it.
+             §8 requires a destructive action to have "its own confirm sheet" AND caps
+             sheets at "max 1 deep" — and the review sheet is already that one, so a
+             second sheet on top would break the cap to satisfy the confirm. §22.1
+             resolves it at the Component Rules step: the sheet's own body becomes the
+             confirm, which is a confirm the driver cannot miss, at 1 deep, having
+             already seen what they are declining. Keep it returns to the review. -->
+        <div v-if="reviewPacket && confirmingDiscard" class="review">
+          <p class="review__note">{{ t("packet.discard_body") }}</p>
+          <p v-if="discardError" class="review__error" role="status">{{ discardError }}</p>
+          <!-- §8: destructive is `flare` filled and says exactly what it does (§12.2) -->
+          <button
+            class="cta cta--destructive"
+            type="button"
+            :disabled="discarding"
+            @click="onDiscardPacket"
+          >
+            <Spinner v-if="discarding" />
+            {{ discarding ? t("busy.discarding") : t("packet.discard_confirm") }}
+          </button>
+          <button
+            class="cta cta--text"
+            type="button"
+            :disabled="discarding"
+            @click="confirmingDiscard = false"
+          >
+            {{ t("packet.discard_keep") }}
+          </button>
+        </div>
+
+        <div v-else-if="reviewPacket" class="review">
           <p class="review__note">{{ t("packet.note") }}</p>
 
           <section class="review__section">
@@ -1133,7 +1260,20 @@ async function endLoad() {
             :disabled="sending"
             @click="onSendPacket"
           >
-            {{ reviewClaim ? t("packet.send_with_claim") : t("packet.send") }}
+            <Spinner v-if="sending" />
+            {{ sending ? t("busy.sending") : reviewClaim ? t("packet.send_with_claim") : t("packet.send") }}
+          </button>
+          <!-- the review's SECOND exit (owner request). Tertiary, because declining is
+               not the expected outcome of opening a review — but it is a real one, and
+               until now the only way to clear a packet a driver did not want was to
+               send it. -->
+          <button
+            class="cta cta--text"
+            type="button"
+            :disabled="sending"
+            @click="confirmingDiscard = true"
+          >
+            {{ t("packet.discard") }}
           </button>
         </div>
       </BottomSheet>
@@ -1205,8 +1345,14 @@ async function endLoad() {
                 </button>
               </li>
               <li>
-                <button class="hist__stop hist__export" type="button" @click="exportLoad(h)">
-                  {{ t("load.history_export_load") }}
+                <button
+                  class="hist__stop hist__export"
+                  type="button"
+                  :disabled="exporting === h.load_id"
+                  @click="exportLoad(h)"
+                >
+                  <Spinner v-if="exporting === h.load_id" />
+                  {{ exporting === h.load_id ? t("busy.preparing") : t("load.history_export_load") }}
                 </button>
                 <p v-if="loadExportFailed === h.load_id" class="hist__quiet">
                   {{ t("evidence.export_failed") }}
@@ -1239,8 +1385,14 @@ async function endLoad() {
           </button></li>
           <!-- §12.2: the button says what will actually happen. On a route this leaves
                THIS dock and opens the next; only the last stop ends the load. -->
-          <li><button class="more__item" type="button" @click="more = false; endLoad()">
-            {{ nextStop ? t("load.leave_stop") : t("load.end") }}
+          <li><button
+            class="more__item"
+            type="button"
+            :disabled="!!rungBusy"
+            @click="more = false; endLoad()"
+          >
+            <Spinner v-if="rungBusy === 'end'" />
+            {{ rungBusy === "end" ? t("busy.working") : nextStop ? t("load.leave_stop") : t("load.end") }}
           </button></li>
         </ul>
       </BottomSheet>
@@ -1260,7 +1412,8 @@ async function endLoad() {
           <input v-model="apptDraft" class="appt__input" type="datetime-local" />
         </label>
         <button class="cta" type="button" :disabled="!apptDraft || apptSaving" @click="saveAppointment">
-          {{ t("load.appt_save") }}
+          <Spinner v-if="apptSaving" />
+          {{ apptSaving ? t("busy.saving") : t("load.appt_save") }}
         </button>
       </BottomSheet>
 
@@ -1663,6 +1816,15 @@ async function endLoad() {
   background: transparent;
   border: 1px solid var(--line-1);
   color: var(--text-1);
+}
+/* §8: "Destructive = flare filled, requires its own confirm sheet." This IS the
+   confirm, so it carries the fill — the same treatment DocsSurface's remove confirm
+   already uses. Deliberately NOT named `cta--danger`: MoreSurface scopes that name to
+   an OUTLINE logout button, and one class name meaning two opposite treatments in two
+   scoped stylesheets is a trap for whoever reads them next. */
+.cta--destructive {
+  background: var(--flare-500);
+  color: var(--ink-0);
 }
 /* text button (§8) — secondary cross-links (end load, profit calculator) */
 .cta--text {

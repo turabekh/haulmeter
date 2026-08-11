@@ -16,6 +16,7 @@ import { Mail, Check } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { contactEmailError, normalizeContactEmail } from "../contact.js";
 import { setCounterpartyEmail } from "../api.js";
+import Spinner from "./Spinner.vue";
 
 const props = defineProps({
   loadId: { type: String, default: null },
@@ -92,7 +93,8 @@ async function save() {
       <p v-if="localError" class="bmail__error" role="alert">{{ t(localError) }}</p>
       <p v-else-if="serverError" class="bmail__error" role="alert">{{ serverError }}</p>
       <button class="bmail__save" type="button" :disabled="blocked" @click="save">
-        {{ t("load.broker_email_save") }}
+        <Spinner v-if="saving" />
+        {{ saving ? t("busy.saving") : t("load.broker_email_save") }}
       </button>
       <p v-if="saved && !localError" class="bmail__saved">
         <Check :size="14" :stroke-width="2.5" aria-hidden="true" />

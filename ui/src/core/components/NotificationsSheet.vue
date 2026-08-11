@@ -28,6 +28,7 @@ import { Bell, Clock } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { ageLabel } from "../presentation.js";
 import { pushSupported, permissionState, isEnabled, enable, disable } from "../push.js";
+import Spinner from "./Spinner.vue";
 import {
   fetchNotificationClasses,
   setNotificationClass,
@@ -204,7 +205,10 @@ const rows = computed(() =>
         :disabled="busy"
         @click="togglePush"
       >
-        {{ pushState === "on" ? t("push.disable") : t("push.enable") }}
+        <Spinner v-if="busy" />
+        {{ busy
+          ? t("busy.saving")
+          : pushState === "on" ? t("push.disable") : t("push.enable") }}
       </button>
       <p v-else class="push__why">{{ t(`push.why_${pushState}`) }}</p>
       <p v-if="pushState === 'error'" class="push__why">{{ t("push.why_error") }}</p>
@@ -220,7 +224,8 @@ const rows = computed(() =>
     <section v-if="promptOn !== null" class="push prompt-class">
       <p class="push__what">{{ t("prompts.lot_what") }}</p>
       <button class="push__cta" type="button" :disabled="promptBusy" @click="togglePrompt">
-        {{ promptOn ? t("prompts.lot_off") : t("prompts.lot_on") }}
+        <Spinner v-if="promptBusy" />
+        {{ promptBusy ? t("busy.saving") : promptOn ? t("prompts.lot_off") : t("prompts.lot_on") }}
       </button>
     </section>
 

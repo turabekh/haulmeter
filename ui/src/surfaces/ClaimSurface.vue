@@ -13,6 +13,7 @@ import { useI18n } from "../core/i18n.js";
 import { formatMoney, formatClock } from "../core/meter.js";
 import { fetchClaim, fetchMe, fetchShares, revokeShare, extendShare } from "../core/api.js";
 import BrokerEmailField from "../core/components/BrokerEmailField.vue";
+import Spinner from "../core/components/Spinner.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -61,21 +62,33 @@ async function loadShares() {
   }
 }
 
+// AI-CONTEXT: which share is working, not merely that one is. These render per ROW, so
+// a single boolean would spin every share's buttons at once — and revoking is the act a
+// driver most needs to see land, because it takes a document away from a broker.
+const shareBusy = ref("");
 async function onRevoke(share) {
+  if (shareBusy.value) return;
+  shareBusy.value = `revoke:${share.share_id}`;
   try {
     await revokeShare(share.share_id);
     await loadShares();
   } catch {
     /* leave the list as it was; the next open re-reads */
+  } finally {
+    shareBusy.value = "";
   }
 }
 
 async function onExtend(share) {
+  if (shareBusy.value) return;
+  shareBusy.value = `extend:${share.share_id}`;
   try {
     await extendShare(share.share_id);
     await loadShares();
   } catch {
     /* as above */
+  } finally {
+    shareBusy.value = "";
   }
 }
 
@@ -218,11 +231,27 @@ function evTime(iso) {
               · {{ t("claim.share_opens") }} {{ s.opened_count }}
             </span>
             <span v-if="!s.revoked" class="share__actions">
-              <button class="share__act" type="button" @click="onExtend(s)">
-                {{ t("claim.share_extend") }}
+              <button
+                class="share__act"
+                type="button"
+                :disabled="!!shareBusy"
+                @click="onExtend(s)"
+              >
+                <Spinner v-if="shareBusy === `extend:${s.share_id}`" />
+                {{ shareBusy === `extend:${s.share_id}`
+                  ? t("busy.saving")
+                  : t("claim.share_extend") }}
               </button>
-              <button class="share__act" type="button" @click="onRevoke(s)">
-                {{ t("claim.share_revoke") }}
+              <button
+                class="share__act"
+                type="button"
+                :disabled="!!shareBusy"
+                @click="onRevoke(s)"
+              >
+                <Spinner v-if="shareBusy === `revoke:${s.share_id}`" />
+                {{ shareBusy === `revoke:${s.share_id}`
+                  ? t("busy.working")
+                  : t("claim.share_revoke") }}
               </button>
             </span>
           </li>

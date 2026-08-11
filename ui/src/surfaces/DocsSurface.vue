@@ -35,6 +35,7 @@ import {
 } from "../core/api.js";
 import SkeletonRow from "../core/components/SkeletonRow.vue";
 import { LoadState, Failure, failureOf } from "../core/load-state.js";
+import Spinner from "../core/components/Spinner.vue";
 
 const { t, has } = useI18n();
 const { isDriving } = useDriverState();
@@ -477,8 +478,9 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
             :disabled="busy"
             @click="restore(row)"
           >
-            <RotateCcw :size="16" :stroke-width="2" aria-hidden="true" />
-            {{ t("docs.arch_restore") }}
+            <Spinner v-if="busy" />
+            <RotateCcw v-else :size="16" :stroke-width="2" aria-hidden="true" />
+            {{ busy ? t("busy.working") : t("docs.arch_restore") }}
           </button>
           <p v-else-if="!row.restorable" class="arch__blocked">{{ t("docs.arch_blocked") }}</p>
         </li>
@@ -494,7 +496,8 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
     <BottomSheet :open="!!removing" :title="t('docs.rm_title')" @close="removing = null">
       <p class="docs__empty">{{ t("docs.rm_body") }}</p>
       <button class="rm__go" type="button" :disabled="busy" @click="confirmRemove">
-        {{ t("docs.rm_confirm") }}
+        <Spinner v-if="busy" />
+        {{ busy ? t("busy.working") : t("docs.rm_confirm") }}
       </button>
       <button class="rm__keep" type="button" @click="removing = null">
         {{ t("docs.rm_keep") }}

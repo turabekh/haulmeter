@@ -10,6 +10,7 @@ import { ref } from "vue";
 import { Clock } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { claimHandoff } from "../api.js";
+import Spinner from "./Spinner.vue";
 
 const props = defineProps({
   handoffs: { type: Array, default: () => [] },
@@ -21,14 +22,19 @@ function minutesUntil(iso) {
   return Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / 60000));
 }
 
+// the existing guard reads `claimed`, which is only written AFTER the await — so two
+// taps inside one round trip both got through. This closes the window the guard left.
+const claiming = ref("");
 async function claim(h) {
-  if (h.mine || claimed.value[h.handoff_id]) return;
+  if (h.mine || claimed.value[h.handoff_id] || claiming.value) return;
+  claiming.value = h.handoff_id;
   try {
     await claimHandoff(h.handoff_id);
   } catch {
     /* taken / offline — reflect claimed locally either way */
   }
   claimed.value = { ...claimed.value, [h.handoff_id]: true };
+  claiming.value = "";
 }
 </script>
 
@@ -52,8 +58,15 @@ async function claim(h) {
         >
           {{ t("handoff.claimed") }}
         </button>
-        <button v-else class="claim" type="button" @click="claim(h)">
-          {{ t("handoff.claim") }}
+        <button
+          v-else
+          class="claim"
+          type="button"
+          :disabled="!!claiming"
+          @click="claim(h)"
+        >
+          <Spinner v-if="claiming === h.handoff_id" />
+          {{ claiming === h.handoff_id ? t("busy.working") : t("handoff.claim") }}
         </button>
       </li>
     </ul>

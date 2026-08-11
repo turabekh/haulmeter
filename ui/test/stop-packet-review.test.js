@@ -16,6 +16,8 @@ import LoadSurface from "../src/surfaces/LoadSurface.vue";
 import { routes } from "../src/router.js";
 import { setToken, logout } from "../src/core/api.js";
 import en from "../src/core/i18n/en.json";
+import { messages } from "../src/core/i18n/index.js";
+import { useI18n } from "../src/core/i18n.js";
 
 const PACKET = {
   id: "p-1",
@@ -533,5 +535,281 @@ describe("The card offline (§15.1)", () => {
 
     expect(second.find(".packet-card").exists()).toBe(true);
     expect(second.find(".packet-card").text()).toContain("Dock 4");
+  });
+});
+
+
+// AI-CONTEXT: §8's button loading state, built for the first time (owner request,
+// 2026-08-11) — "Loading state = inline spinner replacing label, width locked."
+//
+// That sentence has been in the design constitution since it was written and nothing in
+// this product implemented it. About a dozen buttons already set `:disabled` while a
+// write was in flight, so the GUARD existed and the FEEDBACK did not: on a dock with two
+// bars a driver tapped Send and watched a button identical to an untapped one. The
+// reasonable response to that is to tap it again.
+//
+// `deferred` holds the request open, which is the only way to observe the in-flight
+// state at all — a stub that resolves immediately has already finished by the time the
+// assertion runs, and a test written against one would pass no matter what the button
+// rendered mid-flight.
+function deferred() {
+  let resolve;
+  const promise = new Promise((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+describe("Buttons say they are working (§8 loading state)", () => {
+  afterEach(() => {
+    __resetStateForTests();
+    lastEvents.value = [];
+    useI18n().setLocale("en");
+  });
+
+  async function openWithPendingSend() {
+    setToken("tok");
+    const gate = deferred();
+    const stub = vi.fn((url, opts) =>
+      String(url).includes("/send") && opts?.method === "POST"
+        ? gate.promise.then(() => jsonOk({ id: "p-1", state: "sent" }))
+        : jsonOk([PACKET]),
+    );
+    const w = mountLoad(stub);
+    await flushPromises();
+    await w.find(".packet-card__cta").trigger("click");
+    await flushPromises();
+    return { w, gate };
+  }
+
+  it("disables Send and shows a spinner while the packet is in flight", async () => {
+    const { w, gate } = await openWithPendingSend();
+    const send = w.find(".review__send");
+    expect(send.attributes("disabled")).toBeUndefined();
+    expect(send.find(".spin").exists()).toBe(false);
+
+    await send.trigger("click");
+    await flushPromises();
+
+    expect(w.find(".review__send").attributes("disabled")).toBeDefined();
+    expect(w.find(".review__send .spin").exists()).toBe(true);
+    expect(w.find(".review__send").text()).toContain(en["busy.sending"]);
+
+    gate.resolve();
+    await flushPromises();
+  });
+
+  it("says it in the driver's language, not English", async () => {
+    // the owner's actual ask. A busy label hardcoded in English is the same defect as a
+    // raw translation key — worse, because it looks deliberate.
+    for (const loc of ["uz", "ru", "es", "pa", "so"]) {
+      useI18n().setLocale(loc);
+      const { w, gate } = await openWithPendingSend();
+      await w.find(".review__send").trigger("click");
+      await flushPromises();
+
+      expect(w.find(".review__send").text(), `${loc} busy label`).toContain(
+        messages[loc]["busy.sending"],
+      );
+      expect(w.find(".review__send").text()).not.toContain(en["busy.sending"]);
+      gate.resolve();
+      await flushPromises();
+    }
+  });
+
+  it("the spinner is hidden from assistive tech — the LABEL carries the state", async () => {
+    // §16: never motion alone, never colour alone. A screen reader gets the disabled
+    // attribute and the changed label; the ring is decoration for the eye.
+    const { w, gate } = await openWithPendingSend();
+    await w.find(".review__send").trigger("click");
+    await flushPromises();
+
+    expect(w.find(".review__send .spin").attributes("aria-hidden")).toBe("true");
+    gate.resolve();
+    await flushPromises();
+  });
+
+  it("a second tap while in flight does not send twice", async () => {
+    const { w, gate } = await openWithPendingSend();
+    await w.find(".review__send").trigger("click");
+    await flushPromises();
+    await w.find(".review__send").trigger("click");
+    await flushPromises();
+    gate.resolve();
+    await flushPromises();
+
+    // counted on the stub itself: the guard is in `onSendPacket`, and the assertion has
+    // to be about REQUESTS rather than about the button being disabled — a disabled
+    // attribute that a synthetic click ignores would still fire the handler.
+    expect(
+      vi.mocked(globalThis.fetch).mock.calls.filter(
+        (c) => String(c[0]).includes("/send") && c[1]?.method === "POST",
+      ).length,
+    ).toBe(1);
+  });
+});
+
+
+// AI-CONTEXT: the review's SECOND exit (owner request, 2026-08-11).
+//
+// A1 req 5 is "the driver reviews before it sends" and a review could only ever conclude
+// one way. A packet the driver did not want stayed on the Load tab, and the only control
+// that could clear it was Send — so the product's answer to "I don't need to send this"
+// was to send it.
+//
+// §8 wants a destructive action to have "its own confirm sheet" and caps sheets at "max
+// 1 deep"; the review sheet is already that one. So the confirm is a STEP inside it.
+describe("Discarding paperwork without sending it (§8 destructive)", () => {
+  afterEach(() => {
+    __resetStateForTests();
+    lastEvents.value = [];
+  });
+
+  async function openReview(stub) {
+    setToken("tok");
+    const w = mountLoad(stub || packetsOnly([PACKET]));
+    await flushPromises();
+    await w.find(".packet-card__cta").trigger("click");
+    await flushPromises();
+    return w;
+  }
+
+  function discardStub(ok = true) {
+    return vi.fn((url, opts) => {
+      if (String(url).includes("/discard") && opts?.method === "POST") {
+        return ok
+          ? jsonOk({ id: "p-1", state: "discarded" })
+          : Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+      }
+      return String(url).includes("/protection/stop-packets")
+        ? jsonOk([PACKET])
+        : jsonOk({});
+    });
+  }
+
+  it("offers a way out that is not Send", async () => {
+    const w = await openReview();
+    expect(w.find(".review").text()).toContain(en["packet.discard"]);
+  });
+
+  it("does NOT discard on the first tap — it asks first", async () => {
+    // §8: destructive requires a confirm. The assertion that matters is that NO request
+    // was made, not merely that a confirm appeared.
+    const stub = discardStub();
+    const w = await openReview(stub);
+    await w.findAll(".review .cta--text")[0].trigger("click");
+    await flushPromises();
+
+    expect(stub.mock.calls.some((c) => String(c[0]).includes("/discard"))).toBe(false);
+    expect(w.text()).toContain(en["packet.discard_body"]);
+    expect(w.find(".cta--destructive").exists()).toBe(true);
+    // the SHEET'S OWN TITLE has to move too. Found by looking at the screenshot, not by
+    // the suite: the confirm body asked about discarding under a heading that still read
+    // "Review before it sends", and `packet.discard_title` was translated into all six
+    // locales and rendered by nothing — a key with no caller, which is the shape these
+    // handoffs keep finding. Nothing here can go green over it again.
+    expect(w.find(".sheet__title").text()).toBe(en["packet.discard_title"]);
+  });
+
+  it("puts the review title back when the driver keeps it", async () => {
+    const w = await openReview();
+    await w.findAll(".review .cta--text")[0].trigger("click");
+    await flushPromises();
+    await w.findAll(".review .cta--text")[0].trigger("click");
+    await flushPromises();
+    expect(w.find(".sheet__title").text()).toBe(en["packet.review_title"]);
+  });
+
+  it("discards on the confirm, and the card clears", async () => {
+    const stub = discardStub();
+    const w = await openReview(stub);
+    await w.findAll(".review .cta--text")[0].trigger("click");
+    await flushPromises();
+    await w.find(".cta--destructive").trigger("click");
+    await flushPromises();
+
+    expect(
+      stub.mock.calls.some((c) => String(c[0]).includes("/protection/stop-packets/p-1/discard")),
+    ).toBe(true);
+    expect(w.find(".packet-card").exists()).toBe(false);
+  });
+
+  it("never sends anything on the way out", async () => {
+    // the invariant the whole feature rests on. Discard is the opposite of Send, and a
+    // discard path that also posted /send would be the worst possible bug here.
+    const stub = discardStub();
+    const w = await openReview(stub);
+    await w.findAll(".review .cta--text")[0].trigger("click");
+    await flushPromises();
+    await w.find(".cta--destructive").trigger("click");
+    await flushPromises();
+
+    expect(stub.mock.calls.some((c) => String(c[0]).includes("/send"))).toBe(false);
+  });
+
+  it("Keep it goes back to the review with the packet untouched", async () => {
+    const stub = discardStub();
+    const w = await openReview(stub);
+    await w.findAll(".review .cta--text")[0].trigger("click");
+    await flushPromises();
+    await w.findAll(".review .cta--text")[0].trigger("click"); // "Keep it"
+    await flushPromises();
+
+    expect(stub.mock.calls.some((c) => String(c[0]).includes("/discard"))).toBe(false);
+    expect(w.find(".review__send").exists()).toBe(true);
+    expect(w.find(".packet-card").exists()).toBe(true);
+  });
+
+  it("reopening the sheet starts on the review, never on the confirm", async () => {
+    // a sheet that reopened on the destructive step would put a flare-filled button
+    // under a driver who tapped "Check and send".
+    const w = await openReview();
+    await w.findAll(".review .cta--text")[0].trigger("click");
+    await flushPromises();
+    expect(w.find(".cta--destructive").exists()).toBe(true);
+
+    await w.find(".sheet__close").trigger("click");
+    await flushPromises();
+    expect(w.find(".review").exists()).toBe(false); // the sheet really did close
+    await w.find(".packet-card__cta").trigger("click");
+    await flushPromises();
+
+    expect(w.find(".cta--destructive").exists()).toBe(false);
+    expect(w.find(".review__send").exists()).toBe(true);
+  });
+
+  it("a failed discard says so and keeps the packet", async () => {
+    // §12.4, and deliberately NOT the offline wording Send uses: a discard is not
+    // queued, so promising it will happen later would be a promise nothing keeps.
+    const w = await openReview(discardStub(false));
+    await w.findAll(".review .cta--text")[0].trigger("click");
+    await flushPromises();
+    await w.find(".cta--destructive").trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain(en["packet.discard_failed"]);
+    expect(w.find(".packet-card").exists()).toBe(true);
+  });
+
+  it("shows a spinner and a localized busy label while discarding", async () => {
+    setToken("tok");
+    const gate = deferred();
+    const stub = vi.fn((url, opts) =>
+      String(url).includes("/discard") && opts?.method === "POST"
+        ? gate.promise.then(() => jsonOk({ id: "p-1", state: "discarded" }))
+        : jsonOk([PACKET]),
+    );
+    const w = mountLoad(stub);
+    await flushPromises();
+    await w.find(".packet-card__cta").trigger("click");
+    await flushPromises();
+    await w.findAll(".review .cta--text")[0].trigger("click");
+    await flushPromises();
+    await w.find(".cta--destructive").trigger("click");
+    await flushPromises();
+
+    expect(w.find(".cta--destructive").attributes("disabled")).toBeDefined();
+    expect(w.find(".cta--destructive .spin").exists()).toBe(true);
+    expect(w.find(".cta--destructive").text()).toContain(en["busy.discarding"]);
+    gate.resolve();
+    await flushPromises();
   });
 });

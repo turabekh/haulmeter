@@ -17,6 +17,7 @@ import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
 import { calcTrueProfit, activeStopId, fetchMeter } from "../core/api.js";
 import { lastFix } from "../core/location.js";
+import Spinner from "../core/components/Spinner.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -154,7 +155,10 @@ const clears = computed(() => (result.value?.net_cents ?? 0) >= 0);
       <!-- SM-3: a form of number fields is the definition of an interactive
            prompt at speed (Forbidden #11). -->
       <p v-if="isDriving" class="driving-note">{{ t("driving.paused") }}</p>
-      <button v-else class="cta" type="submit" :disabled="submitting">{{ t("calc.calculate") }}</button>
+      <button v-else class="cta" type="submit" :disabled="submitting">
+        <Spinner v-if="submitting" />
+        {{ submitting ? t("busy.working") : t("calc.calculate") }}
+      </button>
     </form>
 
     <section v-if="result" class="result">

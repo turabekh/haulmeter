@@ -8,6 +8,7 @@
 import { ref } from "vue";
 import { useI18n } from "../i18n.js";
 import { draftMessage } from "../api.js";
+import Spinner from "./Spinner.vue";
 
 const { t } = useI18n();
 
@@ -70,7 +71,8 @@ function approve() {
       </p>
 
       <button v-if="!draft" class="cta" type="button" :disabled="busy" @click="write">
-        {{ t("ghost.draft") }}
+        <Spinner v-if="busy" />
+        {{ busy ? t("busy.working") : t("ghost.draft") }}
       </button>
       <button v-else class="cta" type="button" @click="approve">{{ t("ghost.approve") }}</button>
     </template>

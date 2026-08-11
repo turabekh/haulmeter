@@ -766,6 +766,29 @@ def get_stop_packet(db: Session, packet_id, account_id):
     return packet if packet is not None and packet.account_id == account_id else None
 
 
+def discard_drafted_packet(db: Session, packet, now=None):
+    """The driver declining. A review with one exit is not a review (owner request).
+
+    Idempotent like its sibling, and for a sharper reason: `send_drafted_packet` guards a
+    double tap to keep a second document out of an inbox, and this guards one to keep a
+    SENT packet from being rewritten as discarded. The row would then claim the driver
+    declined paperwork a dispatcher is already holding, which is the one wrong answer
+    here — so a sent packet is returned untouched rather than re-stated.
+
+    Nothing is deleted and nothing is sent. `sent_at` stays NULL because nothing left,
+    and `discarded_at` is the decision's own timestamp: the two facts are different and a
+    row that reused one column for both could not say which had happened.
+    """
+    if packet.state is StopPacketState.sent:
+        return packet
+    if packet.state is StopPacketState.discarded:
+        return packet
+    packet.state = StopPacketState.discarded
+    packet.discarded_at = now or datetime.now(UTC)
+    db.flush()
+    return packet
+
+
 def send_drafted_packet(
     db: Session,
     packet,

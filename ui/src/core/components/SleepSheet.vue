@@ -16,6 +16,7 @@ import { formatMoney } from "../meter.js";
 import { fetchSleepPlan } from "../api.js";
 import SkeletonRow from "./SkeletonRow.vue";
 import { LoadState, Failure, failureOf } from "../load-state.js";
+import Spinner from "./Spinner.vue";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -75,7 +76,10 @@ async function find() {
       <span class="field__label">{{ t("sleep.hours") }}</span>
       <input v-model="hours" class="field__input" type="number" inputmode="decimal" min="0" max="11" />
     </label>
-    <button class="cta" type="button" :disabled="busy" @click="find">{{ t("sleep.find") }}</button>
+    <button class="cta" type="button" :disabled="busy" @click="find">
+      <Spinner v-if="busy" />
+      {{ busy ? t("busy.working") : t("sleep.find") }}
+    </button>
 
     <SkeletonRow v-if="planState === LoadState.LOADING" :count="3" />
     <p v-else-if="planState === LoadState.FAILED" class="sleep__failed">

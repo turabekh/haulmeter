@@ -219,6 +219,31 @@ def send_stop_packet_route(
     return {"id": str(packet.id), "state": packet.state.value}
 
 
+@router.post("/stop-packets/{packet_id}/discard")
+def discard_stop_packet_route(
+    packet_id: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """AI-CONTEXT: the review's second exit (owner request, 2026-08-11).
+
+    A1 req 5 is "the driver reviews before it sends", and until now the only thing a
+    review could conclude was Send. A driver who did not want to send a packet had no
+    control that said so, so it sat on their Load tab and the only way to clear the
+    screen was to send the document they had decided not to send.
+
+    Scoped to the OWNER by the same lookup Send uses — one driver's paperwork is not
+    another's to decline any more than it is theirs to send. Nothing leaves the box and
+    nothing is deleted: the stop's BOL, photos and evidence chain are untouched and
+    still exported from Past loads.
+    """
+    packet = m5.get_stop_packet(db, packet_id, account.id)
+    if packet is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "packet not found")
+    packet = m5.discard_drafted_packet(db, packet, now=datetime.now(UTC))
+    return {"id": str(packet.id), "state": packet.state.value}
+
+
 @router.get("/wallet")
 def wallet(
     account: identity.Account = Depends(current_account),

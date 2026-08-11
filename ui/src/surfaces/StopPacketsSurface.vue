@@ -20,6 +20,7 @@ import { FileText } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import { fetchStopPackets, sendStopPacket } from "../core/api.js";
+import Spinner from "../core/components/Spinner.vue";
 
 const { t } = useI18n();
 // SM-3 / Forbidden #11: sending a document to a broker under the driver's name is the
@@ -42,7 +43,17 @@ async function load() {
   }
 }
 
+// AI-CONTEXT: WHICH packet is going, not merely "something is". This is a LIST, so a
+// single boolean would spin every row's button at once and say the wrong thing about
+// four packets to tell the truth about one.
+//
+// It is also the guard this route never had: `send` had no in-flight state at all, so a
+// driver on a bad connection could tap a row twice and post the same packet twice. The
+// server is idempotent, which is why this was survivable rather than harmless.
+const sendingId = ref(null);
 async function send(packet) {
+  if (sendingId.value) return;
+  sendingId.value = packet.id;
   failed.value = null;
   try {
     await sendStopPacket(packet.id);
@@ -51,6 +62,8 @@ async function send(packet) {
     // §12.4: what happened and what to do. A tap that appears to work and does nothing
     // is the worse outcome — the driver would believe their paperwork went out.
     failed.value = packet.id;
+  } finally {
+    sendingId.value = null;
   }
 }
 
@@ -77,8 +90,15 @@ onMounted(load);
         <span class="packet__email">{{ p.recipient || t("packet.no_recipient") }}</span>
       </p>
       <p v-if="failed === p.id" class="packet__failed">{{ t("packet.send_failed") }}</p>
-      <button v-if="!isDriving" class="cta packet__send" type="button" @click="send(p)">
-        {{ t("packet.send") }}
+      <button
+        v-if="!isDriving"
+        class="cta packet__send"
+        type="button"
+        :disabled="sendingId === p.id"
+        @click="send(p)"
+      >
+        <Spinner v-if="sendingId === p.id" />
+        {{ sendingId === p.id ? t("busy.sending") : t("packet.send") }}
       </button>
       <p v-else class="packet__driving">{{ t("packet.driving") }}</p>
     </article>

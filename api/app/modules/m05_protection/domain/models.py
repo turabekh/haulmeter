@@ -126,5 +126,10 @@ class StopPacket(Base):
     )
     drafted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # the decision's own timestamp. Separate from `sent_at` because "the driver declined
+    # this on Tuesday" and "this reached a dispatcher on Tuesday" are different facts,
+    # and a column doing both jobs could not say which one happened (§23 entry 133's
+    # lesson, one table over).
+    discarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     shared_pack_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -31,6 +31,7 @@ import { Search } from "lucide-vue-next";
 import BottomSheet from "./BottomSheet.vue";
 import { useI18n } from "../i18n.js";
 import { geocodeAddress } from "../api.js";
+import Spinner from "./Spinner.vue";
 
 const props = defineProps({ open: { type: Boolean, default: false } });
 const emit = defineEmits(["close", "pick"]);
@@ -93,8 +94,9 @@ function pick(place) {
           :placeholder="t('place.placeholder')"
         />
         <button class="place__go" type="submit" :disabled="!query.trim() || searching">
-          <Search :size="18" :stroke-width="2" aria-hidden="true" />
-          <span class="place__go-text">{{ t("place.search") }}</span>
+          <Spinner v-if="searching" />
+          <Search v-else :size="18" :stroke-width="2" aria-hidden="true" />
+          <span class="place__go-text">{{ searching ? t("busy.working") : t("place.search") }}</span>
         </button>
       </div>
       <p class="place__hint">{{ t("place.hint") }}</p>

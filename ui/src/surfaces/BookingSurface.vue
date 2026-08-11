@@ -15,6 +15,7 @@ import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
 import { bookSpot } from "../core/api.js";
+import Spinner from "../core/components/Spinner.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -112,7 +113,9 @@ async function confirm() {
       <!-- SM-3: a booking moves money, and Forbidden #11 bans acting at speed. -->
       <p v-if="isDriving" class="driving-note">{{ t("driving.paused") }}</p>
       <button v-else class="cta" type="button" :disabled="submitting" @click="confirm">
-        {{ t("facility.book") }} — {{ formatMoney(totalCents) }}
+        <Spinner v-if="submitting" />
+        <template v-if="submitting">{{ t("busy.working") }}</template>
+        <template v-else>{{ t("facility.book") }} — {{ formatMoney(totalCents) }}</template>
       </button>
     </template>
 

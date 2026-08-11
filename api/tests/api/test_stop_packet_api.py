@@ -285,3 +285,130 @@ def test_omitting_the_address_still_uses_the_one_on_file(db, client):
     assert client.post(
         f"/protection/stop-packets/{packet.id}/send", headers=headers
     ).status_code == 200
+
+
+# AI-CONTEXT: the review's SECOND exit (owner request, 2026-08-11).
+#
+# A1 req 5 is "the driver reviews before it sends", and until now a review could only
+# conclude one way. A packet the driver did not want stayed on the Load tab forever, and
+# the only control that could clear it was Send — so the product's answer to "I don't
+# need to send this" was to send it.
+#
+# The invariants worth asserting are what discard must NOT do: it must not deliver, it
+# must not destroy the driver's evidence, and it must not be undoable by driving through
+# the same geofence again.
+def test_a_discarded_packet_leaves_the_queue(db, client):
+    from datetime import UTC, datetime
+
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+
+    resp = client.post(f"/protection/stop-packets/{packet.id}/discard", headers=headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "discarded"
+    assert client.get("/protection/stop-packets", headers=headers).json() == []
+
+
+def test_discarding_sends_NOTHING(db, client):
+    """The whole point. `sent_at` and `shared_pack_ref` stay empty, because nothing left
+    the box — a row that recorded a delivery here would be F-03's defect inverted."""
+    from datetime import UTC, datetime
+
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+
+    client.post(f"/protection/stop-packets/{packet.id}/discard", headers=headers)
+    db.refresh(packet)
+
+    assert packet.sent_at is None, "a discarded packet claimed a delivery"
+    assert packet.shared_pack_ref is None, "a discarded packet produced a shared pack"
+    assert packet.discarded_at is not None, "the decision left no timestamp"
+
+
+def test_discarding_keeps_the_drivers_EVIDENCE(db, client):
+    """A packet is a pointer to a stop. The BOL the driver photographed belongs to them
+    and to the stop, not to the envelope they declined to post — and this is the
+    assertion that would fail if `discard` were ever implemented as a delete."""
+    from datetime import UTC, datetime
+
+    PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+    stop = loads.get_stop(db, packet.stop_ref)
+    m5.capture_document(db, account_id, "bol", PNG, filename="bol.png", stop_ref=stop.id)
+
+    client.post(f"/protection/stop-packets/{packet.id}/discard", headers=headers)
+
+    assert m5.has_bol(db, stop.id), "discarding the packet destroyed the driver's BOL"
+
+
+def test_a_later_EXIT_at_the_same_dock_does_not_resurrect_it(db, client):
+    """A discard that a geofence bounce can undo is not a decision. `stop_ref` is
+    uniquely constrained and drafting is get-or-create, so this is enforced by the
+    schema rather than by a rule somebody has to remember — asserted because that is
+    exactly the kind of guarantee a later refactor removes without noticing."""
+    from datetime import UTC, datetime
+
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+    stop = loads.get_stop(db, packet.stop_ref)
+
+    client.post(f"/protection/stop-packets/{packet.id}/discard", headers=headers)
+    m5.draft_stop_packet_on_exit(
+        db, account_id, stop.facility_id, datetime(2026, 8, 1, 14, tzinfo=UTC)
+    )
+
+    assert client.get("/protection/stop-packets", headers=headers).json() == []
+
+
+def test_discarding_an_ALREADY_SENT_packet_does_not_rewrite_it(db, client):
+    """The sharper half of idempotency. Send guards a double tap to keep a second
+    document out of an inbox; this guards one to stop a row claiming the driver declined
+    paperwork a dispatcher is already holding."""
+    from datetime import UTC, datetime
+
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+    client.post(f"/protection/stop-packets/{packet.id}/send", headers=headers)
+
+    resp = client.post(f"/protection/stop-packets/{packet.id}/discard", headers=headers)
+
+    assert resp.status_code == 200, "a late tap is not an error"
+    assert resp.json()["state"] == "sent", "a sent packet was rewritten as discarded"
+    db.refresh(packet)
+    assert packet.discarded_at is None
+
+
+def test_discarding_twice_is_not_an_error(db, client):
+    from datetime import UTC, datetime
+
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+
+    first = client.post(f"/protection/stop-packets/{packet.id}/discard", headers=headers)
+    db.refresh(packet)
+    stamped = packet.discarded_at
+    second = client.post(f"/protection/stop-packets/{packet.id}/discard", headers=headers)
+    db.refresh(packet)
+
+    assert (first.status_code, second.status_code) == (200, 200)
+    assert stamped is not None
+    # the second tap must not restamp: the decision happened once, and moving the
+    # timestamp would make the record disagree with when the driver actually decided.
+    assert packet.discarded_at == stamped
+
+
+def test_one_driver_cannot_discard_anothers_paperwork(db, client):
+    """The same ownership scope Send has. Declining another driver's paperwork would
+    delete a task from their queue that they never saw."""
+    from datetime import UTC, datetime
+
+    account_id, headers = _auth(client)
+    packet, _ = _drafted(db, account_id, datetime(2026, 8, 1, 12, tzinfo=UTC))
+    _, other = _auth(client, email="thief@example.com")
+
+    assert client.post(
+        f"/protection/stop-packets/{packet.id}/discard", headers=other
+    ).status_code == 404
+    assert len(client.get("/protection/stop-packets", headers=headers).json()) == 1

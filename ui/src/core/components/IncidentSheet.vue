@@ -10,6 +10,7 @@ import { ref } from "vue";
 import { ShieldAlert, Check } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { fileIncident } from "../api.js";
+import Spinner from "./Spinner.vue";
 
 const emit = defineEmits(["filed"]);
 const { t } = useI18n();
@@ -81,7 +82,8 @@ async function submit() {
       </label>
 
       <button class="cta" type="button" :disabled="!kind || busy" @click="submit">
-        {{ t("incident.file") }}
+        <Spinner v-if="busy" />
+        {{ busy ? t("busy.filing") : t("incident.file") }}
       </button>
     </template>
   </div>

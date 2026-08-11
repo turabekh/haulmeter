@@ -11,6 +11,7 @@ import { ref, onMounted, onBeforeUnmount } from "vue";
 import { Send, Mic, Square, Volume2 } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { askVoice } from "../api.js";
+import Spinner from "./Spinner.vue";
 import {
   recognitionSupported,
   recognitionUnavailableReason,
@@ -157,8 +158,14 @@ onBeforeUnmount(() => {
         :placeholder="t('voice.placeholder')"
         :aria-label="t('voice.title')"
       />
-      <button class="voice__send" type="submit" :disabled="asking" :aria-label="t('voice.ask')">
-        <Send :size="20" :stroke-width="2" aria-hidden="true" />
+      <button
+        class="voice__send"
+        type="submit"
+        :disabled="asking"
+        :aria-label="asking ? t('busy.working') : t('voice.ask')"
+      >
+        <Spinner v-if="asking" :size="20" />
+        <Send v-else :size="20" :stroke-width="2" aria-hidden="true" />
       </button>
     </form>
   </div>

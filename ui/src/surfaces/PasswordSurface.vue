@@ -14,6 +14,7 @@ import { useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
 import { changePassword, mustChangePassword } from "../core/api.js";
 import { useDriverState } from "../core/state.js";
+import Spinner from "../core/components/Spinner.vue";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -76,7 +77,8 @@ async function submit() {
       </label>
       <p v-if="error" class="pw__error" role="alert">{{ error }}</p>
       <button class="pw__cta" type="button" :disabled="blocked" @click="submit">
-        {{ t("pw.submit") }}
+        <Spinner v-if="busy" />
+        {{ busy ? t("busy.saving") : t("pw.submit") }}
       </button>
     </template>
 

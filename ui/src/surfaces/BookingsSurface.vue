@@ -23,6 +23,7 @@ import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
 import { fetchMyBookings, cancelBooking } from "../core/api.js";
+import Spinner from "../core/components/Spinner.vue";
 
 const router = useRouter();
 const { t } = useI18n();
@@ -55,18 +56,24 @@ const stateLabel = (s) => t(STATE_KEY[s] ?? "bookings.st_booked");
 const isLive = (b) => LIVE.includes(b.state);
 const nightOf = (iso) => (iso || "").slice(0, 10);
 
+// the arm/confirm pair means the SECOND tap is the one that moves money, and it had no
+// in-flight state — so the confirm tap looked identical to the arm tap that preceded it.
+const cancelling = ref("");
 async function onCancel(booking) {
+  if (cancelling.value) return;
   if (arming.value !== booking.id) {
     arming.value = booking.id;
     return;
   }
   arming.value = null;
+  cancelling.value = booking.id;
   try {
     await cancelBooking(booking.id);
   } catch {
     /* already canceled, or offline — the reload is the source of truth */
   }
   await load();
+  cancelling.value = "";
 }
 </script>
 
@@ -102,9 +109,13 @@ async function onCancel(booking) {
           v-if="isLive(b) && !isDriving"
           class="row__cancel"
           type="button"
+          :disabled="!!cancelling"
           @click="onCancel(b)"
         >
-          {{ arming === b.id ? t("bookings.cancel_confirm") : t("bookings.cancel") }}
+          <Spinner v-if="cancelling === b.id" />
+          {{ cancelling === b.id
+            ? t("busy.working")
+            : arming === b.id ? t("bookings.cancel_confirm") : t("bookings.cancel") }}
         </button>
       </li>
     </ul>

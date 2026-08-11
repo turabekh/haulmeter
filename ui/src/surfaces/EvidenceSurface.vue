@@ -29,6 +29,7 @@ import {
 } from "../core/api.js";
 import { useDriverState } from "../core/state.js";
 import BottomSheet from "../core/components/BottomSheet.vue";
+import Spinner from "../core/components/Spinner.vue";
 
 const route = useRoute();
 const { isDriving } = useDriverState();
@@ -256,8 +257,9 @@ function photoLabel(prompt) {
       <section v-if="!isDriving" class="card">
         <h2 class="card__title">{{ t("evidence.send") }}</h2>
         <button class="cta" type="button" :disabled="busy" @click="openExport">
-          <FileDown :size="18" :stroke-width="2" aria-hidden="true" />
-          {{ t("evidence.export") }}
+          <Spinner v-if="busy" />
+          <FileDown v-else :size="18" :stroke-width="2" aria-hidden="true" />
+          {{ busy ? t("busy.preparing") : t("evidence.export") }}
         </button>
         <button class="cta cta--secondary" type="button" :disabled="busy" @click="sharing = true">
           <Share2 :size="18" :stroke-width="2" aria-hidden="true" />
@@ -285,8 +287,9 @@ function photoLabel(prompt) {
       </label>
       <p class="field__hint">{{ t("evidence.share_note") }}</p>
       <button class="cta" type="button" :disabled="busy" @click="doShare">
-        <Share2 :size="18" :stroke-width="2" aria-hidden="true" />
-        {{ t("evidence.share_send") }}
+        <Spinner v-if="busy" />
+        <Share2 v-else :size="18" :stroke-width="2" aria-hidden="true" />
+        {{ busy ? t("busy.sending") : t("evidence.share_send") }}
       </button>
     </BottomSheet>
   </div>

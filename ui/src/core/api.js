@@ -878,6 +878,20 @@ export async function sendStopPacket(packetId, recipient = null) {
   return resp.json();
 }
 
+// AI-CONTEXT: the review's second exit. Deliberately NOT `queuedPost` — a discard must
+// not be optimistic. The card disappearing while the write sits in an offline queue
+// would tell a driver their decision is recorded when it is not, and the one thing this
+// control must never do is look like it worked when the packet is still waiting to send.
+export async function discardStopPacket(packetId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/protection/stop-packets/${packetId}/discard`, {
+    method: "POST",
+    headers: postHeaders(newOpId()),
+  });
+  if (!resp.ok) throw new Error(`discard packet ${resp.status}`);
+  return resp.json();
+}
+
 export function recordServiceCall(facilityId) {
   return queuedPost(`/map/facility/${facilityId}/called`, {});
 }

@@ -27,6 +27,7 @@ import {
 import { verificationPresentation } from "../core/vendors.js";
 import SkeletonCard from "../core/components/SkeletonCard.vue";
 import { LoadState, Failure, failureOf } from "../core/load-state.js";
+import Spinner from "../core/components/Spinner.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -307,7 +308,10 @@ async function onReview(payload) {
         {{ promptsMuted ? t("prompts.lot_muted") : t("prompts.lot_elsewhere") }}
       </p>
       <button class="cta cta--ghost" type="button" :disabled="muteBusy" @click="toggleMute">
-        {{ promptsMuted ? t("prompts.lot_unmute") : t("prompts.lot_mute") }}
+        <Spinner v-if="muteBusy" />
+        {{ muteBusy
+          ? t("busy.saving")
+          : promptsMuted ? t("prompts.lot_unmute") : t("prompts.lot_mute") }}
       </button>
     </section>
 
@@ -328,7 +332,10 @@ async function onReview(payload) {
           :placeholder="t('qa.placeholder')"
           rows="3"
         ></textarea>
-        <button class="cta" type="button" @click="onAsk">{{ t("qa.submit") }}</button>
+        <button class="cta" type="button" :disabled="asking" @click="onAsk">
+          <Spinner v-if="asking" />
+          {{ asking ? t("busy.sending") : t("qa.submit") }}
+        </button>
       </div>
     </BottomSheet>
   </div>

@@ -15,6 +15,7 @@ import BottomSheet from "../core/components/BottomSheet.vue";
 import LocalePicker from "../core/components/LocalePicker.vue";
 import NotificationsSheet from "../core/components/NotificationsSheet.vue";
 import { fetchNotifications, markNotificationRead } from "../core/api.js";
+import Spinner from "../core/components/Spinner.vue";
 
 const router = useRouter();
 const { t } = useI18n();
@@ -254,6 +255,7 @@ function signOut() {
           </label>
           <p v-if="authForm.error" class="authority__error" role="alert">{{ authForm.error }}</p>
           <button class="cta cta--accent" type="submit" :disabled="authForm.busy">
+            <Spinner v-if="authForm.busy" />
             {{ authForm.busy ? t("authority.verifying") : t("authority.verify") }}
           </button>
         </form>
@@ -301,7 +303,10 @@ function signOut() {
         </label>
         <p v-if="equip.error" class="equip__error" role="alert">{{ equip.error }}</p>
         <button class="cta cta--accent" type="submit" :disabled="equip.busy">
-          {{ equip.saved && !equip.busy ? t("equipment.saved") : t("equipment.save") }}
+          <Spinner v-if="equip.busy" />
+          {{ equip.busy
+            ? t("busy.saving")
+            : equip.saved ? t("equipment.saved") : t("equipment.save") }}
         </button>
       </form>
     </section>

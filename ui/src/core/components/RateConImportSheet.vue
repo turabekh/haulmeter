@@ -29,6 +29,7 @@ import { useI18n } from "../i18n.js";
 import { importRateCon, createActiveLoad, geocodeAddress } from "../api.js";
 import { contactEmailError, normalizeContactEmail } from "../contact.js";
 import { lastFix } from "../location.js";
+import Spinner from "./Spinner.vue";
 
 const emit = defineEmits(["created"]);
 const { t } = useI18n();
@@ -273,7 +274,8 @@ async function create() {
       </label>
       <img v-if="preview" :src="preview" class="rc__preview" :alt="t('load.rc_photo')" />
       <button class="rc__cta" type="button" :disabled="!file || busy" @click="read">
-        <Camera :size="18" :stroke-width="2" aria-hidden="true" />
+        <Spinner v-if="busy" />
+        <Camera v-else :size="18" :stroke-width="2" aria-hidden="true" />
         {{ busy ? t("load.rc_reading") : t("load.rc_read") }}
       </button>
     </template>
@@ -342,6 +344,7 @@ async function create() {
           <p v-else class="rc__unplaced">{{ t("load.rc_place_needed") }}</p>
           <div class="rc__placeacts">
             <button class="rc__mini" type="button" :disabled="!stop.address || stop.placing" @click="findPlace(stop)">
+              <Spinner v-if="stop.placing" />
               {{ stop.placing ? t("load.rc_placing") : t("load.rc_find") }}
             </button>
             <button v-if="lastFix" class="rc__mini" type="button" @click="usePosition(stop)">
@@ -422,7 +425,8 @@ async function create() {
         :disabled="busy || !routeReady || !!brokerEmailError"
         @click="create"
       >
-        {{ t("load.create") }}
+        <Spinner v-if="busy" />
+        {{ busy ? t("busy.working") : t("load.create") }}
       </button>
       <p class="rc__hint">{{ t("load.rc_confirm_hint") }}</p>
     </template>

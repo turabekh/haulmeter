@@ -13,6 +13,7 @@ import { login, register } from "../core/api.js";
 import { BRAND } from "../core/brand.js";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import LocalePicker from "../core/components/LocalePicker.vue";
+import Spinner from "../core/components/Spinner.vue";
 
 const router = useRouter();
 const { t, locale } = useI18n();
@@ -128,7 +129,10 @@ async function submit() {
       <p v-if="error" class="auth__error" role="alert">{{ error }}</p>
 
       <button class="cta" type="submit" :disabled="submitting">
-        {{ mode === "login" ? t("auth.login") : t("auth.register") }}
+        <Spinner v-if="submitting" />
+        {{ submitting
+          ? t("busy.working")
+          : mode === "login" ? t("auth.login") : t("auth.register") }}
       </button>
     </form>
 

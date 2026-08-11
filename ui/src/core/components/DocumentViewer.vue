@@ -24,6 +24,7 @@ import { FileText, TriangleAlert, Pencil, Trash2 } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { useDriverState } from "../state.js";
 import { fetchDocumentBytes, editDocument } from "../api.js";
+import Spinner from "./Spinner.vue";
 
 const props = defineProps({
   document: { type: Object, required: true },
@@ -122,7 +123,8 @@ onBeforeUnmount(() => {
       <input id="doc-expiry" v-model="expiresOn" class="viewer__input" type="date" />
       <p class="viewer__hint">{{ t("docs.view_edit_hint") }}</p>
       <button class="viewer__save" type="button" :disabled="saving" @click="save">
-        {{ t("portal.vendor.save") }}
+        <Spinner v-if="saving" />
+        {{ saving ? t("busy.saving") : t("portal.vendor.save") }}
       </button>
     </div>
 

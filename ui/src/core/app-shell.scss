@@ -31,6 +31,24 @@ button {
   color: inherit;
 }
 
+// AI-CONTEXT: §8's disabled/working treatment, declared ONCE (owner request,
+// 2026-08-11). Roughly a dozen buttons across the driver app already set `:disabled`
+// while a write was in flight and NOTHING styled it, so a disabled button was pixel-
+// identical to a live one — the driver's only feedback that their tap had registered
+// was that nothing happened, which is indistinguishable from a dead control.
+//
+// Here rather than in twenty-five scoped stylesheets because §8 opens with "built once
+// in ui/core/ on tokens, then reused", and a treatment repeated per surface is a
+// treatment that drifts per surface.
+//
+// `opacity` rather than a colour swap: these buttons come in filled, outline, text and
+// destructive grades on two themes, and one dimming rule holds for all eight without
+// inventing a disabled token for each (§22.2 — remove rather than add).
+button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 // §7.2 screen anatomy: content scroll region never hides under the tab bar
 .app-frame {
   display: flex;

@@ -15,6 +15,7 @@ import { ref, computed, onMounted } from "vue";
 import { Camera, Check, TriangleAlert } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { captureDocument, fetchDocumentTypes, fetchWouldReplace } from "../api.js";
+import Spinner from "./Spinner.vue";
 
 // AI-CONTEXT: `stopId` is what made §10.2's BOL row honest.
 //
@@ -185,8 +186,9 @@ async function submit() {
       </label>
 
       <button class="cta" type="button" :disabled="!ready" @click="submit">
-        <Camera :size="18" :stroke-width="2" aria-hidden="true" />
-        {{ t("docs.cap_save") }}
+        <Spinner v-if="busy" />
+        <Camera v-else :size="18" :stroke-width="2" aria-hidden="true" />
+        {{ busy ? t("busy.uploading") : t("docs.cap_save") }}
       </button>
       <p class="cap__hint">{{ t("docs.cap_offline") }}</p>
     </template>
