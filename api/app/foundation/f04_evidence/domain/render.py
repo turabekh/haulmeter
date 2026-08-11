@@ -538,6 +538,23 @@ def _artifacts(cur, pack, context):
     cur.rule()
 
 
+def _anchor_line(v) -> str:
+    """What the anchor row actually proves — three states, not two.
+
+    AI-CONTEXT: this printed "yes" whenever an anchor ROW existed, and every anchor this
+    product writes is internal (`anchor_chain` is called with no `external_ref`). So the
+    document a broker reads asserted third-party timestamping that nothing outside our own
+    database supported — the single strongest-sounding line in the verification block, and
+    the one with the least behind it. External anchoring is not activated; until it is,
+    this says so in the clerk's own terms rather than in ours.
+    """
+    if v.get("anchored"):
+        return "yes — externally timestamped"
+    if v.get("anchor_recorded"):
+        return "head recorded internally; no external timestamp"
+    return "not yet anchored"
+
+
 def _verification(cur, pack):
     """§17: hash-verification block, monospace, quiet.
 
@@ -565,7 +582,7 @@ def _verification(cur, pack):
         ("Records", str(v.get("record_count", 0))),
         ("Head sequence", str(v.get("head_seq", "—"))),
         ("Head hash", v.get("head_hash") or "—"),
-        ("Anchored", "yes" if v.get("anchored") else "not yet anchored"),
+        ("Anchored", _anchor_line(v)),
     ]
     if v.get("anchor_ref"):
         rows.append(("Anchor reference", str(v["anchor_ref"])))

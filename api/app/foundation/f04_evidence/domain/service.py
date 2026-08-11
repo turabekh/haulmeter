@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import hashing
@@ -53,27 +54,56 @@ def append_record(
     payload: dict,
     occurred_at: datetime | None = None,
 ) -> EvidenceRecord:
+    """Append to the chain, retrying once if a concurrent append took our seq.
+
+    AI-CONTEXT: finding F4-4. Reading the head and inserting `seq + 1` is check-then-act,
+    and `uq_evidence_record_log_seq` is what makes the chain trustworthy under it — the
+    loser of a race is REFUSED rather than allowed to fork the chain. That part was right.
+    What was missing is the other half: the loser got an unhandled `IntegrityError`, so a
+    driver uploading a photo at the moment the worker recorded a departure on the same
+    stop's log saw a 500 and lost the upload.
+
+    The constraint stays the invariant; this only recovers from it. One retry, because the
+    second attempt reads a head that the winning transaction has already committed — a
+    third collision would mean sustained parallel writers on one stop's log, which is not
+    a thing this product does, and a loop would hide that if it ever became one.
+    """
     occurred_at = occurred_at or datetime.now(UTC)
-    last = _last_record(db, log.id)
-    if last is None:
-        seq = 0
-        prev = hashing.genesis_hash(log.id)
-    else:
-        seq = last.seq + 1
-        prev = last.record_hash
-    record_hash = hashing.compute_record_hash(prev, seq, record_type.value, payload, occurred_at)
-    record = EvidenceRecord(
-        log_id=log.id,
-        seq=seq,
-        record_type=record_type,
-        payload=payload,
-        occurred_at=occurred_at,
-        prev_hash=prev,
-        record_hash=record_hash,
-    )
-    db.add(record)
-    db.flush()
-    return record
+    for attempt in (1, 2):
+        last = _last_record(db, log.id)
+        if last is None:
+            seq = 0
+            prev = hashing.genesis_hash(log.id)
+        else:
+            seq = last.seq + 1
+            prev = last.record_hash
+        record_hash = hashing.compute_record_hash(
+            prev, seq, record_type.value, payload, occurred_at
+        )
+        record = EvidenceRecord(
+            log_id=log.id,
+            seq=seq,
+            record_type=record_type,
+            payload=payload,
+            occurred_at=occurred_at,
+            prev_hash=prev,
+            record_hash=record_hash,
+        )
+        try:
+            # SAVEPOINT, so a lost race does not poison the caller's transaction — the
+            # photo upload this is protecting has already written rows of its own
+            with db.begin_nested():
+                db.add(record)
+                db.flush()
+        except IntegrityError:
+            if record in db:
+                db.expunge(record)
+            if attempt == 2:
+                raise
+            db.expire_all()  # the winner's head is committed; read it, do not reuse ours
+            continue
+        return record
+    raise AssertionError("unreachable")
 
 
 def attach_artifact(
@@ -203,6 +233,15 @@ def _ordered_records(db: Session, log_id) -> list[EvidenceRecord]:
     )
 
 
+def _latest_anchor(db: Session, log_id) -> ChainAnchor | None:
+    return db.scalar(
+        select(ChainAnchor)
+        .where(ChainAnchor.log_id == log_id)
+        .order_by(ChainAnchor.anchored_at.desc())
+        .limit(1)
+    )
+
+
 def verify_chain(db: Session, log: EvidenceLog) -> ChainVerification:
     records = _ordered_records(db, log.id)
     if not records:
@@ -232,6 +271,36 @@ def verify_chain(db: Session, log: EvidenceLog) -> ChainVerification:
         expected_prev = record.record_hash
 
     head = records[-1]
+
+    # AI-CONTEXT: the chain checks itself against its ANCHORS (finding F4-2).
+    #
+    # Everything above recomputes hashes from the records, which makes the chain
+    # self-consistent — and self-consistency is exactly what a competent rewrite produces.
+    # Re-hash a doctored payload, re-link every record after it, and every check above
+    # passes. The anchor is the one thing a rewriter cannot fix from inside the table: it
+    # was written at a moment in the past and says what the head WAS then.
+    #
+    # Reported as its own reason rather than folded into `tampered`, because the two mean
+    # different things to whoever reads the PDF: `tampered` says a record does not match
+    # its own hash; `anchor_mismatch` says the records agree with each other and disagree
+    # with what we recorded earlier — which is the signature of a rewrite, not a bit flip.
+    #
+    # Only the LATEST anchor is checked. An older anchor legitimately describes a shorter
+    # chain, and treating a chain that has since grown as a mismatch would fail every log
+    # that was anchored and then appended to — which is every log this product makes.
+    anchor = _latest_anchor(db, log.id)
+    if anchor is not None:
+        anchored = next((r for r in records if r.seq == anchor.head_seq), None)
+        if anchored is None or anchored.record_hash != anchor.head_hash:
+            return ChainVerification(
+                valid=False,
+                record_count=len(records),
+                broken_at=anchor.head_seq,
+                reason="anchor_mismatch",
+                head_seq=head.seq,
+                head_hash=head.record_hash,
+            )
+
     return ChainVerification(
         valid=True,
         record_count=len(records),
@@ -253,15 +322,6 @@ def anchor_chain(db: Session, log: EvidenceLog, external_ref: str | None = None)
     db.add(anchor)
     db.flush()
     return anchor
-
-
-def _latest_anchor(db: Session, log_id) -> ChainAnchor | None:
-    return db.scalar(
-        select(ChainAnchor)
-        .where(ChainAnchor.log_id == log_id)
-        .order_by(ChainAnchor.anchored_at.desc())
-        .limit(1)
-    )
 
 
 def compose_grouped_pack(
@@ -327,6 +387,7 @@ def compose_grouped_pack(
             "broken_at": head.get("broken_at"),
             "reason": head.get("reason"),
             "anchored": any(v.get("anchored") for v in parts),
+            "anchor_recorded": any(v.get("anchor_recorded") for v in parts),
             "anchor_ref": next((v.get("anchor_ref") for v in parts if v.get("anchor_ref")), None),
             "log_count": len(logs),
         },
@@ -387,6 +448,7 @@ def compose_stop_pack(db: Session, stop_ref, template: PackTemplate) -> Evidence
             "broken_at": head.get("broken_at"),
             "reason": head.get("reason"),
             "anchored": any(v.get("anchored") for v in parts),
+            "anchor_recorded": any(v.get("anchor_recorded") for v in parts),
             "anchor_ref": next((v.get("anchor_ref") for v in parts if v.get("anchor_ref")), None),
             "log_count": len(logs),
         },
@@ -442,7 +504,13 @@ def compose_pack(db: Session, log: EvidenceLog, template: PackTemplate) -> Evide
             "head_hash": verification.head_hash,
             "broken_at": verification.broken_at,
             "reason": verification.reason,
-            "anchored": anchor is not None,
+            # AI-CONTEXT: "anchored" means an EXTERNAL party attested the head (F4-2).
+            # It used to mean "a row exists in our own table", and the PDF printed
+            # "Anchored: yes" for it — a claim of third-party timestamping that nothing
+            # outside this database supported. An internal-only anchor is still worth
+            # stating, so it is reported separately and rendered as what it is.
+            "anchored": anchor is not None and anchor.external_ref is not None,
+            "anchor_recorded": anchor is not None,
             "anchor_ref": anchor.external_ref if anchor is not None else None,
         },
     )
