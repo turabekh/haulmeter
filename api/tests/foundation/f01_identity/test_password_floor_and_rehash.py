@@ -5,14 +5,13 @@ this session that could take a live driver's access away, and the property that 
 is that the floor is checked where a password is SET and nowhere else.
 """
 
-import threading
 
 import pytest
 
 from app.foundation.f01_identity import public as identity
 from app.foundation.f01_identity.domain import security
-from app.foundation.f01_identity.domain.models import AuthMethod
 from app.foundation.f01_identity.domain.enums import MethodType
+from app.foundation.f01_identity.domain.models import AuthMethod
 
 
 # --- the property that matters most ---

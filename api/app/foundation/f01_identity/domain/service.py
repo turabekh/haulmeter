@@ -59,14 +59,17 @@ CONFIG_LOGIN_MAX_IP = "f01_login_max_per_ip"
 # drivers out of LOGIN on the same address — the exact false positive `LOGIN_MAX_PER_IP`'s
 # comment above exists to avoid. `kind` on `login_attempt` is what keeps them apart.
 #
-# THE DEFAULTS ARE A FIRST GUESS WITH NO TRAFFIC BEHIND THEM. Nobody has watched real
-# signup volume, so these are chosen to be obviously generous for a human and obviously
-# expensive for a script: three accounts from one address in fifteen minutes is already
-# unusual, and one identifier retrying registration more than three times is a person who
-# has learned it is taken. They are F13 keys precisely so the first week of real data can
-# correct them from the console without a deploy.
-REGISTER_MAX_PER_IDENTIFIER = 3
-REGISTER_MAX_PER_IP = 10
+# THE DEFAULTS ARE A FIRST GUESS WITH NO TRAFFIC BEHIND THEM, and they deliberately MATCH
+# login's rather than being tighter. Registration is rarer than login, so a tighter number
+# is tempting — and the realistic failure is a FLEET onboarding its drivers from one depot
+# Wi-Fi, which looks exactly like a script from behind a NAT. Being wrong in that direction
+# turns a customer's first hour into a support call, while being wrong in the other
+# direction costs an attacker a few more Argon2 hashes than we would like.
+#
+# They are F13 keys precisely so the first week of real signup volume can tighten them from
+# the console without a deploy. Tuning down on evidence is cheap; a lockout is not.
+REGISTER_MAX_PER_IDENTIFIER = LOGIN_MAX_PER_IDENTIFIER
+REGISTER_MAX_PER_IP = LOGIN_MAX_PER_IP
 CONFIG_REGISTER_MAX_IDENTIFIER = "f01_register_max_per_identifier"
 CONFIG_REGISTER_MAX_IP = "f01_register_max_per_ip"
 

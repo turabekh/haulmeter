@@ -9,7 +9,7 @@ The assertions are about the INVARIANT — no session for that account resolves 
 about row counts, because the primitive expires in place instead of deleting.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from app.foundation.f01_identity import public as identity
 from app.foundation.f01_identity.domain.models import AuthSession
