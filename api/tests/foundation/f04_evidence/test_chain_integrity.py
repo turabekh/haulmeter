@@ -5,7 +5,7 @@ hashes cannot detect one. The anchor is the one record a rewriter cannot fix fro
 the table: it was written earlier and says what the head WAS.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy.exc import IntegrityError
