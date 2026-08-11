@@ -192,6 +192,31 @@ export function logout() {
   activeStopFacilityId.value = null;
   activeFleetId.value = null;
   failedWrites.value = 0;
+  mustChangePassword.value = false;
+}
+
+// AI-CONTEXT: `must_change_password` reaches the client from BOTH the login response and
+// `/me` (D4). `/me` is the one that matters: sessions last 30 days, so a driver who signed
+// in with a temporary password and reopens the app next morning never sees `/login` again.
+export const mustChangePassword = ref(false);
+
+export async function changePassword(currentPassword, newPassword) {
+  const resp = await fetch(`${API_BASE}/auth/password`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    const err = new Error(`password change failed: ${resp.status}`);
+    err.status = resp.status;
+    err.detail = body.detail ?? null;
+    err.retryAfter = Number(resp.headers.get("Retry-After")) || null;
+    throw err;
+  }
+  const data = await resp.json();
+  mustChangePassword.value = false;
+  return data;
 }
 
 function revokeCurrentSession() {
@@ -207,6 +232,7 @@ function revokeCurrentSession() {
 
 function _adopt(data, userEmail) {
   token.value = data.token;
+  mustChangePassword.value = !!data.must_change_password;
   account.value = data.account_id;
   email.value = userEmail ?? email.value;
   persist();
@@ -762,7 +788,10 @@ export async function fetchMe() {
   // F1: who's signed in + their operating-authority verification state
   const resp = await fetch(`${API_BASE}/auth/me`, { headers: headers() });
   if (!resp.ok) throw new Error(`me failed: ${resp.status}`);
-  return resp.json();
+  const data = await resp.json();
+  // the cold-start path: this is where a driver on a 30-day session learns the flag
+  mustChangePassword.value = !!data.must_change_password;
+  return data;
 }
 
 export async function verifyAuthority({ mcNumber, dotNumber }) {

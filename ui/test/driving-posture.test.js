@@ -24,6 +24,9 @@ import { routes } from "../src/router.js";
 // ships to production and this is test knowledge; the first assertion below keeps the
 // two in step, so adding a route without classifying it fails.
 const SOURCE = {
+  // a credential form withdraws at speed for the obvious reason: two password fields
+  // and a keyboard is precisely what SM-3 exists to take off the screen
+  password: "PasswordSurface",
   map: "MapSurface",
   facility: "FacilityProfileSurface",
   book: "BookingSurface",

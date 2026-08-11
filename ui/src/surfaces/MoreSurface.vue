@@ -156,6 +156,12 @@ onMounted(async () => {
   await loadMe();
 });
 
+function changePassword() {
+  // D5's ORDINARY entry point. `MoreSurface` is the settings home ("Holds the F1
+  // account…"), and it is the only surface where a driver's account details live.
+  router.push("/password");
+}
+
 function signOut() {
   logout();
   router.push("/login");
@@ -327,6 +333,9 @@ function signOut() {
     <section class="card">
       <h2 class="card__title">{{ t("more.account") }}</h2>
       <p v-if="email" class="more__email">{{ email }}</p>
+      <button class="cta" type="button" @click="changePassword">
+        {{ t("more.change_password") }}
+      </button>
       <button class="cta cta--danger" type="button" @click="signOut">{{ t("auth.logout") }}</button>
     </section>
 

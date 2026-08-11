@@ -3,6 +3,7 @@
 // gated behind F1 auth: routes require a session except /login (meta.public +
 // meta.chrome:false hides the tab shell for the full-screen onboarding flow).
 import { createRouter, createWebHistory } from "vue-router";
+import PasswordSurface from "./surfaces/PasswordSurface.vue";
 import MapSurface from "./surfaces/MapSurface.vue";
 import FacilityProfileSurface from "./surfaces/FacilityProfileSurface.vue";
 import LoadSurface from "./surfaces/LoadSurface.vue";
@@ -41,7 +42,7 @@ import VendorReputation from "./surfaces/vendor/VendorReputation.vue";
 import VendorProfile from "./surfaces/vendor/VendorProfile.vue";
 import VendorSite from "./surfaces/vendor/VendorSite.vue";
 import VendorJoinSurface from "./surfaces/vendor/VendorJoinSurface.vue";
-import { isAuthenticated } from "./core/api.js";
+import { mustChangePassword, isAuthenticated } from "./core/api.js";
 
 // DEV-ONLY: the /dev directory ships ONLY in development builds. Vite replaces
 // import.meta.env.DEV with `false` in production, so the route (and its lazily
@@ -138,6 +139,8 @@ export const routes = [
   },
   // §18 PUBLIC portal — no login (meta.public bypasses the auth guard)
   { path: "/scorecard", name: "scorecard", component: PublicScorecardSurface, meta: { public: true, chrome: false, portal: true } },
+  // a credential form is the definition of a task that must not be attempted at speed
+  { path: "/password", name: "password", component: PasswordSurface, meta: { chrome: false, driving: "withdraws" } },
   ...devRoutes, // /dev — development builds only (see above)
 ];
 
@@ -153,6 +156,19 @@ export function installAuthGuard(router) {
       // everyone else goes to the driver login, and comes BACK here afterwards
       // rather than being dumped on the map having forgotten where they were going
       return { name: "login", query: { next: to.fullPath } };
+    }
+    // AI-CONTEXT: the forced change, and it lives HERE because this is the one place a
+    // deep link cannot route around (D5). The flag exists only because an admin just
+    // issued a temporary credential, the remedy takes seconds, and a dismissible force is
+    // not a force — this flag has been ignorable for its entire existence, which is how a
+    // temporary password came to be a permanent one.
+    //
+    // The server does NOT enforce it beyond setting the flag (D6): an API client that
+    // ignores it is not forced. That is acceptable because the flag prompts a cooperating
+    // app rather than containing an adversary who already holds a valid credential — and
+    // it is stated in the report rather than papered over.
+    if (mustChangePassword.value && !to.meta.public && to.name !== "password") {
+      return { name: "password" };
     }
     if (to.name === "login" && isAuthenticated.value) {
       const next = typeof to.query.next === "string" ? to.query.next : null;
