@@ -126,7 +126,7 @@ def test_disarm_stop_stops_evaluation(db):
     loads.disarm_stop(db, stop, occurred_at=T0 + timedelta(minutes=5))
     assert stop.geofence_armed is False
     after = location.evaluate_ping(db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=30))
-    assert after == []
+    assert after.events == []
 
 
 def test_load_status_transitions(db):

@@ -99,7 +99,7 @@ def test_common_ground_synthetic_end_to_end(db):
     assert [e.event_type for e in leave] == [location.GeofenceEventType.EXIT]
 
     # F4 — accrue the geofence events + a BOL photo into the hash-chained log, anchor, compose
-    for event in enter + leave:
+    for event in enter.events + leave.events:
         evidence.append_record(
             db,
             log,
