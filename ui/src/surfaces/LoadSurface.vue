@@ -1037,102 +1037,59 @@ async function endLoad() {
         <span>{{ t("claim.view") }}</span>
       </button>
 
-      <!-- §10.2: ONE state-dependent CTA. The ladder picks the rung; the rungs it
-           passes over stay reachable below as secondary text controls. -->
-      <button
-        v-if="rung === 'arrive'"
-        class="cta"
-        type="button"
-        :disabled="!!rungBusy"
-        @click="onArrive()"
-      >
-        <Spinner v-if="rungBusy === 'arrive'" />
-        {{ rungBusy === "arrive" ? t("busy.saving") : t("load.arrive") }}
-      </button>
-      <button v-else-if="rung === 'bol'" class="cta" type="button" @click="openCapture({ item: 'bol' })">
-        {{ t("load.cta.bol") }}
-      </button>
-      <button
-        v-else-if="rung === 'notice'"
-        class="cta"
-        type="button"
-        :disabled="!!rungBusy"
-        @click="onSendNotice"
-      >
-        <Spinner v-if="rungBusy === 'notice'" />
-        {{ rungBusy === "notice"
-          ? t("busy.sending")
-          : noticeDelivery === "failed"
-            ? t("load.cta.notice_again")
-            : t("load.cta.notice") }}
-      </button>
-      <button
-        v-else-if="rung === 'claim'"
-        class="cta"
-        type="button"
-        :disabled="!!rungBusy"
-        @click="onGenerateClaim"
-      >
-        <Spinner v-if="rungBusy === 'claim'" />
-        {{ rungBusy === "claim" ? t("busy.filing") : t("load.cta.claim") }}
-      </button>
-      <button
-        v-else-if="rung === 'warn'"
-        class="cta"
-        type="button"
-        :disabled="!!rungBusy"
-        @click="onSendNotice"
-      >
-        <Spinner v-if="rungBusy === 'notice'" />
-        {{ rungBusy === "notice" ? t("busy.sending") : t("load.cta.warn", { minutes: freeMinutesLeft }) }}
-      </button>
-      <button
-        v-else-if="rung === 'photos'"
-        class="cta"
-        type="button"
-        @click="router.push('/protection/condition')"
-      >
-        {{ t("load.cta.photos") }}
-        <!-- the denominator travels with the CTA for the same reason §10.2 puts it on
-             the row: "photos" is a task with no end, "0/4" is a task with an end. -->
-        <span v-if="photosRequired" class="cta__count">{{ photosCaptured }}/{{ photosRequired }}</span>
-      </button>
+      <!-- AI-CONTEXT: §7.2's BOTTOM-ANCHORED ACTION ZONE, built for the first time
+           (owner request, §23 entry 140).
 
-      <!-- AI-CONTEXT: passed-over rungs, and why they are a ROW rather than a stack.
-           §8 allows exactly one Primary per screen and grades the rest Secondary
-           (outline) then Tertiary (text) — but these were emitted full-bleed, centred
-           and accent-coloured under a full-bleed accent Primary, so three tertiary
-           controls rendered in the Primary's silhouette. The screen read as four
-           stacked buttons, which is the six-button problem §10.2's single-CTA rule
-           exists to prevent, reduced in count and not in kind. Auto width in a
-           wrapping row keeps them reachable (48 dp, §6.5) while giving the Primary
-           back the only full-width shape on the screen.
+           §7.2's screen anatomy has read "content (scroll region) -> bottom-anchored
+           primary action (when present, 56 dp + 16 gutter) -> tab bar" since it was
+           written, and §7.3 puts primary and frequent actions in the bottom third.
+           NOTHING in this product implemented it: the only `position: fixed` in the
+           codebase is BottomSheet, and every surface's CTA was simply the last thing in
+           the scroll region. On the arrived Load tab — the densest screen here, a Meter
+           plus a stop context plus a five-row checklist — that put "Snap BOL" and the
+           row holding "Leave this stop" below the fold at a dock.
 
-           The ORDER is §10.2's ladder — Snap BOL -> Send notice -> Generate claim.
-           These emitted claim above notice, so the nearer rung sat below the further
-           one and the list read against the sequence it was derived from. -->
-      <div v-if="live" class="rungs">
+           `position: sticky` rather than `fixed`: the zone keeps its place in the flow,
+           so it needs no knowledge of the tab bar's height or the 480 dp column, and on
+           a short screen it simply sits where it always did. It is opaque and hairlined
+           because a sticky element paints OVER the content it has not reached yet.
+
+           Not rendered at speed at all — the whole block is inside `!isDriving`. -->
+      <div v-if="live" class="actions">
+        <p v-if="noticeMsg" class="notice-msg">{{ noticeMsg }}</p>
+        <p v-if="arriveError" class="notice-msg">{{ arriveError }}</p>
+        <!-- §10.2: ONE state-dependent CTA. The ladder picks the rung; the rungs it
+             passes over stay reachable below as secondary text controls. -->
         <button
-          v-if="!preArrival && !bolCaptured && rung !== 'bol'"
-          class="rungs__item"
+          v-if="rung === 'arrive'"
+          class="cta"
           type="button"
-          @click="openCapture({ item: 'bol' })"
+          :disabled="!!rungBusy"
+          @click="onArrive()"
         >
+          <Spinner v-if="rungBusy === 'arrive'" />
+          {{ rungBusy === "arrive" ? t("busy.saving") : t("load.arrive") }}
+        </button>
+        <button v-else-if="rung === 'bol'" class="cta" type="button" @click="openCapture({ item: 'bol' })">
           {{ t("load.cta.bol") }}
         </button>
         <button
-          v-if="accruing && !noticeSent && !isFiled && rung !== 'notice'"
-          class="rungs__item"
+          v-else-if="rung === 'notice'"
+          class="cta"
           type="button"
           :disabled="!!rungBusy"
           @click="onSendNotice"
         >
           <Spinner v-if="rungBusy === 'notice'" />
-          {{ rungBusy === "notice" ? t("busy.sending") : t("load.cta.notice") }}
+          {{ rungBusy === "notice"
+            ? t("busy.sending")
+            : noticeDelivery === "failed"
+              ? t("load.cta.notice_again")
+              : t("load.cta.notice") }}
         </button>
         <button
-          v-if="claimable && !isFiled && rung !== 'claim'"
-          class="rungs__item"
+          v-else-if="rung === 'claim'"
+          class="cta"
           type="button"
           :disabled="!!rungBusy"
           @click="onGenerateClaim"
@@ -1140,39 +1097,102 @@ async function endLoad() {
           <Spinner v-if="rungBusy === 'claim'" />
           {{ rungBusy === "claim" ? t("busy.filing") : t("load.cta.claim") }}
         </button>
-        <!-- AI-CONTEXT: §5's ON_SITE, narrowed to this tab by the owner (§23 entry 64).
-             §5 asks for capture actions "one tap from anywhere via a persistent action
-             chip"; an app-wide chip is a new component pattern AND navigation
-             structure, both §22 never-improvise, so the decision was to deliver the
-             benefit inside a surface that already exists. Cargo condition is two taps
-             the rest of the time (More -> Capture) and one while the truck is parked
-             at the dock, which is the only place those photographs can be taken. It
-             stays in the More sheet as well: this is a shortcut, not a move. -->
-        <!-- `rung !== 'photos'` for the same reason every other rung carries that
-             guard: when the ladder has already promoted this action to the Primary,
-             repeating it here gives one job two controls. -->
         <button
-          v-if="isOnSite && rung !== 'photos'"
-          class="rungs__item"
+          v-else-if="rung === 'warn'"
+          class="cta"
+          type="button"
+          :disabled="!!rungBusy"
+          @click="onSendNotice"
+        >
+          <Spinner v-if="rungBusy === 'notice'" />
+          {{ rungBusy === "notice" ? t("busy.sending") : t("load.cta.warn", { minutes: freeMinutesLeft }) }}
+        </button>
+        <button
+          v-else-if="rung === 'photos'"
+          class="cta"
           type="button"
           @click="router.push('/protection/condition')"
         >
-          {{ t("cond.start") }}
+          {{ t("load.cta.photos") }}
+          <!-- the denominator travels with the CTA for the same reason §10.2 puts it on
+               the row: "photos" is a task with no end, "0/4" is a task with an end. -->
+          <span v-if="photosRequired" class="cta__count">{{ photosCaptured }}/{{ photosRequired }}</span>
         </button>
-
-        <!-- §10.2: "state-dependent SINGLE CTA". These four are real capabilities and
-             none has another home, so they move behind one control into a sheet
-             (NAV-3) rather than stacking six buttons under the Meter. Scoped to this
-             stop, so it is not a nav drawer (Forbidden #2). -->
-        <!-- the modifier is how the layout harness opens this sheet. It cannot click
-             by label: every surface is measured under en, xx-XL and pa, so any
-             text-based step would break in two of the three. -->
-        <button class="rungs__item rungs__item--more" type="button" @click="more = true">
-          {{ t("load.more") }}
-        </button>
+  
+        <!-- AI-CONTEXT: passed-over rungs, and why they are a ROW rather than a stack.
+             §8 allows exactly one Primary per screen and grades the rest Secondary
+             (outline) then Tertiary (text) — but these were emitted full-bleed, centred
+             and accent-coloured under a full-bleed accent Primary, so three tertiary
+             controls rendered in the Primary's silhouette. The screen read as four
+             stacked buttons, which is the six-button problem §10.2's single-CTA rule
+             exists to prevent, reduced in count and not in kind. Auto width in a
+             wrapping row keeps them reachable (48 dp, §6.5) while giving the Primary
+             back the only full-width shape on the screen.
+  
+             The ORDER is §10.2's ladder — Snap BOL -> Send notice -> Generate claim.
+             These emitted claim above notice, so the nearer rung sat below the further
+             one and the list read against the sequence it was derived from. -->
+        <div v-if="live" class="rungs">
+          <button
+            v-if="!preArrival && !bolCaptured && rung !== 'bol'"
+            class="rungs__item"
+            type="button"
+            @click="openCapture({ item: 'bol' })"
+          >
+            {{ t("load.cta.bol") }}
+          </button>
+          <button
+            v-if="accruing && !noticeSent && !isFiled && rung !== 'notice'"
+            class="rungs__item"
+            type="button"
+            :disabled="!!rungBusy"
+            @click="onSendNotice"
+          >
+            <Spinner v-if="rungBusy === 'notice'" />
+            {{ rungBusy === "notice" ? t("busy.sending") : t("load.cta.notice") }}
+          </button>
+          <button
+            v-if="claimable && !isFiled && rung !== 'claim'"
+            class="rungs__item"
+            type="button"
+            :disabled="!!rungBusy"
+            @click="onGenerateClaim"
+          >
+            <Spinner v-if="rungBusy === 'claim'" />
+            {{ rungBusy === "claim" ? t("busy.filing") : t("load.cta.claim") }}
+          </button>
+          <!-- AI-CONTEXT: §5's ON_SITE, narrowed to this tab by the owner (§23 entry 64).
+               §5 asks for capture actions "one tap from anywhere via a persistent action
+               chip"; an app-wide chip is a new component pattern AND navigation
+               structure, both §22 never-improvise, so the decision was to deliver the
+               benefit inside a surface that already exists. Cargo condition is two taps
+               the rest of the time (More -> Capture) and one while the truck is parked
+               at the dock, which is the only place those photographs can be taken. It
+               stays in the More sheet as well: this is a shortcut, not a move. -->
+          <!-- `rung !== 'photos'` for the same reason every other rung carries that
+               guard: when the ladder has already promoted this action to the Primary,
+               repeating it here gives one job two controls. -->
+          <button
+            v-if="isOnSite && rung !== 'photos'"
+            class="rungs__item"
+            type="button"
+            @click="router.push('/protection/condition')"
+          >
+            {{ t("cond.start") }}
+          </button>
+  
+          <!-- §10.2: "state-dependent SINGLE CTA". These four are real capabilities and
+               none has another home, so they move behind one control into a sheet
+               (NAV-3) rather than stacking six buttons under the Meter. Scoped to this
+               stop, so it is not a nav drawer (Forbidden #2). -->
+          <!-- the modifier is how the layout harness opens this sheet. It cannot click
+               by label: every surface is measured under en, xx-XL and pa, so any
+               text-based step would break in two of the three. -->
+          <button class="rungs__item rungs__item--more" type="button" @click="more = true">
+            {{ t("load.more") }}
+          </button>
+        </div>
       </div>
-      <p v-if="noticeMsg" class="notice-msg">{{ noticeMsg }}</p>
-      <p v-if="arriveError" class="notice-msg">{{ arriveError }}</p>
 
       <!-- AI-CONTEXT: the too-far QUESTION (§23 entry 138). Not a gate.
            Detention frequently starts in a gate queue that is most of a kilometre from
@@ -1869,6 +1889,33 @@ async function endLoad() {
   color: var(--on-accent);
   font-size: var(--type-body-size);
   text-align: center;
+}
+/* §7.2's action zone. Sticky rather than fixed: it keeps its place in the flow, so it
+   needs no knowledge of the tab bar or the 480 dp column, and on a screen with nothing
+   to scroll it renders exactly where it always did.
+
+   OPAQUE and hairlined on purpose — a sticky element paints over the content it has not
+   scrolled to yet, so a transparent one would put the checklist through the button.
+
+   The negative inline margin lets it span the surface's own gutter, which is what makes
+   it read as a bar rather than as a card that happens to be last. */
+.actions {
+  position: sticky;
+  /* NEGATIVE, and it is not a fudge: `.app-content` carries §7.2's 16 dp end-padding, and
+     a sticky element aligns to the scrollport's PADDING box — so `bottom: 0` left a 16 dp
+     strip of scrolled content visible beneath the bar. This pulls it flush to the tab bar
+     and the zone's own bottom padding gives the button its gutter back. */
+  bottom: calc(var(--s-4) * -1);
+  z-index: 1;
+  margin: var(--s-3) calc(var(--s-4) * -1) calc(var(--s-4) * -1);
+  padding: var(--s-3) var(--s-4) var(--s-4);
+  background: var(--ink-0);
+  border-top: 1px solid var(--line-1);
+}
+/* inside the zone the ladder's own spacing already applies; this only stops the status
+   line from sitting flush against the button that produced it. */
+.actions .notice-msg {
+  margin: 0 0 var(--s-2);
 }
 .cta {
   width: 100%;
