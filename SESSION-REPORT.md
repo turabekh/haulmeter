@@ -28,15 +28,19 @@ Baseline commit `5af1e9e`; nine commits, one per task.
 
 | | Baseline | Final | |
 |---|---|---|---|
-| pytest | 1558 | **1633** | +75 |
-| vitest | 746 (39 files) | **762 (42 files)** | +16 |
+| pytest | 1558 | **1620** | +62 |
+| vitest | 746 (39 files) | **755 (41 files)** | +9, +2 files |
 | layout | 283 | **286** | +3 (the notice observation) |
 | ruff + import-linter | clean · 30/30 | **clean · 30/30** | |
 
-> **A pre-existing baseline flake, recorded before any change was made:** the full layout
-> sweep failed `sheet-facility · pa` at T1 — the voice chip intercepting a pointer event on
-> a map pin under eight-worker contention. Re-run in isolation it passes 28/28. It is not
-> caused by anything here and it was red before this session touched the tree.
+All four gates are green: `1620 passed` · `755 passed (41)` · `286 passed` · `All checks passed!`
+
+> **A pre-existing baseline flake, recorded because it was red before this session touched
+> the tree:** the T1 layout sweep failed `sheet-facility · pa` — the voice chip intercepting
+> a pointer event on a map pin under eight-worker contention. Re-run in isolation it passed
+> 28/28, and the **final sweep passed it too** (286/286, exit 0). So it is a contention flake
+> rather than a defect, it is not caused by anything here, and the "283 green" figure in
+> HANDOFF-121 should be read as "283 green on a good run".
 
 ---
 
