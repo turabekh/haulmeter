@@ -498,11 +498,17 @@ def reset_credential(db: Session, account: Account) -> str:
         db.add(method)
     method.secret_ref = handler.build_secret_ref(temporary)
     method.must_change = True
+    # EVERY session, with no exception (F1-1). An admin issuing a temporary credential
+    # means the account is presumed compromised or locked out, and in neither case is
+    # there a session worth preserving — including the admin's own view of it.
+    revoke_sessions(db, account)
     db.flush()
     return temporary
 
 
-def complete_credential_change(db: Session, account: Account, new_password: str) -> AuthMethod:
+def complete_credential_change(
+    db: Session, account: Account, new_password: str, except_token: str | None = None
+) -> AuthMethod:
     method = db.scalar(
         select(AuthMethod).where(
             AuthMethod.account_id == account.id, AuthMethod.method_type == MethodType.password
@@ -511,6 +517,10 @@ def complete_credential_change(db: Session, account: Account, new_password: str)
     handler = get_handler(MethodType.password)
     method.secret_ref = handler.build_secret_ref(new_password)
     method.must_change = False
+    # a credential change ends every OTHER session (F1-1). Changing your password is the
+    # act of a driver who thinks someone else has it; leaving those sessions alive for up
+    # to `DEFAULT_SESSION_TTL` means the change evicts nobody.
+    revoke_sessions(db, account, except_token=except_token)
     db.flush()
     return method
 
@@ -524,15 +534,57 @@ def must_change_credential(db: Session, account: Account) -> bool:
     return bool(method and method.must_change)
 
 
+def revoke_sessions(
+    db: Session, account: Account, except_token: str | None = None, now: datetime | None = None
+) -> int:
+    """End every session for this account. Returns how many were revoked.
+
+    AI-CONTEXT: ONE primitive, three call sites, so the next credential-state change cannot
+    forget (findings F1-1, F1-2). `deactivate_account` already knew the rule and stated it:
+
+        "live sessions die with the account, or deactivation would take up to 30 days
+         to bite on anyone already signed in"
+
+    That is `DEFAULT_SESSION_TTL` talking, and it applies just as hard to a password change
+    — a driver who changes their password BECAUSE they believe they are compromised was not
+    evicting the attacker at all. Deactivation was one of three sites that needed it.
+
+    IT EXPIRES IN PLACE rather than deleting, taking `end_impersonation`'s shape: `ended_at`
+    and `expires_at` both set to now, dead immediately and not merely marked. Two reasons.
+    A request already in flight against a deleted row gets a confusing failure where an
+    expired row gives it a clean 401; and a revocation is a security event, so it should be
+    legible afterwards rather than being a gap where rows used to be.
+
+    `except_token` exists for exactly one case — a driver changing their own password. They
+    must not be thrown out mid-action, because being signed out at the moment you change a
+    credential reads as "that failed". Every other caller passes nothing.
+    """
+    when = now or datetime.now(UTC)
+    revoked = 0
+    for session in db.scalars(
+        select(AuthSession).where(
+            AuthSession.account_id == account.id,
+            AuthSession.ended_at.is_(None),
+        )
+    ):
+        if except_token is not None and session.token == except_token:
+            continue
+        session.ended_at = when
+        session.expires_at = when  # dead immediately, not merely marked
+        revoked += 1
+    db.flush()
+    return revoked
+
+
 def deactivate_account(db: Session, account: Account, now: datetime | None = None) -> Account:
     """Blocks login and hides driver-facing presence. Every row the account points at
     survives — this is a door being locked, not a record being erased."""
     account.active = False
     account.deactivated_at = now or datetime.now(UTC)
     # live sessions die with the account, or deactivation would take up to 30 days
-    # to bite on anyone already signed in
-    for session in db.scalars(select(AuthSession).where(AuthSession.account_id == account.id)):
-        db.delete(session)
+    # to bite on anyone already signed in. The loop that used to live here is now
+    # `revoke_sessions` — same rule, three call sites, one implementation.
+    revoke_sessions(db, account, now=account.deactivated_at)
     db.flush()
     return account
 
