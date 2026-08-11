@@ -238,6 +238,23 @@ def run_document_expiry(db: Session, commit: bool = True) -> dict:
     return {"considered": len(sent), "delivered": sum(1 for n in sent if n is not None)}
 
 
+# AI-CONTEXT: finding F11 — a no-op tick used to COMMIT. `run_detention_clock` runs every
+# 60 seconds and normally finds nothing due, so the worker opened and committed an empty
+# transaction a thousand times a day. Harmless, and still worth not doing: an empty commit
+# is a write-ahead log entry, a replication event and a line of noise in any slow-query or
+# transaction-rate view, all of it saying that something happened when nothing did.
+#
+# `scanned` is deliberately NOT counted as work — the whole point of the summary is that a
+# scan which decided nothing is not an event.
+_SCAN_ONLY_KEYS = frozenset({"scanned", "considered"})
+
+
+def _did_work(summary: dict) -> bool:
+    return any(
+        value for key, value in summary.items() if key not in _SCAN_ONLY_KEYS
+    )
+
+
 def run_detention_clock(db: Session, commit: bool = True) -> dict:
     """M3's P0, which nothing had ever fired (§23 entries 106, 107).
 
@@ -254,7 +271,30 @@ def run_detention_clock(db: Session, commit: bool = True) -> dict:
     # Unconfigured deployments fall back to the recording gateway, so this runs the
     # same everywhere and a laptop still exercises the tiering.
     summary = m3.dispatch_clock_alerts(db, notify.gateway_for)
-    if commit:
+    # finding F11: only commit when something was actually decided — see `_did_work`
+    if commit and _did_work(summary):
+        db.commit()
+    return summary
+
+
+def run_dunning(db: Session, commit: bool = True) -> dict:
+    """M3-FR6's follow-up cadence, which had no caller at all (finding F6).
+
+    AI-CONTEXT: `dunning_schedule` computed day 3 / 10 / 21 and was called by its own unit
+    test and nothing else, so no broker has ever been chased for a detention invoice. This
+    is the caller. Daily, because the offsets are measured in days.
+
+    On the counterparty gateway, not a per-driver one: this is outbound mail to a broker,
+    not a push to a phone. Where SMTP is unconfigured it falls back to recording, so a
+    laptop exercises the cadence without sending anything.
+
+    Commits only when it did work — see `run_detention_clock` (finding F11).
+    """
+    from app.foundation.f08_notifications import public as notify
+    from app.modules.m03_detention import public as m3
+
+    summary = m3.run_dunning(db, notify.counterparty_gateway())
+    if commit and _did_work(summary):
         db.commit()
     return summary
 

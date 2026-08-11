@@ -854,11 +854,173 @@ def dunning_schedule(invoiced_at: datetime) -> list[dict]:
 
 
 def escalate(db: Session, claim: DetentionClaim, external_ref: str | None = None) -> DetentionClaim:
-    # AI-CONTEXT: M3-FR7 hand-off to the licensed collection partner — seam.
-    # The partner integration + fee tier are wired at activation (F13 gate).
+    # AI-CONTEXT: M3-FR7 hand-off to the licensed collection partner — still a seam. The
+    # partner integration + fee tier are wired at activation (F13 gate).
+    #
+    # `external_ref` was accepted and DISCARDED (finding F6): a claim handed to a partner
+    # kept no way back to the file they opened, so the one fact the hand-off produces was
+    # thrown away at the moment it was created. Kept now, and deliberately not overwritten
+    # with None — re-escalating without a ref must not erase the one already on file.
     claim.state = ClaimState.escalated
+    if external_ref is not None:
+        claim.escalation_ref = external_ref
     db.flush()
     return claim
+
+
+# --- Dunning (M3-FR6), which had never run ---
+#
+# AI-CONTEXT: finding F6. `dunning_schedule` computed day 3 / 10 / 21 correctly and had
+# exactly ONE caller in the tree: its own unit test. No job walked invoiced claims, so no
+# broker has ever been chased for a detention invoice, and the cadence the PRD promises
+# was three lines of arithmetic nobody ran.
+#
+# THREE BOUNDS, and each is here because the first run of a job like this meets a BACKLOG
+# rather than a steady state — which is not hypothetical: `dispatch_detention_start`'s
+# first run against real data fired ELEVEN stale P0s at once (§23 entry 106).
+#
+#   · the scan is bounded to receivables opened in the last 28 days, so the set cannot
+#     grow without limit as the product ages;
+#   · an action more than 7 days past due is counted `skipped_stale` and never sent, so
+#     switching this on cannot spray a year of missed follow-ups at real brokers in one
+#     tick. Nothing is marked on that path — a stale action was not suppressed, it never
+#     had a send to make, and recording one would say otherwise;
+#   · day 21 offers escalation to a collection partner, and may only be sent when
+#     `collection_partner_agreement` is SATISFIED. Otherwise `skipped_ungated`. The
+#     product must not offer a driver a path it does not have — which is exactly what
+#     F13's gates exist to prevent, and exactly what they were failing to prevent before
+#     migration 0066.
+DUNNING_ACTIONS = ["nudge", "firm", "escalation_offer"]
+DUNNING_COLUMN = {
+    "nudge": "dunning_nudge_sent_at",
+    "firm": "dunning_firm_sent_at",
+    "escalation_offer": "dunning_escalation_offer_sent_at",
+}
+DUNNING_COUNTER = {"nudge": "nudged", "firm": "firmed", "escalation_offer": "offered"}
+# distinct and greppable, so an AP clerk's thread and our own logs both say which of the
+# three a broker actually received
+DUNNING_SUBJECT = {
+    "nudge": "Detention invoice — payment reminder",
+    "firm": "Detention invoice — second request",
+    "escalation_offer": "Detention invoice — final notice before collection",
+}
+DUNNING_GRACE = timedelta(days=7)
+# 28 = 21 + 7, and the two are NOT independent knobs. The window must be at least the last
+# action's day plus its grace, or the escalation offer could fall out of the scan set while
+# it is still current — a follow-up that silently never sends, which is F6's own shape.
+# Pinned by a test so a later edit to either number has to look at the other.
+DUNNING_WINDOW = timedelta(days=max(DUNNING_DAYS)) + DUNNING_GRACE
+ESCALATION_GATE = "collection_partner_agreement"
+DUNNING_TERMINAL_STATES = ("recovered", "escalated")
+
+
+def _escalation_gate_satisfied(db: Session) -> bool:
+    from app.foundation.f13_flags import public as flags
+
+    gate = flags.get_gate(db, FLAG_KEY, ESCALATION_GATE)
+    return bool(gate is not None and gate.satisfied)
+
+
+def claims_awaiting_dunning(db: Session, now: datetime) -> list[DetentionClaim]:
+    """Invoiced claims, still unpaid, opened recently enough to still be worth chasing."""
+    terminal = [s for s in ledger.ReceivableState if s.value in DUNNING_TERMINAL_STATES]
+    return list(
+        db.scalars(
+            select(DetentionClaim)
+            .join(ledger.Receivable, ledger.Receivable.id == DetentionClaim.receivable_ref)
+            .where(
+                DetentionClaim.state == ClaimState.invoiced,
+                ledger.Receivable.state.not_in(terminal),
+                ledger.Receivable.created_at >= now - DUNNING_WINDOW,
+                or_(
+                    DetentionClaim.dunning_nudge_sent_at.is_(None),
+                    DetentionClaim.dunning_firm_sent_at.is_(None),
+                    DetentionClaim.dunning_escalation_offer_sent_at.is_(None),
+                ),
+            )
+        )
+    )
+
+
+def _dunning_body(db: Session, claim: DetentionClaim, now: datetime) -> str:
+    """Self-contained, and English like every other counterparty message.
+
+    Each notice restates the amount, the dock, the service date and carries a FRESH
+    evidence link, because it must never presume an earlier email arrived — the whole
+    reason a broker is being chased is that something did not land.
+    """
+    stop = loads.get_stop(db, claim.stop_ref)
+    log = db.get(evidence.EvidenceLog, claim.evidence_log_ref)
+    where = "The GPS-verified detention evidence pack is available on request."
+    if log is not None:
+        pack = evidence.compose_pack(db, log, evidence.PackTemplate.detention_claim)
+        shared = evidence.share_pack(
+            db, log, pack.template, render_pack_bytes(db, pack), claim.account_id, now=now
+        )
+        link = evidence.share_link(shared)
+        if link:
+            where = f"The GPS-verified detention evidence is here: {link}"
+    amount = f"${claim.amount_cents / 100:,.2f}"
+    served = claim.clock_since.date().isoformat() if claim.clock_since else "the service date"
+    # the LOAD REFERENCE, not a facility id — A1's subject line already established that
+    # the thing an accounts-payable clerk files by is the reference they were given, and a
+    # UUID from our database means nothing on their desk
+    load = loads.get_load(db, stop.load_id) if stop is not None else None
+    reference = getattr(load, "reference_number", None)
+    which = f" on load {reference}" if reference else ""
+    return (
+        f"Detention of {amount} was invoiced per the rate confirmation for the stop"
+        f"{which} served on {served}, and remains outstanding.\n\n{where}"
+    )
+
+
+def run_dunning(db: Session, gateway, now: datetime | None = None) -> dict:
+    """Walk invoiced claims and send whichever follow-up has come due."""
+    now = now or datetime.now(UTC)
+    claims = claims_awaiting_dunning(db, now)
+    summary = {
+        "scanned": len(claims),
+        "nudged": 0,
+        "firmed": 0,
+        "offered": 0,
+        "skipped_no_email": 0,
+        "skipped_stale": 0,
+        "skipped_ungated": 0,
+    }
+    gate_open = _escalation_gate_satisfied(db)
+    for claim in claims:
+        receivable = db.get(ledger.Receivable, claim.receivable_ref)
+        if receivable is None:
+            continue
+        for entry in dunning_schedule(receivable.created_at):
+            action = entry["action"]
+            column = DUNNING_COLUMN[action]
+            if getattr(claim, column) is not None:
+                continue  # this one has already gone out
+            due = entry["at"]
+            if now < due:
+                continue
+            if now - due > DUNNING_GRACE:
+                summary["skipped_stale"] += 1
+                continue
+            if action == "escalation_offer" and not gate_open:
+                summary["skipped_ungated"] += 1
+                continue
+            message = _send_counterparty(
+                db,
+                claim,
+                gateway,
+                now,
+                subject=DUNNING_SUBJECT[action],
+                body=_dunning_body(db, claim, now),
+            )
+            if message is None:
+                summary["skipped_no_email"] += 1
+                continue  # finding F4: never a fake recipient, not even to a chaser
+            setattr(claim, column, now)  # DISPATCHED, matching the alert columns
+            summary[DUNNING_COUNTER[action]] += 1
+    db.flush()
+    return summary
 
 
 def get_claim(db: Session, claim_id) -> DetentionClaim | None:

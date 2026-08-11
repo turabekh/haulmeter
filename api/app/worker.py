@@ -66,6 +66,13 @@ def _jobs() -> list[Job]:
         # against a two-hour free window is honest, and cheaper than the alternative of
         # scheduling a wake-up per claim. F8's own budget decides what actually leaves.
         Job("detention_clock", m3.FLAG_KEY, 60, runners.run_detention_clock),
+        # M3-FR6's dunning cadence (finding F6). Daily: the offsets are day 3 / 10 / 21,
+        # so a finer interval buys nothing and a coarser one would miss a day's window.
+        # Behind M3's own flag — unlike `outbound_retry`, this is not delivery insurance
+        # for mail already decided on, it DECIDES to send, and that is an activation
+        # question the module's flag owns. The day-21 escalation offer additionally waits
+        # on the `collection_partner_agreement` gate; see `run_dunning`.
+        Job("dunning", m3.FLAG_KEY, 86400, runners.run_dunning),
         # audit F-06: counterparty mail that did not go out. Five minutes, because the
         # failures this exists for are transient — a restart window, a rate limit — and
         # a detention notice an hour late is still a detention notice, while one that
