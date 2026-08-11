@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from math import cos, hypot, radians
 
 from geoalchemy2 import Geography
 from geoalchemy2.elements import WKTElement
@@ -838,3 +839,100 @@ def stationary_since(
         since = occurred_at
     return since
 
+
+# --- Location basis, read-only (D6) ---
+#
+# AI-CONTEXT: what the GPS data IS, so a document can stop implying what it is not.
+#
+# Counterparty copy said "GPS-verified" and nothing in the product gated accuracy, flagged
+# a mock provider, or surfaced `gps_time_divergent`. The chain proves a reading has not
+# been altered SINCE it was recorded; it proves nothing about how the reading was produced.
+# This is the honest middle: state the shape of the trail — how many fixes, how precise
+# they claimed to be, how many disagreed with their own device clock, how many implied a
+# speed no truck reaches — and let the reader judge.
+#
+# SHAPE (c), like `stationary_since`: it reads and writes NOTHING. No arming, no presence,
+# no event. It cannot affect a detention claim even if every number in it is wrong, which
+# is the whole reason it is allowed to run at pack time.
+#
+# THE CONSTANTS ARE ANNOTATE-ONLY, and that is why they are constants rather than F13 keys.
+# The two knobs this module gained last session (`exit_confirm_pings`, `accuracy_gate_m`)
+# GATE A CLOCK — move them and detention timing moves, so they are the owner's. These only
+# LABEL A REPORT: change `IMPLAUSIBLE_SPEED_MPS` and a line in a PDF reads differently and
+# not one cent moves. An owner knob implies a decision worth making; this is a threshold
+# for a footnote.
+#
+# 60 m/s is ~134 mph — comfortably above any truck, and above the highway speeds a normal
+# fix pair produces, so it flags teleports rather than lead feet. The dt floor exists
+# because two fixes 200 ms apart with 30 m of GPS jitter imply 150 m/s and mean nothing:
+# below it there is no speed worth computing, only noise.
+IMPLAUSIBLE_SPEED_MPS = 60.0
+IMPLAUSIBLE_MIN_DT_SECONDS = 5.0
+
+
+def location_basis(db: Session, account_id, since: datetime, until: datetime) -> dict:
+    """What the location trail for this window actually consists of.
+
+    `pings` of 0 means the trail is absent — purged past the retention window, or never
+    recorded — and every other figure is None. A caller must render that as absence and
+    assert nothing, never as zero problems.
+    """
+    rows = db.execute(
+        select(
+            LocationPing.occurred_at,
+            LocationPing.accuracy_m,
+            LocationPing.gps_time_divergent,
+            func.ST_Y(LocationPing.geom),
+            func.ST_X(LocationPing.geom),
+        )
+        .where(
+            LocationPing.account_id == account_id,
+            LocationPing.occurred_at >= _as_utc(since),
+            LocationPing.occurred_at <= _as_utc(until),
+        )
+        .order_by(LocationPing.occurred_at)
+    ).all()
+
+    if not rows:
+        return {
+            "pings": 0,
+            "accuracy_min_m": None,
+            "accuracy_median_m": None,
+            "accuracy_max_m": None,
+            "accuracy_reported": 0,
+            "divergent_clock_pings": 0,
+            "implausible_moves": 0,
+        }
+
+    accuracies = sorted(r[1] for r in rows if r[1] is not None)
+    median = None
+    if accuracies:
+        mid = len(accuracies) // 2
+        median = (
+            accuracies[mid]
+            if len(accuracies) % 2
+            else (accuracies[mid - 1] + accuracies[mid]) / 2
+        )
+
+    implausible = 0
+    for (t0, _a0, _d0, lat0, lon0), (t1, _a1, _d1, lat1, lon1) in zip(rows, rows[1:], strict=False):
+        dt = (_as_utc(t1) - _as_utc(t0)).total_seconds()
+        if dt < IMPLAUSIBLE_MIN_DT_SECONDS:
+            continue
+        # equirectangular metres — enough for "is this a teleport", and deliberately not a
+        # second geometry implementation beside F2's (`facility_distances` warns about it)
+        mean_lat = radians((lat0 + lat1) / 2)
+        dx = radians(lon1 - lon0) * 6371000 * cos(mean_lat)
+        dy = radians(lat1 - lat0) * 6371000
+        if hypot(dx, dy) / dt > IMPLAUSIBLE_SPEED_MPS:
+            implausible += 1
+
+    return {
+        "pings": len(rows),
+        "accuracy_min_m": accuracies[0] if accuracies else None,
+        "accuracy_median_m": median,
+        "accuracy_max_m": accuracies[-1] if accuracies else None,
+        "accuracy_reported": len(accuracies),
+        "divergent_clock_pings": sum(1 for r in rows if r[2]),
+        "implausible_moves": implausible,
+    }

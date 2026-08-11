@@ -825,12 +825,31 @@ def open_receivable(
     return receivable
 
 
-def render_pack_bytes(db: Session, pack) -> bytes:
+def _location_basis_for(db: Session, claim: DetentionClaim) -> dict | None:
+    """The visit's location basis, for the pack's honesty section (D6).
+
+    Bounded to the VISIT, not the claim's whole life: the question a broker is judging is
+    the quality of the fixes behind this stop's arrival and departure. Falls back to the
+    clock window when F3 cannot place the visit, and returns None when there is no window
+    to ask about — which renders as nothing rather than as a zero.
+    """
+    arrival, departure = _arrival_departure(db, claim)
+    since = arrival or claim.clock_since
+    until = departure or datetime.now(UTC)
+    if since is None:
+        return None
+    return location.location_basis(db, claim.account_id, since, until)
+
+
+def render_pack_bytes(db: Session, pack, claim: DetentionClaim | None = None) -> bytes:
     """`render_pack_pdf(pack, context)` — the db is not a parameter, and the context is
     what carries the artifact images. M5 builds the same thing one module over; this
     stays minimal deliberately, because M3's pack is composed from the evidence log
     rather than from a photo set."""
-    return evidence.render_pack_pdf(pack, evidence.PackContext())
+    context = evidence.PackContext(
+        location_basis=_location_basis_for(db, claim) if claim is not None else None
+    )
+    return evidence.render_pack_pdf(pack, context)
 
 
 def _notice_body(db: Session, shared) -> str:
@@ -888,7 +907,7 @@ def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=Non
             db,
             log,
             pack.template,
-            render_pack_bytes(db, pack),
+            render_pack_bytes(db, pack, claim),
             claim.account_id,
             now=now,
         )
@@ -1040,7 +1059,7 @@ def _dunning_body(db: Session, claim: DetentionClaim, now: datetime) -> str:
         pack = evidence.compose_pack(db, log, evidence.PackTemplate.detention_claim)
         try:
             shared = evidence.share_pack(
-                db, log, pack.template, render_pack_bytes(db, pack), claim.account_id, now=now
+                db, log, pack.template, render_pack_bytes(db, pack, claim), claim.account_id, now=now
             )
         except evidence.ChainInvalid:
             # a chaser must not carry a link to a pack that failed its own check. The

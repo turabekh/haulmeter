@@ -145,6 +145,10 @@ class PackContext:
 
     parties: list[tuple[str, str]] = field(default_factory=list)
     references: list[tuple[str, str]] = field(default_factory=list)
+    # AI-CONTEXT: what the location data IS (D6). Supplied by the caller, because F3 sits
+    # below F4's callers and F4 may not reach sideways for it. None omits the section
+    # entirely — a pack composed by something that never asked should not invent an answer.
+    location_basis: dict | None = None
     # §9 The Meter: (label, figure) pairs. §17 puts "total detention · total $" here,
     # and §9 requires the same numbers, order and wording as every other surface.
     meter: list[tuple[str, str]] = field(default_factory=list)
@@ -562,6 +566,72 @@ def _anchor_line(v) -> str:
     return "not yet anchored"
 
 
+def _location_basis(cur, context):
+    """§17: what the location data IS — stated, not implied (D6).
+
+    AI-CONTEXT: the counterparty copy used to call this "GPS-verified". The chain proves a
+    reading has not been altered since it was recorded; it proves nothing about how the
+    reading was produced. So the pack says so in the clerk's own terms, and gives them the
+    shape of the trail to judge for themselves.
+
+    HONEST ABSENCE is the important branch. When the window's pings are gone — purged past
+    the retention window, or never recorded — this says the trail is not available and
+    asserts NOTHING. A zero rendered as "0 implausible movements" would be the strongest
+    sentence on the page and completely unearned.
+    """
+    basis = (context.location_basis if context else None) or None
+    if basis is None:
+        return
+    cur.need(S6)
+    cur.text("Location basis", SANS_SEMI, TITLE)
+    cur.space(S4 + S2)
+    cur.text(
+        "Location data as reported by the driver's device. The hash chain shows these "
+        "records are unaltered since capture; it does not attest how they were produced.",
+        SANS,
+        CAPTION,
+        TEXT_3,
+    )
+    cur.space(BODY_LINE)
+
+    if not basis.get("pings"):
+        cur.text(
+            "Position trail not available for this period — it was not recorded, or has "
+            "passed the retention window. No further claim is made about it.",
+            SANS,
+            CAPTION,
+            TEXT_3,
+        )
+        cur.space(S5)
+        cur.rule()
+        return
+
+    def _m(value):
+        return f"{value:.0f} m" if isinstance(value, int | float) else "—"
+
+    rows = [("Position fixes", str(basis["pings"]))]
+    if basis.get("accuracy_reported"):
+        rows.append(
+            (
+                "Reported accuracy",
+                f"best {_m(basis['accuracy_min_m'])} · "
+                f"typical {_m(basis['accuracy_median_m'])} · "
+                f"worst {_m(basis['accuracy_max_m'])}",
+            )
+        )
+    else:
+        rows.append(("Reported accuracy", "not reported by the device"))
+    rows.append(("Device clock disagreed", str(basis.get("divergent_clock_pings", 0))))
+    rows.append(("Implausible movements", str(basis.get("implausible_moves", 0))))
+    for label, value in rows:
+        cur.need(BODY_LINE)
+        cur.text(label, SANS, BODY, TEXT_2)
+        cur.right_text(value, SANS_MEDIUM, BODY, TEXT_1)
+        cur.space(BODY_LINE)
+    cur.space(S5)
+    cur.rule()
+
+
 def _verification(cur, pack):
     """§17: hash-verification block, monospace, quiet.
 
@@ -654,6 +724,7 @@ def render(pack, context: PackContext | None = None) -> bytes:
     _timeline(cur, pack)
     _trace(cur, pack, context)
     _artifacts(cur, pack, context)
+    _location_basis(cur, context)
     _verification(cur, pack)
 
     canvas.save()

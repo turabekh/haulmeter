@@ -16,6 +16,7 @@ from app.foundation.f04_evidence import public as evidence
 from app.foundation.f04_evidence.domain.models import EvidenceRecord, SharedPack
 from app.foundation.f05_load import public as loads
 from app.modules.m03_detention import public as m3
+from app.modules.m03_detention.domain import service as m3_service
 
 DALLAS = (32.7767, -96.7970)
 FAR = (32.9000, -96.8000)
@@ -176,3 +177,57 @@ def test_the_counterparty_body_still_names_the_evidence(db):
 
     assert "GPS evidence" in body
     assert "/pack/s/" in body or "available on request" in body
+
+
+# --- D6: the basis section in a rendered pack ---
+def _drawn(pdf: bytes) -> str:
+    """The text drawn into the page, read the way this suite already reads a PDF.
+
+    `test_render.py` asserts on raw bytes; reportlab writes the drawn strings literally
+    (no stream compression is enabled here), so a decode with errors ignored is enough to
+    check that a label reached the page.
+    """
+    return pdf.decode("latin-1", errors="ignore")
+
+
+def test_a_pack_states_what_its_location_data_is(db):
+    account, claim = _claim(db, email="basis@example.com")
+    # a trail with a known shape: one vague fix, one divergent clock, one teleport
+    location.record_ping(db, account.id, *DALLAS, occurred_at=T0, accuracy_m=8.0)
+    location.record_ping(
+        db, account.id, *DALLAS, occurred_at=T0 + timedelta(minutes=20), accuracy_m=120.0,
+        gps_time=T0 + timedelta(minutes=45),
+    )
+    location.record_ping(db, account.id, 35.0, -99.0, occurred_at=T0 + timedelta(minutes=40))
+    m3.accrue_events(db, claim)
+    pack = evidence.compose_pack(db, claim_log(db, claim), evidence.PackTemplate.detention_claim)
+
+    text = _drawn(m3_service.render_pack_bytes(db, pack, claim))
+
+    assert "Location basis" in text
+    assert "as reported by the driver" in text
+    assert "Position fixes" in text
+    assert "Device clock disagreed" in text
+    assert "Implausible movements" in text
+
+
+def test_a_pack_with_no_trail_says_so_and_asserts_nothing(db):
+    """Purged or never recorded — the section must not render zeros as a clean bill."""
+    account, claim = _claim(db, email="notrail@example.com")
+    m3.accrue_events(db, claim)
+    # the visit's pings are what `_claim` recorded; drop them the way retention would
+    from app.foundation.f03_location.domain.models import LocationPing
+
+    db.query(LocationPing).filter_by(account_id=account.id).delete()
+    db.flush()
+    pack = evidence.compose_pack(db, claim_log(db, claim), evidence.PackTemplate.detention_claim)
+
+    text = _drawn(m3_service.render_pack_bytes(db, pack, claim))
+
+    assert "Location basis" in text
+    assert "not available for this period" in text
+    assert "Implausible movements" not in text  # no figure is asserted
+
+
+def claim_log(db, claim):
+    return db.get(evidence.EvidenceLog, claim.evidence_log_ref)
