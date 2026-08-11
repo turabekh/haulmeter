@@ -110,7 +110,23 @@ class AuthSession(Base):
 
 
 class LoginAttempt(Base):
-    """AI-CONTEXT: failed authentications, which nothing anywhere counted (audit F-07).
+    """AI-CONTEXT: throttling signal for the two unauthenticated hashing routes.
+
+    THE NAME NO LONGER TELLS THE WHOLE TRUTH, and it is kept anyway: `kind` now
+    discriminates `'login'` from `'register'`, so this table holds two signals. Renaming it
+    would be churn across a migration, a model, three queries and their indexes to fix a
+    noun — the docstring is cheaper and this paragraph is the fix.
+
+    The two counters must not share a bucket. A registration flood from a carrier NAT would
+    otherwise fill the per-IP window and lock honest drivers out of LOGIN on the same
+    address — the exact false positive `LOGIN_MAX_PER_IP`'s own comment exists to avoid.
+
+    They also record differently, and that asymmetry is deliberate. Login stores only
+    FAILURES (a success clears the identifier's rows). Registration stores EVERY attempt,
+    successful or not: what is being rationed there is the Argon2 work and the probing, and
+    a successful registration costs exactly as much CPU as a failed one.
+
+    Originally: failed authentications, which nothing anywhere counted (audit F-07).
 
     In POSTGRES rather than Redis, deliberately. `core/events.py` states the rule for
     Redis in this codebase — it is not a system of record, and `publish` swallows a
@@ -132,13 +148,20 @@ class LoginAttempt(Base):
 
     __tablename__ = "login_attempt"
     __table_args__ = (
-        Index("ix_login_attempt_identifier_time", "identifier", "occurred_at"),
-        Index("ix_login_attempt_ip_time", "client_ip", "occurred_at"),
+        # `kind` sits in the MIDDLE: every query filters identifier/ip AND kind, then
+        # windows on time. Migration 0069 replaced the two-column pair rather than adding
+        # beside it — this is the one table that takes a row per attack attempt, so an
+        # index that only ever costs writes is not free here.
+        Index("ix_login_attempt_identifier_kind_time", "identifier", "kind", "occurred_at"),
+        Index("ix_login_attempt_ip_kind_time", "client_ip", "kind", "occurred_at"),
         {"schema": SCHEMA},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     identifier: Mapped[str] = mapped_column(String(320))
+    # 'login' | 'register'. Server-defaulted so every pre-0069 row reads as what it was —
+    # this table has only ever held login failures — with no backfill rewriting history.
+    kind: Mapped[str] = mapped_column(String(20), default="login", server_default="login")
     client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
