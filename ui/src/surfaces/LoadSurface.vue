@@ -51,12 +51,14 @@ import {
   permission as locationPermission,
   retryLocationPermission,
   lastEvents,
+  lastFix,
 } from "../core/location.js";
 import { computeDetentionState, meterVariant, formatClock, formatMoney } from "../core/meter.js";
 import {
   activeStopId,
   setActiveStop,
   arriveAtStop,
+  ArrivalTooFar,
   fetchMeter,
   fetchActiveLoad,
   fetchStopPackets,
@@ -644,11 +646,35 @@ const rung = computed(() => {
 // notice to the broker. `rungBusy` names which rung is working, so one ref disables the
 // Primary and its twin in the secondary row without four more booleans.
 const rungBusy = ref("");
-async function onArrive() {
+// AI-CONTEXT: pre-arrival, the evidence card COLLAPSES (owner request, §23 entry 138).
+//
+// Everything in that card is a record of things captured AT the dock, and before the
+// driver reaches one there is nothing in it — four rows of "not yet" between the Meter
+// and the single action the screen exists to offer, pushing "I have arrived" off a
+// 360 dp screen. It collapses to one row rather than disappearing, because the broker
+// email field lives inside it and fixing that address while still driving there is
+// exactly when a driver can.
+const evidenceOpen = ref(false);
+const docsCaptured = computed(() => docChecklist.value.filter((r) => r.captured).length);
+// the too-far question. `farDistance`/`farPlace` come from the server's 409, so the
+// sheet states the real number rather than one the client guessed at.
+const farOpen = ref(false);
+const farDistance = ref(0);
+const farPlace = ref("");
+const arriveError = ref("");
+// §12.5: units are NEVER localised (miles everywhere). Below a tenth of a mile the
+// figure is useless to a driver, so it rounds to the nearest tenth and never to zero.
+const farText = computed(() => {
+  const miles = farDistance.value / 1609.344;
+  return `${Math.max(0.1, Math.round(miles * 10) / 10)} mi`;
+});
+async function onArrive(confirmed = false) {
   if (!activeStopId.value || rungBusy.value) return;
   rungBusy.value = "arrive";
+  arriveError.value = "";
   try {
-    await arriveAtStop(activeStopId.value);
+    await arriveAtStop(activeStopId.value, { fix: lastFix.value, confirmed });
+    farOpen.value = false;
     // the server writes a real geofence ENTER for this tap (api/load.py: arrive), so
     // the driver IS on site by F3's own reckoning. Saying so here rather than waiting
     // up to a minute for the next ping is what makes the dock actions appear at the
@@ -657,8 +683,17 @@ async function onArrive() {
     // have to wait for one.
     observePresence(true);
     await loadMeter();
-  } catch {
-    /* offline / queued in a later F12 pass */
+  } catch (e) {
+    if (e instanceof ArrivalTooFar) {
+      // NOTHING was recorded — the server is asking, not refusing. §12.4: state the
+      // fact and let the driver answer it.
+      farDistance.value = e.distanceM ?? 0;
+      farPlace.value = e.facilityName || stopName.value;
+      farOpen.value = true;
+    } else {
+      arriveError.value = t("load.arrive_failed");
+      setTimeout(() => (arriveError.value = ""), 6000);
+    }
   } finally {
     rungBusy.value = "";
   }
@@ -849,7 +884,26 @@ async function endLoad() {
         </button>
       </div>
 
-      <section v-if="live" class="card">
+      <!-- AI-CONTEXT: pre-arrival this card is ONE ROW (owner request, §23 entry 138).
+           Everything inside it records what was captured AT the dock, and before the
+           driver reaches one it is four lines of "not yet" sitting between the Meter and
+           the only action the screen exists to offer — which pushed "I have arrived"
+           off a 360 dp screen. Collapsed, not removed: the broker email field lives in
+           here, and the drive there is exactly when a driver can fix that address.
+           Once arrived it is always open, because then it is the driver's job list. -->
+      <button
+        v-if="live && preArrival && !evidenceOpen"
+        class="collapsed"
+        type="button"
+        :aria-expanded="false"
+        @click="evidenceOpen = true"
+      >
+        <span class="collapsed__label">{{ t("load.paperwork_for_stop") }}</span>
+        <span class="collapsed__count">{{ docsCaptured }}/{{ docChecklist.length }}</span>
+        <ChevronRight :size="18" :stroke-width="2" class="collapsed__go" aria-hidden="true" />
+      </button>
+
+      <section v-if="live && (!preArrival || evidenceOpen)" class="card">
         <h2 class="card__title">{{ t("load.evidence") }}</h2>
         <ul class="checklist">
           <!-- AI-CONTEXT: the LABEL carries the state, not just the icon. This row
@@ -969,7 +1023,7 @@ async function endLoad() {
         class="cta"
         type="button"
         :disabled="!!rungBusy"
-        @click="onArrive"
+        @click="onArrive()"
       >
         <Spinner v-if="rungBusy === 'arrive'" />
         {{ rungBusy === "arrive" ? t("busy.saving") : t("load.arrive") }}
@@ -1097,6 +1151,30 @@ async function endLoad() {
         </button>
       </div>
       <p v-if="noticeMsg" class="notice-msg">{{ noticeMsg }}</p>
+      <p v-if="arriveError" class="notice-msg">{{ arriveError }}</p>
+
+      <!-- AI-CONTEXT: the too-far QUESTION (§23 entry 138). Not a gate.
+           Detention frequently starts in a gate queue that is most of a kilometre from
+           the dock a pin sits on, so a driver waiting in one is legitimately arriving —
+           refusing would strand exactly the person this button exists for. The sheet
+           states the distance, says plainly that a queue is normal, and records where
+           they are either way. Withdrawn at speed like every other acting control. -->
+      <BottomSheet
+        :open="farOpen && !isDriving"
+        :title="t('load.far_title')"
+        @close="farOpen = false"
+      >
+        <p class="docs__empty">
+          {{ t("load.far_body", { mi: farText, at: farPlace }) }}
+        </p>
+        <button class="cta" type="button" :disabled="!!rungBusy" @click="onArrive(true)">
+          <Spinner v-if="rungBusy === 'arrive'" />
+          {{ rungBusy === "arrive" ? t("busy.saving") : t("load.far_go") }}
+        </button>
+        <button class="cta cta--text" type="button" @click="farOpen = false">
+          {{ t("load.far_back") }}
+        </button>
+      </BottomSheet>
 
       <!-- §10.2's empty state, in its two shapes. Same two destinations either way —
            this grades them, it does not remove one.
@@ -1554,6 +1632,38 @@ async function endLoad() {
 .context__meta {
   color: var(--text-2);
   font-size: var(--type-caption-size);
+}
+/* the collapsed evidence card: the CARD's own shape and the checklist row's target
+   height, so it reads as the same object shut rather than as a new kind of control. */
+.collapsed {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  min-height: 56px;
+  margin-bottom: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  background: var(--ink-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
+  text-align: left;
+}
+.collapsed__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+}
+/* a figure, so Mono and tabular like every other figure (T-2) */
+.collapsed__count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+}
+.collapsed__go {
+  flex-shrink: 0;
+  color: var(--text-3);
 }
 .card__title {
   margin: 0 0 var(--s-3);

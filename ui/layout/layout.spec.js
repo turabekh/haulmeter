@@ -703,6 +703,40 @@ const SURFACES = [
   // and the harness goes green over the screen it was added to measure — the same
   // failure as the run that measured Vite's error page six times.
   ["load-live", "/load", { stop: LIVE_STOP, mocks: LIVE_MOCKS, ready: ".rungs__item" }],
+  // AI-CONTEXT: PRE-ARRIVAL, which nothing had ever measured (§23 entry 138).
+  //
+  // Every live Load state above mocks `phase: "accruing"` — a driver already at the
+  // dock. The screen BEFORE arrival is a different shape and it is the one every load
+  // starts in: the Meter counts down to the appointment, the evidence card is four rows
+  // of "not yet", and "I have arrived" is the single action underneath all of it. That
+  // is the state the owner reported as pushing the button off the screen, and no state
+  // in this file rendered it.
+  //
+  // `ready` proves the COLLAPSED shape — the one-row card present AND the checklist
+  // absent. Waiting on `.cta` alone would go green against the old stacked screen, which
+  // is this file's recurring failure.
+  ["load-pre-arrival", "/load", {
+    stop: LIVE_STOP,
+    mocks: {
+      ...LIVE_MOCKS,
+      [`/load/${LIVE_STOP}/meter`]: {
+        ...LIVE_MOCKS[`/load/${LIVE_STOP}/meter`],
+        phase: "not_arrived",
+        free_time_remaining_seconds: 7200,
+        detention_seconds: 0,
+        detention_cents: 0,
+        // AI-CONTEXT: computed, not a literal, and the first draft of this state is why.
+        // A fixed far-future date made the pre-arrival countdown render a SIX-DIGIT hour
+        // and the Meter figure blew past 360 dp at 200% text — a real overflow, measured,
+        // but of a string no correct appointment produces. Two hours out is the state
+        // this measures; the wide-figure case is recorded in the handoff instead of
+        // being silently absorbed by a mock nobody would question later.
+        appointment: new Date(Date.now() + 2 * 3600 * 1000).toISOString(),
+        appointment_end: new Date(Date.now() + 4 * 3600 * 1000).toISOString(),
+      },
+    },
+    ready: ".load:has(.collapsed):not(:has(.checklist))",
+  }],
   ["money", "/money"],
   // AI-CONTEXT: the three SKELETON shapes, measured at 360 dp in the commit that
   // introduced them (§23 entry 131, v2.0 acceptance #3). A skeleton the harness cannot

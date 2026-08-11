@@ -17,7 +17,7 @@ import Spinner from "../core/components/Spinner.vue";
 
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { t, has } = useI18n();
 const claim = ref(null);
 const missing = ref(false);
 const me = ref(null); // F1: verified authority, shown on the invoice it backs
@@ -110,7 +110,16 @@ const EV = {
   USER_ACTION: { key: "claim.ev_action", icon: ShieldCheck },
   SYSTEM: { key: "claim.ev_system", icon: ShieldCheck },
 };
-function evLabel(type) {
+// AI-CONTEXT: WHAT HAPPENED, falling back to the record type — the same rule
+// EvidenceSurface uses (§23 entry 70). This screen labelled by RecordType alone, so a
+// driver reading the evidence behind their own claim saw "Action recorded" where the
+// record itself names the event. `has()` guards it because the event vocabulary is
+// dynamic and cannot be checked statically.
+function evLabel(e) {
+  const event = typeof e === "string" ? null : e?.event;
+  const key = event ? `evidence.ev.${event}` : null;
+  if (key && has(key)) return t(key);
+  const type = typeof e === "string" ? e : e?.type;
   return t(EV[type]?.key ?? "claim.ev_system");
 }
 function evIcon(type) {
@@ -179,7 +188,7 @@ function evTime(iso) {
         <ul class="timeline">
           <li v-for="(e, i) in claim.timeline" :key="i" class="ev">
             <component :is="evIcon(e.type)" :size="16" :stroke-width="2" class="ev__icon" aria-hidden="true" />
-            <span class="ev__label">{{ evLabel(e.type) }}</span>
+            <span class="ev__label">{{ evLabel(e) }}</span>
             <span class="ev__time mono">{{ evTime(e.occurred_at) }}</span>
           </li>
           <!-- AI-CONTEXT: finding F5 — this was one bit, and delivery has five states.

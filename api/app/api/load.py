@@ -6,6 +6,7 @@ detention Meter. The client remembers its active stop_id and ticks the Meter
 locally from `arrived_at`; this API is the source of truth for the terms + state.
 """
 
+import math
 import uuid
 from datetime import UTC, datetime
 
@@ -506,24 +507,122 @@ def active_load(
     }
 
 
+class ArriveIn(BaseModel):
+    """The device's OWN fix, and the driver's answer to the too-far question.
+
+    Every field is optional because the fallback must survive a phone with no fix at
+    all — that is half of why this route exists — and an absent position is recorded as
+    absent rather than substituted.
+    """
+
+    lat: float | None = None
+    lon: float | None = None
+    accuracy_m: float | None = None
+    confirmed: bool = False
+
+
+# AI-CONTEXT: a QUESTION threshold, not a fence. §23 entry 138.
+#
+# Deliberately far above F3's 150 m geofence radius, and the gap is the whole point: at a
+# large DC the gate queue where detention actually begins can be most of a kilometre from
+# the dock a pin sits on, and a driver waiting in it is legitimately arriving. A warning
+# tuned to the geofence would fire on ordinary days, and a warning that fires on ordinary
+# days is one drivers learn to tap through — which is worse than no warning, because the
+# record would then show a confirmation that meant nothing.
+#
+# One kilometre is past any plausible yard or queue and well short of anything a correct
+# arrival looks like. It exists to catch a mis-tap, a wrong address on the rate con, or a
+# facility whose coordinates are bad — all three of which are real and none of which
+# should stop the clock.
+ARRIVAL_WARN_DISTANCE_M = 1000.0
+
+
+def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle metres. Local to this module on purpose: F3 owns geography for
+    PostGIS containment, and this is one arithmetic question asked at one seam — routing
+    it through the foundation would be a boundary crossing for four lines of trig."""
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
 @router.post("/{stop_id}/arrive", status_code=201)
 def arrive(
     stop_id: uuid.UUID,
+    body: ArriveIn | None = None,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
+    """AI-CONTEXT: the manual arrival, told the truth about (§23 entry 138).
+
+    THE DEFECT THIS REPLACES. This route used to call
+    `evaluate_ping(db, account.id, lat, lon)` where `lat, lon` were **the facility's own
+    coordinates**. So the position fix a detention claim rests on, on the path a driver
+    takes precisely when the background sensor did not fire, was a reading of where the
+    warehouse is — written into `location_ping` and counted by the pack's Location basis
+    section among the driver's device fixes. That section tells a broker the records are
+    "as reported by the driver's device". For this one it was not true.
+
+    WHAT IS RECORDED NOW. The device's own fix, if it has one, with its accuracy and its
+    distance from the facility. No fix is recorded as no fix and never filled in from the
+    facility. The distance goes into the stop's hash chain either way, so a broker
+    arguing about where the driver actually was is arguing with the record rather than
+    with a number nobody wrote down.
+
+    THE ARRIVAL STILL COUNTS FROM ANYWHERE, and that is deliberate. Detention frequently
+    starts in a gate queue that is half a mile from the dock at a large DC; refusing the
+    arrival would strand exactly the driver this button exists for. Past
+    `ARRIVAL_WARN_DISTANCE_M` the route returns **409 with the distance** so the client
+    can ask "are you sure", and a caller that says `confirmed` proceeds. The warning is a
+    question, never a gate.
+    """
     stop = _owned_stop(db, stop_id, account)
     fac = facility.get_facility(db, stop.facility_id)
     lat, lon = facility.coordinates(db, fac)
-    # a geofence ENTER at the stop is the arrival the detention clock triggers on.
-    # AI-CONTEXT: the result is deliberately not inspected. This is the manual "I've
-    # arrived" fallback — the path a driver takes precisely when the background sensor did
-    # not fire — and it must not fail because the synthesised ping was, say, out of order
-    # behind a queue that just flushed. The stop event below is recorded either way, and
-    # `is_present` is what the screen reads.
-    location.evaluate_ping(db, account.id, lat, lon, occurred_at=datetime.now(UTC))
-    # the arrival, in the chain: the pack used to say an event occurred and not which
-    loads.record_stop_event(db, stop, loads.EVENT_ARRIVED, datetime.now(UTC))
+    now = datetime.now(UTC)
+    device_lat = body.lat if body is not None else None
+    device_lon = body.lon if body is not None else None
+    accuracy_m = body.accuracy_m if body is not None else None
+    confirmed = bool(body.confirmed) if body is not None else False
+
+    distance_m = None
+    if device_lat is not None and device_lon is not None:
+        distance_m = _haversine_m(device_lat, device_lon, lat, lon)
+        if distance_m > ARRIVAL_WARN_DISTANCE_M and not confirmed:
+            # 409 rather than 400: the request is well-formed and the state is the
+            # problem. The body carries what the driver needs to answer the question.
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "reason": "too_far",
+                    "distance_m": round(distance_m),
+                    "facility_name": fac.name if fac is not None else None,
+                },
+            )
+
+    # the arrival, as the driver's ATTESTATION rather than as a manufactured reading.
+    # `assert_presence` opens the visit — which is what `is_present` reads and what starts
+    # the clock — and emits a GeofenceEvent only where there is a real position to put in
+    # it. Nothing is written to `location_ping`.
+    location.assert_presence(db, account.id, stop.facility_id, now, device_lat, device_lon)
+    # the arrival, in the chain: the pack used to say an event occurred and not which.
+    # The extras ride into the hash-chained record, so where the driver said they were is
+    # part of the evidence rather than a fact the product declined to write down.
+    loads.record_stop_event(
+        db,
+        stop,
+        loads.EVENT_ARRIVED,
+        now,
+        presence_basis="device_fix" if distance_m is not None else "no_fix",
+        arrival_lat=device_lat,
+        arrival_lon=device_lon,
+        arrival_accuracy_m=accuracy_m,
+        distance_from_facility_m=round(distance_m) if distance_m is not None else None,
+        far_from_facility=bool(distance_m is not None and distance_m > ARRIVAL_WARN_DISTANCE_M),
+    )
     claim = m3.claim_for_stop(db, stop.id) or m3.start_claim(db, stop)
     # M5-FR1: the arrival that starts the detention clock IS the arrival that proves
     # the driver was on time, so the proof is filed here rather than on its own

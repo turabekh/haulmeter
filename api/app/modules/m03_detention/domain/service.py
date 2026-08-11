@@ -1193,6 +1193,18 @@ def claim_evidence(db: Session, claim: DetentionClaim) -> dict:
         "timeline": [
             {
                 "type": t["type"],
+                # AI-CONTEXT: §23 entry 70's fix, which never reached THIS projection.
+                # Entry 70 taught the pack renderer and `stop_evidence` to say what
+                # happened rather than only which record type it was; `claim_evidence`
+                # kept dropping `event`, so the claim screen could only ever render
+                # "Action recorded". That became visible when the manual arrival stopped
+                # being a manufactured GEOFENCE (entry 138) and correctly became a
+                # USER_ACTION — the driver's own arrival would have read as a generic
+                # action on the screen that argues their claim.
+                # from the record's own payload, which `compose_pack` carries — the
+                # payload itself stays OUT, because a timeline is a sequence of facts
+                # and not a dump of internals (entry 70's own rule).
+                "event": (t.get("payload") or {}).get("event"),
                 "occurred_at": t["occurred_at"].isoformat() if t["occurred_at"] else None,
             }
             for t in pack.timeline

@@ -499,7 +499,21 @@ def test_claim_detail_shows_contents_and_evidence(client, db):
     assert d["counterparty"] == "Acme Brokerage"
     assert d["chain_valid"] is True  # the GPS evidence chain verifies
     assert d["record_count"] >= 1
-    assert any(e["type"] == "GEOFENCE" for e in d["timeline"])  # the arrival is in the pack
+    # AI-CONTEXT: the arrival is in the pack — as what it ACTUALLY WAS (§23 entry 138).
+    #
+    # This used to assert a GEOFENCE record, and one was always there because `arrive`
+    # synthesised a ping AT THE FACILITY'S COORDINATES: the geofence "observation" was
+    # manufactured from the very location it claimed to observe. With no device fix
+    # there is no geofence observation to record, and the honest artifact is the
+    # driver's own attestation. `test_a_device_fix_puts_a_real_GEOFENCE_in_the_pack`
+    # below covers the case where a reading genuinely exists.
+    assert any(e.get("event") == "arrived" for e in d["timeline"]), "the arrival is not in the pack"
+    # and the claim screen can NAME it: `claim_evidence` dropped `event` until entry 138,
+    # so this timeline could only ever render "Action recorded" (§23 entry 70's fix,
+    # which never reached this projection).
+    assert not any(e["type"] == "GEOFENCE" for e in d["timeline"]), (
+        "a geofence observation was recorded for an arrival no sensor observed"
+    )
 
 
 def test_meter_reports_condition_photo_count(client, db):
@@ -834,3 +848,192 @@ def test_the_record_requires_auth(db, client):
 def test_an_unknown_load_is_404_not_500(client):
     headers = _auth(client)
     assert client.get(f"/load/{uuid.uuid4()}/record", headers=headers).status_code == 404
+
+
+# AI-CONTEXT: the manual arrival, told the truth about (§23 entry 138).
+#
+# THE DEFECT. `POST /load/{stop}/arrive` called `evaluate_ping` with the FACILITY'S own
+# coordinates, so the position fix a detention claim rests on — on the path a driver
+# takes precisely when the background sensor did not fire — was a reading of where the
+# warehouse is, written into `location_ping` and counted by the pack's Location basis
+# section among the driver's device fixes. That section tells a broker those records are
+# "as reported by the driver's device", and for this one it was not true.
+#
+# The arrival still counts from anywhere: detention frequently starts in a gate queue
+# half a mile from the dock, and refusing it would strand the driver this button exists
+# for. What changed is that the record says what actually happened.
+DOCK_LAT, DOCK_LON = DALLAS
+FAR_LAT, FAR_LON = 32.9000, -96.7970  # ~13.7 km due north of the dock
+
+
+def _arrival_record(db, stop_id):
+    """The `arrived` record out of the stop's own hash chain."""
+    from app.foundation.f04_evidence import public as evidence
+    from app.foundation.f05_load import public as loads
+
+    stop = loads.get_stop(db, uuid.UUID(stop_id))
+    rows = evidence.stop_evidence(db, stop.id)["timeline"]
+    assert rows, "the stop chain is empty"
+    return stop, rows
+
+
+def test_arriving_records_NO_ping_at_the_facilitys_own_coordinates(client, db):
+    """The defect, asserted directly: nothing may write a position the device never
+    produced. This is the test that fails if the old `evaluate_ping` call comes back."""
+    from app.foundation.f03_location.domain.models import LocationPing
+
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+
+    assert client.post(f"/load/{stop_id}/arrive", headers=headers).status_code == 201
+
+    pings = db.query(LocationPing).count()
+    assert pings == 0, "a position fix was invented for a device that reported none"
+
+
+def test_arriving_with_no_fix_still_starts_the_clock(client, db):
+    """The fallback's whole reason to exist. A phone with no fix must still be able to
+    say "I am here" — recording no position, never the facility's."""
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+
+    resp = client.post(f"/load/{stop_id}/arrive", headers=headers)
+
+    assert resp.status_code == 201
+    assert resp.json()["arrived"] is True
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["phase"] != "not_arrived"
+    _, rows = _arrival_record(db, stop_id)
+    arrived = next(r for r in rows if r.get("event") == "arrived")
+    assert arrived is not None
+
+
+def test_the_device_fix_and_its_distance_go_into_the_chain(client, db):
+    """The owner's ask: record where the driver actually said they were, when it differs
+    from the load's address. It rides in the hash-chained record, so a broker arguing
+    about it is arguing with the evidence rather than with a number nobody wrote down."""
+    from app.foundation.f04_evidence import public as evidence
+    from app.foundation.f05_load import public as loads
+
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+
+    resp = client.post(
+        f"/load/{stop_id}/arrive",
+        headers=headers,
+        json={"lat": DOCK_LAT + 0.001, "lon": DOCK_LON, "accuracy_m": 12.5},
+    )
+    assert resp.status_code == 201
+
+    stop = loads.get_stop(db, uuid.UUID(stop_id))
+    log = db.get(evidence.EvidenceLog, stop.evidence_log_id)
+    pack = evidence.compose_pack(db, log, evidence.PackTemplate.detention_claim)
+    payload = next(
+        r["payload"] for r in pack.timeline if (r.get("payload") or {}).get("event") == "arrived"
+    )
+
+    assert payload["presence_basis"] == "device_fix"
+    assert payload["arrival_lat"] == DOCK_LAT + 0.001
+    assert payload["arrival_accuracy_m"] == 12.5
+    assert 100 < payload["distance_from_facility_m"] < 130, payload["distance_from_facility_m"]
+    assert payload["far_from_facility"] is False
+
+
+def test_no_fix_is_recorded_as_NO_FIX_rather_than_filled_in(client, db):
+    """The half that matters most. An absent reading is a fact; substituting the
+    facility's coordinates for it is the defect this entry removes."""
+    from app.foundation.f04_evidence import public as evidence
+    from app.foundation.f05_load import public as loads
+
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+    client.post(f"/load/{stop_id}/arrive", headers=headers)
+
+    stop = loads.get_stop(db, uuid.UUID(stop_id))
+    log = db.get(evidence.EvidenceLog, stop.evidence_log_id)
+    pack = evidence.compose_pack(db, log, evidence.PackTemplate.detention_claim)
+    payload = next(
+        r["payload"] for r in pack.timeline if (r.get("payload") or {}).get("event") == "arrived"
+    )
+
+    assert payload["presence_basis"] == "no_fix"
+    assert payload["arrival_lat"] is None
+    assert payload["arrival_lon"] is None
+    assert payload["distance_from_facility_m"] is None
+
+
+def test_arriving_from_far_away_ASKS_before_it_records(client, db):
+    """409, with the distance, so the client can put the question to the driver."""
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+
+    resp = client.post(
+        f"/load/{stop_id}/arrive", headers=headers, json={"lat": FAR_LAT, "lon": FAR_LON}
+    )
+
+    assert resp.status_code == 409
+    detail = resp.json()["detail"]
+    assert detail["reason"] == "too_far"
+    assert detail["distance_m"] > 10000
+    assert detail["facility_name"] == "Dallas Receiver"
+    # and NOTHING was recorded: a question is not an arrival
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["phase"] == "not_arrived"
+
+
+def test_a_confirmed_far_arrival_PROCEEDS_and_says_so_in_the_record(client, db):
+    """The warning is a question, never a gate. A driver in a gate queue is legitimately
+    arriving, and the recorded distance is what a broker can argue with later."""
+    from app.foundation.f04_evidence import public as evidence
+    from app.foundation.f05_load import public as loads
+
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+
+    resp = client.post(
+        f"/load/{stop_id}/arrive",
+        headers=headers,
+        json={"lat": FAR_LAT, "lon": FAR_LON, "confirmed": True},
+    )
+
+    assert resp.status_code == 201, "a confirmed arrival was refused"
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["phase"] != "not_arrived"
+
+    stop = loads.get_stop(db, uuid.UUID(stop_id))
+    log = db.get(evidence.EvidenceLog, stop.evidence_log_id)
+    pack = evidence.compose_pack(db, log, evidence.PackTemplate.detention_claim)
+    payload = next(
+        r["payload"] for r in pack.timeline if (r.get("payload") or {}).get("event") == "arrived"
+    )
+    assert payload["far_from_facility"] is True, "the distance was not recorded as unusual"
+    assert payload["distance_from_facility_m"] > 10000
+
+
+def test_a_nearby_arrival_is_never_questioned(client, db):
+    """A yard is not a warning. The threshold sits far above F3's 150 m radius on
+    purpose — a warning that fires on ordinary days is one drivers learn to tap through,
+    and a confirmation that means nothing is worse than none."""
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+
+    resp = client.post(
+        f"/load/{stop_id}/arrive",
+        headers=headers,
+        json={"lat": DOCK_LAT + 0.004, "lon": DOCK_LON},  # ~440 m — a gate queue
+    )
+
+    assert resp.status_code == 201
+
+
+def test_a_device_fix_puts_a_real_GEOFENCE_in_the_pack(client, db):
+    """When there IS a reading, it is recorded as an observation — which is exactly what
+    the old code faked when there was none."""
+    headers = _auth(client)
+    stop_id = _create(client, headers)
+    client.post(
+        f"/load/{stop_id}/arrive",
+        headers=headers,
+        json={"lat": DOCK_LAT, "lon": DOCK_LON},
+    )
+    client.post(f"/load/{stop_id}/claim", headers=headers)
+
+    d = client.get(f"/load/{stop_id}/claim", headers=headers).json()
+    assert any(e["type"] == "GEOFENCE" for e in d["timeline"])

@@ -568,11 +568,42 @@ export async function fetchLoadRecord(loadId) {
   return apiGet(`/load/${loadId}/record`, `load_record_${loadId}`);
 }
 
-export async function arriveAtStop(stopId) {
+// AI-CONTEXT: the arrival carries the DEVICE'S OWN FIX (§23 entry 138).
+//
+// This used to POST an empty body, and the server filled the gap with the FACILITY'S
+// coordinates — so the position fix a detention claim rests on was a reading of where
+// the warehouse is. The client has a real fix in `lastFix` and never sent it.
+//
+// A 409 means "you look far from the dock": the server has recorded NOTHING and is
+// asking a question. The distance rides back so the sheet can state it, and a second
+// call with `confirmed` proceeds. Throwing a typed error rather than a bare one is what
+// lets the caller tell a question apart from a failure.
+export class ArrivalTooFar extends Error {
+  constructor(detail) {
+    super("too far");
+    this.name = "ArrivalTooFar";
+    this.distanceM = detail?.distance_m ?? null;
+    this.facilityName = detail?.facility_name ?? null;
+  }
+}
+
+export async function arriveAtStop(stopId, { fix = null, confirmed = false } = {}) {
   const resp = await fetch(`${API_BASE}/load/${stopId}/arrive`, {
     method: "POST",
-    headers: headers(),
+    headers: postHeaders(newOpId()),
+    body: JSON.stringify({
+      // null rather than a substitute: an absent reading is a fact, and the whole point
+      // of this change is that nothing invents one.
+      lat: fix?.lat ?? null,
+      lon: fix?.lon ?? null,
+      accuracy_m: fix?.accuracyM ?? null,
+      confirmed,
+    }),
   });
+  if (resp.status === 409) {
+    const body = await resp.json().catch(() => ({}));
+    throw new ArrivalTooFar(body?.detail);
+  }
   if (!resp.ok) throw new Error(`arrive failed: ${resp.status}`);
   return resp.json();
 }

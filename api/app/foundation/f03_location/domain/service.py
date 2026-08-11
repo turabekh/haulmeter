@@ -408,6 +408,42 @@ def _lock_cursor(db: Session, account_id) -> EvaluationCursor:
     return cursor
 
 
+def assert_presence(db: Session, account_id, facility_id, occurred_at, lat=None, lon=None):
+    """The driver saying "I am here", without manufacturing a reading (§23 entry 138).
+
+    AI-CONTEXT: until this existed, the manual "I've arrived" path called `evaluate_ping`
+    with THE FACILITY'S OWN COORDINATES — so the position fix that a detention claim
+    rests on was a reading of where the warehouse is, written into `location_ping` and
+    counted by the pack's Location basis section as one of the driver's device fixes.
+    The pack says those records are "as reported by the driver's device", and for that
+    one it was not true.
+
+    THE ARRIVAL STILL COUNTS. It is the driver's own attestation and the whole point of
+    the fallback is that it works when the background sensor did not — refusing to mark
+    presence here would strand exactly the person this path exists for. What changes is
+    that the claim is recorded as what it is: a GeofenceEvent at the position actually
+    reported (or with no geometry at all when the device had no fix), and NO synthetic
+    row in `location_ping`.
+
+    `lat`/`lon` are the DEVICE's, never the facility's. None means the device had no fix,
+    and that is recorded as no fix rather than filled in from the facility — an absent
+    reading is a fact, and inventing one is the failure this function replaces.
+    """
+    if _active_presence(db, account_id, facility_id) is not None:
+        return None  # already inside; a second attestation is not a second arrival
+    presence = _open_presence(db, account_id, facility_id, occurred_at)
+    if presence is None:
+        return None  # a concurrent evaluation opened the visit; theirs stands
+    # `GeofenceEvent.geom` is NOT NULL, so an event can only be emitted when there is a
+    # real position to put in it. With no device fix the visit is still opened — that is
+    # what `is_present` reads and what starts the clock — and the attestation is recorded
+    # in the stop's hash chain by the caller instead. Emitting a point here would mean
+    # inventing one, which is the whole defect this function exists to remove.
+    if lat is None or lon is None:
+        return None
+    return _emit(db, account_id, facility_id, GeofenceEventType.ENTER, occurred_at, lat, lon)
+
+
 def evaluate_ping(
     db: Session,
     account_id,
