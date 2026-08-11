@@ -6,15 +6,12 @@ defect is invisible to all of them. That is precisely how it shipped. These test
 the gateway fail, which is the only condition under which the two differ.
 """
 
-import uuid
-from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api import load as load_api
 from app.api.deps import get_db
-from app.foundation.f01_identity import public as identity
 from app.foundation.f08_notifications import public as notify
 from app.main import app
 
