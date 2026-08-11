@@ -218,6 +218,29 @@ describe("speech availability (§14.5 / §12.4)", () => {
 });
 
 describe("FacilityCard (design-prd §10.1)", () => {
+  // AI-CONTEXT: finding F10 — the detention badge's SAMPLE SIZE, which is rendered and
+  // was under no test at all. §11.7's rule is that a figure never travels without what it
+  // was measured over, and `facility_detention_stats` samples the 50 most recent claims —
+  // so "72%" alone could be 72% of eleven stops or of four. The disclosure existed; only
+  // the pin holding it in place was missing, which is how a line like this quietly goes.
+  it("shows the detention badge's sample size beside the rate (§11.7)", () => {
+    const pin = {
+      facility_id: "f-9",
+      name: "Harvest Foods DC",
+      facility_type: "shipper_receiver",
+      status: null,
+      badges: [{ kind: "dwell_risk", value: 0.72, sample_size: 11, basis: "tracked_stops" }],
+    };
+    const w = mount(FacilityCard, {
+      props: { pin },
+      global: { plugins: [testRouter()] },
+    });
+
+    expect(w.find(".fac__dwell-figure").text()).toBe("72%");
+    expect(w.find(".fac__dwell-basis").text()).toContain("11");
+    expect(w.find(".fac__dwell-basis").text()).toContain(en["profile.stops_basis"]);
+  });
+
   it("shows Navigate as the primary CTA and emits navigate", async () => {
     const pin = {
       facility_id: "f-1",

@@ -258,6 +258,9 @@ function vendorLine(entry) {
       <Clock :size="16" :stroke-width="2" aria-hidden="true" />
       <span>{{ t("facility.dwell_risk") }}</span>
       <span class="fac__dwell-figure">{{ dwellRiskPct }}%</span>
+      <!-- §11.7: the rate never travels without what it was measured over. The sample is
+           COUNT-bounded (the 50 most recent claims), not time-bounded — see the report's
+           follow-up; "72% of 11 stops" is honest about the second number either way. -->
       <span class="fac__dwell-basis">{{ dwellRisk.sample_size }} {{ t("profile.stops_basis") }}</span>
     </p>
 
