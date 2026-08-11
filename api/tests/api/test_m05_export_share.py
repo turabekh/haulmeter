@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 from app.api.deps import get_db
 from app.foundation.f02_facility import public as facility
+from app.foundation.f04_evidence import public as evidence
 from app.foundation.f05_load import public as loads
 from app.main import app
 
@@ -384,3 +385,87 @@ def test_the_archive_route_is_not_swallowed_by_the_document_id_route(client, db)
 
     assert resp.status_code == 200
     assert resp.json() == {"documents": []}
+
+
+# --- D8: the driver can see what they have handed out ---
+def _shared_incident(client, headers):
+    incident_id = client.post(
+        "/protection/incident", json={"kind": "dispute"}, headers=headers
+    ).json()["incident_id"]
+    shared = client.post(
+        f"/protection/incident/{incident_id}/share", json={}, headers=headers
+    ).json()
+    return shared
+
+
+def _log_of(db, share_id):
+    import uuid as _uuid
+
+    return db.get(evidence.SharedPack, _uuid.UUID(share_id)).log_id
+
+
+def test_a_driver_can_list_the_links_for_one_log(client, db):
+    """Extend and revoke existed since sharing shipped; nothing could LIST them.
+
+    So the controls were reachable only by someone already holding a share id, which no
+    screen ever showed — a driver could send a broker a link to their own evidence and
+    then have no way to see that they had.
+    """
+    headers = _headers(client, "list-a@example.com")
+    shared = _shared_incident(client, headers)
+    log_ref = _log_of(db, shared["share_id"])
+
+    listed = client.get("/protection/share", params={"log_ref": str(log_ref)}, headers=headers)
+
+    assert listed.status_code == 200
+    rows = listed.json()
+    assert len(rows) == 1
+    assert rows[0]["share_id"] == shared["share_id"]
+    assert rows[0]["revoked"] is False
+    assert rows[0]["opened_count"] == 0
+    assert rows[0]["expires_at"] is not None
+
+
+def test_the_list_is_scoped_to_the_caller(client, db):
+    headers = _headers(client, "list-b@example.com")
+    shared = _shared_incident(client, headers)
+    log_ref = _log_of(db, shared["share_id"])
+    theirs = _headers(client, "nosy@example.com")
+
+    rows = client.get(
+        "/protection/share", params={"log_ref": str(log_ref)}, headers=theirs
+    ).json()
+
+    assert rows == []
+
+
+def test_a_revoked_link_is_listed_as_revoked_not_hidden(client, db):
+    """Revocation is a fact about a document that was sent; it is not an undo."""
+    headers = _headers(client, "list-c@example.com")
+    shared = _shared_incident(client, headers)
+    log_ref = _log_of(db, shared["share_id"])
+
+    client.delete(f"/protection/share/{shared['share_id']}", headers=headers)
+    rows = client.get(
+        "/protection/share", params={"log_ref": str(log_ref)}, headers=headers
+    ).json()
+
+    assert len(rows) == 1
+    assert rows[0]["revoked"] is True
+    assert rows[0]["revoked_at"] is not None
+
+
+def test_the_open_count_is_reported_for_the_screen_to_caveat(client, db):
+    """The number is honest; the SCREEN says a scanner may be part of it (F4-1)."""
+    headers = _headers(client, "list-d@example.com")
+    shared = _shared_incident(client, headers)
+    log_ref = _log_of(db, shared["share_id"])
+
+    client.get(shared["url"])
+    client.get(shared["url"])
+    rows = client.get(
+        "/protection/share", params={"log_ref": str(log_ref)}, headers=headers
+    ).json()
+
+    assert rows[0]["opened_count"] == 2
+    assert rows[0]["last_opened_at"] is not None

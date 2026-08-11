@@ -11,7 +11,7 @@ import { ArrowLeft, ShieldCheck, MapPin, Camera, Send, FileText } from "lucide-v
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
 import { formatMoney, formatClock } from "../core/meter.js";
-import { fetchClaim, fetchMe } from "../core/api.js";
+import { fetchClaim, fetchMe, fetchShares, revokeShare, extendShare } from "../core/api.js";
 import BrokerEmailField from "../core/components/BrokerEmailField.vue";
 
 const route = useRoute();
@@ -34,6 +34,7 @@ async function reload() {
 
 onMounted(async () => {
   await reload();
+  await loadShares();
   try {
     me.value = await fetchMe();
   } catch {
@@ -44,6 +45,44 @@ onMounted(async () => {
 // finding F5: the server derives this from the F8 message row — `sent` only when that
 // row carries `sent_at`. An older payload without the field reads as "not sent", which
 // is the honest fallback: never claim a delivery this client cannot see evidence of.
+// AI-CONTEXT: the links this driver has handed out for this claim's evidence (D8).
+// Extend and revoke have existed since sharing shipped and no screen could list what
+// there was to extend or revoke, so a driver could send a broker a link to their own
+// evidence and then have no way to see that they had — or to close it.
+const shares = ref([]);
+
+async function loadShares() {
+  const logRef = claim.value?.evidence_log_ref;
+  if (!logRef) return;
+  try {
+    shares.value = await fetchShares(logRef);
+  } catch {
+    shares.value = [];
+  }
+}
+
+async function onRevoke(share) {
+  try {
+    await revokeShare(share.share_id);
+    await loadShares();
+  } catch {
+    /* leave the list as it was; the next open re-reads */
+  }
+}
+
+async function onExtend(share) {
+  try {
+    await extendShare(share.share_id);
+    await loadShares();
+  } catch {
+    /* as above */
+  }
+}
+
+function shareDate(iso) {
+  return iso ? iso.slice(0, 10) : "—";
+}
+
 const noticeDelivery = computed(() => claim.value?.notice_delivery ?? "not_sent");
 const noticeDelivered = computed(() => noticeDelivery.value === "sent");
 const owed = computed(() => claim.value?.mode === "invoice");
@@ -163,6 +202,32 @@ function evTime(iso) {
           {{ t("claim.records") }} <span class="records__n">{{ claim.record_count }}</span>
           · {{ t("claim.photos") }} <span class="records__n">{{ claim.artifact_count }}</span>
         </p>
+      </section>
+
+      <!-- D8: what has been handed out, and the two controls that were unreachable -->
+      <section class="card">
+        <h2 class="card__title">{{ t("claim.shares") }}</h2>
+        <p v-if="!shares.length" class="muted">{{ t("claim.shares_none") }}</p>
+        <ul v-else class="shares">
+          <li v-for="s in shares" :key="s.share_id" class="share">
+            <span class="share__state" :class="{ revoked: s.revoked }">
+              {{ s.revoked ? t("claim.share_revoked") : t("claim.share_active") }}
+            </span>
+            <span class="share__meta">
+              {{ t("claim.share_expires") }} {{ shareDate(s.expires_at) }}
+              · {{ t("claim.share_opens") }} {{ s.opened_count }}
+            </span>
+            <span v-if="!s.revoked" class="share__actions">
+              <button class="share__act" type="button" @click="onExtend(s)">
+                {{ t("claim.share_extend") }}
+              </button>
+              <button class="share__act" type="button" @click="onRevoke(s)">
+                {{ t("claim.share_revoke") }}
+              </button>
+            </span>
+          </li>
+        </ul>
+        <p v-if="shares.length" class="muted">{{ t("claim.share_opens_caveat") }}</p>
       </section>
 
       <p class="doc-note">{{ t("claim.doc_note") }}</p>
@@ -342,6 +407,28 @@ function evTime(iso) {
   margin: var(--s-3) 0 0;
   color: var(--text-3);
   font-size: var(--type-caption-size);
+}
+.shares { list-style: none; margin: 0; padding: 0; }
+.share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--line-1);
+  font-size: var(--type-body-size);
+}
+.share__state { color: var(--ledger-500); }
+.share__state.revoked { color: var(--text-3); }
+.share__meta { color: var(--text-2); font-size: var(--type-label-size); }
+.share__actions { margin-left: auto; display: flex; gap: var(--s-2); }
+.share__act {
+  min-height: 48px;
+  padding: 0 var(--s-2);
+  border: 0;
+  background: none;
+  color: var(--accent-500);
+  font-size: var(--type-label-size);
 }
 .doc-note {
   margin: 0;

@@ -145,7 +145,11 @@ class SharedPack(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # "they opened it on the 12th" is evidence; the count is for the driver's screen
+    # AI-CONTEXT: these are metadata about a URL, NOT evidence about a party (F4-1).
+    # The comment here used to say "they opened it on the 12th is evidence" and the chain
+    # carried an append saying so — but mail-security scanners fetch links before a human
+    # sees the mail, so the only honest reading is "the link was reached". The append is
+    # gone; these keep counting, and the driver's screen states the caveat.
     opened_count: Mapped[int] = mapped_column(Integer, default=0)
     first_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

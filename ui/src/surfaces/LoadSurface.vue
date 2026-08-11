@@ -372,6 +372,12 @@ const noticeSent = computed(() => (live.value ? live.value.notice_sent : false))
 // finding F5: five states, derived server-side from the F8 message row. `notice_sent`
 // above stays the boolean the CTA ladder reads — a notice that FAILED has not been sent,
 // so the rung must still offer it — while this is what the checklist row says out loud.
+// AI-CONTEXT: the CTA was always OFFERED in the `failed` state — `notice_sent` is false
+// there, so the ladder already reached the notice rung — but it read "Send notice", as if
+// nothing had been tried. The driver has tapped it once and watched it fail; inviting them
+// to do the thing they already did hides that this is a RETRY the server will honour with
+// a fresh send (the wedge session's resend rule). `retrying` keeps the plain wording: the
+// sweep owns that row and tapping does not produce a new message.
 const noticeDelivery = computed(() => live.value?.notice_delivery ?? "not_sent");
 // the address this load's notices go to, and the load to PATCH it on
 const loadId = computed(() => live.value?.load_id ?? null);
@@ -886,7 +892,7 @@ async function endLoad() {
         {{ t("load.cta.bol") }}
       </button>
       <button v-else-if="rung === 'notice'" class="cta" type="button" @click="onSendNotice">
-        {{ t("load.cta.notice") }}
+        {{ noticeDelivery === "failed" ? t("load.cta.notice_again") : t("load.cta.notice") }}
       </button>
       <button v-else-if="rung === 'claim'" class="cta" type="button" @click="onGenerateClaim">
         {{ t("load.cta.claim") }}

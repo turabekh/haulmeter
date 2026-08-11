@@ -660,6 +660,32 @@ export async function setCounterpartyEmail(loadId, email) {
   return resp.json();
 }
 
+export async function fetchShares(logRef) {
+  const resp = await fetch(`${API_BASE}/protection/share?log_ref=${logRef}`, {
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`shares failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function revokeShare(shareId) {
+  const resp = await fetch(`${API_BASE}/protection/share/${shareId}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`revoke failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function extendShare(shareId) {
+  const resp = await fetch(`${API_BASE}/protection/share/${shareId}/extend`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`extend failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function sendDetentionNotice(stopId) {
   const resp = await fetch(`${API_BASE}/load/${stopId}/notice`, {
     method: "POST",

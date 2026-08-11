@@ -557,6 +557,46 @@ def share(
     }
 
 
+@router.get("/share")
+def list_shares(
+    log_ref: uuid.UUID,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """The links a driver has handed out for one evidence log (D8).
+
+    AI-CONTEXT: extend and revoke have existed and been tested since sharing shipped, and
+    nothing could LIST what there was to extend or revoke — so the controls were reachable
+    only by someone holding a share id, which no screen ever showed. A driver could send a
+    broker a link to their own evidence and then had no way to see that they had.
+
+    `opened_count` travels with the caveat it needs: a link open is a URL being fetched,
+    and mail scanners fetch URLs (finding F4-1). The copy on the screen says so; this route
+    reports the number honestly and does not dress it as a person.
+    """
+    shares = db.scalars(
+        select(evidence.SharedPack)
+        .where(
+            evidence.SharedPack.log_id == log_ref,
+            evidence.SharedPack.shared_by == account.id,
+        )
+        .order_by(evidence.SharedPack.created_at.desc())
+    )
+    return [
+        {
+            "share_id": str(s.id),
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "expires_at": s.expires_at.isoformat() if s.expires_at else None,
+            "revoked": s.revoked_at is not None,
+            "revoked_at": s.revoked_at.isoformat() if s.revoked_at else None,
+            "recipient": s.recipient,
+            "opened_count": s.opened_count,
+            "last_opened_at": s.last_opened_at.isoformat() if s.last_opened_at else None,
+        }
+        for s in shares
+    ]
+
+
 @router.post("/share/{share_id}/extend")
 def extend(
     share_id: uuid.UUID,

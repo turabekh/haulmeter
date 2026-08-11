@@ -834,6 +834,8 @@ def claim_detail(
         "counterparty_email": cp.contact_email if cp else None,
         "notice_sent": claim.start_notice_sent_at is not None,
         "notice_delivery": m3.notice_delivery(db, claim),
+        # D8: the claim screen lists the links handed out for this log, and needs its id
+        "evidence_log_ref": str(claim.evidence_log_ref) if claim.evidence_log_ref else None,
         "filed": claim.state.value != "open",
         "created_at": claim.created_at.isoformat() if claim.created_at else None,
         **m3.claim_evidence(db, claim),
