@@ -11,6 +11,18 @@
          value: a manifest cannot read CSS custom properties. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#0E1319" />
+    <!-- AI-CONTEXT: iOS, which reads none of the manifest's install fields (§23 entry
+         143). The comment above has said since entry 111 that "iOS requires an INSTALLED
+         PWA for push at all" — and the manifest shipped with `"icons": []`, so the app
+         was never installable on ANY platform and that sentence described something
+         nobody could do. These four lines are what iOS actually reads. -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Haulmeter" />
+    <!-- `black-translucent` lets the app paint under the status bar, which is what
+         `viewport-fit=cover` above already assumes. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" />
   </head>
   <body>
     <div id="app"></div>

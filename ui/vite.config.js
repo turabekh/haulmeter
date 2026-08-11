@@ -1,8 +1,37 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    // AI-CONTEXT: injectManifest, NOT generateSW (§23 entry 143).
+    //
+    // `src/sw.js` is the hand-written worker entry 111 shipped — push rendering, the
+    // lock-screen lot report, the deep-link focus rule — and it stays exactly as
+    // written and reviewed. The plugin's only job is to stamp a REVISIONED precache
+    // list into it. That distinction answers the worry in that file's own header
+    // ("anything clever in here can be stale on a driver's phone for days"): a
+    // content-hashed asset cannot go stale, because a changed file is a different URL.
+    //
+    // `devOptions` stays OFF. The 325-check layout sweep drives the dev server, and a
+    // service worker serving precached assets mid-sweep is a flake nobody would find
+    // twice. The worker is a PRODUCTION artefact and is asserted against the BUILD.
+    VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.js",
+      registerType: "prompt",
+      injectRegister: null, // main.js registers it, so there is one place that does
+      manifest: false, // public/manifest.webmanifest is the source of truth
+      injectManifest: {
+        // the app shell only: JS, CSS, HTML, the icons and the fonts. NOT the API —
+        // F12 owns response caching and a second cache would be a second answer to
+        // "what did the server say", which is how two caches start disagreeing.
+        globPatterns: ["**/*.{js,css,html,png,svg,woff2}"],
+      },
+    }),
+  ],
   server: {
     host: true,
     port: 9008,

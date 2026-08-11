@@ -55,8 +55,17 @@ export async function fetchPushKey() {
   return resp.json();
 }
 
+// AI-CONTEXT: ONE registration, owned by core/pwa.js (§23 entry 143).
+//
+// This used to call `navigator.serviceWorker.register` itself, and it was the ONLY
+// caller — so the worker existed only for drivers who had turned notifications on. With
+// an offline shell that would have made the app's ability to open without signal depend
+// on an unrelated opt-in. Registration happens on boot now; enabling push adopts the
+// registration that is already there, and falls back to registering if it is somehow
+// absent (a browser that refused it at boot, a worker unregistered by hand).
 export async function registerWorker() {
-  return navigator.serviceWorker.register("/sw.js");
+  const existing = await navigator.serviceWorker.getRegistration();
+  return existing || navigator.serviceWorker.register("/sw.js");
 }
 
 function serialize(subscription) {

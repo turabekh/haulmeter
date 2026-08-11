@@ -23,8 +23,9 @@
      Owner-requested (§23 entry 89). -->
 <script setup>
 import { computed } from "vue";
-import { WifiOff, CloudOff, AlertTriangle } from "lucide-vue-next";
+import { WifiOff, CloudOff, AlertTriangle, RefreshCw } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
+import { updateReady, applyUpdate } from "../pwa.js";
 
 const props = defineProps({
   online: { type: Boolean, default: true },
@@ -34,8 +35,14 @@ const props = defineProps({
 const { t } = useI18n();
 // the strip is for facts a driver cannot see anywhere else. All three of these are
 // invisible without it, and none of them is true most of the time.
+// AI-CONTEXT: a waiting build is the fourth fact this strip carries (§23 entry 143).
+//
+// It belongs HERE and not in a toast or a notification: §8 reserves toasts for
+// confirmations and routes "persistent conditions" to this strip, and a notification
+// would spend §13.1's budget — two per driver per day — on the app talking about
+// itself. It is also, like the other three, almost never true.
 const hasSomethingToSay = computed(
-  () => !props.online || props.pending > 0 || props.failed > 0,
+  () => !props.online || props.pending > 0 || props.failed > 0 || updateReady.value,
 );
 </script>
 
@@ -62,6 +69,13 @@ const hasSomethingToSay = computed(
       <AlertTriangle :size="14" :stroke-width="2" aria-hidden="true" />
       {{ failed }}
     </span>
+    <!-- the driver decides WHEN. It never reloads under someone photographing a BOL,
+         which is the one thing an auto-updating shell must not do. -->
+    <button v-if="updateReady" class="strip__update" type="button" @click="applyUpdate">
+      <RefreshCw :size="14" :stroke-width="2" aria-hidden="true" />
+      {{ t("system.update_ready") }}
+      <span class="strip__updatego">{{ t("system.update_apply") }}</span>
+    </button>
   </header>
 </template>
 
@@ -74,6 +88,24 @@ const hasSomethingToSay = computed(
   padding: var(--s-1) var(--s-4);
   color: var(--text-2);
   font-size: var(--type-caption-size);
+}
+/* §6.5's floor does not apply to the 32 dp strip — §7.2 fixes its height — so this is
+   the one control in the app that cannot be 48 dp. It gains the whole strip's width
+   instead: `margin-left: auto` puts it in the corner the thumb reaches, and the label
+   is two words rather than an icon so the target is the text, not the glyph. */
+.strip__update {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin-left: auto;
+  padding: 0;
+  background: transparent;
+  color: var(--shield-500);
+  font-size: var(--type-caption-size);
+  font-weight: 500;
+}
+.strip__updatego {
+  text-decoration: underline;
 }
 .strip__offline {
   display: inline-flex;

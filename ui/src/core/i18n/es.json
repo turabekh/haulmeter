@@ -885,6 +885,8 @@
   "system.offline": "Sin conexión — todo se guarda en tu teléfono",
   "system.pending": "Guardado en tu teléfono",
   "system.retry": "Inténtalo de nuevo",
+  "system.update_apply": "Reiniciar",
+  "system.update_ready": "Nueva versión lista",
   "unit.mi": "mi",
   "vendor.a_stop": "Una parada",
   "vendor.add_appearance": "Agregar una parada",

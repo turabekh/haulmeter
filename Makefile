@@ -97,10 +97,16 @@ ui-layout-only: env
 	$(COMPOSE) up -d ui
 	$(COMPOSE) run --rm --entrypoint sh ui -c "npx --yes playwright install --with-deps chromium >/dev/null 2>&1 || npx --yes playwright install chromium; npx playwright test -g '$(STATE)'"
 
+# AI-CONTEXT: the PWA check (§23 entry 143). Builds, previews and drives a real browser
+# offline — the only thing that proves the shell cache exists. Not part of `ui-layout`:
+# it needs the built output, and the dev server deliberately ships no service worker.
+ui-pwa: env
+	$(COMPOSE) run --rm --entrypoint sh ui -c "npx --yes playwright install --with-deps chromium >/dev/null 2>&1 || npx --yes playwright install chromium; npx vite build && npx playwright test --config=playwright.pwa.config.js"
+
 # preflight runs FIRST, while everything is still down; ui-layout then brings up the
 # one service it needs. Order matters — reversing them puts the port check after the
 # thing that binds the port.
-ci: env preflight lint test ui-layout
+ci: env preflight lint test ui-layout ui-pwa
 
 # --- Real POI data (PRD §12) — live pulls only, never in CI ---
 # Dev seed is OFF by default; this forces it on for local field-testing.

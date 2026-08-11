@@ -885,6 +885,8 @@
   "system.offline": "Oflayn — hammasi telefoningizga saqlanadi",
   "system.pending": "Telefoningizga saqlandi",
   "system.retry": "Qayta urinib ko'ring",
+  "system.update_apply": "Qayta ishga tushirish",
+  "system.update_ready": "Yangi versiya tayyor",
   "unit.mi": "mil",
   "vendor.a_stop": "To'xtash joyi",
   "vendor.add_appearance": "Chiqish qo'shish",

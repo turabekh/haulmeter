@@ -885,6 +885,8 @@
   "system.offline": "Offline — everything saves to your phone",
   "system.pending": "Saved on your phone",
   "system.retry": "Try again",
+  "system.update_apply": "Restart",
+  "system.update_ready": "New version ready",
   "unit.mi": "mi",
   "vendor.a_stop": "A stop",
   "vendor.add_appearance": "Add an appearance",

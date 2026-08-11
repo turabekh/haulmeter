@@ -885,6 +885,8 @@
   "system.offline": "ਆਫ਼ਲਾਈਨ — ਸਭ ਕੁਝ ਤੁਹਾਡੇ ਫ਼ੋਨ 'ਤੇ ਸੇਵ ਹੁੰਦਾ ਹੈ",
   "system.pending": "ਤੁਹਾਡੇ ਫ਼ੋਨ 'ਤੇ ਸੰਭਾਲਿਆ",
   "system.retry": "ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ",
+  "system.update_apply": "ਮੁੜ ਚਾਲੂ ਕਰੋ",
+  "system.update_ready": "ਨਵਾਂ ਵਰਜਨ ਤਿਆਰ",
   "unit.mi": "ਮੀਲ",
   "vendor.a_stop": "ਇੱਕ ਸਟਾਪ",
   "vendor.add_appearance": "ਨਵਾਂ ਸਟਾਪ ਜੋੜੋ",

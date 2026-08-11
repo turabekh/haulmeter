@@ -31,12 +31,26 @@ import { login, logout } from "../src/core/api.js";
 
 // read from the vitest root (ui/) rather than import.meta.url: test modules are served
 // by vite over http, so import.meta.url is not a file URL here
-const SW_SOURCE = readFileSync(resolve(process.cwd(), "public/sw.js"), "utf8");
+const SW_RAW = readFileSync(resolve(process.cwd(), "src/sw.js"), "utf8");
 
-// sw.js is not a module and must not become one: it has no build step, and the browser
-// runs this exact file. It is evaluated with an injected `self` so the handlers it
-// registers can be dispatched, and its two internal functions are handed back so the
-// token read can be checked against the app's write.
+// AI-CONTEXT: this file MOVED and became a module (§23 entry 143).
+//
+// It lived in `public/` and the note here said "sw.js is not a module and must not
+// become one: it has no build step, and the browser runs this exact file". Both halves
+// changed when the offline shell landed: it is now `src/sw.js`, a bundler ENTRY that
+// vite-plugin-pwa compiles in `injectManifest` mode, and the browser runs the built
+// output rather than this source.
+//
+// What has NOT changed is what these tests are about — the push rendering, the
+// lock-screen lot report and the deep-link focus rule are the same hand-written code,
+// which is the entire reason `injectManifest` was chosen over a generated worker. So
+// the two lines the bundler provides are compiled away here rather than stubbed at
+// runtime: an `import` cannot appear inside `new Function`, and precaching is asserted
+// against the vite config and the real build in `pwa.test.js`, where it belongs.
+const SW_SOURCE = SW_RAW
+  .replace(/^import .*$/gm, "")
+  .replace(/precacheAndRoute\([^)]*\);/g, "")
+  .replace(/registerRoute\(\s*new NavigationRoute\([\s\S]*?\)\s*,?\s*\);/g, "");
 function loadServiceWorker(fetchImpl) {
   const listeners = {};
   const self = {

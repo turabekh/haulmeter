@@ -1,0 +1,42 @@
+<!-- AI-CONTEXT: the product's mark, and the SOURCE the PNGs are generated from
+     (§23 entry 143). Every colour is a §6.1 token literal — a manifest and a PNG
+     cannot read CSS custom properties, so the values are written out here and nowhere
+     else, with the token named beside each one.
+
+     WHAT IT IS. A gauge, three-quarters closed, with the needle just past the top: the
+     Meter (§9) is this product's one signature element, and the gauge is the smallest
+     honest drawing of it. It has to survive 48 px on a home screen beside real app
+     icons, which rules out the counting FIGURE itself — digits at that size are mud.
+
+     The ring is `ledger` because the thing being measured is money the driver is owed.
+     The needle is `text-1` rather than a third colour: at 48 px a second accent reads as
+     noise, and §22.2's first heuristic is remove rather than add. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- $ink-0 — the same value as `theme-color` in index.html and the manifest -->
+  <rect width="512" height="512" fill="#0E1319"/>
+  <!-- the gauge. Stroke-only so the mark stays legible when a launcher masks it to a
+       circle: nothing meaningful sits in the corners. -->
+  <circle
+    cx="256" cy="256" r="150"
+    fill="none"
+    stroke="#1C2530"
+    stroke-width="44"
+  />
+  <!-- the measured arc: from 8 o'clock round to 1 o'clock. $ledger-500 -->
+  <path
+    d="M 150 362 A 150 150 0 1 1 331 375"
+    fill="none"
+    stroke="#3BA55D"
+    stroke-width="44"
+    stroke-linecap="round"
+  />
+  <!-- the needle, past the top: a meter that is running, not one at rest. $text-1 -->
+  <path
+    d="M 256 256 L 316 178"
+    fill="none"
+    stroke="#EEF3F7"
+    stroke-width="30"
+    stroke-linecap="round"
+  />
+  <circle cx="256" cy="256" r="26" fill="#EEF3F7"/>
+</svg>

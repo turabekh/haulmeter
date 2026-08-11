@@ -5,10 +5,19 @@
  * "a platform-critical asset" because the model is about reaching a driver who is NOT
  * looking. An open socket or an SSE stream reaches only an app already on screen.
  *
- * It is deliberately tiny and has no build step. A service worker is cached by the
- * browser and updated on its own schedule, so anything clever in here is a thing that
- * can be stale on a driver's phone for days. No caching, no offline shell, no routing —
- * F12's offline story is the app's, not this file's.
+ * It is deliberately tiny. The header used to end "no caching, no offline shell, no
+ * routing", and the reasoning behind that — a service worker updates on its own
+ * schedule, so anything clever in here can be stale on a driver's phone for days — is
+ * still right and is exactly why the shell cache below is GENERATED rather than written
+ * (§23 entry 143). `self.__WB_MANIFEST` is a revisioned list stamped in at build time:
+ * a content-hashed asset cannot go stale, because a changed file is a different URL.
+ * Nothing here is hand-maintained and nothing here decides what to cache.
+ *
+ * THE API IS NOT CACHED, and that boundary is the load-bearing part. F12 owns response
+ * caching and the offline write queue; a second cache in here would be a second answer
+ * to "what did the server say", which is how two caches start disagreeing about a
+ * driver's money. This file caches the SHELL — the JS, CSS and HTML needed to render at
+ * all — and nothing else.
  *
  * NOT A NOTIFICATION SOURCE. Everything shown here was already decided by F8: the tier,
  * the budget, quiet hours and the class rules all ran server-side before the push was
@@ -16,7 +25,31 @@
  * routes; it never decides.
  */
 
-self.addEventListener("install", () => self.skipWaiting());
+import { precacheAndRoute, createHandlerBoundToURL } from "workbox-precaching";
+import { NavigationRoute, registerRoute } from "workbox-routing";
+
+// the build stamps the revisioned shell in here. Empty in dev, where this worker is
+// deliberately not generated at all.
+precacheAndRoute(self.__WB_MANIFEST || []);
+
+// AI-CONTEXT: every in-app route resolves to the SPA shell, which is what makes a cold
+// open work with no signal. `/api` is excluded because it is the API — a navigation
+// there is a download or a share link, not a screen this app renders.
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL("/index.html"), {
+    denylist: [/^\/api\//],
+  }),
+);
+
+// AI-CONTEXT: NO `skipWaiting` on install any more (§23 entry 143, owner decision).
+//
+// It used to take over the moment it installed. For a push-only worker that was
+// harmless; with a shell cache it means a driver photographing a BOL at a dock can have
+// the page swapped under them mid-task. The new worker now WAITS, the app shows a quiet
+// strip, and the driver decides when — so this listener exists to be asked.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
 self.addEventListener("push", (event) => {
