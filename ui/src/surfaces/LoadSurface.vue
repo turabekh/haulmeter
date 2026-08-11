@@ -739,8 +739,19 @@ async function onSendNotice() {
   }
 }
 
+// AI-CONTEXT: leaving is a SECONDARY on the anchored zone, not the last row of a sheet
+// (owner report, §23 entry 141). It was the fourth item inside "More for this stop" —
+// two taps and the bottom of a list — while being the second-most-frequent thing a
+// driver does on this screen after the ladder's own step.
+//
+// It gets a confirm because promoting it raises the cost of a mis-tap and the act is not
+// reversible: departing ends the stop server-side, STOPS THE DETENTION CLOCK and drafts
+// the packet. A clock stopped by accident is money, which is why Forbidden #6's ban on
+// blocking modals for non-destructive actions does not reach this one.
+const leaveOpen = ref(false);
 async function endLoad() {
   if (rungBusy.value) return;
+  leaveOpen.value = false;
   rungBusy.value = "end";
   history.value = []; // re-read on next open: this load just joined it
   const stopId = activeStopId.value;
@@ -1119,7 +1130,22 @@ async function endLoad() {
           <span v-if="photosRequired" class="cta__count">{{ photosCaptured }}/{{ photosRequired }}</span>
         </button>
   
-        <!-- AI-CONTEXT: passed-over rungs, and why they are a ROW rather than a stack.
+          <!-- §8's Secondary, used for exactly what §8 describes: the other thing a
+             driver might do here. Only once ARRIVED — there is no stop to leave before
+             you reach one — and it names which act it is, because on a route this leaves
+             a dock and on the last stop it ends the load (§12.2). -->
+        <button
+          v-if="live && !preArrival"
+          class="cta cta--outline"
+          type="button"
+          :disabled="!!rungBusy"
+          @click="leaveOpen = true"
+        >
+          <Spinner v-if="rungBusy === 'end'" />
+          {{ rungBusy === "end" ? t("busy.working") : nextStop ? t("load.leave_stop") : t("load.end") }}
+        </button>
+
+      <!-- AI-CONTEXT: passed-over rungs, and why they are a ROW rather than a stack.
              §8 allows exactly one Primary per screen and grades the rest Secondary
              (outline) then Tertiary (text) — but these were emitted full-bleed, centred
              and accent-coloured under a full-bleed accent Primary, so three tertiary
@@ -1358,6 +1384,24 @@ async function endLoad() {
         </div>
       </BottomSheet>
 
+      <!-- §8: the confirm for the one act on this screen that cannot be undone. The body
+           says what actually happens — the clock stops and the paperwork is drafted —
+           rather than asking "are you sure" about a consequence it declines to name. -->
+      <BottomSheet
+        :open="leaveOpen && !isDriving"
+        :title="nextStop ? t('load.leave_title') : t('load.end_title')"
+        @close="leaveOpen = false"
+      >
+        <p class="docs__empty">{{ t("load.leave_body") }}</p>
+        <button class="cta cta--destructive" type="button" :disabled="!!rungBusy" @click="endLoad">
+          <Spinner v-if="rungBusy === 'end'" />
+          {{ rungBusy === "end" ? t("busy.working") : nextStop ? t("load.leave_stop") : t("load.end") }}
+        </button>
+        <button class="cta cta--text" type="button" @click="leaveOpen = false">
+          {{ t("load.leave_back") }}
+        </button>
+      </BottomSheet>
+
       <BottomSheet :open="reporting" :title="t('incident.title')" @close="reporting = false">
         <IncidentSheet @filed="onIncidentFiled" />
       </BottomSheet>
@@ -1430,15 +1474,9 @@ async function endLoad() {
           </button></li>
           <!-- §12.2: the button says what will actually happen. On a route this leaves
                THIS dock and opens the next; only the last stop ends the load. -->
-          <li><button
-            class="more__item"
-            type="button"
-            :disabled="!!rungBusy"
-            @click="more = false; endLoad()"
-          >
-            <Spinner v-if="rungBusy === 'end'" />
-            {{ rungBusy === "end" ? t("busy.working") : nextStop ? t("load.leave_stop") : t("load.end") }}
-          </button></li>
+          <!-- leaving used to live HERE, fourth in this list. It is a Secondary on the
+               anchored zone now (§23 entry 141); repeating it would give one act two
+               controls, and the one inside a sheet is the one a driver would not find. -->
         </ul>
       </BottomSheet>
 

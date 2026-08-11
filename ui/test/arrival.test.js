@@ -306,3 +306,85 @@ describe("Tapping I have arrived", () => {
     expect(w.text()).not.toContain(en["load.far_title"]);
   });
 });
+
+
+// AI-CONTEXT: leaving the stop, promoted out of the More sheet (§23 entry 141).
+//
+// The owner reported it twice: "Leave this stop is almost hidden, not quick action (it
+// is under more)". It was the FOURTH item inside "More for this stop" — two taps and the
+// bottom of a list — while being the second-most-frequent act on this screen after the
+// ladder's own step. The previous entry claimed anchoring the quick-actions row made it
+// reachable; that row holds Send notice / Generate claim / More, and never held this.
+describe("Leaving the stop is a control on the screen", () => {
+  const ARRIVED = { ...PRE_ARRIVAL, phase: "within_free_time" };
+
+  it("is a Secondary in the anchored zone, not an item in a sheet", async () => {
+    const w = await mountLoad(stub({ meter: ARRIVED }));
+
+    const leave = w.find(".actions .cta--outline");
+    expect(leave.exists()).toBe(true);
+    expect(leave.text()).toContain(en["load.end"]); // no next stop in this mock
+  });
+
+  it("is not ALSO inside More — one act, one control", async () => {
+    // a duplicate would give the driver two ways to do one thing, and the one in the
+    // sheet is the one they would not find.
+    const w = await mountLoad(stub({ meter: ARRIVED }));
+    await w.find(".rungs__item--more").trigger("click");
+    await flushPromises();
+
+    const items = w.findAll(".more__item").map((b) => b.text());
+    expect(items.join(" | ")).not.toContain(en["load.end"]);
+    expect(items.join(" | ")).not.toContain(en["load.leave_stop"]);
+  });
+
+  it("asks before it stops the clock", async () => {
+    // promoting it raises the cost of a mis-tap, and the act is not reversible:
+    // departing ends the stop server-side, STOPS THE DETENTION CLOCK and drafts the
+    // packet. A clock stopped by accident is money.
+    const s2 = stub({ meter: ARRIVED });
+    const w = await mountLoad(s2);
+    await w.find(".actions .cta--outline").trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain(en["load.leave_body"]);
+    expect(s2.mock.calls.some((c) => String(c[0]).includes("/end"))).toBe(false);
+  });
+
+  it("leaves on the confirm", async () => {
+    const s2 = stub({ meter: ARRIVED });
+    const w = await mountLoad(s2);
+    await w.find(".actions .cta--outline").trigger("click");
+    await flushPromises();
+    await w.find(".cta--destructive").trigger("click");
+    await flushPromises();
+
+    expect(s2.mock.calls.some((c) => String(c[0]).includes("/end"))).toBe(true);
+  });
+
+  it("Stay here backs out without touching the stop", async () => {
+    const s2 = stub({ meter: ARRIVED });
+    const w = await mountLoad(s2);
+    await w.find(".actions .cta--outline").trigger("click");
+    await flushPromises();
+    await w.findAll(".cta--text").find((b) => b.text().includes(en["load.leave_back"])).trigger("click");
+    await flushPromises();
+
+    expect(s2.mock.calls.some((c) => String(c[0]).includes("/end"))).toBe(false);
+    expect(w.find(".actions .cta--outline").exists()).toBe(true);
+  });
+
+  it("says which act it is on a route (§12.2)", async () => {
+    // on a multi-stop load this leaves a DOCK; only the last stop ends the load.
+    const w = await mountLoad(
+      stub({ meter: { ...ARRIVED, next_stop: { facility_name: "Kroger DC", appointment: null } } }),
+    );
+    expect(w.find(".actions .cta--outline").text()).toContain(en["load.leave_stop"]);
+  });
+
+  it("is absent before the driver has arrived", async () => {
+    // there is no stop to leave until you reach one.
+    const w = await mountLoad(stub());
+    expect(w.find(".actions .cta--outline").exists()).toBe(false);
+  });
+});

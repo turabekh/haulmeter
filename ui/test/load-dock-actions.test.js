@@ -183,8 +183,16 @@ describe("the ladder's missing middle (§23 entry 127)", () => {
   });
 
   it("stays quiet when the truck is not at the dock", async () => {
+    // AI-CONTEXT: scoped to the LADDER's own controls (§23 entry 141). This asserted
+    // "no `.cta` at all", which was a proxy for "no on-site shortcut" and stopped being
+    // one when leaving the stop became a Secondary on the anchored zone — that control
+    // depends on having ARRIVED, not on standing inside the geofence, so a driver who
+    // stepped out of the fence would have lost the way to end their own stop.
     observePresence(false);
     const { w } = await mountAtDock();
-    expect(w.find("button.cta").exists()).toBe(false);
+    expect(w.findAll(".cta:not(.cta--text):not(.cta--outline)")).toHaveLength(0);
+    expect(w.findAll(".rungs__item").map((b) => b.text()).join(" | ")).not.toContain(
+      "Capture cargo condition",
+    );
   });
 });

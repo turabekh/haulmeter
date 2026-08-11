@@ -135,6 +135,29 @@ test("the quick-actions row is on screen too", async ({ page }) => {
   console.log(`OBSERVED — quick actions end at y=${Math.round(box.y + box.height)}`);
 });
 
+test("leaving the stop is one tap from the screen, not four from a sheet", async ({ page }) => {
+  // the owner's report, twice: "Leave this stop is almost hidden, not quick action (it is
+  // under more)". It was the FOURTH item inside "More for this stop" — two taps and the
+  // bottom of a list — while being the second-most-frequent act on this screen.
+  await openLoadTab(page);
+
+  const leave = page.locator(".actions .cta--outline");
+  const box = await leave.boundingBox();
+  const viewport = page.viewportSize();
+
+  expect(box, "no leave control on the surface").not.toBeNull();
+  expect.soft(box.y + box.height, "leave is below the fold").toBeLessThanOrEqual(viewport.height);
+  expect.soft(box.height, "leave is under the 56 dp Secondary height").toBeGreaterThanOrEqual(56);
+  // and it is not ALSO in the sheet: one act, one control
+  await page.locator(".actions .rungs__item--more").click();
+  await page.waitForSelector(".more");
+  const inSheet = await page.locator(".more .more__item").allInnerTexts();
+  expect
+    .soft(inSheet.join(" | "), "leaving is duplicated inside the More sheet")
+    .not.toMatch(/Leave this stop|End load/i);
+  console.log(`OBSERVED — leave at y=${Math.round(box.y)}..${Math.round(box.y + box.height)}`);
+});
+
 test("the content behind it still reaches its end", async ({ page }) => {
   // a sticky bar paints over content it has not scrolled to yet, so the risk it
   // introduces is the opposite of the one it fixes: a last row permanently hidden.

@@ -2133,15 +2133,11 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       const w = mount(LoadSurface, { global: { plugins: [router] } });
       await flushPromises();
       expect(w.text()).toContain("Ending Receiver"); // live
-      // §10.2 leaves ONE CTA on the screen; this stop's other actions moved behind
-      // "More for this stop" (NAV-3) rather than stacking six buttons under the Meter
-      await w
-        .findAll(".rungs__item")
-        .find((b) => b.text().includes("More for this stop"))
-        .trigger("click");
+      // §23 entry 141: leaving is a Secondary in the anchored zone, not the fourth item
+      // in a sheet — and it confirms first, because departing stops the detention clock.
+      await w.find(".actions .cta--outline").trigger("click");
       await flushPromises();
-      const endBtn = w.findAll(".more__item").find((b) => b.text() === "End load");
-      await endBtn.trigger("click");
+      await w.find(".cta--destructive").trigger("click");
       await flushPromises();
       expect(fetchStub.mock.calls.some((c) => String(c[0]).endsWith("/load/stop-end/end"))).toBe(true);
       // a single-stop load has nowhere to advance to, so the tab rests (§23 entry 69)
@@ -2272,8 +2268,11 @@ describe("LoadSurface / Meter card (design-prd §10.2)", () => {
       const w = mount(LoadSurface, { global: { plugins: [router] } });
       await flushPromises();
 
-      // exactly one filled primary, and it is the rung the spec orders next
-      const primaries = w.findAll(".cta:not(.cta--text)");
+      // exactly one FILLED primary, and it is the rung the spec orders next. The
+      // selector excludes `--outline` too: §8 grades buttons filled / outline / text,
+      // and `:not(.cta--text)` alone counted the Secondary as a rival primary the day
+      // one was added (§23 entry 141).
+      const primaries = w.findAll(".cta:not(.cta--text):not(.cta--outline)");
       expect(primaries).toHaveLength(1);
       expect(primaries[0].text()).toContain("Snap BOL");
 
@@ -2922,12 +2921,11 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     const w = mount(LoadSurface, { global: { plugins: [router] } });
     await flushPromises();
 
-    await w.find(".rungs__item--more").trigger("click");
-    await flushPromises();
-
-    const items = w.findAll(".more__item").map((b) => b.text());
-    expect(items).toContain("End load");
-    expect(items).not.toContain("Leave this stop");
+    // §23 entry 141: the control is on the screen now, and it still has to say WHICH
+    // act it is — this is the last stop, so it ends the load rather than leaving a dock.
+    const leave = w.find(".actions .cta--outline");
+    expect(leave.text()).toContain("End load");
+    expect(leave.text()).not.toContain("Leave this stop");
     w.unmount();
   });
 
@@ -2986,8 +2984,8 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     const w = mount(LoadSurface, { global: { plugins: [router] } });
     await flushPromises();
 
-    // one filled primary; the secondary controls are text, not rivals
-    expect(w.findAll(".cta:not(.cta--text)")).toHaveLength(0); // in free time nothing is owed yet
+    // one filled primary; the secondary controls are outline or text, not rivals
+    expect(w.findAll(".cta:not(.cta--text):not(.cta--outline)")).toHaveLength(0); // free time: nothing owed
     expect(w.findAll(".more__item")).toHaveLength(0); // sheet closed
 
     await w
@@ -2996,12 +2994,15 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
       .trigger("click");
     await flushPromises();
 
+    const items = w.findAll(".more__item").map((b) => b.text());
+    expect(items).toContain("Check load profit");
+    // §23 entry 141: leaving moved OUT of this sheet onto the surface, so a duplicate
+    // here would be one act with two controls.
+    expect(items).not.toContain("Leave this stop");
+    expect(items).not.toContain("End load");
     // AI-CONTEXT: §12.2 — the control says what will actually happen. LIVE has a next
     // stop, so leaving this dock opens that one; it does not end the load (entry 69).
-    const items = w.findAll(".more__item").map((b) => b.text());
-    expect(items).toContain("Leave this stop");
-    expect(items).not.toContain("End load");
-    expect(items).toContain("Check load profit");
+    expect(w.find(".actions .cta--outline").text()).toContain("Leave this stop");
   });
 });
 
