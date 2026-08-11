@@ -737,6 +737,26 @@ const SURFACES = [
     },
     ready: ".load:has(.collapsed):not(:has(.checklist))",
   }],
+  // the same state OPENED, which is a different shape and the one that has to offer a
+  // way back. `ready` proves the toggle header AND the checklist — the card open with
+  // no way to shut it is the defect this state exists to catch.
+  ["load-pre-arrival-open", "/load", {
+    stop: LIVE_STOP,
+    mocks: {
+      ...LIVE_MOCKS,
+      [`/load/${LIVE_STOP}/meter`]: {
+        ...LIVE_MOCKS[`/load/${LIVE_STOP}/meter`],
+        phase: "not_arrived",
+        free_time_remaining_seconds: 7200,
+        detention_seconds: 0,
+        detention_cents: 0,
+        appointment: new Date(Date.now() + 2 * 3600 * 1000).toISOString(),
+        appointment_end: new Date(Date.now() + 4 * 3600 * 1000).toISOString(),
+      },
+    },
+    open: [".collapsed"],
+    ready: ".load:has(.card__toggle):has(.checklist)",
+  }],
   ["money", "/money"],
   // AI-CONTEXT: the three SKELETON shapes, measured at 360 dp in the commit that
   // introduced them (§23 entry 131, v2.0 acceptance #3). A skeleton the harness cannot

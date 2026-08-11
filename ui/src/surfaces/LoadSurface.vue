@@ -35,6 +35,7 @@ import {
   Send,
   Clock,
   TriangleAlert,
+  ChevronDown,
   ChevronRight,
 } from "lucide-vue-next";
 import { useRouter } from "vue-router";
@@ -904,7 +905,27 @@ async function endLoad() {
       </button>
 
       <section v-if="live && (!preArrival || evidenceOpen)" class="card">
-        <h2 class="card__title">{{ t("load.evidence") }}</h2>
+        <!-- AI-CONTEXT: pre-arrival the header is the SAME control that opened it.
+             `evidenceOpen` was one-way — a driver who tapped the collapsed row to check
+             the broker address could not put it back, so the screen they were given a
+             way out of quietly became the screen they were stuck on. It carries the
+             collapsed row's own label and count so the object reads as one thing
+             opening and closing rather than two rows that happen to swap.
+
+             Only pre-arrival: once the truck is at the dock this card is the driver's
+             job list and §10.2 wants it open. -->
+        <button
+          v-if="preArrival"
+          class="card__toggle"
+          type="button"
+          :aria-expanded="true"
+          @click="evidenceOpen = false"
+        >
+          <span class="card__togglelabel">{{ t("load.paperwork_for_stop") }}</span>
+          <span class="collapsed__count">{{ docsCaptured }}/{{ docChecklist.length }}</span>
+          <ChevronDown :size="18" :stroke-width="2" class="collapsed__go" aria-hidden="true" />
+        </button>
+        <h2 v-else class="card__title">{{ t("load.evidence") }}</h2>
         <ul class="checklist">
           <!-- AI-CONTEXT: the LABEL carries the state, not just the icon. This row
                read "BOL captured" whether or not one had been, so the only thing
@@ -1647,6 +1668,26 @@ async function endLoad() {
   border: 1px solid var(--line-1);
   border-radius: var(--r-card);
   text-align: left;
+}
+/* the same row, inside the card it opened. It keeps the closed row's target height and
+   figure treatment so collapsing and expanding read as one object, not two controls. */
+.card__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  min-height: 48px;
+  margin: 0 0 var(--s-3);
+  padding: 0;
+  background: transparent;
+  text-align: left;
+}
+.card__togglelabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--type-label-size);
+  font-weight: 500;
 }
 .collapsed__label {
   flex: 1 1 auto;

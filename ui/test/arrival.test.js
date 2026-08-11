@@ -130,6 +130,42 @@ describe("Before the driver arrives, the screen is the Meter and one action", ()
     expect(w.find(".collapsed").exists()).toBe(false);
   });
 
+  it("closes again from the header it opened into", async () => {
+    // `evidenceOpen` was one-way: a driver who tapped the row to check the broker
+    // address could not put it back, so a screen they were given a way out of quietly
+    // became the screen they were stuck on.
+    const w = await mountLoad(stub());
+    await w.find(".collapsed").trigger("click");
+    await flushPromises();
+    expect(w.find(".checklist").exists()).toBe(true);
+
+    await w.find(".card__toggle").trigger("click");
+    await flushPromises();
+
+    expect(w.find(".checklist").exists()).toBe(false);
+    expect(w.find(".collapsed").exists()).toBe(true);
+    expect(w.find(".collapsed__count").text()).toBe("0/2"); // and it comes back intact
+  });
+
+  it("names the same thing open and shut", async () => {
+    // one object opening and closing, not two rows that happen to swap places.
+    const w = await mountLoad(stub());
+    const shut = w.find(".collapsed").text();
+    await w.find(".collapsed").trigger("click");
+    await flushPromises();
+
+    expect(w.find(".card__toggle").text()).toContain(en["load.paperwork_for_stop"]);
+    expect(shut).toContain(en["load.paperwork_for_stop"]);
+  });
+
+  it("has no collapse control once the driver has arrived", async () => {
+    // §10.2 wants this open at the dock — it is the job list there, not clutter, and a
+    // control that hides it would be a way to lose the checklist mid-stop.
+    const w = await mountLoad(stub({ meter: { ...PRE_ARRIVAL, phase: "within_free_time" } }));
+    expect(w.find(".card__toggle").exists()).toBe(false);
+    expect(w.find(".checklist").exists()).toBe(true);
+  });
+
   it("is open by default once the driver has arrived", async () => {
     // after arrival the card is the driver's job list, not clutter.
     const w = await mountLoad(stub({ meter: { ...PRE_ARRIVAL, phase: "within_free_time" } }));
