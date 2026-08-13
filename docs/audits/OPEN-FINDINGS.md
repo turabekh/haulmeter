@@ -31,12 +31,12 @@ than wrong. *Re-grep before acting on any of them — the dump is dated.*
 
 | Severity | Open | Blocked | Partial | Closed | Accepted | Total |
 |---|---|---|---|---|---|---|
-| Critical | 1 | 0 | 0 | 7 | 0 | **8** |
+| Critical | 0 | 0 | 0 | 8 | 0 | **8** |
 | High | 0 | 0 | 0 | 17 | 0 | **17** |
 | Medium | 0 | 0 | 0 | 11 | 0 | **11** |
 | Low | 2 | 0 | 0 | 6 | 0 | **8** |
 | Accepted | — | — | — | — | 1 | **1** |
-| **Total** | **3** | **0** | **0** | **41** | **1** | **45** |
+| **Total** | **2** | **0** | **0** | **42** | **1** | **45** |
 
 *Recomputed from the rows themselves 2026-08-08, not carried forward — the previous total
 said 3 open / 1 blocked while the severity rows added to 4 open / 0 blocked, because F-01
@@ -44,7 +44,15 @@ moved out of BLOCKED and F-19 was reclassified Medium → Low without the totals
 Medium is 11 and Low is 8 for that reclassification. **N-01, N-02 and N-03 are NOT in these
 45** — they were opened after the audit and are listed separately below.*
 
-**F-01 is the only Critical left and it is no longer BLOCKED — it is ANSWERED and
+**EVERY CRITICAL IS CLOSED (2026-08-13, session 124).** F-01, the last one, is fixed on the
+box: the SMTP block was written to `/opt/haulmeter/infra/.env`, the gateway now resolves to
+`SmtpNotificationGateway`, and a rehearsal notice was delivered to an owner-controlled
+inbox carrying a real Gmail Message-ID. The two remaining OPEN findings are both Low.
+
+*The paragraph below is the state as it stood before that, kept because it is what the
+finding was for.*
+
+**F-01 was the only Critical left and it was no longer BLOCKED — it was ANSWERED and
 CONFIRMED.** Production email has been delivering to a Mailpit container on the VM; the
 remaining fix is a credential on the box, which is the owner's action rather than a code
 change. **The other two OPEN items are both Low** — F-19 and F-27, each waiting on work scoped
@@ -78,7 +86,7 @@ unobservable until the literal became a token. See §Blockers.
 
 | ID | Severity | Status | One line |
 |---|---|---|---|
-| F-01 | Critical | **CONFIRMED — not fixed** | **ANSWERED on the box, 2026-08-08, during the 113→121 deploy.** `SMTP_HOST='mailpit'`, port 1038, **`configured=True`** — so the gateway does NOT fall back to the recording gateway, it delivers to the Mailpit container running on the VM. **Every counterparty email the deployed product has ever "sent" went into a local inbox on the box, and F8 recorded each one as sent.** No broker has received a detention notice from production. Worse than the audit's "probably", exactly as 119 predicted: falling back to recording requires `SMTP_HOST` to be **blank**, not un-overridden, and `.env.example` ships `mailpit`. **The remaining fix is one `.env` edit on the VM plus an api restart** — `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_STARTTLS=true`, `SMTP_USERNAME`/`SMTP_PASSWORD`/`SMTP_FROM` per §23 entry 126. **Deliberately not done here: that writes a credential onto a production box, which is the owner's action under rule 9.** Not a code change — the code half has been correct since entry 122. |
+| F-01 | Critical | **CLOSED 2026-08-13** | **ANSWERED on the box, 2026-08-08, during the 113→121 deploy.** `SMTP_HOST='mailpit'`, port 1038, **`configured=True`** — so the gateway does NOT fall back to the recording gateway, it delivers to the Mailpit container running on the VM. **Every counterparty email the deployed product has ever "sent" went into a local inbox on the box, and F8 recorded each one as sent.** No broker has received a detention notice from production. Worse than the audit's "probably", exactly as 119 predicted: falling back to recording requires `SMTP_HOST` to be **blank**, not un-overridden, and `.env.example` ships `mailpit`. **The remaining fix is one `.env` edit on the VM plus an api restart** — `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_STARTTLS=true`, `SMTP_USERNAME`/`SMTP_PASSWORD`/`SMTP_FROM` per §23 entry 126. **FIXED on the box, 2026-08-13 (session 124), with the owner's explicit authorization** — the credential question was put to them rather than assumed, because `deploy-testing-env.md` records Mapbox/Anthropic/Voyage/EIA as living on the VM by owner decision and SMTP was not among them. The block was transferred by `scp` rather than an ssh command line, so the app password never appeared in a process list; `.env` was backed up first and left `0600 root:root`; `deploy.sh` excludes it, so a future deploy cannot overwrite it. Verified in three steps: `SmtpNotificationGateway.configured` is True on the box, the production outbox was EMPTY beforehand so nothing stale flushed to a real broker, and a rehearsal notice addressed to an owner-controlled inbox came back with a real `@gmail.com` Message-ID rather than the `@haulmeter.online` one Mailpit had been producing. Not a code change — the code half has been correct since entry 122. |
 | F-02 | Critical | **CLOSED** | `enabled` was one column doing two jobs — a code default and an operator's decision — so `register_all` wrote it by assignment and `enable()`, the only function that reads a gate, was never on the path. **Measured before changing anything: three modules carry gates, all SIX unsatisfied, all three flags enabled.** `default_on` (declared per module, refreshes at boot) and a nullable `enabled` (NULL = nobody decided) are separate now; migration **0066** backfills so no box changes behaviour. **Gates deliberately do NOT block the default** — that would have taken M3's detention clock dark, and satisfying a gate asserts a legal review happened, which a deploy may not decide. The 29 July decision stands and the gate now SAYS SO: `running_ahead_of_gates` reports at boot and on `/admin/flags`, verified live. §23 entry 133. Session 121. |
 | F-03 | High | **CLOSED** | The ref is the message's real RFC 5322 Message-ID — unique, and findable in a mail provider's trace. Session 119. |
 | F-04 | High | **CLOSED** | `_LazyCounterpartyGateway` is tested. Confirmed rather than asserted: against the restored F-03 defect the new test fails while the direct-construction one passes. Session 119. |

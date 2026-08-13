@@ -3,7 +3,52 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-123.md](HANDOFF-123.md)** — read this first, every session.
+➡️ **[HANDOFF-124.md](HANDOFF-124.md)** — read this first, every session.
+
+> **124** was four owner instructions — make images faster, move email to background jobs,
+> deploy, stop duplicate emails — and each ended somewhere further down than it started.
+> Ten commits, **§23 entries 144–147**, five migrations (`0071`→`0075`). Gates went
+> **pytest 1842 → 1907, vitest 885 → 905**, layout 325, plus a new `make ui-image` in
+> `make ci`.
+>
+> **Stack UP · everything PUSHED · DEPLOYED.** `haulmeter.online` is **CURRENT at `0075`**,
+> three deploys, a verified offsite backup before each.
+>
+> **F-01 IS CLOSED AND EVERY CRITICAL IN THE AUDIT IS NOW CLOSED.** Production email leaves
+> the box for the first time in this product's life — the SMTP block was placed on the VM
+> with the owner's explicit authorization, transferred by `scp` so the app password never
+> reached a command line, and proved by a rehearsal notice to an owner-controlled inbox
+> carrying a real Gmail Message-ID. All 8 Criticals, all 17 Highs, all 11 Mediums closed;
+> two Lows remain.
+>
+> **THE PATTERN, and it is the third face of 122's and 123's coin: a thing CORRECT IN ONE
+> PROCESS AND WRONG IN ANOTHER, with every test that could see it written in the process
+> where it is right.** `media_url`'s path is right for the API router and wrong inside an
+> `<img>`. `_wire_object_storage` ran in the API's lifespan and the worker is a different
+> process. A unique index lived in a migration and the test database is built by
+> `create_all`. The budget's `dispatched_at` equals the decision only while the send is
+> synchronous.
+>
+> **The first of those I SHIPPED, and it broke every contact sheet in production.** Caddy's
+> SPA `try_files` answered `haulmeter.online/media/…` with **HTTP 200 and index.html** —
+> not a 404, a 200 — which the browser tried to decode as an image. Nothing threw, nothing
+> logged. It failed identically in dev, and the curl checks that "verified" it hit
+> `localhost:8008` directly, supplying by hand the one thing a browser never supplies.
+> *A test that compares `src` to a STRING cannot catch this, because a string has no origin.*
+>
+> **And the twin, in the tests: three of four race tests proved nothing.** Measured — the
+> unique index could be DROPPED and all 24 dedupe tests still passed. Only the version that
+> waits on `pg_stat_activity` until the loser is genuinely blocked on the index goes red.
+>
+> **Measured, not asserted:** a camera frame **6.7 MB → 731 KB in 187 ms** off the main
+> thread; a notice tap **2,490 ms → 25.9 ms**; thumbnails **0.35 MB against 14.34 MB** of
+> originals.
+>
+> **The owner's next action is not code and is the sharpest thing on the board: 140
+> production records have no bytes** — everything uploaded 26–28 July, from the swallowed
+> `SignatureDoesNotMatch` era. Leave them, purge them, or tell the drivers. **124 §3.**
+
+➡️ **[HANDOFF-123.md](HANDOFF-123.md)** — the session before.
 
 > **123** was driven entirely by the owner looking at real screens on a real phone and
 > saying what was confusing. Nine commits, **§23 entries 135–143**. Gates went
@@ -42,7 +87,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > edit on the VM (F-01, open since 121). The post-deploy worker log names the scale —
 > `dunning … skipped_no_email: 11` of 14. **123 §3.**
 
-➡️ **[HANDOFF-122.md](HANDOFF-122.md)** — the session before.
+➡️ **[HANDOFF-122.md](HANDOFF-122.md)** — two sessions before.
 
 > **122** was six owner-supplied work contracts run back to back, each with its own report at
 > the repo root: **M3 detention**, **wedge delivery**, **location integrity**, **evidence
@@ -75,7 +120,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > to an owner-controlled inbox — two independent blockers lift at once and that is the only
 > test covering both. **122 §4.**
 
-➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — two sessions before.
+➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — three sessions before.
 
 > **121** was two instructions. *"Approved, do the loading-state work"* closed **five
 > findings — U-06, U-09, U-10 (criticals), U-11 and U-12** — every finding that decision was
@@ -175,7 +220,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > logged zero errors where it had failed all seven jobs — then observed on production, where
 > `migrate` exits before api and worker start. **HANDOFF-121 §11.**
 
-➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — three sessions before.
+➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — four sessions before.
 
 > **120** was one instruction — *"read the latest handoff and restart the app"*, then
 > *"proceed using your best judgement"* — and it worked the audit queue to the end:
@@ -238,7 +283,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack UP · thirty-five commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — four sessions before.
+➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — five sessions before.
 
 > **119** worked the 2026-08-07 audit queue: **nineteen findings closed, two partial**, and
 > answered one of the audit's three open questions. Three of
@@ -298,7 +343,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · twenty-four commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — five sessions before.
+➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — six sessions before.
 
 > **118** is a short session with **no source changes**: the owner asked for the stack to be
 > restarted, then for a handoff and a shutdown.
@@ -319,7 +364,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > session (no credential), so the ahead-count is arithmetic, not observation — **re-fetch
 > before pushing.** The next task is still the handset background-sensor test.
 
-➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — six sessions before.
+➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — seven sessions before.
 
 > **117** did two things the owner asked for, and both turned up something under them.
 >
@@ -347,7 +392,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · four commits UNPUSHED · nothing deployed.** The next task is still the
 > handset background-sensor test.
 
-➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — seven sessions before.
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — eight sessions before.
 
 > **116** walked the stop auto-pilot end to end in a real browser, which is what two
 > sessions of building had never been subjected to. **It works.** A human adds a load,
@@ -376,7 +421,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > HANDOFF-116.md's own header contradicted, and its "everything from `a4e282c` onward
 > UNPUSHED" was overtaken by the 2026-08-03 push. Corrected in 117.)
 
-➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — eight sessions before.
+➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — nine sessions before.
 
 > **115** was scoped as a **surfacing rework** — the A1 automation is built and correct,
 > only the way its result reaches the driver is wrong. Re-grepping the seams before
