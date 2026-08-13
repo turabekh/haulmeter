@@ -5,6 +5,11 @@ description = "LONGHAUL — consolidated trucker platform, FastAPI modular monol
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
+    # AI-CONTEXT: multipart form parsing, for the image upload paths (api/uploads.py).
+    # Pure Python and tiny — the driver app sends a photograph as bytes now rather than
+    # as base64 in a JSON body, which inflated every capture by a third over the LTE of
+    # a truck stop. FastAPI needs this to read a form at all.
+    "python-multipart>=0.0.9",
     "uvicorn[standard]>=0.32",
     "sqlalchemy>=2.0.36",
     "alembic>=1.14",

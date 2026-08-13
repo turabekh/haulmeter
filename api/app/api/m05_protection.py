@@ -3,17 +3,17 @@ Document wallet + inspection mode are reads; on-time proof / condition / inciden
 are captures (F4 evidence). F8 gateway seam (recording) in dev.
 """
 
-import base64
 import uuid
 from datetime import UTC, datetime
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db, require_module
+from app.api.uploads import read_upload
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f04_evidence import public as evidence
@@ -324,13 +324,19 @@ class ConditionPhotoIn(BaseModel):
 
 
 @router.post("/condition/{capture_id}/photo", status_code=201)
-def condition_photo(
+async def condition_photo(
     capture_id: uuid.UUID,
-    body: ConditionPhotoIn,
+    request: Request,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
     idempotency_key: str | None = Header(default=None),
 ) -> dict:
+    # AI-CONTEXT: multipart or the legacy base64 JSON — see `api/uploads.py`. This is the
+    # sharpest of the six upload sites because it is a SEQUENCE: a driver shoots a trailer
+    # corner, a seal and the load one after another, so every byte saved is paid back per
+    # shot rather than once.
+    body, uploaded = await read_upload(request, ConditionPhotoIn)
+
     capture = db.get(m5.ConditionCapture, capture_id)
     if capture is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "capture not found")
@@ -339,11 +345,7 @@ def condition_photo(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "not your capture")
 
     def _apply(_env):
-        content = (
-            base64.b64decode(body.content_b64)
-            if body.content_b64
-            else f"photo:{body.prompt}".encode()
-        )
+        content = uploaded if uploaded else f"photo:{body.prompt}".encode()
         m5.add_condition_photo(
             db, capture, body.prompt, content=content, content_type=body.content_type
         )
@@ -658,7 +660,8 @@ def revoke(
 # --- FR3: the wallet's writer (design-prd §8 camera capture) ---
 class DocumentIn(BaseModel):
     doc_type: str
-    content_b64: str
+    # optional now: multipart carries the bytes beside the fields rather than inside them
+    content_b64: str | None = None
     filename: str | None = None
     content_type: str | None = None
     expires_on: str | None = None  # ISO date; meaningful only for credentials
@@ -771,8 +774,8 @@ def restore_document(
 
 
 @router.post("/documents", status_code=201)
-def capture_document(
-    body: DocumentIn,
+async def capture_document(
+    request: Request,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
     idempotency_key: str | None = Header(default=None),
@@ -780,8 +783,20 @@ def capture_document(
     """The endpoint the Docs tab never had. Until this existed the wallet was a
     reader with no writer: a vendor could upload a licence through the portal and a
     driver could not upload their own CDL, so the tab was empty and F6's expiry
-    engine had nothing to count down from."""
+    engine had nothing to count down from.
+
+    AI-CONTEXT: takes multipart now, and still takes the base64 JSON body — see
+    `api/uploads.py`. The app sends bytes as bytes (base64 inflates a photograph by a
+    third over truck-stop LTE); a phone REPLAYING a capture queued under an older build
+    sends the JSON, and its idempotency key is what makes that replay exactly-once.
+    Refusing it would throw away a driver's evidence for having been captured before a
+    deploy. The size ceiling is enforced for both, which is new: there was none.
+    """
     from datetime import date as _date
+
+    body, content = await read_upload(request, DocumentIn)
+    if not content:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "no document content")
 
     expires_on = None
     if body.expires_on:
@@ -800,7 +815,7 @@ def capture_document(
                 db,
                 account.id,
                 body.doc_type,
-                base64.b64decode(body.content_b64),
+                content,
                 filename=body.filename,
                 content_type=body.content_type,
                 expires_on=expires_on,

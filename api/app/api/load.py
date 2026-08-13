@@ -10,12 +10,13 @@ import math
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db
 from app.api.m03_detention import already_filed
+from app.api.uploads import read_upload
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f03_location import public as location
@@ -299,14 +300,15 @@ def create_load(
 
 
 class ImportRateConIn(BaseModel):
-    content_b64: str
+    # optional: multipart carries the bytes beside the fields rather than inside them
+    content_b64: str | None = None
     filename: str | None = None
     content_type: str | None = None
 
 
 @router.post("/import", status_code=201)
-def import_rate_con(
-    body: ImportRateConIn,
+async def import_rate_con(
+    request: Request,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -325,10 +327,16 @@ def import_rate_con(
     """
     import base64
 
-    try:
-        content = base64.b64decode(body.content_b64)
-    except Exception as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unreadable upload") from exc
+    # AI-CONTEXT: multipart or the legacy base64 JSON (see `api/uploads.py`), and the
+    # size ceiling now applies to both — a rate con arrives as a PDF from a desktop
+    # scanner as often as a photograph, and neither had any limit.
+    body, content = await read_upload(request, ImportRateConIn)
+    if not content:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unreadable upload")
+
+    # F9 reads the document as base64 whatever the wire format was, so it is encoded
+    # once here rather than being required of the client.
+    content_b64 = body.content_b64 or base64.b64encode(content).decode()
 
     document = m5.capture_document(
         db,
@@ -345,7 +353,7 @@ def import_rate_con(
             ai.resolve_provider(),
             document.content_hash,
             account_id=account.id,
-            document_b64=body.content_b64,
+            document_b64=content_b64,
             media_type=document.content_type,
         )
     except Exception:

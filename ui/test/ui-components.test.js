@@ -2390,12 +2390,26 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     ],
   };
 
+  // AI-CONTEXT: an upload is multipart now, not a JSON body — the rate con travels as
+  // BYTES rather than as base64 inside JSON, which inflated it by a third. The fields
+  // ride beside the file in a `fields` part, validated by the same server-side model
+  // either way, so what these tests assert about the posted body is unchanged. Reading
+  // it takes two lines instead of one.
+  function postedBody(body) {
+    if (!body) return null;
+    if (typeof FormData !== "undefined" && body instanceof FormData) {
+      const fields = body.get("fields");
+      return fields ? JSON.parse(fields) : null;
+    }
+    return JSON.parse(body);
+  }
+
   function stub(draft) {
     const posts = [];
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url, opts) => {
-        posts.push({ url: String(url), body: opts?.body ? JSON.parse(opts.body) : null });
+        posts.push({ url: String(url), body: postedBody(opts?.body) });
         if (String(url).endsWith("/load/import")) return jsonOk(draft);
         return jsonOk({ load_id: "l-1", stop_id: "s-1" });
       }),

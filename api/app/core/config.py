@@ -22,6 +22,18 @@ class Settings(BaseSettings):
     redis_host: str = Field(default="redis")
     redis_port: int = Field(default=6438)
 
+    # AI-CONTEXT: the ceiling every upload path in this product was missing. F6 has
+    # recorded `byte_size` since it was written and nothing ever compared it to anything,
+    # so the limit on a document was whatever the machine could decode into memory — from
+    # six separate hand-rolled `b64decode` calls, none of which checked.
+    #
+    # 25 MB is chosen against what the CLIENT now sends rather than against what a phone
+    # can produce: captures are downscaled to 2048 px / q0.85 before they leave, which put
+    # a 12 MP frame at ~730 KB when it was measured. The headroom is for the paths that do
+    # NOT go through that pipeline — a PDF rate con, a portal upload from a desktop
+    # scanner — so this rejects the absurd without ever refusing a real document.
+    max_upload_mb: int = Field(default=25)
+
     minio_endpoint: str = Field(default="minio:9018")
     minio_access_key: str = Field(default="longhaul")
     minio_secret_key: str = Field(default="longhaul")

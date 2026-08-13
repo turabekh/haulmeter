@@ -127,21 +127,14 @@ function onFile(event) {
   preview.value = URL.createObjectURL(f);
 }
 
-function b64(f) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(",")[1]);
-    r.onerror = reject;
-    r.readAsDataURL(f);
-  });
-}
-
 async function read() {
   if (!file.value || busy.value) return;
   busy.value = true;
   try {
+    // the File goes straight over as bytes; the base64 read that used to happen on the
+    // main thread here is gone
     const res = await importRateCon({
-      contentB64: await b64(file.value),
+      file: file.value,
       filename: file.value.name,
       contentType: file.value.type,
     });

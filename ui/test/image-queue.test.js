@@ -52,6 +52,21 @@ const deadZone = () => vi.fn(() => Promise.reject(new Error("network")));
 const accepts = () =>
   vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }));
 
+// AI-CONTEXT: the upload is multipart — the photograph travels as BYTES beside a
+// `fields` JSON part, rather than as base64 inside the JSON. These helpers read the two
+// halves back, and `sentBytes` is what proves the pixels actually left: asserting only
+// on the fields would go green over a request carrying no file at all.
+function sentFields(call) {
+  const body = call[1].body;
+  return JSON.parse(body instanceof FormData ? body.get("fields") : body);
+}
+
+function sentBytes(call) {
+  const body = call[1].body;
+  if (!(body instanceof FormData)) return null;
+  return body.get("file");
+}
+
 beforeEach(() => {
   globalThis.indexedDB = new IDBFactory();
   __resetIdbForTests();
@@ -99,9 +114,12 @@ describe("a photograph queued in a dead zone", () => {
     await flushQueue();
 
     expect(pendingWrites.value).toBe(0);
-    const sent = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(sent.content_b64, "the replay must carry the photograph").toBeTruthy();
-    expect(sent.content_b64.length).toBeGreaterThan(1000);
+    const bytes = sentBytes(fetchMock.mock.calls[0]);
+    expect(bytes, "the replay must carry the photograph, as bytes").toBeTruthy();
+    expect(bytes.size, "and all of it").toBeGreaterThan(500 * 1024);
+    // base64 is gone from the wire: the field is present and empty, not carrying a
+    // second copy of the same photograph at +33%
+    expect(sentFields(fetchMock.mock.calls[0]).content_b64).toBeNull();
 
     // the server has them now; keeping a second copy on the phone is how a device
     // fills up with photographs of things already filed
@@ -116,7 +134,7 @@ describe("a photograph queued in a dead zone", () => {
 
     expect(readQueue()).toHaveLength(0);
     expect(await idbKeys(BLOB_STORE)).toHaveLength(0);
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body).content_b64).toBeTruthy();
+    expect(sentBytes(fetchMock.mock.calls[0]).size).toBeGreaterThan(500 * 1024);
   });
 });
 

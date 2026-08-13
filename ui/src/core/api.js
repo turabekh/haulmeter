@@ -331,22 +331,29 @@ function newOpId() {
   }
 }
 
-// AI-CONTEXT: the last base64 in the upload path, and it is here rather than at the
-// capture site on purpose — a queued photo is converted when it SENDS, not when it is
-// taken, so a driver in a dead zone never pays for a string nobody is going to read.
-// Phase 2 removes it entirely in favour of multipart; until then the wire format is
-// unchanged, which is what keeps this change revertable on its own.
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    try {
-      const r = new FileReader();
-      r.onload = () => resolve(String(r.result).split(",")[1] || "");
-      r.onerror = () => reject(new Error("read failed"));
-      r.readAsDataURL(blob);
-    } catch (err) {
-      reject(err);
-    }
-  });
+/* AI-CONTEXT: a photograph goes on the wire as BYTES now, and base64 is gone from the
+ * driver upload path entirely.
+ *
+ * It cost +33% on every capture — on the largest payload this product sends, over the
+ * LTE of a truck stop, on the screen where a driver is standing at a dock waiting to
+ * leave. It also meant building a multi-megabyte JS string and handing it to
+ * `JSON.stringify`, so the phone paid for it twice before the request started.
+ *
+ * The fields travel beside the file as one JSON part rather than as loose form fields:
+ * the server validates them with the SAME pydantic model either way, so a multipart
+ * request and a legacy JSON replay cannot drift into meaning different things. And
+ * `Content-Type` is deliberately NOT set — the browser must write it itself, because
+ * only it knows the multipart boundary. Setting it by hand produces a body the server
+ * cannot parse, with no error either side would explain. */
+function imageRequest(opId, body, image) {
+  const h = postHeaders(opId);
+  if (!image) return { headers: h, body: JSON.stringify(body) };
+
+  delete h["Content-Type"];
+  const form = new FormData();
+  form.append("fields", JSON.stringify(body));
+  form.append("file", image.blob, image.filename || "capture.jpg");
+  return { headers: h, body: form };
 }
 function postHeaders(opId) {
   const h = headers();
@@ -416,16 +423,11 @@ async function queuedPost(path, body, image = null) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const opId = newOpId(); // stable across replays -> exactly-once at the server
 
-  // the bytes are only turned into a wire payload at SEND time, and only once. Held as
-  // a Blob until then, a 350 KB photo costs 350 KB rather than a 470 KB string.
-  const sendBody = image ? { ...body, [image.field]: await blobToBase64(image.blob) } : body;
-
   let resp;
   try {
     resp = await fetch(`${API_BASE}${path}`, {
       method: "POST",
-      headers: postHeaders(opId),
-      body: JSON.stringify(sendBody),
+      ...imageRequest(opId, body, image),
     });
   } catch {
     online.value = false; // dead zone — save it to the phone
@@ -552,7 +554,7 @@ export async function flushQueue() {
       // was cleared, or the browser evicted it — so replaying the row without it would
       // file a photograph-shaped record containing no photograph. It dead-letters
       // instead, which is the only outcome that leaves a trace of what was lost.
-      let body = item.body;
+      let image = null;
       if (item.blob) {
         const blob = restoreBlob(await idbGet(BLOB_STORE, item.blob.key));
         if (!blob) {
@@ -561,22 +563,15 @@ export async function flushQueue() {
           deadLetter(item, CAPTURE_NOT_STORED);
           continue;
         }
-        try {
-          body = { ...item.body, [item.blob.field]: await blobToBase64(blob) };
-        } catch {
-          q.shift();
-          saveQueue(q);
-          deadLetter(item, CAPTURE_NOT_STORED);
-          continue;
-        }
+        image = { blob, field: item.blob.field, filename: item.blob.name };
       }
 
       let resp;
       try {
         resp = await fetch(`${API_BASE}${item.path}`, {
           method: "POST",
-          headers: postHeaders(item.opId), // same key -> the server dedupes the replay
-          body: JSON.stringify(body),
+          // same key -> the server dedupes the replay
+          ...imageRequest(item.opId, item.body, image),
         });
       } catch {
         online.value = false; // still offline — stop, keep the rest queued
@@ -679,16 +674,20 @@ export async function createActiveLoad(payload) {
 // photographed contract is a proposal and only the driver holds both the paper and
 // the phone. Not queued offline — there is nothing useful to show a driver who
 // photographs a rate con in a dead zone except the manual form they already have.
-export async function importRateCon({ contentB64, filename, contentType } = {}) {
+export async function importRateCon({ file = null, contentB64, filename, contentType } = {}) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const fields = {
+    content_b64: file ? null : contentB64,
+    filename: filename ?? file?.name ?? null,
+    content_type: contentType ?? null,
+  };
+  // a rate con is often a PDF, which `prepareImage` passes through untouched — the
+  // multipart switch is worth it there too, because a scanned contract is routinely
+  // the largest single upload this product handles.
+  const prepared = file ? await prepareImage(file) : null;
   const resp = await fetch(`${API_BASE}/load/import`, {
     method: "POST",
-    headers: headers(),
-    body: JSON.stringify({
-      content_b64: contentB64,
-      filename: filename ?? null,
-      content_type: contentType ?? null,
-    }),
+    ...imageRequest(null, fields, prepared ? { blob: prepared, filename: fields.filename } : null),
   });
   if (!resp.ok) throw new Error(`import failed: ${resp.status}`);
   return resp.json();

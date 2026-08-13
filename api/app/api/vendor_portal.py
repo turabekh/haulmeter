@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import PortalActor, get_db, portal_actor
+from app.api.uploads import decode_b64
 from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f14_admin import public as admin
@@ -167,12 +168,15 @@ def _assisted(
 
 
 def _decode(content_b64: str) -> bytes:
-    import base64
-
-    try:
-        return base64.b64decode(content_b64)
-    except Exception as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "bad document encoding") from exc
+    # AI-CONTEXT: routed through the shared seam for the SIZE CEILING, not for the
+    # decoding. These are §18 desktop portals, so base64 over a wired connection is not
+    # the bottleneck the driver app's multipart switch was about — but "no limit at all"
+    # was true here too, and a limit that covers five of six upload paths is the shape
+    # this codebase keeps finding. The wire format is deliberately unchanged.
+    content = decode_b64(content_b64)
+    if content is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "bad document encoding")
+    return content
 
 
 @router.get("/profile")
