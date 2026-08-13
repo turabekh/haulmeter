@@ -84,20 +84,32 @@ self.addEventListener("push", (event) => {
  * localStorage on the same origin, so the threat model is unchanged — what changes is
  * that a tap answered from the lock screen can be sent without opening the app, which
  * is the whole difference between a confirmation and a chore. */
+/* AI-CONTEXT: the version and the store list are duplicated from `core/idb.js` ON
+ * PURPOSE, and the duplication is load-bearing rather than sloppy.
+ *
+ * This file cannot import it: `tray-answer.test.js` runs this source through
+ * `new Function` with every `import` line compiled away, so an imported constant would
+ * be `undefined` exactly where the token is read. What it MUST do is agree — the app
+ * opens `haulmeter` at v2 for the queued-image blob store, and `open(name, 1)` against a
+ * v2 database fails with VersionError. Left at 1, `readToken` would resolve null for
+ * every driver and every tray tap would fall back to opening the app, which looks like
+ * the deliberate fallback it is not. If `core/idb.js` bumps again, bump here too. */
 function readToken() {
   return new Promise((resolve) => {
     let req;
     try {
-      req = indexedDB.open("haulmeter", 1);
+      req = indexedDB.open("haulmeter", 2);
     } catch {
       resolve(null);
       return;
     }
     req.onupgradeneeded = () => {
-      try {
-        req.result.createObjectStore("kv");
-      } catch {
-        /* already there */
+      for (const name of ["kv", "blobs"]) {
+        try {
+          req.result.createObjectStore(name);
+        } catch {
+          /* already there */
+        }
       }
     };
     req.onerror = () => resolve(null);

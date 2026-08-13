@@ -5,6 +5,8 @@
 // fixtures when a request fails offline. This module is the ONLY place the UI
 // talks to the backend — swap-friendly (§19).
 import { ref, computed, watch } from "vue";
+import { idbPut, idbGet, idbDelete, idbKeys, KV_STORE, BLOB_STORE } from "./idb.js";
+import { prepareImage } from "./image.js";
 
 // AI-CONTEXT: WHOSE localhost? (§23 entry 92)
 //
@@ -70,28 +72,11 @@ function persist() {
  * `flush: "sync"` keeps the timing of the hand-placed calls it replaces; `immediate`
  * covers the restored session, which is what heals a driver already signed in. */
 function mirrorTokenToIdb(value) {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const req = indexedDB.open("haulmeter", 1);
-    req.onupgradeneeded = () => {
-      try {
-        req.result.createObjectStore("kv");
-      } catch {
-        /* already there */
-      }
-    };
-    req.onsuccess = () => {
-      try {
-        const store = req.result.transaction("kv", "readwrite").objectStore("kv");
-        if (value) store.put(value, "token");
-        else store.delete("token");
-      } catch {
-        /* nothing to do — the SW falls back to opening the app */
-      }
-    };
-  } catch {
-    /* same */
-  }
+  // AI-CONTEXT: the open moved to `core/idb.js` (v2, `kv` + `blobs`). It was a THIRD
+  // hand-rolled `open("haulmeter", 1)` beside sw.js's, and leaving it at v1 while the
+  // queue opened v2 would have made every sign-in race the upgrade and lose.
+  if (value) idbPut(KV_STORE, "token", value);
+  else idbDelete(KV_STORE, "token");
 }
 
 watch(token, mirrorTokenToIdb, { immediate: true, flush: "sync" });
@@ -345,30 +330,121 @@ function newOpId() {
     return `op-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 }
+
+// AI-CONTEXT: the last base64 in the upload path, and it is here rather than at the
+// capture site on purpose — a queued photo is converted when it SENDS, not when it is
+// taken, so a driver in a dead zone never pays for a string nobody is going to read.
+// Phase 2 removes it entirely in favour of multipart; until then the wire format is
+// unchanged, which is what keeps this change revertable on its own.
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    try {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(",")[1] || "");
+      r.onerror = () => reject(new Error("read failed"));
+      r.readAsDataURL(blob);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
 function postHeaders(opId) {
   const h = headers();
   if (opId) h["Idempotency-Key"] = opId; // honored by F12-wired endpoints (§15.1)
   return h;
 }
-function enqueue(path, body, opId) {
+function enqueue(path, body, opId, blob = null) {
   const q = readQueue();
-  q.push({ path, body, opId });
+  q.push(blob ? { path, body, opId, blob } : { path, body, opId });
   saveQueue(q);
 }
 
-async function queuedPost(path, body) {
+/* AI-CONTEXT: the reason a capture must not ride in `localStorage`, and what happens
+ * when the place it rides instead is unavailable.
+ *
+ * `saveQueue` writes the WHOLE queue as one JSON string, synchronously. A base64 camera
+ * photo is 5–11 MB against a ~5 MB per-origin cap, so `setItem` threw QuotaExceededError,
+ * the `catch {}` swallowed it, and `pendingWrites` was still incremented — the strip read
+ * "1 pending" for a photograph that had never been written anywhere. On the next reload
+ * it was gone, and nothing recorded that it had existed. That is the U-07 shape exactly:
+ * evidence lost while the UI reports success.
+ *
+ * So the bytes go to IndexedDB as a Blob (no base64, no synchronous write, no 5 MB
+ * ceiling) and only the pointer goes in the queue. And when IndexedDB itself will not
+ * take it — private mode, a blocked upgrade, a full device — the write is DEAD-LETTERED
+ * rather than reported as queued. §15.4: a failure a driver can act on, said out loud,
+ * instead of a reassuring count. `CAPTURE_NOT_STORED` is how the capture sheets tell that
+ * apart from a dead zone, because those two need opposite words. */
+export const CAPTURE_NOT_STORED = "capture_not_stored";
+
+/* AI-CONTEXT: an ArrayBuffer goes in, not the Blob itself, and that is a portability
+ * decision rather than a convenience.
+ *
+ * Storing a Blob in IndexedDB is legal and every current browser does it — but Safari
+ * has a history of returning Blobs from IDB with their bytes detached, which fails as
+ * silent data loss rather than as an error, on the one platform where a driver cannot
+ * choose another browser. An ArrayBuffer plus its type is the shape that clones the same
+ * way everywhere, and it is what the test environment can see too: `fake-indexeddb`
+ * round-trips a Blob to `{type}` with the bytes GONE, so a test written against a Blob
+ * would have passed while asserting nothing about the photograph. */
+async function stashBlob(opId, blob, field, filename, contentType) {
+  let record;
+  try {
+    record = {
+      buf: await blob.arrayBuffer(),
+      type: contentType || blob.type || "application/octet-stream",
+      name: filename || null,
+    };
+  } catch {
+    return null;
+  }
+  const ok = await idbPut(BLOB_STORE, opId, record);
+  if (!ok) return null;
+  return { key: opId, field, name: record.name, type: record.type };
+}
+
+function restoreBlob(record) {
+  if (!record || !record.buf) return null;
+  try {
+    return new Blob([record.buf], { type: record.type || "application/octet-stream" });
+  } catch {
+    return null;
+  }
+}
+
+async function queuedPost(path, body, image = null) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const opId = newOpId(); // stable across replays -> exactly-once at the server
+
+  // the bytes are only turned into a wire payload at SEND time, and only once. Held as
+  // a Blob until then, a 350 KB photo costs 350 KB rather than a 470 KB string.
+  const sendBody = image ? { ...body, [image.field]: await blobToBase64(image.blob) } : body;
+
   let resp;
   try {
     resp = await fetch(`${API_BASE}${path}`, {
       method: "POST",
       headers: postHeaders(opId),
-      body: JSON.stringify(body),
+      body: JSON.stringify(sendBody),
     });
   } catch {
     online.value = false; // dead zone — save it to the phone
-    enqueue(path, body, opId);
+    if (image) {
+      const stashed = await stashBlob(
+        opId,
+        image.blob,
+        image.field,
+        image.filename,
+        image.contentType,
+      );
+      if (!stashed) {
+        deadLetter({ path, body, opId }, CAPTURE_NOT_STORED);
+        throw new Error(CAPTURE_NOT_STORED);
+      }
+      enqueue(path, body, opId, stashed);
+    } else {
+      enqueue(path, body, opId);
+    }
     return { queued: true };
   }
   if (!resp.ok) throw new Error(`${path} ${resp.status}`); // server rejected — caller handles
@@ -418,8 +494,39 @@ function deadLetter(item, reason) {
 export function listFailedWrites() {
   return readFailed();
 }
-export function clearFailedWrites() {
+export async function clearFailedWrites() {
+  // the blobs go with them. A dead letter holds its bytes so a retry surface can replay
+  // it whole; once the driver discards the letter, those bytes are the last reference
+  // and keeping them would silently fill the device with photographs of nothing.
+  const dead = readFailed();
   saveFailed([]);
+  for (const item of dead) {
+    if (item?.blob?.key) await idbDelete(BLOB_STORE, item.blob.key);
+  }
+}
+
+/* AI-CONTEXT: blobs whose queue row is gone — a `clearCache()` at logout, a queue reset,
+ * a tab that died between `idbPut` and `saveQueue`. Nothing else would ever collect them,
+ * and unlike the localStorage queue they are large enough to matter: a handful of orphans
+ * is a handful of megabytes on a phone that is already low.
+ *
+ * It runs after a flush rather than at boot, because boot is the moment this whole change
+ * exists to keep clear, and it compares against BOTH lists — an orphan is a key no queued
+ * row and no dead letter can still name. */
+export async function sweepOrphanedBlobs() {
+  const keys = await idbKeys(BLOB_STORE);
+  if (!keys.length) return 0;
+  const live = new Set();
+  for (const item of [...readQueue(), ...readFailed()]) {
+    if (item?.blob?.key) live.add(item.blob.key);
+  }
+  let removed = 0;
+  for (const key of keys) {
+    if (live.has(key)) continue;
+    await idbDelete(BLOB_STORE, key);
+    removed += 1;
+  }
+  return removed;
 }
 
 // AI-CONTEXT: which HTTP answers are worth trying again. 429 and 5xx are the box being
@@ -439,12 +546,37 @@ export async function flushQueue() {
     const q = readQueue();
     while (q.length) {
       const item = q[0];
+
+      // AI-CONTEXT: the bytes are re-attached HERE, from IndexedDB, because they were
+      // never in the queue row. A missing blob is not a transient failure — the store
+      // was cleared, or the browser evicted it — so replaying the row without it would
+      // file a photograph-shaped record containing no photograph. It dead-letters
+      // instead, which is the only outcome that leaves a trace of what was lost.
+      let body = item.body;
+      if (item.blob) {
+        const blob = restoreBlob(await idbGet(BLOB_STORE, item.blob.key));
+        if (!blob) {
+          q.shift();
+          saveQueue(q);
+          deadLetter(item, CAPTURE_NOT_STORED);
+          continue;
+        }
+        try {
+          body = { ...item.body, [item.blob.field]: await blobToBase64(blob) };
+        } catch {
+          q.shift();
+          saveQueue(q);
+          deadLetter(item, CAPTURE_NOT_STORED);
+          continue;
+        }
+      }
+
       let resp;
       try {
         resp = await fetch(`${API_BASE}${item.path}`, {
           method: "POST",
           headers: postHeaders(item.opId), // same key -> the server dedupes the replay
-          body: JSON.stringify(item.body),
+          body: JSON.stringify(body),
         });
       } catch {
         online.value = false; // still offline — stop, keep the rest queued
@@ -455,6 +587,10 @@ export async function flushQueue() {
       if (resp.ok) {
         q.shift();
         saveQueue(q);
+        // the bytes are the server's now. A dead-lettered item deliberately KEEPS its
+        // blob, because the dead letter holds the item whole for a future retry surface
+        // and a retry with no photograph is not a retry.
+        if (item.blob) await idbDelete(BLOB_STORE, item.blob.key);
         continue;
       }
 
@@ -481,6 +617,13 @@ export async function flushQueue() {
     }
   } finally {
     _flushing = false;
+  }
+  // after the drain, not before: a blob belonging to a row this flush was about to send
+  // must not be collected out from under it.
+  try {
+    await sweepOrphanedBlobs();
+  } catch {
+    /* a sweep that cannot run costs space, never correctness */
   }
 }
 
@@ -1366,14 +1509,26 @@ export async function startConditionCapture(stopId, phase = "delivery") {
   return resp.json();
 }
 
-export async function addConditionPhoto(captureId, prompt, contentB64 = null, contentType = null) {
-  // F12: a photo taken in a dead zone queues with an idempotency key and appends
-  // to the hash-chain exactly once on reconnect (offline.ingest dedupes replays)
-  return queuedPost(`/protection/condition/${captureId}/photo`, {
-    prompt,
-    content_b64: contentB64,
-    content_type: contentType,
-  });
+/* AI-CONTEXT: takes a FILE now, not a base64 string, and the signature change is the
+ * point rather than a tidy-up. The caller used to build the string on the main thread
+ * before it could even call this, so the freeze happened before the queue was involved.
+ *
+ * `file` is downscaled off-thread, held as a Blob, and only serialised if and when it is
+ * actually sent. The legacy string form is still accepted because nine tests and the
+ * replay of anything queued by an older build pass one. */
+export async function addConditionPhoto(captureId, prompt, content = null, contentType = null) {
+  const path = `/protection/condition/${captureId}/photo`;
+  // the argument keeps its position and gains a type: a File/Blob takes the fast path,
+  // a string is what nine existing tests and any queue written by an older build pass.
+  if (!content || typeof content === "string") {
+    return queuedPost(path, { prompt, content_b64: content, content_type: contentType });
+  }
+  const blob = await prepareImage(content);
+  return queuedPost(
+    path,
+    { prompt, content_b64: null, content_type: blob.type || contentType || null },
+    { blob, field: "content_b64", filename: content.name || null, contentType: blob.type },
+  );
 }
 
 export async function fileIncident(kind, note) {
@@ -1614,15 +1769,32 @@ export async function shareProtectionPack(kind, ref, recipient = null) {
 
 // M5-FR3's missing writer. Queued like every other capture (§15.1) — a credential
 // photographed at a scale house with no signal is exactly the case this exists for.
-export async function captureDocument({ docType, contentB64, filename, contentType, expiresOn, stopId } = {}) {
-  return queuedPost("/protection/documents", {
+export async function captureDocument({
+  docType,
+  file = null,
+  contentB64 = null,
+  filename,
+  contentType,
+  expiresOn,
+  stopId,
+} = {}) {
+  const body = {
     doc_type: docType,
     content_b64: contentB64,
     filename: filename ?? null,
     content_type: contentType ?? null,
     expires_on: expiresOn || null,
     stop_id: stopId ?? null,
-  });
+  };
+  // `file` is the path the sheet takes now; `contentB64` stays for the portals and for
+  // tests that hand over a string.
+  if (!file) return queuedPost("/protection/documents", body);
+  const blob = await prepareImage(file);
+  return queuedPost(
+    "/protection/documents",
+    { ...body, content_b64: null, content_type: blob.type || contentType || null },
+    { blob, field: "content_b64", filename: filename || file.name || null, contentType: blob.type },
+  );
 }
 
 // the document itself. Held as an object URL by the caller, which revokes it —

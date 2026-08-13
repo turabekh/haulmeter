@@ -28,6 +28,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { login, logout } from "../src/core/api.js";
+import { __resetIdbForTests } from "../src/core/idb.js";
 
 // read from the vitest root (ui/) rather than import.meta.url: test modules are served
 // by vite over http, so import.meta.url is not a file URL here
@@ -118,6 +119,12 @@ beforeEach(() => {
   // a fresh IDB per test: `haulmeter` is a real database here and a token left behind
   // would let the no-token case pass for the wrong reason
   globalThis.indexedDB = new IDBFactory();
+  // AI-CONTEXT: and the app's cached HANDLE has to go with it. `core/idb.js` opens the
+  // database once and keeps it — one open per sign-in instead of one per write, which is
+  // what makes the blob queue cheap — so a swapped factory leaves the app writing into a
+  // database nothing can read. Without this the mirror lands in the previous test's
+  // database and `readToken` correctly reports no token.
+  __resetIdbForTests();
   localStorage.clear();
   vi.restoreAllMocks();
 });

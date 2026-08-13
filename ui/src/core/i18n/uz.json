@@ -274,6 +274,7 @@
   "docs.cap_offline": "Aloqa bo'lmasa, telefoningizga saqlanadi.",
   "docs.cap_photo": "Rasm yoki fayl",
   "docs.cap_queued": "Telefonga saqlandi. Aloqa paydo bo'lganda yuboriladi.",
+  "docs.cap_lost": "Telefonga saqlab bo'lmadi. Suratni qayta oling.",
   "docs.cap_replaced_done": "Eskisi arxivlandi, o'chirilmadi.",
   "docs.cap_replaces": "Sizda allaqachon shundaysi bor. Saqlash uni almashtiradi — eskisi yozuvlaringizda qoladi.",
   "docs.cap_save": "Hamyonga saqlash",

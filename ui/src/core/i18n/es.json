@@ -274,6 +274,7 @@
   "docs.cap_offline": "Se guarda en tu teléfono si no hay señal.",
   "docs.cap_photo": "Foto o archivo",
   "docs.cap_queued": "Guardado en tu teléfono. Se sincroniza cuando haya señal.",
+  "docs.cap_lost": "No se pudo guardar en tu teléfono. Toma la foto otra vez.",
   "docs.cap_replaced_done": "El anterior se archivó, no se borró.",
   "docs.cap_replaces": "Ya tienes uno de estos. Guardar lo reemplaza — el anterior queda en tus registros.",
   "docs.cap_save": "Guardar en la cartera",

@@ -103,10 +103,20 @@ ui-layout-only: env
 ui-pwa: env
 	$(COMPOSE) run --rm --entrypoint sh ui -c "npx --yes playwright install --with-deps chromium >/dev/null 2>&1 || npx --yes playwright install chromium; npx vite build && npx playwright test --config=playwright.pwa.config.js"
 
+# AI-CONTEXT: the image pipeline in a REAL browser. `prepareImage` falls back to the
+# original blob whenever the browser cannot downscale, which is correct and silent —
+# happy-dom has no `OffscreenCanvas` or `createImageBitmap`, so every vitest upload
+# assertion exercises the passthrough and would stay green if the downscale never ran.
+# Same argument as ui-pwa: a manifest check that reads the manifest is how `"icons": []`
+# shipped. Needs the dev server, which it brings up itself.
+ui-image: env
+	$(COMPOSE) up -d ui
+	$(COMPOSE) run --rm --entrypoint sh ui -c "npx --yes playwright install --with-deps chromium >/dev/null 2>&1 || npx --yes playwright install chromium; npx playwright test --config=playwright.image.config.js"
+
 # preflight runs FIRST, while everything is still down; ui-layout then brings up the
 # one service it needs. Order matters — reversing them puts the port check after the
 # thing that binds the port.
-ci: env preflight lint test ui-layout ui-pwa
+ci: env preflight lint test ui-layout ui-pwa ui-image
 
 # --- Real POI data (PRD §12) — live pulls only, never in CI ---
 # Dev seed is OFF by default; this forces it on for local field-testing.

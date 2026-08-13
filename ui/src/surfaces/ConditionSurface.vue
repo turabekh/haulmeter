@@ -7,11 +7,16 @@
      F12 evidence-envelope follow-up. -->
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { ArrowLeft, Camera, Check } from "lucide-vue-next";
+import { ArrowLeft, Camera, Check, TriangleAlert } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
-import { activeStopId, startConditionCapture, addConditionPhoto } from "../core/api.js";
+import {
+  activeStopId,
+  startConditionCapture,
+  addConditionPhoto,
+  CAPTURE_NOT_STORED,
+} from "../core/api.js";
 
 const router = useRouter();
 const { t } = useI18n();
@@ -23,6 +28,7 @@ const captureId = ref(null);
 const done = ref(false);
 const busy = ref(false);
 const noStop = ref(false);
+const lost = ref(false);
 
 onMounted(async () => {
   if (!activeStopId.value) {
@@ -40,27 +46,26 @@ onMounted(async () => {
 
 const step = computed(() => sequence.value[index.value]);
 
-function fileToB64(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(",")[1]);
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
-}
-
+// AI-CONTEXT: this is the worst of the six upload sites, because it is a SEQUENCE —
+// a driver photographs a trailer corner, a seal and a load six times in a row, and every
+// one of them read 3–8 MB to a base64 string on the main thread before anything moved.
+// The freeze was therefore per shot, in the one flow that guarantees several.
+// `addConditionPhoto` takes the File now and downscales it off-thread.
 async function onCapture(event) {
   const file = event.target.files?.[0];
   event.target.value = ""; // allow re-picking the same file
   if (!file || busy.value) return;
   busy.value = true;
+  lost.value = false;
   try {
-    const b64 = await fileToB64(file);
-    await addConditionPhoto(captureId.value, step.value, b64, file.type || null);
+    await addConditionPhoto(captureId.value, step.value, file, file.type || null);
     if (index.value + 1 >= sequence.value.length) done.value = true;
     else index.value += 1;
-  } catch {
-    /* offline / failed — stay on this step; the driver retries (F12 follow-up) */
+  } catch (err) {
+    // §15.4: a capture that reached no storage at all must not look like a dead zone,
+    // which is the one failure this flow already tolerates silently.
+    if (err?.message === CAPTURE_NOT_STORED) lost.value = true;
+    /* otherwise offline / failed — stay on this step; the driver retries (F12 follow-up) */
   }
   busy.value = false;
 }
@@ -99,6 +104,14 @@ async function onCapture(event) {
            Same shape as EvidenceSurface: what you can READ stays — the step and the
            progress are still there — and only the acting stops. The progress is
            already durable server-side, so saying so is a fact, not a reassurance. -->
+      <!-- §15.4: the step does not advance, so without this the driver taps the shutter,
+           nothing visibly happens, and the only reading available is "the camera is
+           broken". It clears on the next attempt. -->
+      <p v-if="lost" class="cond__lost" role="alert">
+        <TriangleAlert :size="18" :stroke-width="2" aria-hidden="true" />
+        {{ t("docs.cap_lost") }}
+      </p>
+
       <p v-if="isDriving" class="muted">{{ t("cond.driving") }}</p>
       <label v-else class="shoot">
         <Camera :size="40" :stroke-width="2" aria-hidden="true" />
@@ -153,6 +166,17 @@ async function onCapture(event) {
   font-size: var(--type-display-size);
   line-height: var(--type-display-line);
   font-weight: var(--type-display-weight);
+}
+/* §15.4 / §8: `flare` is the error grade. Sits above the shutter so it is read on the
+   way back to the control the driver is about to use again. */
+.cond__lost {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-4);
+  color: var(--flare-500);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
 }
 /* camera-first: one giant target (S2 gloves, §6.5) */
 .shoot {

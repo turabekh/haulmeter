@@ -14,7 +14,7 @@
 import { ref, computed, onMounted } from "vue";
 import { Camera, Check, TriangleAlert } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
-import { captureDocument, fetchDocumentTypes, fetchWouldReplace } from "../api.js";
+import { captureDocument, fetchDocumentTypes, fetchWouldReplace, CAPTURE_NOT_STORED } from "../api.js";
 import Spinner from "./Spinner.vue";
 
 // AI-CONTEXT: `stopId` is what made §10.2's BOL row honest.
@@ -93,22 +93,18 @@ function onFile(event) {
   preview.value = URL.createObjectURL(f);
 }
 
-function b64(f) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(",")[1]);
-    r.onerror = reject;
-    r.readAsDataURL(f);
-  });
-}
-
+// AI-CONTEXT: the base64 read that used to live here is gone. It ran on the MAIN THREAD
+// over a 3–8 MB camera frame, so the sheet froze between the tap and anything happening —
+// and it froze before the request was even attempted, which is why it looked like a slow
+// network on a screen where the network had not been touched yet. `captureDocument` takes
+// the File now and downscales it in a worker.
 async function submit() {
   if (!ready.value) return;
   busy.value = true;
   try {
     const res = await captureDocument({
       docType: docType.value,
-      contentB64: await b64(file.value),
+      file: file.value,
       filename: file.value.name,
       contentType: file.value.type,
       expiresOn: wantsExpiry.value ? expiresOn.value : null,
@@ -118,9 +114,18 @@ async function submit() {
     done.value = res?.queued ? "queued" : "filed";
     replacedLabel.value = replaces.value ? t(`docs.type.${docType.value}`) : null;
     emit("captured", { state: done.value });
-  } catch {
-    done.value = "queued"; // never lose a capture to a server hiccup
-    emit("captured", { state: "queued" });
+  } catch (err) {
+    // AI-CONTEXT: "queued" was said here for EVERY failure, including the one where the
+    // capture was not stored anywhere. §15.4 wants a failure a driver can act on, and
+    // "saved to your phone" is the opposite of actionable when nothing was saved — the
+    // driver walks away from the dock and the BOL is gone. These two need opposite words.
+    if (err?.message === CAPTURE_NOT_STORED) {
+      done.value = "lost";
+      emit("captured", { state: "lost" });
+    } else {
+      done.value = "queued"; // never lose a capture to a server hiccup
+      emit("captured", { state: "queued" });
+    }
   } finally {
     busy.value = false;
   }
@@ -129,12 +134,19 @@ async function submit() {
 
 <template>
   <div class="cap">
-    <p v-if="done" class="cap__done">
+    <!-- §15.4: inline, specific, and it does NOT wear the confirmation's tick -->
+    <p v-if="done === 'lost'" class="cap__lost" role="alert">
+      <TriangleAlert :size="18" :stroke-width="2" aria-hidden="true" />
+      {{ t("docs.cap_lost") }}
+    </p>
+    <p v-if="done && done !== 'lost'" class="cap__done">
       <Check :size="18" :stroke-width="2.5" aria-hidden="true" />
       {{ done === "queued" ? t("docs.cap_queued") : t("docs.cap_filed") }}
     </p>
     <!-- and said again afterwards, because it happened -->
-    <p v-if="done && replacedLabel" class="cap__hint">{{ t("docs.cap_replaced_done") }}</p>
+    <p v-if="done && done !== 'lost' && replacedLabel" class="cap__hint">
+      {{ t("docs.cap_replaced_done") }}
+    </p>
 
     <template v-else>
       <template v-if="!fixedType">
@@ -282,6 +294,18 @@ async function submit() {
   gap: var(--s-2);
   color: var(--ledger-500);
   font-size: var(--type-body-size);
+}
+/* §15.4 / §12.4: the failure reads as a failure. `flare` is §8's destructive/error
+   grade and the form stays open underneath, because the only useful next action is
+   to take the photograph again. */
+.cap__lost {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-4);
+  color: var(--flare-500);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
 }
 .cta {
   display: flex;

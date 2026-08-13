@@ -274,6 +274,7 @@
   "docs.cap_offline": "Saves to your phone if you have no signal.",
   "docs.cap_photo": "Photo or file",
   "docs.cap_queued": "Saved on your phone. Syncs when you have signal.",
+  "docs.cap_lost": "Couldn't save on your phone. Take the photo again.",
   "docs.cap_replaced_done": "The previous one was archived, not deleted.",
   "docs.cap_replaces": "You already have one of these. Saving replaces it — the old one stays in your records.",
   "docs.cap_save": "Save to wallet",
