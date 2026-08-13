@@ -7,6 +7,7 @@ the pure adapters + pipeline against committed fixtures). Idempotent by design.
 import os
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.foundation.f02_facility import public as facility
@@ -363,3 +364,85 @@ def run_location_retention(db: Session, commit: bool = True) -> dict:
     if commit:
         db.commit()
     return summary
+
+
+def run_image_thumbnails(db: Session, commit: bool = True, batch: int = 200) -> dict:
+    """Derive a small JPEG for every stored image that does not have one yet.
+
+    AI-CONTEXT: this job IS the backfill, and that is deliberate rather than lazy.
+
+    Every existing row carries `thumbnail_state IS NULL`, which means "not reached yet",
+    so the 89 evidence artifacts and 106 documents already on the dev box are simply the
+    first few passes' worth of work. A separate one-shot script would be a second thing
+    to write, run once, and never test again — and the shape it would have is exactly
+    this loop. HANDOFF-121's N-03 is the warning: a migration and the code that needs it
+    landing at different moments is how seven jobs ran against the wrong schema.
+
+    BOUNDED PER PASS. A driver who photographs a whole route lands a few dozen rows at
+    once, and decoding every image on the box in one transaction is how a five-minute
+    janitor becomes an outage. `batch` is the ceiling and the remainder waits five
+    minutes, which is invisible: nothing blocks on a thumbnail, the surfaces fall back to
+    the original while it is missing.
+
+    "none" IS A SUCCESS. A PDF rate con has no image to derive from, and recording that
+    is what stops it being re-decoded forever. Only `failed` is worth retrying, and it is
+    left NULL precisely so the next pass picks it up — a transient MinIO blip should heal
+    itself, and it is the one case where doing nothing is the right record.
+    """
+    from app.foundation.f04_evidence import public as evidence
+    from app.foundation.f06_documents import public as documents
+
+    storage = documents.default_storage()
+    made = 0
+    skipped = 0
+    failed = 0
+    missing = 0
+
+    def _derive(storage_key: str) -> str | None:
+        """'ready' / 'none' / 'missing' / None, where None means 'try again next pass'."""
+        nonlocal made, skipped, failed, missing
+        try:
+            original = storage.get(storage_key)
+        except Exception as exc:
+            # AI-CONTEXT: two failures that look alike and are opposites. An object that
+            # is GONE will never appear, and re-reading it every five minutes forever is
+            # what this job did on its first real run — 27 rows on the dev box point at
+            # bytes lost in the era `main._wire_object_storage` describes. A store that
+            # is briefly unreachable must heal instead, so it stays NULL and the next
+            # pass picks it up.
+            if documents.is_missing_object(exc):
+                missing += 1
+                return "missing"
+            failed += 1
+            return None
+        thumb = documents.make_thumbnail(original)
+        if thumb is None:
+            skipped += 1
+            return "none"
+        try:
+            storage.put(
+                documents.thumbnail_key(storage_key), thumb, documents.THUMB_CONTENT_TYPE
+            )
+        except Exception:
+            failed += 1
+            return None
+        made += 1
+        return "ready"
+
+    for model in (documents.Document, evidence.EvidenceArtifact):
+        rows = db.scalars(
+            select(model)
+            .where(model.thumbnail_state.is_(None), model.storage_key.is_not(None))
+            .limit(batch)
+        ).all()
+        for row in rows:
+            state = _derive(row.storage_key)
+            if state is not None:
+                row.thumbnail_state = state
+
+    if commit:
+        db.commit()
+    # `missing` is reported separately from `failed` on purpose: it is not this job
+    # misbehaving, it is a count of stored records whose bytes are gone, and burying it
+    # in a failure total is how that stops being visible to anyone.
+    return {"made": made, "skipped": skipped, "failed": failed, "missing": missing}

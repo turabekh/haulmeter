@@ -69,6 +69,27 @@ class MinioObjectStorage:
         self._client.remove_object(self._bucket, key)
 
 
+def is_missing_object(exc: BaseException) -> bool:
+    """AI-CONTEXT: "the bytes are not there" vs "I could not reach the store", and the
+    knowledge of how each adapter says so lives HERE, beside the adapters, rather than in
+    every caller that has to tell them apart.
+
+    They are opposite facts and a caller that conflates them gets one of two behaviours
+    wrong: retry a permanently absent object forever, or give up on a store that was
+    briefly unwell. The derivative job hit the first — 27 rows on the dev box point at
+    objects that no longer exist (documents written during the era `main._wire_object_storage`
+    describes, when a SignatureDoesNotMatch was swallowed and every upload went to an
+    in-process dict), and it re-read all 27 every five minutes with nothing to show.
+
+    `KeyError` is the in-memory store's version of the same fact; MinIO raises `S3Error`
+    carrying `NoSuchKey`, matched on the code rather than on the class so this needs no
+    import of a client the tests deliberately never load.
+    """
+    if isinstance(exc, KeyError):
+        return True
+    return getattr(exc, "code", None) in {"NoSuchKey", "NoSuchBucket"}
+
+
 _default_storage: ObjectStorage = InMemoryObjectStorage()
 
 

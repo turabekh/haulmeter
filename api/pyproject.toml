@@ -10,6 +10,12 @@ dependencies = [
     # as base64 in a JSON body, which inflated every capture by a third over the LTE of
     # a truck stop. FastAPI needs this to read a form at all.
     "python-multipart>=0.0.9",
+    # AI-CONTEXT: image derivatives (f06_documents/domain/thumbnails.py). "Thumbnail" was
+    # a variable name in two surfaces and never a file — both rendered the ORIGINAL into a
+    # box a few dozen dp across, so opening a past load downloaded every full-size
+    # photograph of every stop. Pillow is the only new runtime cost of fixing that; the
+    # image size delta is recorded in the commit rather than guessed at.
+    "pillow>=11.0",
     "uvicorn[standard]>=0.32",
     "sqlalchemy>=2.0.36",
     "alembic>=1.14",

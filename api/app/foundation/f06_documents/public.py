@@ -31,10 +31,21 @@ from .domain.storage import (
     MinioObjectStorage,
     ObjectStorage,
     default_storage,
+    is_missing_object,
     set_default_storage,
+)
+from .domain.thumbnails import (
+    THUMB_CONTENT_TYPE,
+    THUMB_EDGE,
+    make_thumbnail,
+    thumbnail_key,
 )
 
 __all__ = [
+    "THUMB_CONTENT_TYPE",
+    "THUMB_EDGE",
+    "make_thumbnail",
+    "thumbnail_key",
     "Document",
     "DocType",
     "ExtractionStatus",
@@ -59,5 +70,6 @@ __all__ = [
     "InMemoryObjectStorage",
     "MinioObjectStorage",
     "default_storage",
+    "is_missing_object",
     "set_default_storage",
 ]

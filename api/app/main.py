@@ -35,42 +35,15 @@ settings = get_settings()
 
 
 def _wire_object_storage() -> None:
-    # AI-CONTEXT: put MinIO (already in the compose topology, 9018) in the F6
-    # object-storage path so evidence photo bytes persist and serve across
-    # processes. Falls back to the in-memory default if MinIO is unreachable —
-    # capture never breaks (the hash/chain still records; the image is just
-    # unavailable). Tests keep the in-memory default (lifespan doesn't run).
-    from app.foundation.f06_documents import public as documents
+    # AI-CONTEXT: moved to `app/wiring.py` so the WORKER can call it too. It lived here,
+    # in the API's lifespan, and the worker is a separate process — so `default_storage()`
+    # there was the in-memory dict and the first job to reach for a driver's photograph
+    # failed on every row. It sits at the app root rather than in `core/` because core is
+    # forbidden from importing foundation (import-linter caught exactly that). Tests keep
+    # the in-memory default (lifespan does not run).
+    from app.wiring import wire_object_storage
 
-    try:
-        storage = documents.MinioObjectStorage(
-            settings.minio_endpoint,
-            settings.minio_access_key,
-            settings.minio_secret_key,
-            settings.minio_bucket,
-        )
-        documents.set_default_storage(storage)
-        # prove the credentials actually work rather than trusting construction:
-        # the client is lazy, so a bad secret only surfaces on first use, which used
-        # to be a driver's photo hours later
-        storage.put("_wiring/probe", b"ok", "text/plain")
-    except Exception as exc:  # MinIO down / misconfigured -> keep the in-memory default
-        # AI-CONTEXT: the fallback stays — a capture must never crash on storage —
-        # but the SILENCE does not. This swallowed a SignatureDoesNotMatch for the
-        # whole life of the project: the compose file passed no MinIO credentials to
-        # this service, so it used its own defaults, whose secret did not match
-        # MINIO_ROOT_PASSWORD. Every document and every evidence photo went into an
-        # in-process dict and evaporated on the next restart, while the UI reported
-        # success. A backend that cannot store bytes has to say so out loud.
-        import sys
-
-        print(
-            f"WARNING: object storage unavailable ({type(exc).__name__}: {exc}). "
-            "Falling back to IN-MEMORY storage — uploaded bytes will NOT survive a "
-            "restart. Check MINIO_* in infra/.env.",
-            file=sys.stderr,
-            flush=True,
-        )
+    wire_object_storage("api")
 
 
 def _register_module_flags() -> None:

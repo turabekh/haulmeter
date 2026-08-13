@@ -84,6 +84,10 @@ class EvidenceArtifact(Base):
     )
     storage_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     content_hash: Mapped[str] = mapped_column(String(64), index=True)
+    # AI-CONTEXT: as on f06.document — whether a derivative has been attempted. These are
+    # the rows the Evidence and Load-record contact sheets draw, and until now each one
+    # was drawn from the full-size original. See f06_documents/domain/thumbnails.py.
+    thumbnail_state: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     exif: Mapped[dict] = mapped_column(JSON, default=dict)
     gps_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     gps_lon: Mapped[float | None] = mapped_column(Float, nullable=True)

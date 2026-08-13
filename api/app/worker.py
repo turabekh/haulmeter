@@ -86,6 +86,22 @@ def _jobs() -> list[Job]:
         # The config value is the switch, and it is the honest one — an operator turning
         # this off should be setting a retention policy, not disabling a job.
         Job("location_retention", None, 86400, runners.run_location_retention),
+        # AI-CONTEXT: image derivatives. "Thumbnail" was a variable name in two surfaces
+        # and never a file — both rendered the ORIGINAL into a box a few dozen dp across,
+        # so opening a past load pulled every full-size photograph of every stop.
+        #
+        # Five minutes rather than a minute: nothing BLOCKS on a thumbnail. A surface with
+        # no derivative yet falls back to the original, which is exactly the behaviour
+        # that shipped, so the cost of being late is that one contact sheet is briefly as
+        # slow as it always was. Being aggressive here would buy nothing and would put
+        # image decoding on the same cadence as M3's money clock.
+        #
+        # Unflagged, for the same reason as `outbound_retry` and `location_retention`:
+        # this is infrastructure behind surfaces that are already live, not a capability
+        # with an activation decision. A flag nobody registered returns False, and a
+        # derivative job that silently never runs is indistinguishable from the defect it
+        # was written to fix.
+        Job("image_thumbnails", None, 300, runners.run_image_thumbnails),
     ]
 
 
@@ -203,6 +219,22 @@ def _startup() -> None:
         db_registry.import_all_models()
     except Exception as exc:
         _log(f"model registration failed: {exc!r}")
+
+    # AI-CONTEXT: the worker needs OBJECT STORAGE too, and for the life of this project
+    # it did not have it. `_wire_object_storage` ran in the API's FastAPI lifespan, and
+    # this is a different process — so `default_storage()` here was the empty in-memory
+    # dict every process starts with. No job had ever reached for a stored byte, so
+    # nothing had failed; the first one that did (image derivatives) failed on every
+    # single row and would have gone on doing so forever, reporting a count.
+    #
+    # Logged either way. A worker silently running against in-memory storage is exactly
+    # the class of defect the API's own warning was added for.
+    try:
+        from app.wiring import wire_object_storage
+
+        _log("object storage: minio" if wire_object_storage("worker") else "object storage: MEMORY")
+    except Exception as exc:
+        _log(f"object storage wiring failed: {exc!r}")
 
     # session creation is INSIDE the guard: a database that is a few seconds late
     # coming up must leave the worker running to retry on the next tick, not kill it

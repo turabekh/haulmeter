@@ -36,6 +36,14 @@ class Document(Base):
     byte_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     content_hash: Mapped[str] = mapped_column(String(64), index=True)
 
+    # AI-CONTEXT: whether the derivative has been ATTEMPTED, which is the only thing a
+    # column is needed for — the key itself is `<storage_key>.thumb.jpg`, always
+    # derivable, and storing it too would be a second fact to keep in step with the first.
+    # NULL means the job has not reached this row yet; "none" means it tried and there is
+    # no image here (a PDF rate con is the normal case, not a failure), so a scanned
+    # contract is never re-decoded every five minutes forever.
+    thumbnail_state: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+
     issued_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     expires_on: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     sent_reminders: Mapped[list] = mapped_column(JSON, default=list)
