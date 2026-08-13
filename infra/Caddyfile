@@ -29,6 +29,27 @@
 		reverse_proxy api:{$API_PORT}
 	}
 
+	# AI-CONTEXT: THE BROKER'S LINK, and without this route it reached the driver app.
+	#
+	# `PUBLIC_BASE_URL` + `/pack/s/<token>` is what goes into every counterparty email.
+	# The API route exists and is correctly session-free (§23: "an accounts-payable clerk
+	# will not make an account to read what a driver sent them") — but only `/api/*` was
+	# proxied, so the link fell through to the SPA below and answered **HTTP 200 with
+	# index.html**, whose router guard sends an unauthenticated visitor to sign-in. A
+	# broker clicking the evidence for a detention claim got a login screen for a trucking
+	# app. Measured against the live domain before this line existed.
+	#
+	# `handle` and NOT `handle_path`: the API's route really is `/pack/s/{token}`, so the
+	# prefix must survive. That is the opposite of the `/api` block above, where the prefix
+	# is ours and the routers know nothing about it.
+	#
+	# It stays OUT of `/api` on purpose. This is the one URL in the product a stranger
+	# reads, and §17 asks for one plain link; `haulmeter.online/pack/s/…` is a link a clerk
+	# can look at without wondering what `/api` means.
+	handle /pack/* {
+		reverse_proxy api:{$API_PORT}
+	}
+
 	# everything else is the built SPA. `try_files` sends unknown paths to index.html
 	# so a deep link (/load/<id>/evidence, which §13.5 requires notifications to use)
 	# is answered by the app rather than by a 404 from the filesystem.

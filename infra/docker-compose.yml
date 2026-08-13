@@ -160,6 +160,13 @@ services:
       # container the file (rule 9).
       - ./docker-compose.yml:/repo/infra/docker-compose.yml:ro
       - ./docker-compose.deploy.yml:/repo/infra/docker-compose.deploy.yml:ro
+      # AI-CONTEXT: the EDGE config, for `test_broker_link_is_reachable.py`. The routing it
+      # holds is invisible from the application — every test in this suite talks to the
+      # router directly, where a missing proxy route cannot be seen — and a link that never
+      # reaches the API is precisely the defect that test exists for: `/pack/s/<token>` was
+      # answered by the SPA, so every broker following a link from a counterparty email got
+      # the driver app's sign-in screen. Mounted read-only, like the compose files beside it.
+      - ./Caddyfile:/repo/infra/Caddyfile:ro
     depends_on:
       postgres:
         condition: service_healthy
