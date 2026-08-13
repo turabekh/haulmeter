@@ -29,7 +29,7 @@ class CountingGateway:
     def __init__(self):
         self.sent = []
 
-    def send_email(self, to_ref, subject, body):
+    def send_email(self, to_ref, subject, body, attachments=None):
         self.sent.append((to_ref, subject, body))
         return f"smtp-ok-{len(self.sent)}"
 

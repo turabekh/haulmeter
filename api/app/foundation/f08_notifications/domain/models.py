@@ -264,6 +264,15 @@ class OutboundMessage(Base):
     # through rather than being forced into a key that would collide on its second
     # legitimate use.
     dedupe_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # AI-CONTEXT: the PDF that rides with this message, as a storage key rather than bytes.
+    #
+    # Delivery is asynchronous, so the sweep — not the request — has to be able to produce
+    # the attachment a minute later. Storing the bytes on the row would put a multi-megabyte
+    # document in Postgres for every send; storing the KEY keeps the pack where F4 already
+    # pinned it, which is also the copy the link serves. One document, one place, two ways
+    # for a broker to reach it.
+    attachment_key: Mapped[str | None] = mapped_column(String(600), nullable=True)
+    attachment_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     provider_ref: Mapped[str | None] = mapped_column(String(300), nullable=True)
     # AI-CONTEXT: `sent_at` means IT WENT OUT, and until now it did not (audit F-06).
     #

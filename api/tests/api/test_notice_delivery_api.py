@@ -31,7 +31,7 @@ class FailingGateway:
         self.kind = kind
         self.sent = []
 
-    def send_email(self, to_ref, subject, body):
+    def send_email(self, to_ref, subject, body, attachments=None):
         self.sent.append(to_ref)
         return f"smtp-failed-{self.kind}"
 

@@ -669,6 +669,10 @@ def share_pack(
         # not "here is a new document". When the record really has moved on, `force` is the
         # deliberate way to say so.
         dedupe_key=key,
+        # the document itself, beside the link (§23). `subject` already names the load,
+        # so the filename says what the FILE is rather than repeating it.
+        attachment_key=evidence.pack_storage_key(shared),
+        attachment_name="load-record.pdf",
     )
     return {"shared": shared, "sent": True, "already_sent": False, "message": message}
 
@@ -1088,6 +1092,8 @@ def send_stop_packet(
         # refuses a second send; this is the half that survives two requests arriving
         # together, which the offline queue's replay makes ordinary rather than exotic.
         dedupe_key=f"stop_packet:{stop_ref}",
+        attachment_key=evidence.pack_storage_key(shared),
+        attachment_name="stop-paperwork.pdf",
     )
     return {"pack": pack, "shared": shared, "thread": thread}
 

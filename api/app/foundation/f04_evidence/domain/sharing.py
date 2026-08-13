@@ -93,6 +93,17 @@ def _share_days(db: Session) -> int:
 # address itself, and a broken link in an email to a broker is worse than an honest
 # sentence saying the evidence is available on request (§12.4). The caller writes the
 # sentence, because only the caller knows the document.
+def pack_storage_key(shared) -> str:
+    """Where a shared pack's bytes live, derived from the row rather than stored twice.
+
+    AI-CONTEXT: the same formula `share_pack` writes with. A second column holding a key
+    that is always computable is a second thing to keep in step with the first — and the
+    pair it is computed from (`log_id`, `content_hash`) is exactly what pins the document:
+    a share is the bytes that were sent, and those two identify them.
+    """
+    return f"packs/{shared.log_id}/{shared.content_hash}.pdf"
+
+
 def share_link(shared) -> str | None:
     from app.core.config import get_settings
 

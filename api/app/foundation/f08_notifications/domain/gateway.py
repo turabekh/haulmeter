@@ -43,12 +43,16 @@ class NotificationGateway(Protocol):
 
     def send_sms(self, to_ref: str, body: str) -> str: ...
 
-    def send_email(self, to_ref: str, subject: str, body: str) -> str: ...
+    def send_email(
+        self, to_ref: str, subject: str, body: str, attachments: list | None = None
+    ) -> str: ...
 
 
 class RecordingNotificationGateway:
     def __init__(self) -> None:
         self.sent: list[SentMessage] = []
+        # one entry per email, so `attachments[i]` belongs to the i-th email sent
+        self.attachments: list[list] = []
 
     def send_push(
         self,
@@ -65,8 +69,14 @@ class RecordingNotificationGateway:
         self.sent.append(SentMessage("sms", to_ref, None, body))
         return f"sms-{len(self.sent)}"
 
-    def send_email(self, to_ref: str, subject: str, body: str) -> str:
+    def send_email(
+        self, to_ref: str, subject: str, body: str, attachments: list | None = None
+    ) -> str:
         self.sent.append(SentMessage("email", to_ref, subject, body))
+        # AI-CONTEXT: recorded, so a test can assert the PDF really rode along. A recording
+        # gateway that silently dropped attachments would let "we attach the pack" pass
+        # everywhere while nothing was ever attached.
+        self.attachments.append(list(attachments or []))
         return f"email-{len(self.sent)}"
 
 
@@ -84,7 +94,9 @@ class StubNotificationGateway:
     def send_sms(self, to_ref: str, body: str) -> str:
         raise NotImplementedError("Twilio adapter is a seam; wired at activation")
 
-    def send_email(self, to_ref: str, subject: str, body: str) -> str:
+    def send_email(
+        self, to_ref: str, subject: str, body: str, attachments: list | None = None
+    ) -> str:
         raise NotImplementedError("transactional email adapter is a seam; wired at activation")
 
 
@@ -184,7 +196,9 @@ class WebPushNotificationGateway:
     def send_sms(self, to_ref: str, body: str) -> str:
         raise NotImplementedError("Twilio adapter is a seam; wired at activation")
 
-    def send_email(self, to_ref: str, subject: str, body: str) -> str:
+    def send_email(
+        self, to_ref: str, subject: str, body: str, attachments: list | None = None
+    ) -> str:
         raise NotImplementedError("transactional email adapter is a seam; wired at activation")
 
 
@@ -284,7 +298,9 @@ class SmtpNotificationGateway:
     def send_sms(self, to_ref: str, body: str) -> str:
         raise NotImplementedError("Twilio adapter is a seam; wired at activation")
 
-    def send_email(self, to_ref: str, subject: str, body: str) -> str:
+    def send_email(
+        self, to_ref: str, subject: str, body: str, attachments: list | None = None
+    ) -> str:
         import smtplib
         from email.message import EmailMessage
         from email.utils import make_msgid
@@ -310,6 +326,17 @@ class SmtpNotificationGateway:
         msg["Subject"] = subject
         msg["Message-ID"] = message_id
         msg.set_content(body)
+        # AI-CONTEXT: the pack itself, beside the link rather than instead of it (§23).
+        # A clerk who can open the document from their inbox does not have to click
+        # anything; the link survives because it is the half that records that they DID —
+        # "they opened it on the 12th" is evidence, and an attachment produces none.
+        #
+        # `application/pdf` explicitly: a filename is a hint and some gateways will guess
+        # `application/octet-stream`, which more filters quarantine than pass.
+        for name, data in attachments or []:
+            msg.add_attachment(
+                data, maintype="application", subtype="pdf", filename=name
+            )
         try:
             with smtplib.SMTP(
                 self._s.smtp_host, self._s.smtp_port, timeout=10

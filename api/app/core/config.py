@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     # scanner — so this rejects the absurd without ever refusing a real document.
     max_upload_mb: int = Field(default=25)
 
+    # AI-CONTEXT: the ceiling on a PDF riding along with a counterparty email. The link is
+    # in the body either way, so exceeding this costs a broker one click and never a
+    # delivery — while a bounced notice costs the driver the notice. 10 MB sits under the
+    # limit most corporate filters enforce; Gmail's own is 25. Measured on real packs:
+    # 96 KB median, 196 KB max today, and 2.2 MB for a pack carrying four real photographs.
+    max_email_attachment_mb: int = Field(default=10)
+
     # AI-CONTEXT: signs the short-lived image URLs an `<img src>` can load without a
     # header (api/media.py). Unset is supported and safe — a per-process key is generated
     # and the URLs simply stop working across a restart, which for a one-hour image

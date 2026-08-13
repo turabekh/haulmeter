@@ -944,6 +944,8 @@ def open_receivable(
     notice_body: str = "Please find attached the GPS evidence and invoice "
     "per the rate confirmation.",
     external_ref: str | None = None,
+    attachment_key: str | None = None,
+    attachment_name: str | None = None,
 ):
     # `external_ref` is the caller's idempotency key, unique where present
     # (`uq_receivable_external_ref`). M3 passes `m03:<claim_id>`; M4 does not pass one
@@ -977,6 +979,12 @@ def open_receivable(
             # accessorial, where one load can legitimately open several receivables, and
             # keying on the claim would silence all but the first.
             dedupe_key=f"{PURPOSE_INVOICE}:{receivable.id}",
+            # AI-CONTEXT: the body has said "Please find attached" since it was written,
+            # and nothing was ever attached. Now something is — and the default stays
+            # None, because this rail is shared with M4 accessorial, which has no pack of
+            # its own yet and must not claim one.
+            attachment_key=attachment_key,
+            attachment_name=attachment_name,
         )
     return receivable
 
@@ -1088,6 +1096,8 @@ def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=Non
                     notice_subject="Detention invoice",
                     notice_body=_notice_body(db, shared),
                     external_ref=f"{MODULE}:{claim.id}",
+                    attachment_key=evidence.pack_storage_key(shared),
+                    attachment_name="detention-evidence.pdf",
                 )
         except IntegrityError:
             # the concurrent filing the state guard cannot see: another transaction has
