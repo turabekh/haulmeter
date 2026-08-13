@@ -7,12 +7,14 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     Time,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -192,7 +194,23 @@ class OutboundThread(Base):
 
 class OutboundMessage(Base):
     __tablename__ = "outbound_message"
-    __table_args__ = {"schema": SCHEMA}
+    # AI-CONTEXT: THE INDEX IS DECLARED HERE, not only in migration 0073, and the reason
+    # is that the test database is built by `Base.metadata.create_all` — never by the
+    # migrations. A constraint written only in a migration is therefore invisible to the
+    # entire suite: measured, the unique index could be dropped from the dev database and
+    # all 24 dedupe tests still passed, because the one they ran against never had it.
+    #
+    # That is the same class of defect as a check that cannot fail. The model is what the
+    # tests get; the migration is what production gets; they have to say the same thing.
+    __table_args__ = (
+        Index(
+            "uq_f08_outbound_message_dedupe_key",
+            "dedupe_key",
+            unique=True,
+            postgresql_where=text("dedupe_key IS NOT NULL"),
+        ),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     thread_id: Mapped[uuid.UUID] = mapped_column(
@@ -207,6 +225,23 @@ class OutboundMessage(Base):
     # could say a notice was sent and not say to whom. A retry needs the address, and so
     # does anyone reconstructing what a broker was actually told.
     to_ref: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    # AI-CONTEXT: WHAT THIS MESSAGE IS FOR, so the same purpose cannot be sent twice.
+    #
+    # Duplicate suppression was five ad-hoc guards in four modules — a claim column here,
+    # a `pre_notice_sent_at` there, a packet state, a dunning column, and nothing at all
+    # on two paths. Each was written for its own case, which is how §23 entry 136 found
+    # `onSendNotice` "genuinely sent a broker two emails on a double tap", and how making
+    # sends asynchronous re-opened the same hole in `_existing_start_notice`.
+    #
+    # A key names the purpose AND the thing it is about — `detention_start:<claim>`,
+    # `dunning:nudge:<receivable>` — so "one notice per claim" stops being something each
+    # caller has to remember and becomes something the database will not allow.
+    #
+    # NULL means "not deduplicated", and the partial unique index ignores NULLs. A message
+    # with no natural identity — a driver's own approved free text — is still allowed
+    # through rather than being forced into a key that would collide on its second
+    # legitimate use.
+    dedupe_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     provider_ref: Mapped[str | None] = mapped_column(String(300), nullable=True)
     # AI-CONTEXT: `sent_at` means IT WENT OUT, and until now it did not (audit F-06).
     #

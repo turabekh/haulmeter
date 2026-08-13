@@ -111,6 +111,9 @@ def file_on_time_proof(
             gateway,
             counterparty_email,
             now=checked_in_at,
+            # one on-time proof per stop. `auto_file_on_arrival` and the manual route can
+            # both reach this, and a geofence bounce can reach it twice.
+            dedupe_key=f"on_time:{stop.id}",
         )
         # asynchronous now: nothing has gone out yet, and saying otherwise here is exactly
         # the claim audit F-06 removed. The ref is what the sweep reconciles against.
@@ -984,7 +987,20 @@ def send_stop_packet(
     thread = notify.create_thread(
         db, account_id, subject=subject, counterparty_ref=counterparty_ref
     )
-    notify.send_counterparty_message(db, thread, where, gateway, to_ref, now=now)
+    notify.send_counterparty_message(
+        db,
+        thread,
+        where,
+        gateway,
+        to_ref,
+        now=now,
+        # one handoff per STOP, which is the packet's own identity: `stop_ref` is
+        # uniquely constrained and `draft_stop_packet` is get-or-create (§23 entry 136),
+        # so keying here matches the row it announces. The packet's state guard already
+        # refuses a second send; this is the half that survives two requests arriving
+        # together, which the offline queue's replay makes ordinary rather than exotic.
+        dedupe_key=f"stop_packet:{stop_ref}",
+    )
     return {"pack": pack, "shared": shared, "thread": thread}
 
 

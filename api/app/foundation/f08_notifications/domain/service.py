@@ -3,6 +3,7 @@ from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .enums import (
@@ -632,6 +633,7 @@ def send_counterparty_message(
     gateway: NotificationGateway | None = None,
     to_ref: str = "",
     now: datetime | None = None,
+    dedupe_key: str | None = None,
 ) -> OutboundMessage:
     """Record the decision to send. The BYTES leave on the `outbound_mail` sweep.
 
@@ -659,11 +661,26 @@ def send_counterparty_message(
     """
     _ = gateway  # the transport is the sweep's business now, not the caller's
     now = now or datetime.now(UTC)
+
+    # AI-CONTEXT: ONE MESSAGE PER PURPOSE, and the constraint is what enforces it.
+    #
+    # This lookup is the fast path, not the guarantee. §23 closed the four money races on
+    # the reasoning that **an application check reads rows a concurrent transaction has
+    # not committed yet** — two taps landing together, or a request racing the offline
+    # queue's replay, both pass this SELECT and both go on to insert. The partial unique
+    # index is what makes the second one impossible; this only saves the round trip and
+    # returns the same row a caller would have got anyway.
+    if dedupe_key:
+        existing = existing_by_dedupe_key(db, dedupe_key)
+        if existing is not None:
+            return existing
+
     message = OutboundMessage(
         thread_id=thread.id,
         direction=MessageDirection.outbound,
         body=body,
         to_ref=to_ref,
+        dedupe_key=dedupe_key,
         # AI-CONTEXT: NULL, and the three NULLs mean three different things. `provider_ref`
         # NULL is "never attempted" — distinct from a `smtp-failed-…` ref, which is "tried
         # and did not go". `sent_at` NULL is what audit F-06 made load-bearing: only a send
@@ -674,9 +691,57 @@ def send_counterparty_message(
         sent_at=None,
         attempts=0,
     )
-    db.add(message)
-    db.flush()
+    # AI-CONTEXT: a SAVEPOINT, not a plain flush, and the difference matters twice over.
+    #
+    # This is the race the index exists for: another transaction commits the same purpose
+    # between our SELECT above and our INSERT here — a double tap, or a request arriving
+    # alongside the offline queue replaying the same capture. Postgres refuses the second
+    # row, which is exactly right, and leaves the transaction unusable until something
+    # unwinds it.
+    #
+    # `begin_nested()` scopes that unwind to THIS insert. A bare `db.rollback()` would
+    # discard the caller's whole transaction — the claim, the evidence record, the
+    # receivable — to recover from a duplicate we are choosing to tolerate. It would also
+    # silently destroy the surrounding work in the test session, which runs everything
+    # inside one outer transaction.
+    #
+    # Losing this race is a SUCCESS: both callers return the same message, and the broker
+    # gets one email.
+    try:
+        with db.begin_nested():
+            db.add(message)
+            db.flush()
+    except IntegrityError:
+        winner = existing_by_dedupe_key(db, dedupe_key) if dedupe_key else None
+        if winner is None:
+            raise
+        return winner
     return message
+
+
+def release_dedupe_key(db: Session, message: OutboundMessage) -> None:
+    """Give up a message's claim on its purpose, so a fresh one may take it.
+
+    AI-CONTEXT: the key answers "has this purpose been served?", and there is a case where
+    the honest answer is no even though a row exists — a notice that failed PERMANENTLY,
+    or one addressed to an email the driver has since corrected. The broker never received
+    it, so a replacement is not a duplicate; it is the first delivery.
+
+    Only a caller that owns the purpose can know this. M3's `_existing_start_notice`
+    already encodes the rule in five cases and is the authority; this is how it hands the
+    key over. The ROW IS NOT TOUCHED otherwise — it keeps its body, its recipient and its
+    `smtp-failed-…` ref, because "we tried and it bounced" is history a dispute may need,
+    and the address-aware rule exists precisely so that history is not rewritten.
+    """
+    message.dedupe_key = None
+    db.flush()
+
+
+def existing_by_dedupe_key(db: Session, dedupe_key: str) -> OutboundMessage | None:
+    """The message already serving this purpose, if there is one."""
+    return db.scalars(
+        select(OutboundMessage).where(OutboundMessage.dedupe_key == dedupe_key)
+    ).first()
 
 
 MAX_SEND_ATTEMPTS = 5

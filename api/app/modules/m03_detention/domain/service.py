@@ -483,6 +483,7 @@ def send_pre_detention_notice(
         claim,
         gateway,
         now,
+        purpose=PURPOSE_PRE_NOTICE,
         subject="Free time expiring — detention will begin",
         body="Per the rate confirmation, free time is nearly used at this stop. "
         "Detention will begin accruing shortly.",
@@ -569,11 +570,21 @@ def send_detention_start_notice(
     existing = _existing_start_notice(db, claim)
     if existing is not None:
         return existing
+    # AI-CONTEXT: the rule above has just decided a FRESH send is legitimate — the last
+    # attempt failed permanently, or it was addressed to an email the driver has since
+    # corrected. The broker never received it, so the replacement is not a duplicate; it
+    # is the first delivery. Hand the purpose over so the new message may claim it.
+    #
+    # The old row keeps everything else. "We tried this address and it bounced" is history
+    # a dispute may need, and the address-aware rule exists precisely so that history is
+    # not rewritten.
+    _release_start_notice_key(db, claim)
     message = _send_counterparty(
         db,
         claim,
         gateway,
         now,
+        purpose=PURPOSE_START_NOTICE,
         subject="Detention now accruing",
         body="Per the rate confirmation, free time has been exceeded at this stop; "
         "detention is now accruing at the contracted rate.",
@@ -589,7 +600,25 @@ def send_detention_start_notice(
     return message
 
 
-def _send_counterparty(db, claim, gateway, now, subject, body):
+# AI-CONTEXT: the PURPOSE half of a dedupe key. One notice per claim per purpose, and the
+# purposes are distinct facts: "free time is about to run out" and "it has run out" are
+# two different things to tell a broker, and a claim legitimately produces both.
+PURPOSE_PRE_NOTICE = "detention_warning"
+PURPOSE_START_NOTICE = "detention_start"
+PURPOSE_INVOICE = "detention_invoice"
+
+
+def _release_start_notice_key(db: Session, claim: DetentionClaim) -> None:
+    """Free `detention_start:<claim>` for a re-send the five-case rule has approved."""
+    ref = claim.start_notice_message_ref
+    if ref is None:
+        return
+    prior = db.get(notify.OutboundMessage, ref)
+    if prior is not None and prior.dedupe_key is not None:
+        notify.release_dedupe_key(db, prior)
+
+
+def _send_counterparty(db, claim, gateway, now, subject, body, purpose=None):
     """None when there is no counterparty email — no thread, no row, no gateway call.
 
     AI-CONTEXT: finding F4. This addressed an invented `counterparty@unknown`, which is not
@@ -605,7 +634,18 @@ def _send_counterparty(db, claim, gateway, now, subject, body):
     thread = notify.create_thread(
         db, claim.account_id, subject=subject, counterparty_ref=claim.counterparty_ref
     )
-    return notify.send_counterparty_message(db, thread, body, gateway, to_ref, now=now)
+    return notify.send_counterparty_message(
+        db,
+        thread,
+        body,
+        gateway,
+        to_ref,
+        now=now,
+        # the key names the purpose AND the claim it is about, so "one start notice per
+        # claim" is something Postgres refuses to break rather than something five
+        # callers have to remember
+        dedupe_key=f"{purpose}:{claim.id}" if purpose else None,
+    )
 
 
 # --- Driver alerts: the P0 §13.2 names first (§23 entries 106, 107) ---
@@ -901,7 +941,18 @@ def open_receivable(
         thread = notify.create_thread(
             db, account_id, subject=notice_subject, counterparty_ref=counterparty_ref
         )
-        notify.send_counterparty_message(db, thread, notice_body, gateway, to_ref, now=now)
+        notify.send_counterparty_message(
+            db,
+            thread,
+            notice_body,
+            gateway,
+            to_ref,
+            now=now,
+            # scoped to the RECEIVABLE rather than the claim: this rail is shared with M4
+            # accessorial, where one load can legitimately open several receivables, and
+            # keying on the claim would silence all but the first.
+            dedupe_key=f"{PURPOSE_INVOICE}:{receivable.id}",
+        )
     return receivable
 
 
@@ -1206,6 +1257,10 @@ def run_dunning(db: Session, gateway, now: datetime | None = None) -> dict:
                 claim,
                 gateway,
                 now,
+                # each cadence step is its OWN purpose — day 3's nudge and day 10's
+                # chaser are different things to say, and a claim legitimately produces
+                # all three. Keying on the claim alone would send only the first.
+                purpose=f"dunning:{action}",
                 subject=DUNNING_SUBJECT[action],
                 body=_dunning_body(db, claim, now),
             )
