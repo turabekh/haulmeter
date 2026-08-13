@@ -1778,7 +1778,14 @@ describe("EvidenceSurface — consolidated evidence locker (M5/M3)", () => {
       await flushPromises();
       const img = w.find(".photo__img");
       expect(img.exists()).toBe(true);
-      expect(img.attributes("src")).toBe("/media/evidence/art-1?size=thumb&exp=1&sig=z");
+      // AI-CONTEXT: asserted as the browser RESOLVES it, not as a string. The string
+      // form went green while every contact sheet in production was empty: a
+      // root-relative src resolves against the page origin, so `/media/…` reached
+      // Caddy's SPA and came back as index.html with HTTP 200.
+      const resolved = new URL(img.attributes("src"), "https://haulmeter.online/x");
+      expect(resolved.href).not.toBe(new URL("/media/evidence/art-1", "https://haulmeter.online/x").href);
+      expect(resolved.pathname.endsWith("/media/evidence/art-1")).toBe(true);
+      expect(resolved.searchParams.get("sig")).toBe("z");
       expect(img.attributes("loading")).toBe("lazy");
       expect(img.attributes("decoding")).toBe("async");
 

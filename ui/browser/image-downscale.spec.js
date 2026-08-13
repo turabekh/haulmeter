@@ -115,3 +115,47 @@ test("a small scan and a PDF are passed through untouched", async ({ page }) => 
   expect(result.pdfSame, "a PDF is never decoded as an image").toBe(true);
   expect(result.pdfType).toBe("application/pdf");
 });
+
+// AI-CONTEXT: the check that would have caught the empty contact sheets.
+//
+// `media_url` returns an API-relative path and the surfaces put it in an `<img src>`. A
+// browser resolves a root-relative src against the DOCUMENT'S origin, so the deployed app
+// asked `haulmeter.online/media/…` — where Caddy's SPA `try_files` answered HTTP 200 with
+// index.html, which the browser then tried to decode as an image. Nothing threw and
+// nothing logged.
+//
+// Every unit test compared `src` to a STRING, and a string has no origin, so none of them
+// could express the defect. This asks the only question that contains it: given the page
+// the app is actually served from, where does the browser send the request?
+test("an image src is fetched from the API, never from the page itself", async ({ page }) => {
+  await page.goto("/map");
+
+  const result = await page.evaluate(async () => {
+    const { mediaUrl, API_BASE } = await import("/src/core/api.js");
+    const path = "/media/evidence/abc?size=thumb&exp=1&sig=s";
+
+    // resolved by the BROWSER, against the real document location
+    const resolved = new URL(mediaUrl(path), location.href);
+    const naive = new URL(path, location.href);
+    return {
+      resolvedHref: resolved.href,
+      naiveHref: naive.href,
+      pageOrigin: location.origin,
+      apiBase: API_BASE,
+      keepsSignature: resolved.searchParams.get("sig") === "s",
+      reachesMedia: resolved.pathname.endsWith("/media/evidence/abc"),
+    };
+  });
+
+  // the defect, in one line: the app must not ask its own SPA for a photograph
+  expect(result.resolvedHref).not.toBe(result.naiveHref);
+  expect(result.keepsSignature, "the signature must survive prefixing or every image 403s").toBe(
+    true,
+  );
+  expect(result.reachesMedia).toBe(true);
+  // dev serves the API on another origin; a deployment uses /api on the same one
+  const sameOrigin = result.resolvedHref.startsWith(result.pageOrigin);
+  expect(sameOrigin ? new URL(result.resolvedHref).pathname : result.resolvedHref).toContain(
+    result.apiBase.replace(/^https?:\/\/[^/]+/, "") || "8008",
+  );
+});

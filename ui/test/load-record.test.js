@@ -157,7 +157,11 @@ describe("Seeing a past load before doing anything with it", () => {
 
     // the photographs are ordinary images the browser owns: deferred below the fold,
     // decoded off the main thread, cached by the browser rather than held in JS memory
-    expect(imgs[0].attributes("src")).toContain("/media/evidence/p1");
+    // resolved the way a browser does — a bare string comparison is what let the
+    // page-origin defect ship (see media-url-origin.test.js)
+    const src = new URL(imgs[0].attributes("src"), "https://haulmeter.online/x");
+    expect(src.pathname.endsWith("/media/evidence/p1")).toBe(true);
+    expect(src.href).not.toBe("https://haulmeter.online/media/evidence/p1?size=thumb&exp=1&sig=x");
     expect(imgs[0].attributes("loading")).toBe("lazy");
     expect(imgs[0].attributes("decoding")).toBe("async");
   });

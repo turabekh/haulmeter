@@ -34,6 +34,7 @@ import {
   exportProtectionPack,
   shareProtectionPack,
   online,
+  mediaUrl,
 } from "../core/api.js";
 import { LoadState, Failure, failureOf } from "../core/load-state.js";
 import { formatMoney } from "../core/meter.js";
@@ -237,7 +238,7 @@ async function onDownload() {
           <li v-for="p in s.photos" :key="p.artifact_id" class="shots__item">
             <img
               v-if="p.thumb_url"
-              :src="p.thumb_url"
+              :src="mediaUrl(p.thumb_url)"
               class="shots__img"
               :alt="photoLabel(p.prompt)"
               loading="lazy"

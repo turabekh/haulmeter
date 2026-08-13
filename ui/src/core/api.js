@@ -674,6 +674,30 @@ export async function createActiveLoad(payload) {
 // photographed contract is a proposal and only the driver holds both the paper and
 // the phone. Not queued offline — there is nothing useful to show a driver who
 // photographs a rate con in a dead zone except the manual form they already have.
+/* AI-CONTEXT: an image URL has to be resolved against the API, and a browser resolves it
+ * against the PAGE. That difference shipped broken to production.
+ *
+ * `media_url` returns an API-relative path — `/media/evidence/<id>?…` — which is right
+ * for the API and wrong for an `<img>`. A browser resolves a root-relative `src` against
+ * the document's origin, so the deployed app requested `haulmeter.online/media/…`, where
+ * Caddy's SPA `try_files` answered **HTTP 200 with index.html**. Not a 404: a 200, with
+ * `content-type: text/html`, which the browser tried to decode as an image. Nothing
+ * errored, nothing logged, and every contact sheet was empty.
+ *
+ * Locally it fails the same way for the same reason — the page is 9008 and the API is
+ * 8008 — so this was broken in BOTH environments from the moment it shipped.
+ *
+ * `API_BASE` is exactly the thing that knows the difference: `http://localhost:8008` in
+ * dev, `/api` in a deployment where the proxy strips the prefix. This is §23 entry 92's
+ * lesson ("whose localhost?") arriving from a third direction, and it is invisible to a
+ * test that compares `src` to a string, because a string has no origin. */
+export function mediaUrl(path) {
+  if (!path) return null;
+  // an absolute URL is already resolved and must be left alone
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE}${path}`;
+}
+
 export async function importRateCon({ file = null, contentB64, filename, contentType } = {}) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const fields = {

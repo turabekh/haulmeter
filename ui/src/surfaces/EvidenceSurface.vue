@@ -25,6 +25,7 @@ import {
   fetchEvidence,
   exportProtectionPack,
   shareProtectionPack,
+  mediaUrl,
 } from "../core/api.js";
 import { useDriverState } from "../core/state.js";
 import BottomSheet from "../core/components/BottomSheet.vue";
@@ -198,7 +199,7 @@ function photoLabel(prompt) {
                    never fetched at all until it is scrolled to. -->
               <img
                 v-if="p.thumb_url"
-                :src="p.thumb_url"
+                :src="mediaUrl(p.thumb_url)"
                 class="photo__img"
                 :alt="photoLabel(p.prompt)"
                 loading="lazy"
