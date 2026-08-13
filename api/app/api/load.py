@@ -1100,7 +1100,15 @@ def _attach_media_urls(photos: list[dict]) -> None:
             continue
         ref = photo["artifact_id"]
         photo["thumb_url"] = media.media_url(media.KIND_EVIDENCE, ref, media.SIZE_THUMB)
-        photo["full_url"] = media.media_url(media.KIND_EVIDENCE, ref, media.SIZE_FULL)
+        # AI-CONTEXT: NO `full_url`. It was minted here beside the thumbnail and read by
+        # NOTHING — the ninth built-and-inert mechanism in this codebase's tally, created
+        # in the same session that quotes HANDOFF-122's warning about them.
+        #
+        # It is not free to leave: every photo in every contact sheet carried a second
+        # signed capability granting full-resolution access, minted on every render, for a
+        # reader that does not exist. Opening a photograph full-size is a real feature and
+        # a real design question (§8 says nothing about a lightbox), so it comes back with
+        # the surface that needs it — `media.SIZE_FULL` already works and is tested.
 
 
 def _with_media_urls(photos: list[dict]) -> list[dict]:

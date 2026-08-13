@@ -270,8 +270,30 @@ def draft_counterparty_message(
 
 
 def approve_and_send(db: Session, thread, body: str, gateway, to_ref: str):
-    # the driver approved the draft — send the English message via F8
-    return notifications.send_counterparty_message(db, thread, body, gateway, to_ref)
+    """The driver approved the draft — record the message; the sweep sends it.
+
+    AI-CONTEXT: the last unkeyed send path, and the only one where a double tap could
+    still put two emails in a broker's inbox. Every other purpose has a natural identity —
+    a claim, a receivable, a stop — and this one does not: a driver may legitimately write
+    to the same counterparty twice about different things, so keying on the thread alone
+    would silence the second one.
+
+    What IS a duplicate is the same approved words to the same thread. That is a second
+    tap, a replayed request, or a driver who did not see the first one land — never a
+    deliberate second message, because a driver who means to say something else says
+    something else. So the key is the thread plus a digest of the body, which is exactly
+    "the same purpose and intent" for text that has no other identity.
+
+    SHA-256 rather than the raw body: `dedupe_key` is 200 characters and a ghostwritten
+    message is longer than that, so a prefix would collide on two messages sharing an
+    opening line — which is the normal case for templated prose.
+    """
+    import hashlib
+
+    digest = hashlib.sha256(body.strip().encode()).hexdigest()[:32]
+    return notifications.send_counterparty_message(
+        db, thread, body, gateway, to_ref, dedupe_key=f"voice:{thread.id}:{digest}"
+    )
 
 
 # --- Conversational claim assistant (M11-FR4) ---

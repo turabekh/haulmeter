@@ -246,6 +246,39 @@ class TestTheRaceTheIndexExistsFor:
                 cleanup.close()
 
 
+class TestTheVoicePathHasNoNaturalIdentity:
+    """AI-CONTEXT: the last unkeyed send, and why its key is shaped differently.
+
+    Every other purpose names a thing — a claim, a receivable, a stop. A driver's own
+    ghostwritten message names nothing, and they may legitimately write to the same
+    counterparty twice about different matters, so keying on the thread alone would
+    silence the second one. The same approved WORDS to the same thread is the duplicate:
+    a second tap, a replayed request, or a driver who did not see the first one land.
+    """
+
+    def test_the_same_approved_words_twice_send_once(self, db, account):
+        from app.modules.m11_voice import public as m11
+
+        thread = _thread(db, account, subject="Where is my BOL?")
+        body = "Please confirm receipt of the paperwork for load L-9001."
+
+        first = m11.approve_and_send(db, thread, body, None, "ap@acme.example")
+        second = m11.approve_and_send(db, thread, body, None, "ap@acme.example")
+
+        assert second.id == first.id
+        assert len(notify.unsent_messages(db)) == 1
+
+    def test_a_different_message_in_the_same_thread_still_sends(self, db, account):
+        from app.modules.m11_voice import public as m11
+
+        thread = _thread(db, account, subject="Where is my BOL?")
+
+        a = m11.approve_and_send(db, thread, "Please confirm receipt.", None, "ap@acme.example")
+        b = m11.approve_and_send(db, thread, "Also, the lumper receipt.", None, "ap@acme.example")
+
+        assert a.id != b.id, "a driver may write twice about different things"
+
+
 class TestAReSendIsNotADuplicate:
     def test_releasing_the_purpose_lets_a_fresh_message_take_it(self, db, account):
         # a permanent failure, or an address the driver has since corrected: the broker
