@@ -123,7 +123,9 @@ def test_a_driver_can_turn_the_prompt_on_and_then_be_asked(client, db):
 
     asked = _inbox(client, headers)
     assert len(asked) == 1, "the driver opted in, parked, and was never asked"
-    assert asked[0]["status"] == "sent"
+    # AI-CONTEXT: the DECISION, over the wire. Delivery is the push_delivery sweep,
+    # so the status a driver's inbox reports the instant a prompt is decided is `queued`.
+    assert asked[0]["status"] == "queued"
     assert asked[0]["suppressed_reason"] is None
     assert asked[0]["deep_link"] == f"/facility/{lot.id}"
 

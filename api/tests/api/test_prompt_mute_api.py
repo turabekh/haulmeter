@@ -108,7 +108,9 @@ def test_muting_one_lot_leaves_every_other_lot_asking(client, db):
 
     asked = _prompts(client, headers)
     assert len(asked) == 1
-    assert asked[0]["status"] == "sent"
+    # AI-CONTEXT: the DECISION, over the wire. Delivery is the push_delivery sweep,
+    # so the status a driver's inbox reports the instant a prompt is decided is `queued`.
+    assert asked[0]["status"] == "queued"
     assert asked[0]["deep_link"] == f"/facility/{other.id}"
 
 
@@ -126,7 +128,7 @@ def test_unmuting_asks_again(client, db):
     _park(db, account)
     _ping(client, headers)
 
-    assert _prompts(client, headers)[0]["status"] == "sent"
+    assert _prompts(client, headers)[0]["status"] == "queued"
 
 
 def test_unmuting_does_not_switch_the_class_on(client, db):

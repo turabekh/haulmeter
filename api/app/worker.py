@@ -89,6 +89,13 @@ def _jobs() -> list[Job]:
         # send — there is no activation decision, and a flag nobody registered would mean
         # no counterparty mail leaves this box at all.
         Job("outbound_mail", None, 60, runners.run_outbound_mail),
+        # AI-CONTEXT: driver push, and the same argument as `outbound_mail` one line up.
+        # `dispatch` opened an HTTP connection per subscription inside the request that
+        # decided to notify — every §13.1 law is still applied there, at the moment the
+        # driver would be interrupted; only the transport moved. Sixty seconds because
+        # the P0 this carries is a detention clock, and unflagged because a flag nobody
+        # registered would mean no push ever leaves the box.
+        Job("push_delivery", None, 60, runners.run_push_delivery),
         # audit F-09: raw GPS pings were never purged — the purge existed and nothing
         # called it. Daily; the window is an F13 key (`f03.ping_retention_days`) and 0
         # disables it. Unflagged for the same reason as outbound_mail: a foundation

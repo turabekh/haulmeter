@@ -244,7 +244,7 @@ class TestExitCarveOut:
             )
         ).all()
         assert len(sent) == 1
-        assert sent[0].status == notify.NotificationStatus.sent
+        assert sent[0].status == notify.NotificationStatus.queued
         assert "BOL" in sent[0].title
         # §13.5: deep-links to the exact screen, never a tab root
         assert sent[0].deep_link == f"/load/{stop.id}/evidence"
@@ -315,7 +315,7 @@ class TestExitCarveOut:
                 notify.Notification.category == notify.PROTECTION_GAP_CLASS
             )
         )
-        assert gap.status == notify.NotificationStatus.sent
+        assert gap.status == notify.NotificationStatus.queued
 
     def test_the_deadline_does_not_spend_the_ordinary_budget(self, db):
         """Both halves of 'exempt'. A class that skipped the check but still consumed a
@@ -361,7 +361,7 @@ class TestExitCarveOut:
             "Missing: BOL", "body", "/load/x/evidence", gateway, now=now,
         )
 
-        assert first.status == notify.NotificationStatus.sent
+        assert first.status == notify.NotificationStatus.queued
         assert second.status == notify.NotificationStatus.suppressed
         assert second.suppress_reason == notify.SuppressReason.budget
 

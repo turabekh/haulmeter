@@ -72,7 +72,7 @@ def test_p0_fires_at_free_time_expiry(db):
 
     assert sent is not None
     assert sent.tier == notify.NotificationTier.P0
-    assert sent.status == notify.NotificationStatus.sent
+    assert sent.status == notify.NotificationStatus.queued
     # §12.6 verbatim: figure-first fact + single action
     assert sent.title == "Detention started · $75/h"
     assert sent.body == "Free time is used up at this stop. Notice ready to send."
@@ -88,6 +88,9 @@ def test_p0_fires_once_and_only_once(db):
     assert m3.dispatch_detention_start(db, claim, gw, later) is not None
     assert m3.dispatch_detention_start(db, claim, gw, later + timedelta(minutes=1)) is None
     assert m3.dispatch_detention_start(db, claim, gw, later + timedelta(hours=3)) is None
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert len(gw.sent) == 1
 
 
@@ -229,6 +232,9 @@ def test_warning_fires_once(db):
 
     assert m3.dispatch_free_time_warning(db, claim, gw, EXPIRY - timedelta(minutes=20)) is not None
     assert m3.dispatch_free_time_warning(db, claim, gw, EXPIRY - timedelta(minutes=5)) is None
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert len(gw.sent) == 1
 
 
@@ -250,7 +256,7 @@ def test_p0_outlives_a_spent_budget_that_suppresses_a_p1(db):
     p0 = m3.dispatch_detention_start(db, claim, gw, now)
 
     assert p1 is None or p1.status == notify.NotificationStatus.suppressed
-    assert p0.status == notify.NotificationStatus.sent
+    assert p0.status == notify.NotificationStatus.queued
 
 
 def test_p0_outlives_quiet_hours_that_suppress_a_p1(db):
@@ -267,7 +273,7 @@ def test_p0_outlives_quiet_hours_that_suppress_a_p1(db):
 
     p0 = m3.dispatch_detention_start(db, claim, gw, night)
 
-    assert p0.status == notify.NotificationStatus.sent
+    assert p0.status == notify.NotificationStatus.queued
 
 
 def test_detention_start_is_not_an_opt_in_class(db):
@@ -321,6 +327,9 @@ def test_the_scan_finds_the_claim_and_reports_what_it_did(db):
     assert summary["scanned"] == 1
     assert summary["started"] == 1
     assert summary["warned"] == 0
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert len(gw.sent) == 1
 
 

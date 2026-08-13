@@ -47,6 +47,9 @@ def test_a_late_cancellation_refunds_half(db):
     m6.cancel(db, booking, now, actor_account_id=owner.id, gateway=gw)
 
     assert booking.state == m6.BookingState.refunded
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert gw.sent[0].subject == "Booking canceled · $12 refunded"
 
 
@@ -71,7 +74,7 @@ def test_the_owner_canceling_reaches_the_driver_as_a_p0(db):
     assert len(rows) == 1
     sent = rows[0]
     assert sent.tier == notify.NotificationTier.P0
-    assert sent.status == notify.NotificationStatus.sent
+    assert sent.status == notify.NotificationStatus.queued
     assert sent.title == "Booking canceled · $24 refunded"
     assert sent.body == "Riverside Lot canceled your spot. Book another nearby."
 

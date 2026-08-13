@@ -40,7 +40,7 @@ def test_a_driver_who_stopped_is_asked(db):
     sent = m1.prompt_for_lot_status(db, account.id, lot.id, gw, NOW)
 
     assert sent is not None
-    assert sent.status == notify.NotificationStatus.sent
+    assert sent.status == notify.NotificationStatus.queued
     assert sent.tier == notify.NotificationTier.P1
     assert sent.title == "How's the lot at Riverside Truck Stop?"
 
@@ -53,6 +53,9 @@ def test_the_answer_is_three_tray_buttons_the_map_already_speaks(db):
 
     m1.prompt_for_lot_status(db, account.id, lot.id, gw, NOW)
 
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert [a["action"] for a in gw.sent[0].actions] == ["lot:empty", "lot:some", "lot:full"]
     assert [a["title"] for a in gw.sent[0].actions] == ["Empty", "Some", "Full"]
 
@@ -137,6 +140,9 @@ def test_a_driver_who_stops_three_times_is_asked_once(db):
         lot = _lot(db, name=f"Stop {i}")
         m1.prompt_for_lot_status(db, account.id, lot.id, gw, NOW + timedelta(hours=i))
 
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert len(gw.sent) == 1
 
 
@@ -208,6 +214,9 @@ def test_a_driver_parked_at_an_unarmed_truck_stop_is_asked(db):
     sent = m1.lot_status_prompt_due(db, account.id, *DALLAS, gw, NOW)
 
     assert sent is not None
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert len(gw.sent) == 1
 
 
@@ -274,6 +283,9 @@ def test_it_asks_once_and_then_stops_asking_on_every_ping(db):
 
     rows = db.query(notify.Notification).filter_by(account_id=account.id).all()
     assert len(rows) == 1
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert len(gw.sent) == 1
 
 

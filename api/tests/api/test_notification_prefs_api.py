@@ -72,7 +72,7 @@ def test_the_driver_can_set_their_zone_and_it_changes_who_gets_interrupted(clien
         notify.RecordingNotificationGateway(),
         now=evening,
     )
-    assert note.status == notify.NotificationStatus.sent
+    assert note.status == notify.NotificationStatus.queued
 
 
 def test_the_driver_can_move_the_window(client, db):

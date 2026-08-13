@@ -41,7 +41,10 @@ def test_p0_always_sends_even_at_night(db):
     account = _account(db)
     gw = notify.RecordingNotificationGateway()
     n = _dispatch(db, account, gw, notify.NotificationTier.P0, now=NIGHT)
-    assert n.status == notify.NotificationStatus.sent
+    assert n.status == notify.NotificationStatus.queued
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert len(gw.sent) == 1
 
 
@@ -49,7 +52,7 @@ def test_p1_sends_when_clear(db):
     account = _account(db)
     gw = notify.RecordingNotificationGateway()
     n = _dispatch(db, account, gw, notify.NotificationTier.P1, now=NOON)
-    assert n.status == notify.NotificationStatus.sent
+    assert n.status == notify.NotificationStatus.queued
     assert n.channel == notify.NotificationChannel.push
 
 
@@ -70,6 +73,9 @@ def test_p1_suppressed_by_budget(db):
     third = _dispatch(db, account, gw, notify.NotificationTier.P1, now=NOON)
     assert third.status == notify.NotificationStatus.suppressed
     assert third.suppress_reason == notify.SuppressReason.budget
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert len(gw.sent) == 2
     assert notify.p1_budget_used(db, account.id, NOON) == 2
 
@@ -99,7 +105,7 @@ def test_driving_delivers_audio_not_interactive(db):
         now=NOON,
         driver_state=notify.DriverState.driving,
     )
-    assert n.status == notify.NotificationStatus.sent
+    assert n.status == notify.NotificationStatus.queued
     assert n.channel == notify.NotificationChannel.audio
 
 
@@ -169,6 +175,9 @@ def test_outbound_thread_tracking_and_reply(db):
     notify.retry_unsent_messages(db, gw, now=NOON)
     assert msg.sent_at == NOON
     assert msg.provider_ref is not None
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert gw.sent[0].channel == "email"
 
     notify.mark_opened(db, msg, now=NIGHT)

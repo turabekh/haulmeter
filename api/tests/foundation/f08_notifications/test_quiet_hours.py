@@ -77,7 +77,7 @@ def test_the_shipped_default_is_wrong_for_every_us_driver(db, zone):
 
     note = _send_at(db, account, 19, zone)
 
-    assert note.status == notify.NotificationStatus.sent, (
+    assert note.status == notify.NotificationStatus.queued, (
         f"a driver in {zone} was silenced at 19:00 local"
     )
     assert note.suppress_reason is None
@@ -131,7 +131,7 @@ def test_p0_was_never_affected(db):
         now=when,
     )
 
-    assert note.status == notify.NotificationStatus.sent
+    assert note.status == notify.NotificationStatus.queued
 
 
 # --- the driver's own window (§13.3 "driver-adjustable") ---
@@ -145,7 +145,7 @@ def test_a_driver_can_move_their_window(db):
     assert _send_at(db, account, 11, "America/Chicago").suppress_reason == (
         notify.SuppressReason.quiet_hours
     )
-    assert _send_at(db, account, 23, "America/Chicago").status == notify.NotificationStatus.sent
+    assert _send_at(db, account, 23, "America/Chicago").status == notify.NotificationStatus.queued
 
 
 def test_an_empty_window_means_no_quiet_hours(db):
@@ -160,7 +160,7 @@ def test_an_empty_window_means_no_quiet_hours(db):
         notify.set_prefs(db, account.id, quiet_start=dt_time(3, 0), quiet_end=dt_time(3, 0))
 
         assert _send_at(db, account, hour, "America/Denver").status == (
-            notify.NotificationStatus.sent
+            notify.NotificationStatus.queued
         ), f"{hour}:00 was held despite an empty quiet window"
 
 

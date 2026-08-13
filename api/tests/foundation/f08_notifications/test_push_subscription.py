@@ -109,4 +109,7 @@ def test_the_deep_link_travels_with_the_push(db):
         "Detention started · $75/h", "b", "/claim/abc", gw,
     )
 
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gw)
     assert gw.sent[0].deep_link == "/claim/abc"

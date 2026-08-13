@@ -9,6 +9,12 @@ class NotificationTier(enum.Enum):
 
 class NotificationStatus(enum.Enum):
     pending = "pending"
+    # AI-CONTEXT: DECIDED to interrupt the driver, not yet handed to the push service.
+    # Delivery is a 10-second-timeout HTTP POST per subscription and it used to run inside
+    # the request handler, holding a pooled database connection on a third party — the
+    # same shape §23 records as an outage ("QueuePool limit of size 5 overflow 10
+    # reached"). `sent` still means what it always meant: the push service accepted it.
+    queued = "queued"
     sent = "sent"
     suppressed = "suppressed"
     digested = "digested"

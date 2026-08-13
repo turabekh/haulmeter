@@ -351,6 +351,33 @@ def run_outbound_mail(db: Session, commit: bool = True) -> dict:
     return summary
 
 
+def run_push_delivery(db: Session, commit: bool = True) -> dict:
+    """Hand queued driver pushes to the push service.
+
+    AI-CONTEXT: the push half of what `outbound_mail` does for counterparty email.
+    `dispatch` called `send_push` inline — a POST per subscription with a ten-second
+    timeout, once per browser the driver has, inside the request handler and holding a
+    pooled database connection on a third party. §23 records that failure mode as an
+    outage.
+
+    SIXTY SECONDS, matching `outbound_mail` and `detention_clock`, because the P0 this
+    carries is "free time has expired and your money is accruing". A minute late is
+    honest; five would make the deadline notifications this exists for arrive after the
+    driver has already pulled off the dock.
+
+    Unflagged: this is delivery for notifications F8 has already DECIDED to send, with
+    every §13.1 law — quiet hours, the interruption budget, DRIVING/RESTING — already
+    applied at decision time. A flag nobody registered would mean no driver push leaves
+    this box at all.
+    """
+    from app.foundation.f08_notifications import public as notify
+
+    summary = notify.deliver_queued_notifications(db)
+    if commit:
+        db.commit()
+    return summary
+
+
 def run_location_retention(db: Session, commit: bool = True) -> dict:
     """Delete raw GPS pings past the configured retention window (audit F-09).
 

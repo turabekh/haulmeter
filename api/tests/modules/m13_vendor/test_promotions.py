@@ -198,6 +198,9 @@ def test_an_opted_in_driver_gets_one_promotion(db):
     gateway = notify.RecordingNotificationGateway()
 
     m13.notify_promotion(db, promo, gateway, now=T0 + timedelta(minutes=30))
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gateway)
     assert len(gateway.sent) == 1
     assert promo.pushed_at is not None
 
@@ -215,6 +218,9 @@ def test_the_one_a_day_cap_still_bites_across_promotions(db):
     m13.notify_promotion(db, _promo(db, vendor, "First"), gateway, now=T0 + timedelta(minutes=30))
     m13.notify_promotion(db, _promo(db, vendor, "Second"), gateway, now=T0 + timedelta(hours=2))
 
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gateway)
     assert len(gateway.sent) == 1
 
 

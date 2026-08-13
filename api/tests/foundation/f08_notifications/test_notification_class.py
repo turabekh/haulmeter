@@ -55,7 +55,10 @@ def test_opting_in_lets_the_alert_through(db):
     gateway = _gateway()
     note = _send(db, account, gateway)
 
-    assert note.status == notify.NotificationStatus.sent
+    assert note.status == notify.NotificationStatus.queued
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gateway)
     assert len(gateway.sent) == 1
 
 
@@ -77,9 +80,12 @@ def test_class_cap_is_one_per_day(db):
     first = _send(db, account, gateway, now=T0)
     second = _send(db, account, gateway, now=T0 + timedelta(hours=2))
 
-    assert first.status == notify.NotificationStatus.sent
+    assert first.status == notify.NotificationStatus.queued
     assert second.status == notify.NotificationStatus.suppressed
     assert second.suppress_reason == notify.SuppressReason.budget
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gateway)
     assert len(gateway.sent) == 1
 
 
@@ -91,7 +97,10 @@ def test_the_cap_reopens_after_the_window(db):
     _send(db, account, gateway, now=T0)
     later = _send(db, account, gateway, now=T0 + timedelta(hours=25))
 
-    assert later.status == notify.NotificationStatus.sent
+    assert later.status == notify.NotificationStatus.queued
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gateway)
     assert len(gateway.sent) == 2
 
 
@@ -106,7 +115,7 @@ def test_muting_one_vendor_leaves_the_rest_of_the_class_on(db):
     other = _send(db, account, gateway, subject_ref="vendor-2")
 
     assert muted.suppress_reason == notify.SuppressReason.muted
-    assert other.status == notify.NotificationStatus.sent
+    assert other.status == notify.NotificationStatus.queued
 
 
 def test_class_respects_quiet_hours(db):
@@ -126,7 +135,7 @@ def test_ungoverned_categories_are_unaffected(db):
     note = _send(db, account, gateway, category="detention_started")
 
     assert notify.get_class("detention_started") is None
-    assert note.status == notify.NotificationStatus.sent
+    assert note.status == notify.NotificationStatus.queued
 
 
 def test_vendor_alert_class_declares_its_anti_spam_laws(db):
@@ -163,7 +172,7 @@ def test_following_clears_an_older_mute_on_the_same_subject(db):
     assert notify.is_subject_muted(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-2") is False
     gateway = _gateway()
     sent = _send(db, account, gateway, subject_ref="vendor-2")
-    assert sent.status == notify.NotificationStatus.sent
+    assert sent.status == notify.NotificationStatus.queued
 
 
 def test_unfollowing_leaves_the_class_on(db):
@@ -209,7 +218,7 @@ def test_a_follow_does_not_bypass_a_single_cap(db):
 
     first = _send(db, account, gateway, subject_ref="vendor-6")
     second = _send(db, account, gateway, subject_ref="vendor-6")
-    assert first.status == notify.NotificationStatus.sent
+    assert first.status == notify.NotificationStatus.queued
     assert second.status == notify.NotificationStatus.suppressed
     assert second.suppress_reason == notify.SuppressReason.budget
 
@@ -233,7 +242,7 @@ def test_unmuting_lets_the_subject_through_again(db):
     notify.unmute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-7")
 
     assert _send(db, account, gateway, subject_ref="vendor-7").status == (
-        notify.NotificationStatus.sent
+        notify.NotificationStatus.queued
     )
 
 

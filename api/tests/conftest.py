@@ -146,3 +146,30 @@ def flush_outbox(db):
         return summary
 
     return _flush
+
+
+@pytest.fixture
+def flush_push(db):
+    """Run the `push_delivery` sweep, the way the worker does.
+
+    AI-CONTEXT: driver push is no longer sent on the request path. `dispatch` called
+    `send_push` inline — a POST per subscription with a ten-second timeout, once per
+    browser, inside the request handler and holding a pooled database connection on a
+    third party (§23's QueuePool outage). It now records a `queued` notification and this
+    sweep hands it over.
+
+    So a test that asserts a driver's browser RECEIVED something has to run the sweep.
+    That is not ceremony — it is the system. Tests that assert F8's DECISION laws
+    (tiering, quiet hours, the interruption budget, opt-in) correctly assert `queued` and
+    need none of this: those laws are all applied at dispatch time, where they belong,
+    because they are facts about the moment a driver would be interrupted.
+    """
+    from app.foundation.f08_notifications import public as notify
+
+    def _flush(gateway=None, now=None):
+        factory = (lambda _account_id: gateway) if gateway is not None else None
+        summary = notify.deliver_queued_notifications(db, factory, now=now)
+        db.flush()
+        return summary
+
+    return _flush

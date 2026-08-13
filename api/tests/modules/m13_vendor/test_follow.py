@@ -80,7 +80,7 @@ def test_a_follower_nearby_hears_that_a_cook_published(db):
 
     sent = [n for n in db.query(notify.Notification).all() if n.account_id == driver.id]
     assert len(sent) == 1
-    assert sent[0].status == notify.NotificationStatus.sent
+    assert sent[0].status == notify.NotificationStatus.queued
     assert vendor.name in sent[0].title
     # §13.5: every notification deep-links to the exact thing it describes
     assert sent[0].deep_link == f"/vendor/{vendor.id}"
@@ -144,7 +144,7 @@ def test_a_cancellation_reaches_followers_AND_past_confirmers(db):
     reached = {
         n.account_id
         for n in db.query(notify.Notification).all()
-        if n.status == notify.NotificationStatus.sent and "cancelled" in n.title
+        if n.status == notify.NotificationStatus.queued and "cancelled" in n.title
     }
     assert follower.id in reached
     assert confirmer.id in reached
@@ -163,7 +163,7 @@ def test_following_does_not_buy_a_second_push(db):
     _publish(db, second, fac, _gateway())
 
     mine = [n for n in db.query(notify.Notification).all() if n.account_id == driver.id]
-    sent = [n for n in mine if n.status == notify.NotificationStatus.sent]
+    sent = [n for n in mine if n.status == notify.NotificationStatus.queued]
     suppressed = [n for n in mine if n.status == notify.NotificationStatus.suppressed]
     assert len(sent) == 1
     assert len(suppressed) == 1
@@ -187,7 +187,7 @@ def test_the_one_push_that_survives_the_cap_goes_to_the_nearest(db):
     sent = [
         n
         for n in db.query(notify.Notification).all()
-        if n.account_id == driver.id and n.status == notify.NotificationStatus.sent
+        if n.account_id == driver.id and n.status == notify.NotificationStatus.queued
     ]
     assert len(sent) == 1
     assert "Close Lot" in sent[0].body

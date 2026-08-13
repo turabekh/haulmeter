@@ -100,7 +100,29 @@ class Notification(Base):
     suppress_reason: Mapped[SuppressReason | None] = mapped_column(
         Enum(SuppressReason, name="suppress_reason", schema=SCHEMA), nullable=True
     )
+    # AI-CONTEXT: the tray buttons, PERSISTED, because delivery no longer happens in the
+    # call that supplies them. `actions` was a parameter handed straight to the gateway and
+    # kept nowhere — so deferring the send would have dropped it on the floor, and the one
+    # notification that uses it is the lot-status prompt, whose own comment says "the
+    # answer must be one tap from a LOCKED phone or it is a task, not a confirmation".
+    # Losing them would not have failed anything; it would have quietly turned a
+    # confirmation into a chore.
+    actions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # AI-CONTEXT: WHEN WE DECIDED TO INTERRUPT THIS DRIVER, and §13.1's budget is counted
+    # on it. Not `created_at`: that is a server default, so it ignores the `now` a caller
+    # passes — which makes every time-travelling test wrong and, worse, makes the budget
+    # wrong for any job that replays with a historical `now`. Not `dispatched_at` either:
+    # that is NULL until a push service accepts the notification, so a window measured on
+    # it cannot see a decision already taken.
+    #
+    # The driver's attention is spent at the decision. Whether the POST has landed yet is
+    # the sweep's business and changes nothing about how often they were interrupted.
+    decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # `dispatched_at` means HANDED TO THE PUSH SERVICE, and it stays that way: it is set
+    # by the delivery sweep, never by the request that decided to send.
     dispatched_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )

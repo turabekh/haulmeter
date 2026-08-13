@@ -136,6 +136,9 @@ def test_cancelling_alerts_drivers_who_confirmed_this_vendor(db):
 
     m13.cancel_appearance(db, appearance, gateway=gateway, now=T0)
 
+    # the push_delivery sweep is what hands a queued notification to the
+    # push service; the request only decides (§13.1 laws included)
+    notify.deliver_queued_notifications(db, lambda _a: gateway)
     assert len(gateway.sent) == 1
     assert "cancelled" in gateway.sent[0].subject
 

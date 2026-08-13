@@ -101,7 +101,7 @@ def test_a_recovery_recorded_by_someone_else_is_a_p0(db):
 
     assert sent is not None
     assert sent.tier == notify.NotificationTier.P0
-    assert sent.status == notify.NotificationStatus.sent
+    assert sent.status == notify.NotificationStatus.queued
     assert sent.title == "Claim paid · $150"
     assert sent.account_id == account.id  # the driver, not the actor
 
@@ -173,7 +173,7 @@ def test_the_p0_outlives_a_spent_budget(db):
 
     _, sent = m9.mark_receivable_paid(db, receivable, other.id, gateway=gw, now=now)
 
-    assert sent.status == notify.NotificationStatus.sent
+    assert sent.status == notify.NotificationStatus.queued
 
 
 def test_cents_are_not_rounded_away_in_the_figure(db):
@@ -205,4 +205,4 @@ def test_aging_does_not_change_the_outcome(db):
         db, receivable, other.id, gateway=gw, now=datetime.now(UTC) + timedelta(days=90)
     )
 
-    assert sent.status == notify.NotificationStatus.sent
+    assert sent.status == notify.NotificationStatus.queued

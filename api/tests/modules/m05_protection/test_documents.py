@@ -101,7 +101,7 @@ def test_the_budget_lets_the_two_most_urgent_through(db):
     delivered = {
         n.title
         for n in db.query(notify.Notification).all()
-        if n.status == notify.NotificationStatus.sent
+        if n.status == notify.NotificationStatus.queued
     }
     assert len(delivered) == 2, "§13.1 — two unprompted per driver per day"
     assert any("med card" in t for t in delivered)  # the nearest deadline gets a slot

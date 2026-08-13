@@ -15,7 +15,7 @@ from .enums import (
     SuppressReason,
     TemplateAudience,
 )
-from .gateway import NotificationGateway, is_failure, is_retryable
+from .gateway import NotificationGateway, gateway_for, is_failure, is_retryable
 from .models import (
     Notification,
     NotificationClassPref,
@@ -28,6 +28,11 @@ from .models import (
 
 MAX_UNPROMPTED_P1_PER_DAY = 2
 BUDGET_WINDOW = timedelta(hours=24)
+
+# AI-CONTEXT: the states in which a notification has cost the driver an interruption.
+# `queued` is here because the decision has been taken and the push is going; excluding
+# it would let a burst inside one delivery sweep pass every cap in §13.1.
+_SPENDS_ATTENTION = (NotificationStatus.queued, NotificationStatus.sent)
 
 
 # AI-CONTEXT: OPT-IN notification classes (design-prd §23 E-D1). A class is a named
@@ -200,8 +205,20 @@ def p1_budget_used(db: Session, account_id, now: datetime) -> int:
         .where(
             Notification.account_id == account_id,
             Notification.tier == NotificationTier.P1,
-            Notification.status == NotificationStatus.sent,
-            Notification.dispatched_at >= now - BUDGET_WINDOW,
+            # AI-CONTEXT: `queued` COUNTS. §13.1's budget is a defence against nagging,
+            # and a driver's attention is spent the moment the product commits to
+            # interrupting them — not when a push service accepts the POST a minute
+            # later. Counting only `sent` would have made the budget, and every
+            # per-class daily cap, silently stop working the day delivery became
+            # asynchronous: a burst inside one sweep window would all read zero used.
+            #
+            # The window moves to `decided_at` for the same reason: `dispatched_at` is
+            # NULL until delivery, so a window measured on it cannot see a decision
+            # already taken. NOT `created_at` — that is a server default and ignores the
+            # `now` a caller passes, which would make this wrong for every job that
+            # replays with a historical clock.
+            Notification.status.in_(_SPENDS_ATTENTION),
+            Notification.decided_at >= now - BUDGET_WINDOW,
             Notification.category.notin_(BUDGET_EXEMPT_CLASSES),
         )
     )
@@ -350,8 +367,10 @@ def class_sends_today(db: Session, account_id, class_key: str, now: datetime) ->
         .where(
             Notification.account_id == account_id,
             Notification.category == class_key,
-            Notification.status == NotificationStatus.sent,
-            Notification.dispatched_at >= now - BUDGET_WINDOW,
+            # see `p1_budget_used`: a decision to interrupt spends the cap whether or not
+            # the push service has accepted it yet
+            Notification.status.in_(_SPENDS_ATTENTION),
+            Notification.decided_at >= now - BUDGET_WINDOW,
         )
     )
 
@@ -405,12 +424,31 @@ def dispatch(
         return notification
 
     def _send(channel: NotificationChannel) -> Notification:
-        # §13.5 travels WITH the push: one definition of "where this is about" serves
-        # the tray entry and the inbox row, so the two can never disagree.
-        gateway.send_push(to_ref, title, body, deep_link, actions)
-        notification.status = NotificationStatus.sent
+        """AI-CONTEXT: QUEUES it. The decision is made here; the HTTP call is not.
+
+        `send_push` is a POST per subscription with a ten-second timeout, and it ran
+        inside the request handler — holding a pooled database connection and a
+        threadpool slot on a third party, for as many round trips as the driver has
+        browsers. §23 records that exact outage: "QueuePool limit of size 5 overflow
+        10 reached", the API out of connections and answering nothing.
+
+        EVERYTHING THAT DECIDES STAYS HERE. The channel depends on `driver_state` at
+        this moment, quiet hours on `now`, the budget on what has already gone — all
+        of them are facts about the instant a driver would be interrupted, and none of
+        them survive being re-evaluated a minute later by a janitor. Only the transport
+        moves.
+
+        §13.5 travels WITH the push: one definition of "where this is about" serves the
+        tray entry and the inbox row, so the two can never disagree.
+        """
+        _ = gateway  # the transport is the delivery sweep's business now
+        notification.status = NotificationStatus.queued
         notification.channel = channel
-        notification.dispatched_at = now
+        notification.actions = actions
+        # the interruption is spent HERE, at the caller's `now` — see `decided_at`
+        notification.decided_at = now
+        # `dispatched_at` stays NULL: it means the push service accepted it, and nothing
+        # has been offered to a push service yet.
         db.flush()
         return notification
 
@@ -465,7 +503,14 @@ def dispatch(
 #
 # `pending` is excluded: it has not been decided yet, and showing a driver something
 # the system has not finished thinking about is how a half-written row becomes a fact.
+# `queued` IS rendered, and that is the same argument as `suppressed` one paragraph up.
+# The decision has been taken — every §13.1 law was applied and the notification is going
+# — so the only thing still outstanding is a POST to a push service. Hiding it until then
+# would mean a driver who opens the app in the minute after their detention clock expired
+# sees an empty inbox and concludes nothing happened, which is the one reading the whole
+# §13.2 P0 exists to prevent. It is a notification; the tray is not the only place it lives.
 INBOX_STATUSES = (
+    NotificationStatus.queued,
     NotificationStatus.sent,
     NotificationStatus.digested,
     NotificationStatus.suppressed,
@@ -717,6 +762,65 @@ def send_counterparty_message(
             raise
         return winner
     return message
+
+
+def queued_notifications(db: Session, limit: int = 100) -> list[Notification]:
+    """Pushes the product has committed to and not yet handed to a push service."""
+    return list(
+        db.scalars(
+            select(Notification)
+            .where(Notification.status == NotificationStatus.queued)
+            .order_by(Notification.created_at)
+            .limit(limit)
+        )
+    )
+
+
+def deliver_queued_notifications(
+    db: Session, gateway_factory=None, now: datetime | None = None, limit: int = 100
+) -> dict:
+    """Hand queued pushes to the push service. The `push_delivery` sweep's whole job.
+
+    AI-CONTEXT: the gateway is built PER ACCOUNT, which is why this takes a factory
+    rather than a gateway. `gateway_for(db, account_id)` reads that driver's own
+    subscriptions — a push is addressed to browsers, not to an address — so one shared
+    instance would send every driver's notification to whoever the first one belonged to.
+
+    A FAILURE LEAVES IT QUEUED. `WebPushNotificationGateway` never raises: it drops a
+    subscription the push service has permanently rejected (410/404) and swallows the
+    rest, because a service having a bad minute is not a reason to lose a P0. So a
+    notification that reaches no browser stays `queued` and the next sweep tries again —
+    the same rule the mail sweep follows, and the reason `status` is the queue rather
+    than a separate table.
+
+    THE DECISION IS NOT RE-EVALUATED. Quiet hours, the interruption budget and the
+    DRIVING/RESTING channel were all settled when the notification was created; they are
+    facts about the moment a driver would have been interrupted. Re-asking them here
+    would let a notification decided at 21:59 be silently dropped at 22:01.
+    """
+    now = now or datetime.now(UTC)
+    factory = gateway_factory or (lambda account_id: gateway_for(db, account_id))
+    delivered = failed = 0
+    for notification in queued_notifications(db, limit):
+        gateway = factory(notification.account_id)
+        try:
+            gateway.send_push(
+                str(notification.account_id),
+                notification.title,
+                notification.body,
+                notification.deep_link,
+                notification.actions,
+            )
+        except Exception:
+            # a gateway that raises is a defect in the gateway, not a reason to lose the
+            # row. It stays queued and the next sweep tries again.
+            failed += 1
+            continue
+        notification.status = NotificationStatus.sent
+        notification.dispatched_at = now
+        delivered += 1
+    db.flush()
+    return {"delivered": delivered, "failed": failed}
 
 
 def release_dedupe_key(db: Session, message: OutboundMessage) -> None:
