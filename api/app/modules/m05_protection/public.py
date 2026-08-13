@@ -54,6 +54,7 @@ from .domain.service import (
     on_time_proof_for_stop,
     packet_context,
     protection_summary,
+    reconcile_on_time_notices,
     register_module,
     render_pack,
     restore_blocked_by,
@@ -70,6 +71,7 @@ from .domain.service import (
 )
 
 __all__ = [
+    "reconcile_on_time_notices",
     "CONDITION_SEQUENCE",
     "INSPECTION_DOC_TYPES",
     "CapturePhase",

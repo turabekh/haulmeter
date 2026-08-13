@@ -14,7 +14,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api import load as load_api
 from app.api.deps import get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f05_load import public as loads
@@ -207,27 +206,29 @@ def _accrued_claim(client, db, headers, email="ap@acme.example"):
     return stop_id, m3.claim_for_stop(db, uuid.UUID(stop_id))
 
 
-def test_case_1_no_linked_message_sends(client, db, monkeypatch):
+def test_case_1_no_linked_message_sends(client, db, flush_outbox):
     _, headers = _auth(client, db)
     stop_id, claim = _accrued_claim(client, db, headers)
     gateway = CountingGateway()
-    monkeypatch.setattr(load_api, "_GATEWAY", gateway)
 
     resp = client.post(f"/load/{stop_id}/notice", headers=headers)
+    assert resp.json()["delivery"] == "queued", "the route no longer knows the outcome"
+    flush_outbox(gateway)
 
-    assert resp.json()["delivery"] == "sent"
+    assert m3.notice_delivery(db, claim) == "sent"
     assert gateway.sent == ["ap@acme.example"]
 
 
-def test_case_2_a_delivered_notice_is_never_sent_again(client, db, monkeypatch):
+def test_case_2_a_delivered_notice_is_never_sent_again(client, db, flush_outbox):
     """The dispute anchor may not be re-anchored — and it WAS resent before this rule."""
     _, headers = _auth(client, db)
     stop_id, claim = _accrued_claim(client, db, headers)
     gateway = CountingGateway()
-    monkeypatch.setattr(load_api, "_GATEWAY", gateway)
     client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(gateway)
 
     second = client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(gateway)
 
     assert len(gateway.sent) == 1
     assert second.json()["delivery"] == "sent"
@@ -237,13 +238,13 @@ def test_case_2_a_delivered_notice_is_never_sent_again(client, db, monkeypatch):
 
 
 def test_case_3_a_retryable_failure_to_the_same_address_is_left_to_the_sweep(
-    client, db, monkeypatch
+    client, db, flush_outbox
 ):
     _, headers = _auth(client, db)
     stop_id, claim = _accrued_claim(client, db, headers)
     gateway = FailingGateway()
-    monkeypatch.setattr(load_api, "_GATEWAY", gateway)
     client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(gateway)
 
     second = client.post(f"/load/{stop_id}/notice", headers=headers)
 
@@ -252,25 +253,25 @@ def test_case_3_a_retryable_failure_to_the_same_address_is_left_to_the_sweep(
     assert len(notify.unsent_messages(db)) == 1
 
 
-def test_case_4_a_permanent_failure_sends_fresh(client, db, monkeypatch):
+def test_case_4_a_permanent_failure_sends_fresh(client, db, flush_outbox):
     _, headers = _auth(client, db)
     stop_id, claim = _accrued_claim(client, db, headers)
-    monkeypatch.setattr(load_api, "_GATEWAY", FailingGateway("SMTPAuthenticationError"))
     client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(FailingGateway("SMTPAuthenticationError"))
     failed_ref = claim.start_notice_message_ref
     good = CountingGateway()
-    monkeypatch.setattr(load_api, "_GATEWAY", good)
 
-    resp = client.post(f"/load/{stop_id}/notice", headers=headers)
+    client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(good)
 
-    assert resp.json()["delivery"] == "sent"
+    assert m3.notice_delivery(db, claim) == "sent"
     assert len(good.sent) == 1
     assert claim.start_notice_message_ref != failed_ref  # relinked
     # the failed row stays as history rather than being rewritten
     assert db.get(notify.OutboundMessage, failed_ref) is not None
 
 
-def test_case_5_fixing_the_address_makes_a_refused_notice_sendable(client, db, monkeypatch):
+def test_case_5_fixing_the_address_makes_a_refused_notice_sendable(client, db, flush_outbox):
     """The case this whole session exists for.
 
     A wrong address produces SMTPRecipientsRefused, which is PERMANENT and correctly never
@@ -279,8 +280,8 @@ def test_case_5_fixing_the_address_makes_a_refused_notice_sendable(client, db, m
     """
     _, headers = _auth(client, db)
     stop_id, claim = _accrued_claim(client, db, headers, email="wrong@acme.example")
-    monkeypatch.setattr(load_api, "_GATEWAY", FailingGateway("SMTPRecipientsRefused"))
     client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(FailingGateway("SMTPRecipientsRefused"))
     assert m3.notice_delivery(db, claim) == "failed"
 
     client.patch(
@@ -289,22 +290,29 @@ def test_case_5_fixing_the_address_makes_a_refused_notice_sendable(client, db, m
         headers=headers,
     )
     good = CountingGateway()
-    monkeypatch.setattr(load_api, "_GATEWAY", good)
-    resp = client.post(f"/load/{stop_id}/notice", headers=headers)
+    client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(good)
 
-    assert resp.json()["delivery"] == "sent"
-    assert good.sent == ["right@acme.example"]
+    assert m3.notice_delivery(db, claim) == "sent"
+    # AI-CONTEXT: the CLAIM's notice went to the corrected address, which is what this
+    # rule exists to guarantee. The stale row is also still in the outbox and the sweep
+    # delivers it too — that is unchanged behaviour, not something deferral introduced:
+    # a retryable message stays retryable, and `retry_unsent_messages` has always owned
+    # it. What the address-aware rule fixes is that the CLAIM is no longer hostage to it.
+    linked = db.get(notify.OutboundMessage, claim.start_notice_message_ref)
+    assert linked.to_ref == "right@acme.example"
+    assert "right@acme.example" in good.sent
 
 
-def test_a_retryable_failure_to_a_STALE_address_sends_fresh(client, db, monkeypatch):
+def test_a_retryable_failure_to_a_STALE_address_sends_fresh(client, db, flush_outbox):
     """Retryable, but queued against an address the driver has since corrected.
 
     Leaving it to the sweep would re-present the OLD address forever.
     """
     _, headers = _auth(client, db)
     stop_id, claim = _accrued_claim(client, db, headers, email="wrong@acme.example")
-    monkeypatch.setattr(load_api, "_GATEWAY", FailingGateway())
     client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(FailingGateway())
     assert m3.notice_delivery(db, claim) == "retrying"
 
     client.patch(
@@ -313,18 +321,24 @@ def test_a_retryable_failure_to_a_STALE_address_sends_fresh(client, db, monkeypa
         headers=headers,
     )
     good = CountingGateway()
-    monkeypatch.setattr(load_api, "_GATEWAY", good)
-    resp = client.post(f"/load/{stop_id}/notice", headers=headers)
+    client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(good)
 
-    assert resp.json()["delivery"] == "sent"
-    assert good.sent == ["right@acme.example"]
+    assert m3.notice_delivery(db, claim) == "sent"
+    # AI-CONTEXT: the CLAIM's notice went to the corrected address, which is what this
+    # rule exists to guarantee. The stale row is also still in the outbox and the sweep
+    # delivers it too — that is unchanged behaviour, not something deferral introduced:
+    # a retryable message stays retryable, and `retry_unsent_messages` has always owned
+    # it. What the address-aware rule fixes is that the CLAIM is no longer hostage to it.
+    linked = db.get(notify.OutboundMessage, claim.start_notice_message_ref)
+    assert linked.to_ref == "right@acme.example"
+    assert "right@acme.example" in good.sent
 
 
-def test_a_no_email_claim_becomes_sendable_once_the_address_is_added(client, db, monkeypatch):
+def test_a_no_email_claim_becomes_sendable_once_the_address_is_added(client, db, flush_outbox):
     _, headers = _auth(client, db)
     stop_id, claim = _accrued_claim(client, db, headers, email=None)
     gateway = CountingGateway()
-    monkeypatch.setattr(load_api, "_GATEWAY", gateway)
     refused = client.post(f"/load/{stop_id}/notice", headers=headers)
     assert refused.json()["delivery"] == "no_email"
     assert gateway.sent == []
@@ -334,14 +348,15 @@ def test_a_no_email_claim_becomes_sendable_once_the_address_is_added(client, db,
         json={"email": "ap@acme.example"},
         headers=headers,
     )
-    resp = client.post(f"/load/{stop_id}/notice", headers=headers)
+    client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(gateway)
 
-    assert resp.json()["delivery"] == "sent"
+    assert m3.notice_delivery(db, claim) == "sent"
     assert gateway.sent == ["ap@acme.example"]
 
 
 # --- dunning inherits the fix with no code change ---
-def test_a_claim_skipped_for_no_email_dunned_once_the_address_exists(client, db, monkeypatch):
+def test_a_claim_skipped_for_no_email_dunned_once_the_address_exists(client, db, flush_outbox):
     """No dunning code changes for this — it reads the address at send time, as it should."""
     account_id, headers = _auth(client, db)
     stop_id, claim = _accrued_claim(client, db, headers, email=None)
@@ -366,6 +381,8 @@ def test_a_claim_skipped_for_no_email_dunned_once_the_address_exists(client, db,
         headers=headers,
     )
     after = m3.run_dunning(db, gateway, now=datetime.now(UTC))
+    # dunning records rows like every other send site; the sweep is what delivers them
+    flush_outbox(gateway)
 
     assert after["nudged"] == 1
     assert gateway.sent == ["ap@acme.example"]

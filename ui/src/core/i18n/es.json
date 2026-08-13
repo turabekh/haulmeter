@@ -662,6 +662,7 @@
   "notice.delivery.failed": "El aviso falló — bróker no contactado",
   "notice.delivery.no_email": "Sin correo del bróker — agrega uno para avisar",
   "notice.delivery.not_sent": "Bróker no notificado",
+  "notice.delivery.queued": "Aviso en cola — enviando al bróker",
   "notice.delivery.retrying": "El aviso no salió — reintentando",
   "notice.delivery.sent": "Bróker notificado",
   "notifications.empty": "Nada todavía.",

@@ -83,6 +83,8 @@ def test_only_the_driver_sending_it_puts_it_on_the_wire(db):
     sent = m5.send_drafted_packet(db, packet, gateway=gateway, now=T0, base_url_required=False)
 
     assert sent.state is m5.StopPacketState.sent
+    # delivery is the `outbound_mail` sweep's job now, not the request path's
+    notify.retry_unsent_messages(db, gateway)
     assert len(gateway.sent) == 1
     assert "BL-1" in gateway.sent[0].subject
 
@@ -95,6 +97,8 @@ def test_a_packet_cannot_be_sent_twice(db):
     packet = m5.draft_stop_packet_on_exit(db, account.id, fac.id, T0)
     m5.send_drafted_packet(db, packet, gateway=gateway, now=T0, base_url_required=False)
     m5.send_drafted_packet(db, packet, gateway=gateway, now=T0, base_url_required=False)
+    # delivery is the `outbound_mail` sweep's job now, not the request path's
+    notify.retry_unsent_messages(db, gateway)
     assert len(gateway.sent) == 1
 
 

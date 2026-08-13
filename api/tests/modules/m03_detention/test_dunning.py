@@ -84,6 +84,8 @@ def test_a_nudge_goes_out_on_day_three_and_only_once(db):
     assert first["nudged"] == 1
     assert claim.dunning_nudge_sent_at is not None
     assert second["nudged"] == 0  # the column is the once-only record
+    # delivery is the `outbound_mail` sweep's job now, not the request path's
+    notify.retry_unsent_messages(db, gateway)
     assert len(gateway.sent) == 1
 
 
@@ -110,6 +112,8 @@ def test_each_action_has_its_own_subject_and_its_own_column(db):
     assert claim.dunning_nudge_sent_at is not None
     assert claim.dunning_firm_sent_at is not None
     assert claim.dunning_escalation_offer_sent_at is not None
+    # delivery is the `outbound_mail` sweep's job now, not the request path's
+    notify.retry_unsent_messages(db, gateway)
     assert len(gateway.sent) == 3
     subjects = {m3.DUNNING_SUBJECT[a] for a in m3.DUNNING_ACTIONS}
     assert len(subjects) == 3  # distinct and greppable
@@ -132,6 +136,8 @@ def test_switching_this_on_over_a_backlog_does_not_spray_the_missed_ones(db):
 
     assert summary["skipped_stale"] == 2
     assert summary["nudged"] == 0 and summary["firmed"] == 0
+    # delivery is the `outbound_mail` sweep's job now, not the request path's
+    notify.retry_unsent_messages(db, gateway)
     assert len(gateway.sent) == 1
     assert gateway.sent[0].subject == m3.DUNNING_SUBJECT["escalation_offer"]
     # not suppressed — a stale action never had a send to make, so nothing is recorded
@@ -234,6 +240,8 @@ def test_each_notice_stands_on_its_own(db):
     gateway = notify.RecordingNotificationGateway()
 
     m3.run_dunning(db, gateway, now=FILED + timedelta(days=3, hours=1))
+    # delivery is the `outbound_mail` sweep's job now, not the request path's
+    notify.retry_unsent_messages(db, gateway)
     body = gateway.sent[0].body
 
     assert "$150.00" in body  # the amount

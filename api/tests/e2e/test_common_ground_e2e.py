@@ -172,5 +172,10 @@ def test_common_ground_synthetic_end_to_end(db):
         db, account.id, subject="Detention notice — L-9001", counterparty_ref=broker.id
     )
     message = notify.send_counterparty_message(db, thread, body, gateway, "ap@acme.com", now=T0)
+    # the row is the promise; the `outbound_mail` sweep is the delivery. Counterparty
+    # email left the request thread — it was 2.5 s of SMTP inside a handler, holding a
+    # pooled DB connection for the whole round trip (§23's QueuePool outage).
+    assert message.sent_at is None, "nothing has gone out on the request path"
+    notify.retry_unsent_messages(db, gateway, now=T0)
     assert message.sent_at is not None
     assert gateway.sent[0].channel == "email"

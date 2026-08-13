@@ -162,6 +162,11 @@ def test_outbound_thread_tracking_and_reply(db):
     msg = notify.send_counterparty_message(
         db, thread, "Please remit detention per rate con.", gw, "broker@acme.com", now=NOON
     )
+    # AI-CONTEXT: recording the message no longer sends it — the `outbound_mail` sweep
+    # does, off the request thread. The row is the promise; delivery is a separate fact,
+    # which is exactly the distinction `sent_at` has always carried (audit F-06).
+    assert msg.sent_at is None, "nothing has gone out yet"
+    notify.retry_unsent_messages(db, gw, now=NOON)
     assert msg.sent_at == NOON
     assert msg.provider_ref is not None
     assert gw.sent[0].channel == "email"

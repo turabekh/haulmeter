@@ -662,6 +662,7 @@
   "notice.delivery.failed": "Notice failed — broker not reached",
   "notice.delivery.no_email": "No broker email — add one to notify",
   "notice.delivery.not_sent": "Broker not notified",
+  "notice.delivery.queued": "Notice queued — sending to broker",
   "notice.delivery.retrying": "Notice didn't send — retrying",
   "notice.delivery.sent": "Broker notified",
   "notifications.empty": "Nothing yet.",

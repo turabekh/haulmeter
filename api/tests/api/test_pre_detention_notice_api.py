@@ -73,14 +73,20 @@ def test_thirty_one_minutes_out_is_still_too_early(client, db):
     assert claim.start_notice_sent_at is None
 
 
-def test_twenty_nine_minutes_out_warns_the_broker(client, db):
+def test_twenty_nine_minutes_out_warns_the_broker(client, db, flush_outbox):
     account, headers = _driver(client, db)
     stop, claim = _stop_with_free_time_left(db, account, minutes_left=29)
 
     resp = client.post(f"/load/{stop.id}/notice", headers=headers)
 
-    assert resp.json()["sent"] is True
+    # AI-CONTEXT: `sent` is False at the POST because sending is asynchronous — it means
+    # the broker was REACHED, and nothing has left the box yet. `pre_notice_sent_at`
+    # below is a different fact and is unaffected: it means "we decided to warn, once",
+    # which is exactly what has happened.
+    assert resp.json()["sent"] is False
+    assert resp.json()["delivery"] == "queued"
     assert resp.json()["phase"] == "warning"
+    flush_outbox()
     assert claim.pre_notice_sent_at is not None
     # the WARNING is not the START. `start_notice_sent_at` means the broker was told the
     # clock had begun, and it has not.
@@ -112,20 +118,24 @@ def test_the_warning_goes_out_once(client, db):
     assert second.json()["phase"] == "start"
 
 
-def test_past_expiry_it_is_the_start_notice_exactly_as_before(client, db):
+def test_past_expiry_it_is_the_start_notice_exactly_as_before(client, db, flush_outbox):
     account, headers = _driver(client, db)
     stop, claim = _stop_with_free_time_left(db, account, minutes_left=-10)  # 10 min over
 
     resp = client.post(f"/load/{stop.id}/notice", headers=headers)
+    assert resp.json() == {"sent": False, "delivery": "queued", "phase": "start"}
+
+    flush_outbox()
     timeline = client.get(f"/load/{stop.id}/evidence", headers=headers).json()["timeline"]
 
-    assert resp.json() == {"sent": True, "delivery": "sent", "phase": "start"}
     assert claim.start_notice_sent_at is not None
     assert claim.pre_notice_sent_at is None
     assert "notice_sent" in [e["event"] for e in timeline]
 
 
-def test_a_warned_stop_still_sends_its_start_notice_when_the_clock_turns(client, db):
+def test_a_warned_stop_still_sends_its_start_notice_when_the_clock_turns(
+    client, db, flush_outbox
+):
     """The chain is untouched by the warning: both notices, in order, one each."""
     account, headers = _driver(client, db)
     stop, claim = _stop_with_free_time_left(db, account, minutes_left=29)
@@ -135,11 +145,12 @@ def test_a_warned_stop_still_sends_its_start_notice_when_the_clock_turns(client,
     claim.free_time_minutes = 0
     db.flush()
     resp = client.post(f"/load/{stop.id}/notice", headers=headers)
+    flush_outbox()
 
     assert resp.json()["phase"] == "start"
-    assert resp.json()["sent"] is True
+    assert resp.json()["delivery"] == "queued"
     assert claim.pre_notice_sent_at is not None
-    assert claim.start_notice_sent_at is not None
+    assert claim.start_notice_sent_at is not None, "the reconcile stamps it once it goes"
 
 
 def test_a_company_driver_is_unchanged_by_any_of_this(client, db):

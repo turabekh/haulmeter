@@ -37,7 +37,7 @@ def test_register_module(db):
     assert db.get(flags.FeatureFlag, "m05_protection").enabled is None
 
 
-def test_on_time_proof_within_window_and_notice(db):
+def test_on_time_proof_within_window_and_notice(db, flush_outbox):
     account = _account(db)
     stop = _stop(db, account, appt_start=T0, appt_end=T0 + timedelta(hours=1))
     gateway = notify.RecordingNotificationGateway()
@@ -51,8 +51,18 @@ def test_on_time_proof_within_window_and_notice(db):
         gateway=gateway,
     )
     assert proof.within_window is True
-    assert proof.notice_sent is True
+    # AI-CONTEXT: `notice_sent` means the counterparty was REACHED, and at file time
+    # nothing has gone out — sending is the `outbound_mail` sweep's job now. Asserting
+    # True here would be the F-06 claim ("a row claiming a delivery it never got") with
+    # the timing changed, so the proof records WHICH message carries the notice and the
+    # sweep stamps the boolean when that message lands.
+    assert proof.notice_sent is False, "nothing has reached the broker yet"
+    assert proof.notice_message_ref is not None, "but we know which message will"
+
+    flush_outbox(gateway)
+
     assert gateway.sent[0].channel == "email"
+    assert proof.notice_sent is True, "the reconcile must stamp it once it actually goes"
 
 
 def test_on_time_proof_late_no_notice(db):
@@ -158,7 +168,7 @@ def test_arrival_files_the_proof_even_without_consent(db):
     assert gateway.sent == []
 
 
-def test_consent_turns_the_notice_on(db):
+def test_consent_turns_the_notice_on(db, flush_outbox):
     account = _account(db)
     stop = _stop(db, account)
     m5.set_on_time_consent(db, account.id, stop.load_id, True, "ap@acme.example")
@@ -166,8 +176,12 @@ def test_consent_turns_the_notice_on(db):
 
     proof = m5.auto_file_on_arrival(db, stop, account.id, arrived_at=T0, gateway=gateway)
 
-    assert proof.notice_sent is True
+    assert proof.notice_sent is False, "nothing has reached the broker yet"
+
+    flush_outbox(gateway)
+
     assert len(gateway.sent) == 1
+    assert proof.notice_sent is True
 
 
 def test_a_late_arrival_notifies_nobody(db):

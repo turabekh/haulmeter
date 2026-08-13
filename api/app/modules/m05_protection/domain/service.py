@@ -94,6 +94,7 @@ def file_on_time_proof(
     )
 
     notice_sent = False
+    notice_message_ref = None
     # finding F4: this fell back to an invented unknown-counterparty address, which is not
     # an address anywhere, and then recorded `notice_sent=True` over the bounce. No
     # address, no send, and the proof says so — the artifact is filed either way, which is
@@ -111,7 +112,10 @@ def file_on_time_proof(
             counterparty_email,
             now=checked_in_at,
         )
+        # asynchronous now: nothing has gone out yet, and saying otherwise here is exactly
+        # the claim audit F-06 removed. The ref is what the sweep reconciles against.
         notice_sent = message.sent_at is not None
+        notice_message_ref = message.id
 
     proof = OnTimeProof(
         account_id=account_id,
@@ -119,6 +123,7 @@ def file_on_time_proof(
         checked_in_at=checked_in_at,
         within_window=within,
         notice_sent=notice_sent,
+        notice_message_ref=notice_message_ref,
         evidence_log_ref=log.id,
     )
     db.add(proof)
@@ -1368,3 +1373,34 @@ def dispatch_expiry_reminders(db: Session, gateway, as_of: date | None = None, n
         )
         documents.mark_reminder_sent(db, document, offset)
     return sent
+
+
+def reconcile_on_time_notices(db: Session, delivered: list) -> int:
+    """Stamp `notice_sent` when the on-time notice actually reaches the counterparty.
+
+    AI-CONTEXT: the M5 half of the same problem `m3.reconcile_delivered_notices` solves,
+    and it exists for the same reason: sending moved off the request thread, so a column
+    meaning "the counterparty was reached" can no longer be written by the request that
+    decided to reach them.
+
+    Without this, `OnTimeProof.notice_sent` would have been False for every proof ever
+    filed — not wrong at the moment it is written, which is the subtle part, but never
+    corrected afterwards. A boolean that is always False is indistinguishable from a
+    feature that does not work, and this one is the driver's evidence that they arrived on
+    time AND that the broker was told.
+    """
+    if not delivered:
+        return 0
+    by_id = {m.id: m for m in delivered if m.sent_at is not None}
+    if not by_id:
+        return 0
+    proofs = db.scalars(
+        select(OnTimeProof).where(
+            OnTimeProof.notice_message_ref.in_(list(by_id)),
+            OnTimeProof.notice_sent.is_(False),
+        )
+    ).all()
+    for proof in proofs:
+        proof.notice_sent = True
+    db.flush()
+    return len(proofs)

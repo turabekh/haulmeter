@@ -662,6 +662,7 @@
   "notice.delivery.failed": "Ogeysiisku wuu guuldareystay — dilaalka lama gaarin",
   "notice.delivery.no_email": "Iimayl dilaal ma jiro — mid ku dar",
   "notice.delivery.not_sent": "Dilaalka lama ogeysiin",
+  "notice.delivery.queued": "Ogeysiiska safka ku jira — dirayaa broker-ka",
   "notice.delivery.retrying": "Ogeysiisku ma bixin — dib ayaa loo isku dayayaa",
   "notice.delivery.sent": "Dilaalka waa la ogeysiiyay",
   "notifications.empty": "Weli waxba ma jiraan.",

@@ -103,6 +103,8 @@ def test_generate_pack_invoice_opens_receivable_and_notifies(db):
     assert receivable.amount_cents == 15000
     db.refresh(broker)
     assert broker.claim_count == 1
+    # delivery is the `outbound_mail` sweep's job now, not the request path's
+    notify.retry_unsent_messages(db, gateway)
     assert gateway.sent[0].channel == "email"
 
 

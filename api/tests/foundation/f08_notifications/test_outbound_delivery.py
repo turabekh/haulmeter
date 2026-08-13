@@ -111,25 +111,75 @@ def test_the_lazy_gateway_falls_back_to_recording_when_smtp_is_unconfigured(db):
     assert _FakeSmtp.sent == [], "nothing may reach an SMTP server when unconfigured"
 
 
-# --- F-06 ---
+# --- F-06, and the outbox ---
+#
+# AI-CONTEXT: `send_counterparty_message` NO LONGER SENDS. It records the decision and
+# returns; `retry_unsent_messages` — the `outbound_mail` sweep — is the only thing that
+# opens an SMTP connection.
+#
+# The inline send was 2.5 s of connect/STARTTLS/AUTH inside the request handler, measured
+# against the configured provider before a byte of a notice moved, with a 10 s timeout,
+# holding a POOLED DATABASE CONNECTION and a threadpool slot for the whole round trip.
+# §23 records that exact outage: "QueuePool limit of size 5 overflow 10 reached", the API
+# out of connections and answering nothing.
+#
+# So these tests now say what the two halves each owe. The row is the promise; the sweep
+# is the delivery.
+def test_recording_a_message_opens_no_connection_at_all(db):
+    # the whole point of the change, asserted directly: nothing reaches a mail server on
+    # the request path, so no driver ever waits on one
+    _FakeSmtp.sent = []
+    thread = _thread(db)
+    message = notify.send_counterparty_message(
+        db, thread, "body", gw.SmtpNotificationGateway(_Settings()), "ap@broker.example"
+    )
+
+    assert _FakeSmtp.sent == [], "the request path must not talk to SMTP"
+    assert message.sent_at is None
+    assert message.provider_ref is None, "never attempted is not the same as failed"
+    assert message.attempts == 0
+
+
+def test_a_recorded_message_is_waiting_for_the_sweep(db):
+    thread = _thread(db)
+    message = notify.send_counterparty_message(
+        db, thread, "body", gw.SmtpNotificationGateway(_Settings()), "ap@broker.example"
+    )
+    assert notify.unsent_messages(db) == [message]
+
+
+def test_the_sweep_delivers_a_never_attempted_message(db):
+    # AI-CONTEXT: this is the one that would have silently eaten every email. The sweep
+    # guarded on `is_retryable(provider_ref)`, which asks "is this FAILURE worth another
+    # go?" — of a row nothing had tried. `is_retryable(None)` is False, so a first
+    # delivery was counted `abandoned` and dropped, and the outbox would have looked
+    # perfect: rows in, rows out, a tidy summary, and no mail.
+    thread = _thread(db)
+    message = notify.send_counterparty_message(
+        db, thread, "body", gw.SmtpNotificationGateway(_Settings()), "ap@broker.example"
+    )
+
+    summary = notify.retry_unsent_messages(db, gw.SmtpNotificationGateway(_Settings()))
+
+    assert summary["sent"] == 1
+    assert summary["first_delivery"] == 1, "a first send is not a retry"
+    assert summary["abandoned"] == 0
+    assert message.sent_at is not None
+    assert message.to_ref == "ap@broker.example", "the database recorded no recipient at all"
+    assert _FakeSmtp.sent[-1]["To"] == "ap@broker.example"
+
+
 def test_a_failed_send_does_not_claim_it_was_sent(db):
     _FakeSmtp.raises = TimeoutError("connection timed out")
     thread = _thread(db)
     message = notify.send_counterparty_message(
         db, thread, "body", gw.SmtpNotificationGateway(_Settings()), "ap@broker.example"
     )
+    notify.retry_unsent_messages(db, gw.SmtpNotificationGateway(_Settings()))
+
     assert notify.is_failure(message.provider_ref)
     assert message.sent_at is None, "sent_at means it went out"
     assert message.attempts == 1
-
-
-def test_a_successful_send_records_when_and_to_whom(db):
-    thread = _thread(db)
-    message = notify.send_counterparty_message(
-        db, thread, "body", gw.SmtpNotificationGateway(_Settings()), "ap@broker.example"
-    )
-    assert message.sent_at is not None
-    assert message.to_ref == "ap@broker.example", "the database recorded no recipient at all"
 
 
 def test_a_transient_failure_is_retried_and_eventually_delivered(db):
@@ -138,12 +188,15 @@ def test_a_transient_failure_is_retried_and_eventually_delivered(db):
     message = notify.send_counterparty_message(
         db, thread, "body", gw.SmtpNotificationGateway(_Settings()), "ap@broker.example"
     )
+    notify.retry_unsent_messages(db, gw.SmtpNotificationGateway(_Settings()))
     assert notify.unsent_messages(db) == [message]
 
     _FakeSmtp.raises = None
     summary = notify.retry_unsent_messages(db, gw.SmtpNotificationGateway(_Settings()))
 
-    assert summary == {"retried": 1, "sent": 1, "abandoned": 0}
+    assert summary["retried"] == 1
+    assert summary["first_delivery"] == 0, "the first attempt already happened"
+    assert summary["sent"] == 1
     assert message.sent_at is not None
     assert message.attempts == 2
     assert _FakeSmtp.sent[-1]["To"] == "ap@broker.example"
@@ -159,10 +212,13 @@ def test_an_auth_failure_is_not_retried_at_all(db):
     message = notify.send_counterparty_message(
         db, thread, "body", gw.SmtpNotificationGateway(_Settings()), "ap@broker.example"
     )
+    notify.retry_unsent_messages(db, gw.SmtpNotificationGateway(_Settings()))
     _FakeSmtp.raises = None
     summary = notify.retry_unsent_messages(db, gw.SmtpNotificationGateway(_Settings()))
 
-    assert summary == {"retried": 0, "sent": 0, "abandoned": 1}
+    assert summary["retried"] == 0
+    assert summary["sent"] == 0
+    assert summary["abandoned"] == 1
     assert message.sent_at is None, "it stays visible rather than being quietly abandoned"
 
 
@@ -182,11 +238,12 @@ def test_a_delivered_message_is_never_swept_again(db):
     notify.send_counterparty_message(
         db, thread, "body", gw.SmtpNotificationGateway(_Settings()), "ap@broker.example"
     )
-    assert notify.retry_unsent_messages(db, gw.SmtpNotificationGateway(_Settings())) == {
-        "retried": 0,
-        "sent": 0,
-        "abandoned": 0,
-    }
+    notify.retry_unsent_messages(db, gw.SmtpNotificationGateway(_Settings()))
+    again = notify.retry_unsent_messages(db, gw.SmtpNotificationGateway(_Settings()))
+
+    assert again["sent"] == 0
+    assert again["retried"] == 0
+    assert again["first_delivery"] == 0
     assert len(_FakeSmtp.sent) == 1, "a broker must not receive the same notice twice"
 
 
@@ -204,6 +261,10 @@ def test_the_retry_sweep_is_wired_to_the_worker(db):
     # so gating a foundation safety net is how it becomes permanently idle.
     from app.worker import _jobs
 
-    job = next(j for j in _jobs() if j.name == "outbound_retry")
+    # RENAMED from `outbound_retry`: it is no longer a net beside an inline send, it is
+    # the only thing that sends. Sixty seconds rather than five minutes because the
+    # interval is now FIRST-DELIVERY latency — how long a broker's mail sits after a
+    # driver taps Send, and how long the screen reads `queued`.
+    job = next(j for j in _jobs() if j.name == "outbound_mail")
     assert job.flag_key is None
-    assert job.interval_seconds == 300
+    assert job.interval_seconds == 60

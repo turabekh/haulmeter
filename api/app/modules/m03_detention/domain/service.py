@@ -361,6 +361,7 @@ def _counterparty_email(db: Session, claim: DetentionClaim) -> str | None:
 # cached, so a send that fails now and succeeds later on the retry sweep tells the truth
 # without anything having to remember to update the claim.
 DELIVERY_SENT = "sent"
+DELIVERY_QUEUED = "queued"
 DELIVERY_RETRYING = "retrying"
 DELIVERY_FAILED = "failed"
 DELIVERY_NO_EMAIL = "no_email"
@@ -377,6 +378,19 @@ def delivery_of(message) -> str | None:
         return None
     if message.sent_at is not None:
         return DELIVERY_SENT
+    # AI-CONTEXT: the SIXTH state, and without it moving sends off the request thread
+    # would have replaced one lie with its opposite.
+    #
+    # A row that has never been attempted has `provider_ref` NULL, which is not a failure
+    # — `is_retryable(None)` is False because it asks "is this failure worth another go?"
+    # of something nothing has tried. So this ladder fell straight through to FAILED, and
+    # a driver who tapped Send would have read **"Notice failed — broker not reached"**
+    # about a notice sitting correctly in the outbox, seconds before it went.
+    #
+    # QUEUED is what the row actually says: we hold it, it has not gone yet. It resolves
+    # to `sent` on the next `outbound_mail` sweep, within a minute.
+    if message.provider_ref is None and message.attempts == 0:
+        return DELIVERY_QUEUED
     if notify.is_retryable(message.provider_ref) and message.attempts < notify.MAX_SEND_ATTEMPTS:
         return DELIVERY_RETRYING
     return DELIVERY_FAILED
@@ -402,6 +416,56 @@ def notice_delivery(db: Session, claim: DetentionClaim) -> str:
     if _counterparty_email(db, claim) is None:
         return DELIVERY_NO_EMAIL
     return DELIVERY_NOT_SENT
+
+
+def reconcile_delivered_notices(db: Session, delivered: list) -> int:
+    """Close the loop after the sweep actually delivers. Returns how many claims moved.
+
+    AI-CONTEXT: this exists because moving sends off the request thread would otherwise
+    have quietly weakened every detention pack in the product.
+
+    `notice_delivery` above records an "ACCEPTED ASYMMETRY": a message that fails now and
+    succeeds later on the sweep reads `sent` — that state is computed live — but gains no
+    `notice_sent` evidence record, because nothing re-enters this code path. The reasoning
+    was sound while the sweep only caught rare failures, and it even chose the safe
+    direction: a pack that omits a notice the broker DID receive costs the driver an
+    argument, while one asserting a notice they did not costs them the claim.
+
+    Asynchronous sending makes that rare case the ONLY case. Every notice would now be
+    delivered by the sweep, so every pack would omit the line — "we notified the broker at
+    10:05" is the fact a detention dispute turns on, and it would have silently stopped
+    being written for anybody. The asymmetry had to be closed rather than inherited.
+
+    Three things kept exactly as the synchronous path had them:
+      · the timestamp is the message's own `sent_at`, not "now" — the pack states when the
+        broker was reached, not when a janitor noticed
+      · ONLY the start notice writes `notice_sent`. A pre-detention WARNING is a different
+        fact (F7), and filing it here would put a claim in the pack nothing supports
+      · the record is appended once. `start_notice_sent_at` already being set is what says
+        this claim has been through here, so a re-run cannot append a second entry to a
+        hash-chained log.
+    """
+    if not delivered:
+        return 0
+    by_id = {m.id: m for m in delivered}
+    claims = db.scalars(
+        select(DetentionClaim).where(
+            DetentionClaim.start_notice_message_ref.in_(list(by_id)),
+            DetentionClaim.start_notice_sent_at.is_(None),
+        )
+    ).all()
+    moved = 0
+    for claim in claims:
+        message = by_id.get(claim.start_notice_message_ref)
+        if message is None or message.sent_at is None:
+            continue
+        claim.start_notice_sent_at = message.sent_at
+        stop = loads.get_stop(db, claim.stop_ref)
+        if stop is not None:
+            loads.record_stop_event(db, stop, loads.EVENT_NOTICE_SENT, message.sent_at)
+        moved += 1
+    db.flush()
+    return moved
 
 
 def send_pre_detention_notice(
@@ -472,10 +536,26 @@ def _existing_start_notice(db: Session, claim: DetentionClaim):
         return None  # the ref points at nothing — treat it as never sent
     if message.sent_at is not None:
         return message
+    # AI-CONTEXT: a SIXTH case, and without it asynchronous sending re-opens the exact
+    # defect the five above were written to close.
+    #
+    # A queued notice has never been attempted, so `is_retryable(None)` is False and it
+    # fell through every branch below to "send fresh" — meaning a second tap, a replayed
+    # offline write, or simply a driver returning to the screen inside the sweep's minute
+    # would have created a SECOND message row for the same claim and mailed the broker
+    # twice. §23 entry 136 fixed that once at the UI (`onSendNotice` had no in-flight
+    # guard and "genuinely sent a broker two emails on a double tap"); deferring the send
+    # widened the window from one round trip to a whole sweep interval, where a guard on
+    # the client cannot reach.
+    #
+    # Addressed-to-the-current-address for the same reason as the retryable case: if the
+    # driver has since corrected the broker's email, the queued row is going to the wrong
+    # place and a fresh one is right.
+    queued = message.provider_ref is None and message.attempts == 0
     retryable = notify.is_retryable(message.provider_ref) and (
         message.attempts < notify.MAX_SEND_ATTEMPTS
     )
-    if retryable and message.to_ref == _counterparty_email(db, claim):
+    if (queued or retryable) and message.to_ref == _counterparty_email(db, claim):
         return message
     return None
 

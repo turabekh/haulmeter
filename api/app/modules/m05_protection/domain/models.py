@@ -33,7 +33,18 @@ class OnTimeProof(Base):
     stop_ref: Mapped[uuid.UUID] = mapped_column(index=True)
     checked_in_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     within_window: Mapped[bool] = mapped_column(Boolean, default=False)
+    # AI-CONTEXT: `notice_sent` means the counterparty was REACHED, and it is written by
+    # the delivery sweep rather than by the request that files the proof. Sending is
+    # asynchronous now (2.5 s of SMTP inside a handler, holding a pooled DB connection —
+    # §23 records that outage), so at file time nothing has gone out and this is False.
+    #
+    # `notice_message_ref` is what lets it ever become True: it points at the F8 row, and
+    # `reconcile_on_time_notices` stamps this the moment that row actually lands. Without
+    # the ref there is nothing to reconcile AGAINST, and the column would have been
+    # permanently False — a stored field that always lies, which is the F-06 defect with
+    # the sign flipped.
     notice_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    notice_message_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
     evidence_log_ref: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

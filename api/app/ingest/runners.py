@@ -311,22 +311,41 @@ def run_eia(db: Session, commit: bool = True) -> dict:
     return {"regions": regions}
 
 
-def run_outbound_retry(db: Session, commit: bool = True) -> dict:
-    """Re-send counterparty mail that did not go out (audit F-06).
+def run_outbound_mail(db: Session, commit: bool = True) -> dict:
+    """Deliver counterparty mail. THE only thing that sends it (audit F-06 built the net).
 
-    AI-CONTEXT: one SMTP attempt with a ten-second timeout was the entire delivery
-    strategy. A transient blip or a Gmail rate limit permanently lost a detention notice
-    — the document the whole detention wedge exists to deliver — and because the failure
-    was swallowed into a string nobody read, with `sent_at` written anyway, nothing in
-    the product could tell you it had happened.
+    AI-CONTEXT: this used to be a retry net beside an inline send. It is now the send.
+
+    `send_counterparty_message` opened an SMTP connection inside the request handler —
+    measured at 2.5 s of connect/STARTTLS/AUTH against the configured provider before a
+    byte of the notice moved, with a 10 s timeout, holding a POOLED DATABASE CONNECTION
+    and a threadpool slot for the whole round trip. §23 records that exact outage
+    ("QueuePool limit of size 5 overflow 10 reached"). The row was always the record that
+    we DECIDED to send; now it is also the queue.
 
     Runs on the counterparty gateway rather than a per-driver one: this is outbound mail
     to a broker, not a push to a phone. Where SMTP is unconfigured the gateway falls back
     to recording, so a laptop exercises the sweep without sending anything.
+
+    THE RECONCILE IS WHY THIS RETURNS WHAT IT RETURNS. `notice_delivery` records an
+    "ACCEPTED ASYMMETRY": a message that succeeds on the sweep gains no `notice_sent`
+    evidence record, because nothing re-enters M3's code path. That was tolerable while
+    the sweep only caught rare failures. Now that it carries EVERY send, the same gap
+    would strip "we notified the broker at 10:05" out of every detention pack — the line a
+    dispute turns on. F8 cannot close it (it sits below the modules); this runner can, and
+    does, because it may see both layers.
     """
     from app.foundation.f08_notifications import public as notify
+    from app.modules.m03_detention import public as m3
+    from app.modules.m05_protection import public as m5
 
     summary = notify.retry_unsent_messages(db, notify.counterparty_gateway())
+    delivered = summary.pop("delivered", [])
+    # both modules cache a "the counterparty was reached" fact that the request can no
+    # longer write. Reported separately so a zero in either is visible rather than summed
+    # away — M3's is the detention pack's evidence line, M5's is the on-time proof.
+    summary["reconciled_notices"] = m3.reconcile_delivered_notices(db, delivered)
+    summary["reconciled_on_time"] = m5.reconcile_on_time_notices(db, delivered)
     if commit:
         db.commit()
     return summary

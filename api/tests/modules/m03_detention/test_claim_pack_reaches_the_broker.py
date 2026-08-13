@@ -52,6 +52,8 @@ def test_the_notice_carries_a_link_the_broker_can_actually_open(db, monkeypatch)
         gateway = notify.RecordingNotificationGateway()
         result = m3.generate_pack(db, _claim(db), now=T0 + timedelta(minutes=240), gateway=gateway)
 
+        # delivery is the `outbound_mail` sweep's job now, not the request path's
+        notify.retry_unsent_messages(db, gateway)
         assert gateway.sent, "no counterparty message was sent at all"
         body = gateway.sent[-1].body
         assert "attached" not in body.lower(), (
@@ -72,6 +74,8 @@ def test_with_no_public_url_it_says_so_instead_of_printing_a_dead_link(db, monke
     try:
         gateway = notify.RecordingNotificationGateway()
         m3.generate_pack(db, _claim(db), now=T0 + timedelta(minutes=240), gateway=gateway)
+        # delivery is the `outbound_mail` sweep's job now, not the request path's
+        notify.retry_unsent_messages(db, gateway)
         body = gateway.sent[-1].body
         assert "attached" not in body.lower()
         assert "/pack/s/" not in body

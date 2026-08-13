@@ -191,6 +191,32 @@ describe("the notice control after a permanent failure", () => {
     expect(w.findAll("button.cta").map((b) => b.text())).toContain(en["load.cta.notice"]);
   });
 
+  // AI-CONTEXT: the SIXTH delivery state, and the reason it exists.
+  //
+  // Counterparty email left the request thread — 2.5 s of connect/STARTTLS/AUTH inside
+  // the handler, holding a pooled DB connection for the whole round trip (§23's QueuePool
+  // outage). So between the tap and the `outbound_mail` sweep the F8 row has never been
+  // attempted, and the old five-state ladder read that as FAILED: a driver who had just
+  // tapped Send would have been told "Notice failed — broker not reached" about a notice
+  // sitting correctly in the outbox, seconds before it went.
+  it("says the notice is queued, never that it failed", async () => {
+    const w = await mountLoad("queued");
+
+    expect(w.text()).toContain(en["notice.delivery.queued"]);
+    expect(w.text()).not.toContain(en["notice.delivery.failed"]);
+    expect(w.text()).not.toContain(en["notice.delivery.sent"]);
+  });
+
+  it("stops offering the rung while the notice is on its way", async () => {
+    // the server refuses to duplicate a queued notice, so a button that re-sends it is a
+    // control that runs and changes nothing — the dead-control pattern §23 entry 72 records
+    const w = await mountLoad("queued");
+
+    const cta = w.findAll("button.cta").map((b) => b.text());
+    expect(cta).not.toContain(en["load.cta.notice"]);
+    expect(cta).not.toContain(en["load.cta.notice_again"]);
+  });
+
   it("says Send notice on a stop nobody has tried yet", async () => {
     const w = await mountLoad("not_sent");
 

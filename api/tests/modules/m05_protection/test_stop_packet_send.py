@@ -55,6 +55,8 @@ def test_the_dispatcher_gets_a_link_to_the_paperwork(db):
         gateway=gateway, now=NOW, base_url_required=False,
     )
 
+    # delivery is the `outbound_mail` sweep's job now, not the request path's
+    notify.retry_unsent_messages(db, gateway)
     assert gateway.sent, "nothing was sent"
     body = gateway.sent[-1].body
     assert result["shared"].token
@@ -105,6 +107,8 @@ def test_the_subject_carries_the_load_reference_a_clerk_files_by(db):
         db, account.id, stop_ref=stop.id, counterparty_ref=broker.id,
         gateway=gateway, now=NOW, base_url_required=False,
     )
+    # delivery is the `outbound_mail` sweep's job now, not the request path's
+    notify.retry_unsent_messages(db, gateway)
     assert "BL-88421" in gateway.sent[-1].subject
 
 
@@ -118,6 +122,8 @@ def test_the_tone_is_a_handoff_not_a_demand(db):
         db, account.id, stop_ref=stop.id, counterparty_ref=broker.id,
         gateway=gateway, now=NOW, base_url_required=False,
     )
+    # delivery is the `outbound_mail` sweep's job now, not the request path's
+    notify.retry_unsent_messages(db, gateway)
     body = gateway.sent[-1].body.lower()
     for word in ("claim", "demand", "owed", "dispute", "invoice"):
         assert word not in body, f"a handoff document should not say {word!r}"

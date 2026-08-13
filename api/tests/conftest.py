@@ -111,3 +111,38 @@ def db(engine) -> Session:
         session.close()
         transaction.rollback()
         connection.close()
+
+
+@pytest.fixture
+def flush_outbox(db):
+    """Run the `outbound_mail` sweep, the way the worker does.
+
+    AI-CONTEXT: counterparty email is no longer sent on the request path. It was 2.5 s of
+    connect/STARTTLS/AUTH inside the handler before a byte of a notice moved, with a 10 s
+    timeout, holding a POOLED DATABASE CONNECTION and a threadpool slot for the whole
+    round trip — §23 records that exact outage ("QueuePool limit of size 5 overflow 10
+    reached"). `send_counterparty_message` records the row; this sweep delivers it.
+
+    So a test that asserts a broker RECEIVED something has to run the sweep, and that is
+    not ceremony — it is the system. A test asserting delivery without it would be
+    asserting the old architecture.
+
+    It reconciles too, because the real job does: M3 stamps `start_notice_sent_at` and
+    appends the `notice_sent` evidence record when a notice actually lands, which is what
+    keeps the detention pack's "we notified the broker at 10:05" line from quietly
+    disappearing now that every notice goes out asynchronously.
+    """
+    from app.foundation.f08_notifications import public as notify
+    from app.modules.m03_detention import public as m3
+    from app.modules.m05_protection import public as m5
+
+    def _flush(gateway=None, now=None):
+        gateway = gateway if gateway is not None else notify.counterparty_gateway()
+        summary = notify.retry_unsent_messages(db, gateway, now=now)
+        delivered = summary.pop("delivered", [])
+        summary["reconciled_notices"] = m3.reconcile_delivered_notices(db, delivered)
+        summary["reconciled_on_time"] = m5.reconcile_on_time_notices(db, delivered)
+        db.flush()
+        return summary
+
+    return _flush

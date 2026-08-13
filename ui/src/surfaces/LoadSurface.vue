@@ -406,6 +406,19 @@ const noticeSent = computed(() => (live.value ? live.value.notice_sent : false))
 // a fresh send (the wedge session's resend rule). `retrying` keeps the plain wording: the
 // sweep owns that row and tapping does not produce a new message.
 const noticeDelivery = computed(() => live.value?.notice_delivery ?? "not_sent");
+// AI-CONTEXT: "the notice is on its way", which is NOT the same question as `notice_sent`.
+//
+// `notice_sent` means the broker was REACHED, and the CTA ladder reads it so that a
+// failed notice still offers the rung. Sending is asynchronous now, so for up to a sweep
+// interval after the tap a notice is genuinely in flight while `notice_sent` is still
+// false — and without this the ladder would go on offering "Notify broker" over a row the
+// server correctly refuses to duplicate. A control that runs and changes nothing is the
+// dead-control pattern §23 entry 72 records.
+//
+// ONLY `queued`. `retrying` and `failed` keep the behaviour they were given: the rung
+// stays, with `failed` wording it "Send again". Widening this to `retrying` would be a
+// second, unrelated decision smuggled in beside an asynchrony change.
+const noticeInFlight = computed(() => noticeDelivery.value === "queued");
 // the address this load's notices go to, and the load to PATCH it on
 const loadId = computed(() => live.value?.load_id ?? null);
 const brokerEmail = computed(() => live.value?.counterparty_email ?? null);
@@ -610,7 +623,7 @@ const rung = computed(() => {
   if (isFiled.value) return null;
   if (preArrival.value) return "arrive";
   if (!bolCaptured.value) return "bol";
-  if (accruing.value && !noticeSent.value) return "notice";
+  if (accruing.value && !noticeSent.value && !noticeInFlight.value) return "notice";
   if (claimable.value) return "claim";
   // F7: inside the last half hour, warning the broker is the act that can still change
   // what happens. It ranks BELOW the accruing notice and the claim deliberately — once
@@ -1168,7 +1181,7 @@ async function endLoad() {
             {{ t("load.cta.bol") }}
           </button>
           <button
-            v-if="accruing && !noticeSent && !isFiled && rung !== 'notice'"
+            v-if="accruing && !noticeSent && !noticeInFlight && !isFiled && rung !== 'notice'"
             class="rungs__item"
             type="button"
             :disabled="!!rungBusy"

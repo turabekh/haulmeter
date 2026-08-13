@@ -4,13 +4,19 @@ Every other notice test in this suite runs against the recording gateway, which 
 succeeds — so `message is not None` and `message.sent_at is not None` agree, and the
 defect is invisible to all of them. That is precisely how it shipped. These tests make
 the gateway fail, which is the only condition under which the two differ.
+
+AI-CONTEXT: sending is ASYNCHRONOUS now, so the route no longer knows the outcome and
+these tests read in two beats: the POST records, `flush_outbox` delivers. The gateway is
+handed to the SWEEP rather than patched onto the route module, because that is where the
+transport now lives — patching `load_api._GATEWAY` would patch something nothing calls,
+which is the shape of test this codebase keeps finding (a stub the code under test never
+consults).
 """
 
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api import load as load_api
 from app.api.deps import get_db
 from app.foundation.f08_notifications import public as notify
 from app.main import app
@@ -65,20 +71,32 @@ def _timeline(client, headers, stop_id):
     return [e["event"] for e in body["timeline"]]
 
 
-def test_a_failed_send_is_not_reported_as_sent(client, db, monkeypatch):
+def test_the_route_reports_queued_rather_than_guessing(client, db):
+    """The route cannot say `sent` any more, and must not say `failed` either."""
     headers = _auth(client)
     stop_id = _arrived_stop(client, headers, db)
-    gateway = FailingGateway()
-    monkeypatch.setattr(load_api, "_GATEWAY", gateway)
 
     resp = client.post(f"/load/{stop_id}/notice", headers=headers)
 
+    assert resp.json()["sent"] is False, "nothing has left the box yet"
+    assert resp.json()["delivery"] == "queued"
+
+
+def test_a_failed_send_is_not_reported_as_sent(client, db, flush_outbox):
+    headers = _auth(client)
+    stop_id = _arrived_stop(client, headers, db)
+    gateway = FailingGateway()
+
+    client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(gateway)
+
     assert gateway.sent == ["ap@broker.example"]  # it was attempted, at a real address
-    assert resp.json()["sent"] is False
-    assert resp.json()["delivery"] == "retrying"
+    meter = client.get(f"/load/{stop_id}/meter", headers=headers).json()
+    assert meter["notice_sent"] is False
+    assert meter["notice_delivery"] == "retrying"
 
 
-def test_a_failed_send_puts_nothing_in_the_evidence_log(client, db, monkeypatch):
+def test_a_failed_send_puts_nothing_in_the_evidence_log(client, db, flush_outbox):
     """The one that matters most: this record goes into the legal pack.
 
     "We notified the broker at 10:05" is the fact a detention dispute turns on, and it was
@@ -87,65 +105,96 @@ def test_a_failed_send_puts_nothing_in_the_evidence_log(client, db, monkeypatch)
     """
     headers = _auth(client)
     stop_id = _arrived_stop(client, headers, db)
-    monkeypatch.setattr(load_api, "_GATEWAY", FailingGateway())
 
     client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(FailingGateway())
 
     assert "notice_sent" not in _timeline(client, headers, stop_id)
 
 
 def test_a_failed_send_leaves_the_meter_saying_the_broker_was_not_notified(
-    client, db, monkeypatch
+    client, db, flush_outbox
 ):
     headers = _auth(client)
     stop_id = _arrived_stop(client, headers, db)
-    monkeypatch.setattr(load_api, "_GATEWAY", FailingGateway())
 
     client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(FailingGateway())
     meter = client.get(f"/load/{stop_id}/meter", headers=headers).json()
 
     assert meter["notice_sent"] is False
     assert meter["notice_delivery"] == "retrying"
 
 
-def test_the_retry_sweep_turns_it_into_sent_on_the_meter(client, db, monkeypatch):
+def test_the_sweep_turns_it_into_sent_on_the_meter_AND_writes_the_evidence(
+    client, db, flush_outbox
+):
+    """AI-CONTEXT: the second assertion is INVERTED from what it used to be, deliberately.
+
+    It read `"notice_sent" not in timeline` and called that "the correct direction for a
+    legal document" — a pack that understates costs the driver an argument, one that
+    overstates costs them the claim. True, and tolerable while the sweep only caught the
+    rare failure.
+
+    Asynchronous sending makes the sweep the ONLY path, so understating would become
+    universal: no detention pack would ever again say the broker was told. The asymmetry
+    is closed by `reconcile_delivered_notices`, and this is the test that says so.
+    """
     headers = _auth(client)
     stop_id = _arrived_stop(client, headers, db)
-    monkeypatch.setattr(load_api, "_GATEWAY", FailingGateway())
     client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(FailingGateway())
 
-    notify.retry_unsent_messages(db, notify.RecordingNotificationGateway())
+    flush_outbox(notify.RecordingNotificationGateway())
     meter = client.get(f"/load/{stop_id}/meter", headers=headers).json()
 
     assert meter["notice_delivery"] == "sent"
-    # ...and the evidence pack still does not claim it. Understating is the correct
-    # direction for a legal document; see `notice_delivery`'s note.
-    assert "notice_sent" not in _timeline(client, headers, stop_id)
+    assert meter["notice_sent"] is True
+    assert "notice_sent" in _timeline(client, headers, stop_id)
 
 
-def test_a_load_with_no_broker_email_sends_nothing_and_says_why(client, db, monkeypatch):
+def test_a_load_with_no_broker_email_sends_nothing_and_says_why(client, db, flush_outbox):
     headers = _auth(client)
     stop_id = _arrived_stop(client, headers, db, email=None)
     gateway = FailingGateway()
-    monkeypatch.setattr(load_api, "_GATEWAY", gateway)
 
     resp = client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(gateway)
 
-    assert gateway.sent == []  # no address, so the gateway is never reached
+    assert gateway.sent == []  # no address, so no row exists to deliver
     assert resp.json()["sent"] is False
     assert resp.json()["delivery"] == "no_email"
     assert "notice_sent" not in _timeline(client, headers, stop_id)
 
 
+def test_tapping_send_twice_while_QUEUED_does_not_queue_a_second_notice(client, db):
+    """AI-CONTEXT: the window widened from one round trip to a whole sweep interval.
+
+    §23 entry 136 fixed a double-send at the UI, where `onSendNotice` had no in-flight
+    guard and "genuinely sent a broker two emails on a double tap". That guard covered the
+    request. A QUEUED notice stays un-sent for up to a minute, and a replayed offline
+    write reaches straight past any client-side guard — so the refusal has to live in
+    `_existing_start_notice`, which now treats a never-attempted row as an existing one.
+    """
+    headers = _auth(client)
+    stop_id = _arrived_stop(client, headers, db)
+
+    client.post(f"/load/{stop_id}/notice", headers=headers)
+    second = client.post(f"/load/{stop_id}/notice", headers=headers)
+
+    assert second.json()["delivery"] == "queued"
+    assert len(notify.unsent_messages(db)) == 1, "one stop, one notice"
+
+
 def test_tapping_send_twice_while_retrying_does_not_queue_a_second_notice(
-    client, db, monkeypatch
+    client, db, flush_outbox
 ):
     headers = _auth(client)
     stop_id = _arrived_stop(client, headers, db)
     gateway = FailingGateway()
-    monkeypatch.setattr(load_api, "_GATEWAY", gateway)
 
     client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox(gateway)
     second = client.post(f"/load/{stop_id}/notice", headers=headers)
 
     assert len(gateway.sent) == 1
@@ -153,12 +202,15 @@ def test_tapping_send_twice_while_retrying_does_not_queue_a_second_notice(
     assert len(notify.unsent_messages(db)) == 1
 
 
-def test_a_successful_send_still_records_the_moment(client, db):
+def test_a_successful_send_still_records_the_moment(client, db, flush_outbox):
     """The other half: the fix must not have made `notice_sent` unreachable."""
     headers = _auth(client)
     stop_id = _arrived_stop(client, headers, db)
 
     resp = client.post(f"/load/{stop_id}/notice", headers=headers)
+    flush_outbox()
 
-    assert resp.json() == {"sent": True, "delivery": "sent", "phase": "start"}
+    assert resp.json() == {"sent": False, "delivery": "queued", "phase": "start"}
+    meter = client.get(f"/load/{stop_id}/meter", headers=headers).json()
+    assert meter["notice_delivery"] == "sent"
     assert "notice_sent" in _timeline(client, headers, stop_id)

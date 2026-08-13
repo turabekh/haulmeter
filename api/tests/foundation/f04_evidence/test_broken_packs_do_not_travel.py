@@ -15,6 +15,7 @@ from app.foundation.f03_location import public as location
 from app.foundation.f04_evidence import public as evidence
 from app.foundation.f04_evidence.domain.models import EvidenceRecord, SharedPack
 from app.foundation.f05_load import public as loads
+from app.foundation.f08_notifications import public as notify
 from app.modules.m03_detention import public as m3
 from app.modules.m03_detention.domain import service as m3_service
 
@@ -123,6 +124,11 @@ def test_a_healthy_chain_travels_exactly_as_before(db):
     gateway = CountingGateway()
 
     result = m3.generate_pack(db, claim, now=FILED, gateway=gateway)
+    # AI-CONTEXT: the pack is composed, pinned and linked on the request path; the EMAIL
+    # leaves on the `outbound_mail` sweep. The gate this file is about still runs where it
+    # always did — a broken chain raises before a row is ever written, which is why the
+    # `gateway.sent == []` assertions above need no sweep to be true.
+    notify.retry_unsent_messages(db, gateway)
 
     assert result["shared"] is not None
     assert claim.state == m3.ClaimState.invoiced
@@ -173,6 +179,7 @@ def test_the_counterparty_body_still_names_the_evidence(db):
     gateway = CountingGateway()
 
     m3.generate_pack(db, claim, now=FILED, gateway=gateway)
+    notify.retry_unsent_messages(db, gateway)
     body = gateway.sent[0][2]
 
     assert "GPS evidence" in body

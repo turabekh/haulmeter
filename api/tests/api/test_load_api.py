@@ -456,7 +456,7 @@ class TestAppointmentProvenanceAndCorrection:
         assert resp.status_code == 403
 
 
-def test_notice_flags_notice_sent_on_the_meter(client, db):
+def test_notice_flags_notice_sent_on_the_meter(client, db, flush_outbox):
     # a detention-start notice, once detention is accruing, is recorded so the
     # Meter/evidence show "notice sent" (was a broken proxy on claim.state)
     headers = _auth(client)
@@ -479,9 +479,17 @@ def test_notice_flags_notice_sent_on_the_meter(client, db):
 
     assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["notice_sent"] is False
     sent = client.post(f"/load/{stop_id}/notice", headers=headers)
-    assert sent.status_code == 201 and sent.json()["sent"] is True
-    assert sent.json()["delivery"] == "sent"
-    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["notice_sent"] is True
+    # the route records; the `outbound_mail` sweep delivers. `notice_sent` means the
+    # broker was REACHED, so it stays false across the tap and turns true when it goes.
+    assert sent.status_code == 201 and sent.json()["sent"] is False
+    assert sent.json()["delivery"] == "queued"
+    assert client.get(f"/load/{stop_id}/meter", headers=headers).json()["notice_sent"] is False
+
+    flush_outbox()
+
+    meter = client.get(f"/load/{stop_id}/meter", headers=headers).json()
+    assert meter["notice_sent"] is True
+    assert meter["notice_delivery"] == "sent"
 
 
 def test_claim_detail_shows_contents_and_evidence(client, db):
@@ -674,9 +682,13 @@ class TestEvidenceTimelineSaysWhatHappened:
         client.post(f"/load/{stop_id}/end", headers=headers)
         return stop_id
 
-    def test_the_three_moments_a_dispute_turns_on_are_recorded(self, client, db):
+    def test_the_three_moments_a_dispute_turns_on_are_recorded(self, client, db, flush_outbox):
         headers = _auth(client)
         stop_id = self._run_a_stop(client, headers)
+        # `notice_sent` is written by the reconcile when the mail actually lands, not by
+        # the request that queued it — otherwise the pack would assert a delivery it does
+        # not have, which is the F-06 defect
+        flush_outbox()
 
         body = client.get(f"/load/{stop_id}/evidence", headers=headers).json()
         events = [e["event"] for e in body["timeline"]]

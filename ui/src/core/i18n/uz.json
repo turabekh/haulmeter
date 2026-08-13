@@ -662,6 +662,7 @@
   "notice.delivery.failed": "Xabar yuborilmadi — brokerga yetmadi",
   "notice.delivery.no_email": "Broker e-pochtasi yo'q — qo'shing",
   "notice.delivery.not_sent": "Broker ogohlantirilmadi",
+  "notice.delivery.queued": "Xabar navbatda — brokerga yuborilmoqda",
   "notice.delivery.retrying": "Xabar ketmadi — qayta urinilmoqda",
   "notice.delivery.sent": "Broker ogohlantirildi",
   "notifications.empty": "Hozircha hech narsa yo‘q.",

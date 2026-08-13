@@ -629,24 +629,50 @@ def send_counterparty_message(
     db: Session,
     thread: OutboundThread,
     body: str,
-    gateway: NotificationGateway,
-    to_ref: str,
+    gateway: NotificationGateway | None = None,
+    to_ref: str = "",
     now: datetime | None = None,
 ) -> OutboundMessage:
+    """Record the decision to send. The BYTES leave on the `outbound_mail` sweep.
+
+    AI-CONTEXT: this used to open an SMTP connection inline, inside the request handler.
+    Measured against the configured provider — connect, STARTTLS, AUTH, sending nothing —
+    that is **2.5 seconds** before a single byte of a notice moves, and `timeout=10`
+    means a bad minute costs ten seconds of a frozen button on the screen where a driver
+    taps Send at a dock.
+
+    The wait was the smaller half. A `def` handler runs in a bounded threadpool and holds
+    a POOLED DATABASE CONNECTION for the whole round trip, so every send parked one of
+    both on a third party. §23 already records that exact outage — *"QueuePool limit of
+    size 5 overflow 10 reached"*, the API out of connections and answering nothing — and
+    `run_dunning` walks a whole receivable list in one pass.
+
+    Nothing here is new machinery. F8 has always modelled the row as the record that we
+    DECIDED to send, `unsent_messages` has always been able to find one, and
+    `retry_unsent_messages` has always been able to deliver it: the outbox existed and
+    one inline call was jumping the queue. So this writes the row and returns.
+
+    `gateway` is kept in the signature and deliberately unused. Every caller passes one,
+    and a parameter removed here is a five-module edit for no behavioural gain — while
+    leaving it means a future caller cannot accidentally re-introduce an inline send by
+    passing a gateway and expecting it to be used. `_ = gateway` says that out loud.
+    """
+    _ = gateway  # the transport is the sweep's business now, not the caller's
     now = now or datetime.now(UTC)
-    provider_ref = gateway.send_email(to_ref, thread.subject, body)
     message = OutboundMessage(
         thread_id=thread.id,
         direction=MessageDirection.outbound,
         body=body,
         to_ref=to_ref,
-        provider_ref=provider_ref,
-        # AI-CONTEXT: only a send that actually went out gets a `sent_at` (audit F-06).
-        # It was set unconditionally, so a row beside a `smtp-failed-…` ref still claimed
-        # delivery — and because nothing ever read the ref, the failure was invisible to
-        # every surface in the product. A NULL here is what makes it findable.
-        sent_at=None if is_failure(provider_ref) else now,
-        attempts=1,
+        # AI-CONTEXT: NULL, and the three NULLs mean three different things. `provider_ref`
+        # NULL is "never attempted" — distinct from a `smtp-failed-…` ref, which is "tried
+        # and did not go". `sent_at` NULL is what audit F-06 made load-bearing: only a send
+        # that actually went out gets one, so a row can never claim a delivery it did not
+        # get. `attempts` 0 is what tells the sweep this is a first delivery rather than a
+        # retry, which is the difference between the driver seeing `queued` and `retrying`.
+        provider_ref=None,
+        sent_at=None,
+        attempts=0,
     )
     db.add(message)
     db.flush()
@@ -692,9 +718,17 @@ def retry_unsent_messages(
     they stay visible rather than being quietly abandoned.
     """
     now = now or datetime.now(UTC)
-    sent = retried = abandoned = 0
+    sent = retried = abandoned = delivered_first_try = 0
+    delivered: list[OutboundMessage] = []
     for message in unsent_messages(db, limit):
-        if not is_retryable(message.provider_ref):
+        # AI-CONTEXT: a NEVER-ATTEMPTED row is not a failed one, and this gate could not
+        # tell them apart. `is_retryable(None)` is False — it asks "is this failure worth
+        # another go?" of something that has not been tried — so the moment sends became
+        # asynchronous, every first delivery would have been counted `abandoned` and
+        # dropped on the very first sweep. The whole outbox would have looked like it was
+        # working: rows in, rows out, a tidy summary, and no mail.
+        first_attempt = message.provider_ref is None
+        if not first_attempt and not is_retryable(message.provider_ref):
             abandoned += 1
             continue
         thread = db.get(OutboundThread, message.thread_id)
@@ -704,7 +738,10 @@ def retry_unsent_messages(
             # notice to an address we inferred is worse than not sending it.
             abandoned += 1
             continue
-        retried += 1
+        if first_attempt:
+            delivered_first_try += 1
+        else:
+            retried += 1
         message.attempts += 1
         message.provider_ref = gateway.send_email(
             message.to_ref, thread.subject, message.body
@@ -712,8 +749,22 @@ def retry_unsent_messages(
         if not is_failure(message.provider_ref):
             message.sent_at = now
             sent += 1
+            delivered.append(message)
     db.flush()
-    return {"retried": retried, "sent": sent, "abandoned": abandoned}
+    # AI-CONTEXT: `delivered` is returned so a CALLER can reconcile. `notice_delivery`'s
+    # docstring records an "ACCEPTED ASYMMETRY" — a message that succeeds on the sweep
+    # gains no `notice_sent` evidence record, because nothing re-enters that code path —
+    # and that was tolerable while the sweep only handled the rare failure. Now that it
+    # handles EVERY send, the same asymmetry would strip the "we notified the broker at
+    # 10:05" line out of every detention pack, which is the line a dispute turns on. F8
+    # cannot fix that itself (it sits below the modules); it can hand back what went.
+    return {
+        "sent": sent,
+        "first_delivery": delivered_first_try,
+        "retried": retried,
+        "abandoned": abandoned,
+        "delivered": delivered,
+    }
 
 
 def mark_opened(

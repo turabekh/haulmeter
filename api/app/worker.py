@@ -35,7 +35,7 @@ class Job:
     # AI-CONTEXT: None means ALWAYS RUN. Every job here gates on a module flag, and
     # `is_enabled` returns False for a flag nobody registered — so giving a foundation
     # safety net a flag is how it becomes another engine that is built, wired and
-    # permanently idle. `outbound_retry` is delivery insurance for mail F8 has already
+    # permanently idle. `outbound_mail` is the delivery path for mail F8 has already
     # decided to send; there is no activation decision to make about it.
     flag_key: str | None
     interval_seconds: float
@@ -68,19 +68,30 @@ def _jobs() -> list[Job]:
         Job("detention_clock", m3.FLAG_KEY, 60, runners.run_detention_clock),
         # M3-FR6's dunning cadence (finding F6). Daily: the offsets are day 3 / 10 / 21,
         # so a finer interval buys nothing and a coarser one would miss a day's window.
-        # Behind M3's own flag — unlike `outbound_retry`, this is not delivery insurance
+        # Behind M3's own flag — unlike `outbound_mail`, this is not merely delivery
         # for mail already decided on, it DECIDES to send, and that is an activation
         # question the module's flag owns. The day-21 escalation offer additionally waits
         # on the `collection_partner_agreement` gate; see `run_dunning`.
         Job("dunning", m3.FLAG_KEY, 86400, runners.run_dunning),
-        # audit F-06: counterparty mail that did not go out. Five minutes, because the
-        # failures this exists for are transient — a restart window, a rate limit — and
-        # a detention notice an hour late is still a detention notice, while one that
-        # never goes is the defect. Unflagged: see Job.flag_key.
-        Job("outbound_retry", None, 300, runners.run_outbound_retry),
+        # AI-CONTEXT: counterparty mail — now the ONLY thing that sends it, not a retry
+        # net (audit F-06 built it; §23 built the rest around it).
+        #
+        # SIXTY SECONDS, not the five minutes this ran at when it only picked up failures.
+        # The interval used to be a retry cadence, where "a detention notice an hour late
+        # is still a detention notice" was the right argument. It is now FIRST-DELIVERY
+        # latency: it is how long after a driver taps Send that a broker's mail actually
+        # leaves, and the screen says `queued` for exactly this long. A minute is a
+        # truthful "sending"; five would make the queued state something a driver waits on
+        # and doubts. The sweep is one indexed query against `sent_at IS NULL`, so the
+        # extra ticks cost nothing when there is nothing to send.
+        #
+        # Unflagged: see Job.flag_key. This is delivery for mail F8 has already decided to
+        # send — there is no activation decision, and a flag nobody registered would mean
+        # no counterparty mail leaves this box at all.
+        Job("outbound_mail", None, 60, runners.run_outbound_mail),
         # audit F-09: raw GPS pings were never purged — the purge existed and nothing
         # called it. Daily; the window is an F13 key (`f03.ping_retention_days`) and 0
-        # disables it. Unflagged for the same reason as outbound_retry: a foundation
+        # disables it. Unflagged for the same reason as outbound_mail: a foundation
         # retention job gated on a flag nobody registered is a retention policy that
         # silently does not run, which is indistinguishable from the defect being fixed.
         # The config value is the switch, and it is the honest one — an operator turning
@@ -96,7 +107,7 @@ def _jobs() -> list[Job]:
         # slow as it always was. Being aggressive here would buy nothing and would put
         # image decoding on the same cadence as M3's money clock.
         #
-        # Unflagged, for the same reason as `outbound_retry` and `location_retention`:
+        # Unflagged, for the same reason as `outbound_mail` and `location_retention`:
         # this is infrastructure behind surfaces that are already live, not a capability
         # with an activation decision. A flag nobody registered returns False, and a
         # derivative job that silently never runs is indistinguishable from the defect it

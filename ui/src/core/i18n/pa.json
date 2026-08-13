@@ -662,6 +662,7 @@
   "notice.delivery.failed": "ਨੋਟਿਸ ਅਸਫਲ — ਬ੍ਰੋਕਰ ਤੱਕ ਨਹੀਂ ਪੁੱਜਾ",
   "notice.delivery.no_email": "ਬ੍ਰੋਕਰ ਈਮੇਲ ਨਹੀਂ — ਸੂਚਿਤ ਕਰਨ ਲਈ ਜੋੜੋ",
   "notice.delivery.not_sent": "ਬ੍ਰੋਕਰ ਨੂੰ ਸੂਚਿਤ ਨਹੀਂ",
+  "notice.delivery.queued": "ਨੋਟਿਸ ਕਤਾਰ ਵਿੱਚ — ਬ੍ਰੋਕਰ ਨੂੰ ਭੇਜਿਆ ਜਾ ਰਿਹਾ",
   "notice.delivery.retrying": "ਨੋਟਿਸ ਨਹੀਂ ਗਿਆ — ਮੁੜ ਕੋਸ਼ਿਸ਼",
   "notice.delivery.sent": "ਬ੍ਰੋਕਰ ਨੂੰ ਸੂਚਿਤ",
   "notifications.empty": "ਹਾਲੇ ਕੁਝ ਨਹੀਂ।",

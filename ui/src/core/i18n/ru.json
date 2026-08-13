@@ -662,6 +662,7 @@
   "notice.delivery.failed": "Уведомление не доставлено брокеру",
   "notice.delivery.no_email": "Нет почты брокера — добавьте её",
   "notice.delivery.not_sent": "Брокер не уведомлён",
+  "notice.delivery.queued": "Уведомление в очереди — отправляется брокеру",
   "notice.delivery.retrying": "Уведомление не ушло — повтор",
   "notice.delivery.sent": "Брокер уведомлён",
   "notifications.empty": "Пока ничего.",
