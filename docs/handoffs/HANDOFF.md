@@ -5,14 +5,14 @@ results, exact next task, and blockers always live in the latest numbered handof
 
 ➡️ **[HANDOFF-124.md](HANDOFF-124.md)** — read this first, every session.
 
-> **124** was four owner instructions — make images faster, move email to background jobs,
-> deploy, stop duplicate emails — and each ended somewhere further down than it started.
-> Ten commits, **§23 entries 144–147**, five migrations (`0071`→`0075`). Gates went
-> **pytest 1842 → 1907, vitest 885 → 905**, layout 325, plus a new `make ui-image` in
-> `make ci`.
+> **124** was six owner instructions — make images faster, move email to background jobs,
+> deploy, stop duplicate emails, send the broker the actual PDF — and each ended somewhere
+> further down than it started. Fourteen commits, **§23 entries 144–148**, six migrations
+> (`0071`→`0076`). Gates went **pytest 1842 → 1929, vitest 885 → 905**, layout 325, plus a
+> new `make ui-image` in `make ci`.
 >
-> **Stack UP · everything PUSHED · DEPLOYED.** `haulmeter.online` is **CURRENT at `0075`**,
-> three deploys, a verified offsite backup before each.
+> **Stack UP · everything PUSHED · DEPLOYED.** `haulmeter.online` is **CURRENT at `0076`**,
+> six deploys, a verified offsite backup before each.
 >
 > **F-01 IS CLOSED AND EVERY CRITICAL IN THE AUDIT IS NOW CLOSED.** Production email leaves
 > the box for the first time in this product's life — the SMTP block was placed on the VM
@@ -24,10 +24,11 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **THE PATTERN, and it is the third face of 122's and 123's coin: a thing CORRECT IN ONE
 > PROCESS AND WRONG IN ANOTHER, with every test that could see it written in the process
 > where it is right.** `media_url`'s path is right for the API router and wrong inside an
-> `<img>`. `_wire_object_storage` ran in the API's lifespan and the worker is a different
-> process. A unique index lived in a migration and the test database is built by
-> `create_all`. The budget's `dispatched_at` equals the decision only while the send is
-> synchronous.
+> `<img>`. **The pack link is right for the API router and wrong in a broker's browser.**
+> `_wire_object_storage` ran in the API's lifespan and the worker is a different process. A
+> unique index lived in a migration and the test database is built by `create_all`. The
+> budget's `dispatched_at` equals the decision only while the send is synchronous. **Five
+> instances, two of them shipped to production.**
 >
 > **The first of those I SHIPPED, and it broke every contact sheet in production.** Caddy's
 > SPA `try_files` answered `haulmeter.online/media/…` with **HTTP 200 and index.html** —
@@ -36,13 +37,22 @@ results, exact next task, and blockers always live in the latest numbered handof
 > `localhost:8008` directly, supplying by hand the one thing a browser never supplies.
 > *A test that compares `src` to a STRING cannot catch this, because a string has no origin.*
 >
+> **THE SECOND ONE IS THE ONE TO READ, and the owner found it by asking a question.** Every
+> pack link ever emailed to a broker returned **HTTP 200 with index.html** — the driver
+> app's sign-in screen. It had never worked in production, and F-01 hid it: no counterparty
+> mail left the box until the day before, so nobody had ever clicked one. **Then the fix
+> deployed twice and did nothing** — the Caddyfile is a single-file bind mount and
+> `deploy.sh` replaces files by unpacking a tar, so the container kept serving a twelve-day-
+> old config while `caddy reload` logged "using config from file". A deploy that reports
+> success and changes nothing is the worst failure mode available.
+>
 > **And the twin, in the tests: three of four race tests proved nothing.** Measured — the
 > unique index could be DROPPED and all 24 dedupe tests still passed. Only the version that
 > waits on `pg_stat_activity` until the loser is genuinely blocked on the index goes red.
 >
 > **Measured, not asserted:** a camera frame **6.7 MB → 731 KB in 187 ms** off the main
 > thread; a notice tap **2,490 ms → 25.9 ms**; thumbnails **0.35 MB against 14.34 MB** of
-> originals.
+> originals; a broker's mail now carrying **98,214 bytes** of PDF beside its link.
 >
 > **The owner's next action is not code and is the sharpest thing on the board: 140
 > production records have no bytes** — everything uploaded 26–28 July, from the swallowed

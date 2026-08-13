@@ -1,15 +1,17 @@
 # HANDOFF-124 — the request thread gave back everything it was holding
 
-> **Stack UP · everything PUSHED · DEPLOYED · `haulmeter.online` CURRENT at `0075`.**
-> Ten commits, §23 entries **144–147**, five migrations applied on the box (`0071`→`0075`),
-> a backup taken before each of the three deploys and verified offsite.
+> **Stack UP · everything PUSHED · DEPLOYED · `haulmeter.online` CURRENT at `0076`.**
+> Fourteen commits, §23 entries **144–148**, six migrations applied on the box
+> (`0071`→`0076`), a backup taken and verified offsite before each of the six deploys.
 >
 > **F-01 IS CLOSED. Every Critical in the 2026-08-07 audit is now closed.** Production
 > email leaves the box for the first time in the product's life — verified by a rehearsal
 > notice to an owner-controlled inbox carrying a real Gmail Message-ID.
 >
-> One session, four owner instructions: make images faster, move email to background jobs,
-> deploy, then stop duplicate emails. Each one ended somewhere further down than it started.
+> One session, six owner instructions: make images faster, move email to background jobs,
+> deploy, stop duplicate emails, and send the broker the actual PDF. Each one ended somewhere
+> further down than it started — and **the last one, a single question about whether the
+> link needed a sign-in, found the sharpest defect of the session.**
 >
 > ---
 >
@@ -21,6 +23,7 @@
 > | The thing | Right where it is written | Wrong where it is used |
 > |---|---|---|
 > | `media_url`'s `/media/…` | the API router, which serves that path | an `<img src>`, which resolves against the PAGE |
+> | **the pack link's `/pack/s/…`** | **the API router, which serves that path** | **a broker's browser, where only `/api/*` is proxied** |
 > | `_wire_object_storage` | the API's FastAPI lifespan | the worker, a different process, which had no storage |
 > | `dedupe_key`'s unique index | migration 0073, which production runs | the test DB, built by `create_all`, which never had it |
 > | the budget's `dispatched_at` | a synchronous send, where it equals the decision | an asynchronous one, where it is NULL for a minute |
@@ -32,6 +35,22 @@
 > checks I "verified" it with hit `localhost:8008` directly, supplying by hand the one thing
 > a browser never supplies. **A test that compares `src` to a STRING cannot catch this,
 > because a string has no origin.** They resolve with `new URL(src, pageOrigin)` now.
+>
+> **THE SAME SHAPE TWICE MORE, and the second one is the one to read.** Every pack link
+> ever emailed to a broker returned **HTTP 200 with `index.html`** — the driver app, whose
+> router guard sends an unauthenticated visitor to sign-in. The API route is correctly
+> session-free; the link simply never reached it, because the edge proxies only `/api/*`.
+> It had never worked in production, and **F-01 hid it**: no counterparty mail left the box
+> until the day before, so nobody had ever clicked one. Found by the owner asking a
+> question, not by anything in the tree.
+>
+> **And then the fix deployed twice and did nothing.** The Caddyfile is a SINGLE-FILE bind
+> mount; `deploy.sh` replaces files by unpacking a tar, which writes a new inode while the
+> mount stays pinned to the old one. `up -d --build` does not recreate a service whose
+> definition has not changed, and `caddy reload` re-read the same stale inode and logged
+> *"using config from file"*. Host `grep` found the new route; container `grep` found
+> **zero**. A deploy that reports success and changes nothing is the worst failure mode
+> available, and it is now closed by a force-recreate in `deploy.sh`.
 >
 > **And the twin, in the tests: three of my four race tests proved nothing.** Sequential
 > sends take the fast path; REPEATABLE READ is stricter than the app's own isolation;
@@ -46,16 +65,16 @@
 
 | | |
 |---|---|
-| Branch | `main`, **0 ahead / 0 behind `origin/main`** at `3653d6f` (OBSERVED) |
-| Gates | **pytest 1907 · vitest 905 (52 files) · layout 325 · `make ui-image` · `make ui-pwa` · import-linter 30/30 · ruff clean** |
-| Migrations | local **and production** at **`0075_notification_queued`**. Nothing pending |
+| Branch | `main`, **0 ahead / 0 behind `origin/main`** at `3767e05` (OBSERVED) |
+| Gates | **pytest 1929 · vitest 905 (52 files) · layout 325 · `make ui-image` · `make ui-pwa` · import-linter 30/30 · ruff clean** |
+| Migrations | local **and production** at **`0076_message_attachment`**. Nothing pending |
 | Working tree | clean |
 | Stack | **UP** |
-| Deploy | **DONE ×3 and verified.** Latest backup `haulmeter-20260813T125517Z.dump`, offsite |
+| Deploy | **DONE ×6 and verified.** Latest backup `haulmeter-20260813T180615Z.dump`, offsite |
 | Email | **PRODUCTION SENDS REAL MAIL NOW.** dev still points at the same live Gmail |
 
 **Baseline at session start: pytest 1842 / vitest 885 / layout 325.**
-Net: **+65 pytest, +20 vitest, +1 make target (`ui-image`, in `make ci`).**
+Net: **+87 pytest, +20 vitest, +1 make target (`ui-image`, in `make ci`).**
 
 ### The audit queue is nearly empty
 
@@ -90,6 +109,24 @@ switch every daily cap off.
 modules became one `dedupe_key` with a partial unique index. A re-send after a permanent
 failure is not a duplicate, so M3's five-case rule hands the purpose over rather than the
 key being weakened.
+
+**148 — the pack rides WITH the email, and the link had never reached the document.** Two
+things under one owner request. The link is fixed at the edge (`handle /pack/*`, prefix
+preserved) and a broker now gets `HTTP 200, application/pdf` with no session — measured on
+the live domain, where the day before the same URL returned the app's sign-in screen. And
+the PDF is attached to every mail that already linked a pack, **beside** the link rather
+than instead of it: §23 entry 432 chose the link partly because "the first open is written
+into the chain … is evidence", and an attachment can be neither tracked nor revoked. The
+message stores a KEY, not bytes — delivery is asynchronous, so the sweep produces the
+document a minute later from the copy F4 already pinned, and a test asserts the attached
+bytes are byte-identical to what the link serves. Verified against real SMTP:
+`load-record.pdf`, `application/pdf`, **98,214 bytes**, link still in the body.
+
+**And the send paths stopped lying.** `POST /protection/{kind}/{ref}/share` emailed
+**nobody** — measured, `outbound_message` unchanged across a share — while two screens said
+"Sent. The broker has the link." Four paths refused duplicates *invisibly*; they report
+`already_sent` now, and `force` is the driver's deliberate override. A forced detention
+notice sends a copy and **does not move the dispute anchor**.
 
 ---
 
@@ -169,7 +206,17 @@ device fixes finally enter the chain.
     silently removes nothing. Use an id.
 11. **`infra/.env` on the VM is now `0600 root:root`** and holds the SMTP block. Read it with
     `sudo`; `deploy.sh` excludes it, so a deploy cannot overwrite it.
-12. **The API wedges mid-reload if SSE streams are open.** (Carried from 122 §5.10.)
+12. **A SINGLE-FILE BIND MOUNT GOES STALE ON DEPLOY, and the deploy reports success.**
+    `deploy.sh` replaces files by unpacking a tar — a new inode — while a file bind mount
+    stays pinned to the one it was created with. `up -d --build` will not recreate a service
+    whose definition has not changed, and `caddy reload` re-reads the same stale inode and
+    logs "using config from file". The Caddyfile hit this; anything else mounted as a FILE
+    rather than a directory will too. `deploy.sh` force-recreates caddy now.
+13. **The edge is invisible to every test in the suite**, because they all talk to the
+    router directly, where a missing proxy route cannot be seen.
+    `test_broker_link_is_reachable.py` asserts against `infra/Caddyfile`, which is mounted
+    at `/repo/infra` beside the compose files for exactly that reason.
+14. **The API wedges mid-reload if SSE streams are open.** (Carried from 122 §5.10.)
 
 ---
 
@@ -185,6 +232,9 @@ device fixes finally enter the chain.
   configured and **zero** subscriptions, so the whole path is exercised only by tests. That
   is also why moving it was cheap: no backlog, no behaviour change for anyone.
 - **`SESSION-REPORT*.md` still live at the repo root** (six, from 122).
+- **The attachment has not been seen in a real inbox yet.** Production sent one to an
+  owner-controlled address; whether Gmail delivered the PDF intact or stripped it is the
+  one step that needs a human looking at a mail client.
 
 ---
 
@@ -193,7 +243,7 @@ device fixes finally enter the chain.
 ```
 make up                              # preflight, then the full stack
 make seed-where                      # the Tampa origin — paste into Sensors
-make test                            # 1907 pytest + 905 vitest — do NOT pipe it
+make test                            # 1929 pytest + 905 vitest — do NOT pipe it
 make lint                            # ruff + import-linter (30 contracts)
 make ui-layout                       # 325 checks, ~3.6 min, runs ALONE
 make ui-image                        # 3 checks, real browser, needs the DEV server
