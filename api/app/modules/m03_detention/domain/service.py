@@ -562,11 +562,36 @@ def _existing_start_notice(db: Session, claim: DetentionClaim):
 
 
 def send_detention_start_notice(
-    db: Session, claim: DetentionClaim, gateway, now: datetime
+    db: Session, claim: DetentionClaim, gateway, now: datetime, force: bool = False
 ) -> notify.OutboundMessage | None:
+    """AI-CONTEXT: `force` is the driver saying "send it again anyway", and what it must
+    NOT do is move the dispute anchor.
+
+    The five-case rule below refuses to re-send a DELIVERED notice, deliberately: the
+    broker has it, and `start_notice_sent_at` is the timestamp a detention dispute turns
+    on. But "the broker says they never got it" is a real thing that happens, and until
+    now the product's answer was a button that ran and changed nothing.
+
+    So a forced send delivers a fresh copy and leaves `start_notice_message_ref` and
+    `start_notice_sent_at` pointing at the FIRST real delivery. The pack still argues from
+    when the broker was actually told; the copy is a courtesy, not a new claim. It carries
+    no dedupe key either — a deliberate duplicate is not a duplicate, and keying it would
+    make the second forced send a silent no-op.
+    """
     state = clock(db, claim, now)
     if state.phase == DetentionPhase.within_free_time:
         return None  # nothing owed yet — no notice to send
+    if force:
+        return _send_counterparty(
+            db,
+            claim,
+            gateway,
+            now,
+            purpose=None,  # no key: the driver has asked for this one on purpose
+            subject="Detention now accruing",
+            body="Per the rate confirmation, free time has been exceeded at this stop; "
+            "detention is now accruing at the contracted rate.",
+        )
     existing = _existing_start_notice(db, claim)
     if existing is not None:
         return existing

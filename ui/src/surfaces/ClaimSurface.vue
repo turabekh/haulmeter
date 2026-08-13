@@ -11,7 +11,14 @@ import { ArrowLeft, ShieldCheck, MapPin, Camera, Send, FileText } from "lucide-v
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
 import { formatMoney, formatClock } from "../core/meter.js";
-import { fetchClaim, fetchMe, fetchShares, revokeShare, extendShare } from "../core/api.js";
+import {
+  fetchClaim,
+  fetchMe,
+  fetchShares,
+  revokeShare,
+  extendShare,
+  sendDetentionNotice,
+} from "../core/api.js";
 import BrokerEmailField from "../core/components/BrokerEmailField.vue";
 import Spinner from "../core/components/Spinner.vue";
 
@@ -97,6 +104,37 @@ function shareDate(iso) {
 }
 
 const noticeDelivery = computed(() => claim.value?.notice_delivery ?? "not_sent");
+
+/* AI-CONTEXT: the only place a delivered notice can be sent again, and the reason it
+ * lives here rather than on the Load tab.
+ *
+ * §23's five-case rule refuses to re-send a DELIVERED notice — the broker has it and
+ * `start_notice_sent_at` is the timestamp a detention dispute turns on — so the Load tab
+ * correctly retires the rung once `notice_sent`. That left the product with no answer at
+ * all to "the broker says they never got it", which is a real thing that happens.
+ *
+ * A forced re-send delivers a copy and leaves the anchor pointing at the FIRST real
+ * delivery, so the pack still argues from when the broker was actually told. Two steps,
+ * never one tap: the driver reads what they are about to do before the control that does
+ * it appears (§22.1 step 4, the resolution entry 136 used for the packet discard). */
+const resendOpen = ref(false);
+const resending = ref(false);
+const resentMsg = ref("");
+
+async function onResend() {
+  if (resending.value) return;
+  resending.value = true;
+  try {
+    await sendDetentionNotice(route.params.stopId, true);
+    resendOpen.value = false;
+    resentMsg.value = t("claim.notice_resent");
+    await reload();
+  } catch {
+    resentMsg.value = t("rec.send_failed");
+  } finally {
+    resending.value = false;
+  }
+}
 const noticeDelivered = computed(() => noticeDelivery.value === "sent");
 const owed = computed(() => claim.value?.mode === "invoice");
 const rateHr = computed(() => (claim.value ? Math.round(claim.value.rate_cents_per_hour / 100) : 0));
@@ -205,6 +243,28 @@ function evTime(iso) {
                then has to go and find somewhere else is only half a sentence. Saving
                re-reads the claim, so the delivery state re-derives and Send becomes
                available without leaving this screen. -->
+          <!-- AI-CONTEXT: its OWN modifier, not `ev--fix`. That class means "the broker
+               address is the problem and here is the field that fixes it", and a test
+               asserts it is absent when the address is fine. Reusing it would have made
+               the selector stop standing for its idea the moment this row arrived —
+               HANDOFF-123's lesson, caught by that test.
+
+               The second copy, and it is deliberately not one tap from the first. -->
+          <li v-if="noticeDelivery === 'sent'" class="ev ev--resend">
+            <template v-if="resentMsg">
+              <span class="ev__label">{{ resentMsg }}</span>
+            </template>
+            <template v-else-if="resendOpen">
+              <span class="ev__label">{{ t("send.again_lead") }}</span>
+              <button class="ev__resend" type="button" :disabled="resending" @click="onResend">
+                {{ resending ? t("busy.sending") : t("send.again_confirm") }}
+              </button>
+            </template>
+            <button v-else class="ev__resend" type="button" @click="resendOpen = true">
+              {{ t("send.again") }}
+            </button>
+          </li>
+
           <li v-if="noticeDelivery === 'no_email'" class="ev ev--fix">
             <BrokerEmailField
               variant="inline"

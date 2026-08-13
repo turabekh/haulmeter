@@ -1148,9 +1148,18 @@ def _claim_or_409(db: Session, stop) -> m3.DetentionClaim:
     return claim
 
 
+class NoticeIn(BaseModel):
+    # AI-CONTEXT: the driver saying "send it again anyway". A delivered notice is the
+    # dispute anchor and the five-case rule refuses to re-send it — correctly — but "the
+    # broker says they never got it" is real, and the answer to it was a button that ran
+    # and changed nothing. A forced send delivers a copy and leaves the anchor alone.
+    force: bool = False
+
+
 @router.post("/{stop_id}/notice", status_code=201)
 def send_notice(
     stop_id: uuid.UUID,
+    body: NoticeIn | None = None,
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -1182,8 +1191,9 @@ def send_notice(
     # appended a second `notice_sent` for one stop the moment a request was replayed.
     # A fresh send always relinks the claim; nothing else does.
     linked_before = claim.start_notice_message_ref
+    force = bool(body and body.force)
     if message is None:
-        message = m3.send_detention_start_notice(db, claim, _GATEWAY, now)
+        message = m3.send_detention_start_notice(db, claim, _GATEWAY, now, force=force)
     fresh = message is not None and (warned or message.id != linked_before)
     # AI-CONTEXT: finding F5 — this comment used to describe exactly this behaviour while
     # the line under it did something else. It read `if message is not None`, and
@@ -1203,7 +1213,22 @@ def send_notice(
     # the WARNING's delivery is that message's own; the claim's `notice_delivery` tracks
     # the start notice, which this stop has not sent yet
     delivery = m3.delivery_of(message) if warned else m3.notice_delivery(db, claim)
-    return {"sent": sent, "delivery": delivery, "phase": "warning" if warned else "start"}
+    # AI-CONTEXT: `already_sent` is what stops this being a dead control. Without a force,
+    # a notice the broker already has returns the EXISTING message — the route reported the
+    # same `delivery` a real send reports, so the driver could not tell a send from a no-op.
+    already_sent = (
+        not force
+        and not warned
+        and message is not None
+        and message.id == linked_before
+    )
+    return {
+        "sent": sent,
+        "delivery": delivery,
+        "phase": "warning" if warned else "start",
+        "already_sent": already_sent,
+        "forced": force,
+    }
 
 
 @router.post("/{stop_id}/claim", status_code=201)

@@ -123,7 +123,16 @@ def test_past_expiry_it_is_the_start_notice_exactly_as_before(client, db, flush_
     stop, claim = _stop_with_free_time_left(db, account, minutes_left=-10)  # 10 min over
 
     resp = client.post(f"/load/{stop.id}/notice", headers=headers)
-    assert resp.json() == {"sent": False, "delivery": "queued", "phase": "start"}
+    # `already_sent` is what stops the control being dead: a notice the broker already
+    # has returns the existing message, and without this the route reported exactly what
+    # a real send reports. `forced` echoes the driver's deliberate override.
+    assert resp.json() == {
+        "sent": False,
+        "delivery": "queued",
+        "phase": "start",
+        "already_sent": False,
+        "forced": False,
+    }
 
     flush_outbox()
     timeline = client.get(f"/load/{stop.id}/evidence", headers=headers).json()["timeline"]

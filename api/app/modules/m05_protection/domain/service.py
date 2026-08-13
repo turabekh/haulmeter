@@ -584,14 +584,102 @@ def render_pack(db: Session, pack, context=None):
     return evidence.render_pack_pdf(pack, context)
 
 
-def share_pack(db: Session, log_ref, pack, account_id, recipient=None, now=None, context=None):
-    """Render, pin, and hand back the record. The share is the moment the document
-    stops being a view of the chain and becomes a thing that was SENT."""
+def share_pack(
+    db: Session,
+    log_ref,
+    pack,
+    account_id,
+    recipient=None,
+    now=None,
+    context=None,
+    gateway=None,
+    subject="Load record",
+    counterparty_ref=None,
+    force=False,
+):
+    """Render, pin, and SEND. The share is the moment the document stops being a view of
+    the chain and becomes a thing that was sent.
+
+    AI-CONTEXT: that sentence was in this docstring before any of it was true. Measured on
+    the running stack: `POST /protection/{kind}/{ref}/share` created a `SharedPack`, stored
+    a `recipient` **that nothing ever read**, and left `f08.outbound_message` at exactly the
+    count it started with. No thread for a shared pack existed anywhere in the database.
+
+    Two screens called it and both told the driver otherwise — the whole-load record said
+    **"Sent. The broker has the link."** and, offline, "This sends when you're back
+    online." §23 entry 137 wired that button believing the endpoint delivered, and called
+    the gap it was fixing "the eighth built-and-inert mechanism"; the send stayed inert and
+    gained a confirmation message on top of it. That is worse than inert: a driver who
+    believes a broker holds their evidence does not chase it.
+
+    The email goes through the same seam as every other counterparty message, so it
+    inherits the outbox, the sweep and the duplicate key rather than growing a second
+    delivery path beside them.
+
+    NO RECIPIENT, NO SEND — and no error either. `EvidenceSurface` offers the address as
+    optional because a driver often wants a link to paste somewhere themselves, and that
+    is a legitimate use of this endpoint. What it must never do is claim a delivery; the
+    caller learns which happened from `sent`.
+    """
+    ref_key = log_ref
     log = db.get(evidence.EvidenceLog, log_ref)
     content = render_pack(db, pack, context)
-    return evidence.share_pack(
+    shared = evidence.share_pack(
         db, log, pack.template, content, account_id, recipient=recipient, now=now
     )
+
+    to_ref = recipient or None
+    if not to_ref or gateway is None:
+        return {"shared": shared, "sent": False, "already_sent": False, "message": None}
+
+    # AI-CONTEXT: asked BEFORE sending, so "already sent" is a fact this function
+    # establishes rather than something inferred from what came back. The dedupe key hands
+    # back the message that already served this purpose, and reporting that as a fresh send
+    # would be the same lie this endpoint was fixed for, one layer further in.
+    key = None if force else _share_dedupe_key(shared.id, to_ref, ref_key)
+    if key is not None and notify.existing_by_dedupe_key(db, key) is not None:
+        return {"shared": shared, "sent": False, "already_sent": True, "message": None}
+
+    link = evidence.share_link(shared)
+    body = (
+        f"The record is here: {link}"
+        if link
+        else "The record is available on request."
+    )
+    thread = notify.create_thread(
+        db, account_id, subject=subject, counterparty_ref=counterparty_ref
+    )
+    message = notify.send_counterparty_message(
+        db,
+        thread,
+        body,
+        gateway,
+        to_ref,
+        now=now,
+        # AI-CONTEXT: the RECORD and the RECIPIENT, and the first version of this keyed on
+        # `content_hash` instead — which deduplicated nothing, measured.
+        #
+        # Sharing is itself an evidence event: `f04.sharing` appends to the chain, so the
+        # pack rendered for the second share legitimately contains the first one and hashes
+        # differently. `render.py` is right that a regenerated pack is byte-identical — the
+        # INPUT had changed. So a content key can never match on the path it was written
+        # for, and two taps produced two emails with the dedupe in place.
+        #
+        # A driver re-sending the same record to the same broker means "did you get it?",
+        # not "here is a new document". When the record really has moved on, `force` is the
+        # deliberate way to say so.
+        dedupe_key=key,
+    )
+    return {"shared": shared, "sent": True, "already_sent": False, "message": message}
+
+
+def _share_dedupe_key(_share_id, to_ref: str, ref_key) -> str:
+    """One send per record per recipient. Bounded: `dedupe_key` is 200 characters and an
+    email address alone may be 320, so the address travels as a digest."""
+    import hashlib
+
+    who = hashlib.sha256(to_ref.strip().lower().encode()).hexdigest()[:16]
+    return f"pack_share:{ref_key}:{who}"
 
 
 # --- A1 req 1: the capture checklist, as CONFIGURATION ---

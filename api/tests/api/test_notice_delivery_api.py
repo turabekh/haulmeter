@@ -210,7 +210,16 @@ def test_a_successful_send_still_records_the_moment(client, db, flush_outbox):
     resp = client.post(f"/load/{stop_id}/notice", headers=headers)
     flush_outbox()
 
-    assert resp.json() == {"sent": False, "delivery": "queued", "phase": "start"}
+    # `already_sent` is what stops the control being dead: a notice the broker already
+    # has returns the existing message, and without this the route reported exactly what
+    # a real send reports. `forced` echoes the driver's deliberate override.
+    assert resp.json() == {
+        "sent": False,
+        "delivery": "queued",
+        "phase": "start",
+        "already_sent": False,
+        "forced": False,
+    }
     meter = client.get(f"/load/{stop_id}/meter", headers=headers).json()
     assert meter["notice_delivery"] == "sent"
     assert "notice_sent" in _timeline(client, headers, stop_id)

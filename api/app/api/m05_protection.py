@@ -391,6 +391,12 @@ def summary(
 # --- FR2/FR4 export + share (design-prd §17: one link, never an attachment) ---
 class ShareIn(BaseModel):
     recipient: str | None = None
+    # AI-CONTEXT: the driver saying "send it again anyway". Without it a re-tap is a dead
+    # control — the dedupe key returns the existing message and the screen shows the same
+    # thing a real send shows. With it the send is deliberate and the driver knows it is a
+    # second copy, which is the only honest way to answer "the broker says they never got
+    # it".
+    force: bool = False
 
 
 def _appointment(stop) -> str | None:
@@ -445,6 +451,27 @@ def _parties(db: Session, load) -> list[tuple[str, str]]:
         if counterparty.mc_number:
             rows.append(("MC", counterparty.mc_number))
     return rows
+
+
+def _load_for_share(db: Session, kind: str, ref: uuid.UUID):
+    """The load a shared pack belongs to, whichever way the caller addressed it."""
+    if kind == "load":
+        return loads.get_load(db, ref)
+    stop = loads.get_stop(db, ref)
+    return loads.get_load(db, stop.load_id) if stop is not None else None
+
+
+def _share_subject(db: Session, kind: str, ref: uuid.UUID) -> str:
+    """A1 requirement 4's rule, reused: the reference an AP clerk files by goes in the
+    SUBJECT, so they never have to open it to know what it belongs to."""
+    load = _load_for_share(db, kind, ref)
+    reference = getattr(load, "reference_number", None) if load is not None else None
+    return f"Load record · {reference}" if reference else "Load record"
+
+
+def _share_counterparty(db: Session, kind: str, ref: uuid.UUID):
+    load = _load_for_share(db, kind, ref)
+    return getattr(load, "counterparty_id", None) if load is not None else None
 
 
 def _context_for(db: Session, kind: str, ref: uuid.UUID):
@@ -559,14 +586,23 @@ def share(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown pack kind")
     pack = _pack_for(db, account, kind, ref)
     try:
-        shared = m5.share_pack(
+        result = m5.share_pack(
             db,
             pack.log_id,
             pack,
             account.id,
             recipient=body.recipient,
             context=_context_for(db, kind, ref),
+            # AI-CONTEXT: the gateway is what makes this a SEND. Without it this endpoint
+            # pinned a pack, stored a `recipient` nothing read, and returned a link —
+            # while two screens told the driver the broker had it. Measured before the
+            # fix: `f08.outbound_message` unchanged across a share.
+            gateway=_GATEWAY,
+            subject=_share_subject(db, kind, ref),
+            counterparty_ref=_share_counterparty(db, kind, ref),
+            force=body.force,
         )
+        shared = result["shared"]
     except evidence.ChainInvalid as exc:
         # finding F4-3: the PDF itself says "do not rely on this pack", and we were
         # pinning it and handing out a link anyway. 409 rather than 500 — nothing is
@@ -581,6 +617,17 @@ def share(
         "url": f"/pack/s/{shared.token}",
         "content_hash": shared.content_hash,
         "expires_at": shared.expires_at.isoformat() if shared.expires_at else None,
+        # AI-CONTEXT: WHETHER AN EMAIL WENT, so the screen can stop guessing. A share with
+        # no recipient is a legitimate use — a driver wanting a link to paste somewhere —
+        # and the two are not the same event. `LoadRecordSurface` said "Sent. The broker
+        # has the link." over both of them.
+        "sent": result["sent"],
+        # AI-CONTEXT: the driver tapped Send and no NEW email went, because this record has
+        # already gone to this address. Silently returning the old one is a control that
+        # runs and changes nothing (§23 entry 72's dead-control pattern); the screen offers
+        # a deliberate re-send instead.
+        "already_sent": result["already_sent"],
+        "recipient": body.recipient,
     }
 
 

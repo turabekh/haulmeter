@@ -38,6 +38,9 @@ const recipient = ref("");
 const busy = ref(false);
 const queued = ref(false);
 const shareUrl = ref(null);
+const emailed = ref(false);
+const alreadySent = ref(false);
+const forceShare = ref(false);
 const exportFailed = ref(false);
 
 // AI-CONTEXT: this surface serves both pack kinds. Condition packs key on the STOP;
@@ -149,11 +152,23 @@ async function openExport() {
 async function doShare() {
   busy.value = true;
   try {
-    const res = await shareProtectionPack(packKind(), route.params.stopId, recipient.value || null);
+    const res = await shareProtectionPack(
+      packKind(),
+      route.params.stopId,
+      recipient.value || null,
+      forceShare.value,
+    );
     // §15.1: a queued share is stated once, quietly, and its completion is silent
     queued.value = res?.queued === true;
     shareUrl.value = res?.url ?? null;
-    sharing.value = false;
+    // AI-CONTEXT: this endpoint used to email NOBODY while the copy around it said
+    // "They get one link to this record" and "the link goes out when you have one".
+    // It sends now, and these two say which of the three things actually happened:
+    // delivered, already delivered to this address, or link-only because no address
+    // was given — which is a legitimate use of the same control, not a failure.
+    emailed.value = res?.sent === true;
+    alreadySent.value = res?.already_sent === true;
+    sharing.value = alreadySent.value; // stay open only when there is a decision to make
   } catch {
     sharing.value = false;
   } finally {
@@ -281,6 +296,10 @@ function photoLabel(prompt) {
         <p v-if="queued" class="pending">
           <Clock :size="14" :stroke-width="2" aria-hidden="true" />
           {{ t("evidence.share_queued") }}
+        </p>
+        <p v-else-if="shareUrl && emailed" class="shared">
+          <ShieldCheck :size="16" :stroke-width="2.5" aria-hidden="true" />
+          {{ t("evidence.share_sent") }}
         </p>
         <p v-else-if="shareUrl" class="shared">
           <ShieldCheck :size="14" :stroke-width="2.5" aria-hidden="true" />

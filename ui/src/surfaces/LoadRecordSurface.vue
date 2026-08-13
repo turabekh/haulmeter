@@ -114,19 +114,53 @@ const sentMsg = ref("");
 function openSend() {
   recipient.value = data.value?.counterparty_email || "";
   sendError.value = "";
+  alreadySent.value = false;
   sendOpen.value = true;
 }
-async function onSend() {
+/* AI-CONTEXT: this said **"Sent. The broker has the link."** over an endpoint that emailed
+ * nobody. Measured on the running stack: a share left `f08.outbound_message` at exactly the
+ * count it started with, and the `recipient` it stored was read by nothing. §23 entry 137
+ * wired this button believing the endpoint delivered — it called the gap it was closing
+ * "the eighth built-and-inert mechanism", and the send stayed inert with a confirmation on
+ * top of it. A driver who believes a broker holds their evidence does not chase it.
+ *
+ * The endpoint sends now, and this reads what it reports rather than assuming:
+ *   · `sent`          — an email is on its way because of this tap
+ *   · `already_sent`  — this record has already gone to this address; NOTHING new went
+ *   · neither         — a link was pinned and no address was given, which is a legitimate
+ *                       use of the same endpoint and is not a delivery
+ */
+const alreadySent = ref(false);
+
+async function onSend(force = false) {
   if (sending.value) return;
   sending.value = true;
   sendError.value = "";
   try {
-    const res = await shareProtectionPack("load", loadId.value, recipient.value.trim() || null);
-    sendOpen.value = false;
+    const res = await shareProtectionPack(
+      "load",
+      loadId.value,
+      recipient.value.trim() || null,
+      force,
+    );
     // §15.1: a queued share is not a delivery, and saying "Sent" over one would be the
     // F-03 defect — a row claiming a delivery it never got — rebuilt on a screen.
-    sentMsg.value = res && res.queued ? t("rec.send_offline") : t("rec.sent");
-    setTimeout(() => (sentMsg.value = ""), 6000);
+    if (res && res.queued) {
+      sendOpen.value = false;
+      sentMsg.value = t("rec.send_offline");
+    } else if (res && res.already_sent) {
+      // the sheet STAYS OPEN: "already sent" is only useful beside the control that can
+      // act on it, and closing it would leave the driver with a message and no next step
+      alreadySent.value = true;
+    } else if (res && res.sent) {
+      sendOpen.value = false;
+      alreadySent.value = false;
+      sentMsg.value = t("rec.sent");
+    } else {
+      sendOpen.value = false;
+      sentMsg.value = t("send.link_only");
+    }
+    if (sentMsg.value) setTimeout(() => (sentMsg.value = ""), 6000);
   } catch {
     sendError.value = online.value ? t("rec.send_failed") : t("rec.send_offline");
   } finally {
@@ -296,11 +330,33 @@ async function onDownload() {
                so on most real loads this is empty. Say what to do, before the tap. -->
           <p v-if="!recipient.trim()" class="send__hint">{{ t("rec.no_email") }}</p>
           <p v-if="sendError" class="send__error" role="status">{{ sendError }}</p>
+
+          <!-- AI-CONTEXT: §22.1 step 4, the same resolution entry 136 used for the packet
+               discard: §8 wants a deliberate action to have its own confirm and caps sheets
+               at 1 deep, and this IS that one sheet. So the confirmation is the sheet's own
+               body changing — the driver reads that the broker already has it, and the
+               control they then tap is labelled differently from the one they just used.
+               A second copy is never one tap away from a first. -->
+          <template v-if="alreadySent">
+            <p class="send__already" role="status">{{ t("send.already") }}</p>
+            <p class="send__hint">{{ t("send.again_lead") }}</p>
+            <button
+              class="cta cta--outline"
+              type="button"
+              :disabled="sending"
+              @click="onSend(true)"
+            >
+              <Spinner v-if="sending" />
+              {{ sending ? t("busy.sending") : t("send.again") }}
+            </button>
+          </template>
+
           <button
+            v-else
             class="cta"
             type="button"
             :disabled="sending || !recipient.trim()"
-            @click="onSend"
+            @click="onSend(false)"
           >
             <Spinner v-if="sending" />
             {{ sending ? t("busy.sending") : t("rec.send_go") }}
@@ -523,6 +579,19 @@ async function onDownload() {
   background: var(--ink-0);
   color: var(--text-1);
   font-size: var(--type-body-size);
+}
+/* §8: Secondary is a hairline outline. A re-send is deliberate, not the screen's primary
+   action — the driver has already sent this once. */
+.cta--outline {
+  background: transparent;
+  border: 1px solid var(--line-1);
+  color: var(--text-1);
+}
+.send__already {
+  margin: 0;
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
 }
 .send__error {
   margin: 0;

@@ -939,10 +939,11 @@ export async function extendShare(shareId) {
   return resp.json();
 }
 
-export async function sendDetentionNotice(stopId) {
+export async function sendDetentionNotice(stopId, force = false) {
   const resp = await fetch(`${API_BASE}/load/${stopId}/notice`, {
     method: "POST",
     headers: headers(),
+    body: JSON.stringify({ force }),
   });
   if (!resp.ok) throw new Error(`notice failed: ${resp.status}`);
   return resp.json();
@@ -1786,8 +1787,8 @@ export async function exportProtectionPack(kind, ref) {
 // SHARE pins what is sent, so it queues like any other write (F12). §15.1: the
 // driver is told once, quietly, that it will go when there is signal — and nothing
 // announces it when it does.
-export async function shareProtectionPack(kind, ref, recipient = null) {
-  return queuedPost(`/protection/${kind}/${ref}/share`, { recipient });
+export async function shareProtectionPack(kind, ref, recipient = null, force = false) {
+  return queuedPost(`/protection/${kind}/${ref}/share`, { recipient, force });
 }
 
 // M5-FR3's missing writer. Queued like every other capture (§15.1) — a credential
