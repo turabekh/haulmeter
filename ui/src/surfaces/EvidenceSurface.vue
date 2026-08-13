@@ -6,7 +6,7 @@
      images are served from F6 at activation — here each is a verified, labeled
      entry (never a fake thumbnail). -->
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { ref, onMounted } from "vue";
 import {
   ArrowLeft,
   ShieldCheck,
@@ -23,7 +23,6 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
 import {
   fetchEvidence,
-  fetchEvidencePhoto,
   exportProtectionPack,
   shareProtectionPack,
 } from "../core/api.js";
@@ -66,28 +65,26 @@ function docLabel(type) {
 }
 const data = ref(null);
 const missing = ref(false);
-// object URLs for the real F6-served thumbnails, keyed by artifact_id; revoked
-// on unmount so the blobs don't leak.
-const thumbs = ref({});
 
+/* AI-CONTEXT: the photographs are `<img src>` now, and this whole block is what that
+ * removed.
+ *
+ * It used to fetch each one with an Authorization header, read a Blob, build an object
+ * URL, and store it in a map that was CLONED on every arrival — so N photos did N
+ * re-renders over a growing object. Worse, the fetches were `await`ed inside a `for`
+ * loop: one full-size photograph at a time, in series, before the next even started.
+ * And "thumbs" was a lie — every one of them was the original at camera resolution.
+ *
+ * The server hands over a signed, expiring URL per photo (`thumb_url`), so the browser
+ * does the work it is good at: it fetches them in parallel on its own connection budget,
+ * defers the ones below the fold via `loading="lazy"`, decodes off the main thread with
+ * `decoding="async"`, and keeps them in its own HTTP cache instead of in JS memory. No
+ * object URLs means nothing to revoke and nothing to leak. */
 onMounted(async () => {
-  const stopId = route.params.stopId;
   try {
-    data.value = await fetchEvidence(stopId);
+    data.value = await fetchEvidence(route.params.stopId);
   } catch {
     missing.value = true;
-    return;
-  }
-  for (const p of data.value.photos || []) {
-    if (!p.has_image || !p.artifact_id) continue;
-    const url = await fetchEvidencePhoto(stopId, p.artifact_id);
-    if (url) thumbs.value = { ...thumbs.value, [p.artifact_id]: url };
-  }
-});
-
-onBeforeUnmount(() => {
-  for (const url of Object.values(thumbs.value)) {
-    try { URL.revokeObjectURL(url); } catch { /* noop */ }
   }
 });
 
@@ -196,7 +193,19 @@ function photoLabel(prompt) {
         <ul v-else class="photos">
           <li v-for="(p, i) in data.photos" :key="i" class="photo">
             <div class="photo__thumb" aria-hidden="true">
-              <img v-if="thumbs[p.artifact_id]" :src="thumbs[p.artifact_id]" class="photo__img" :alt="photoLabel(p.prompt)" />
+              <!-- `lazy` + `async` are the two attributes that were missing from every
+                   image in this product. Below the fold on a long stop, a photograph is
+                   never fetched at all until it is scrolled to. -->
+              <img
+                v-if="p.thumb_url"
+                :src="p.thumb_url"
+                class="photo__img"
+                :alt="photoLabel(p.prompt)"
+                loading="lazy"
+                decoding="async"
+                width="44"
+                height="44"
+              />
               <Camera v-else :size="22" :stroke-width="2" />
             </div>
             <div class="photo__meta">

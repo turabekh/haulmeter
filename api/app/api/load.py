@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api import media
 from app.api.deps import current_account, get_db
 from app.api.m03_detention import already_filed
 from app.api.uploads import read_upload
@@ -999,12 +1000,14 @@ def load_record(
                 "facility_name": fac.name if fac is not None else None,
                 "detention_cents": claim.amount_cents if claim and claim.amount_cents else None,
                 # the photos THEMSELVES, so the screen can show what was captured
-                # rather than a count. `artifact_id` is what the existing per-stop
-                # photo route serves, so no new image endpoint is needed.
-                # `stop_evidence` already serialises these (ids stringified, timestamps
-                # isoformatted), so they pass through — re-converting here is how the
-                # two views start to disagree about the same artifact.
-                "photos": ev.get("photos", []),
+                # rather than a count. `stop_evidence` already serialises these (ids
+                # stringified, timestamps isoformatted), so they pass through —
+                # re-converting here is how the two views start to disagree about the
+                # same artifact. They now carry their own signed URLs, for the same
+                # reason and by the same helper as the per-stop evidence screen: a whole
+                # route's contact sheet is the worst case this exists for, and it was
+                # fetching every full-size photograph of every stop, one at a time.
+                "photos": _with_media_urls(ev.get("photos", [])),
                 "document_types": sorted(
                     {d.doc_type.value for d in documents.documents_for_subject(db, "stop", stop.id)}
                 ),
@@ -1069,6 +1072,8 @@ def evidence_detail(
     stop = _owned_stop(db, stop_id, account)
     fac = facility.get_facility(db, stop.facility_id)
     docs = documents.documents_for_subject(db, "stop", stop.id)
+    detail = evidence.stop_evidence(db, stop.id)
+    _attach_media_urls(detail.get("photos", []))
     return {
         "stop_id": str(stop.id),
         "facility": fac.name if fac else None,
@@ -1076,8 +1081,31 @@ def evidence_detail(
             {"doc_type": d.doc_type.value, "uploaded_at": d.uploaded_at.isoformat()}
             for d in docs
         ],
-        **evidence.stop_evidence(db, stop.id),
+        **detail,
     }
+
+
+# AI-CONTEXT: the URLs the contact sheets put straight into an `<img src>`.
+#
+# Minted HERE rather than in `f04_evidence`, because the foundation must not reach up into
+# the API layer to learn how a route is addressed — and minted at all because an `<img>`
+# cannot send an Authorization header, which is the single constraint that made the read
+# path slow (no lazy-load, no progressive decode, every byte through JS memory).
+#
+# Ownership is checked by the endpoint that calls this, once, for the whole set; the
+# signature then carries that decision to the browser. See `api/media.py`.
+def _attach_media_urls(photos: list[dict]) -> None:
+    for photo in photos:
+        if not photo.get("has_image") or not photo.get("artifact_id"):
+            continue
+        ref = photo["artifact_id"]
+        photo["thumb_url"] = media.media_url(media.KIND_EVIDENCE, ref, media.SIZE_THUMB)
+        photo["full_url"] = media.media_url(media.KIND_EVIDENCE, ref, media.SIZE_FULL)
+
+
+def _with_media_urls(photos: list[dict]) -> list[dict]:
+    _attach_media_urls(photos)
+    return photos
 
 
 @router.get("/{stop_id}/evidence/photo/{artifact_id}")

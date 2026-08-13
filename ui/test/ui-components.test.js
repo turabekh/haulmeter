@@ -1748,20 +1748,21 @@ describe("EvidenceSurface — consolidated evidence locker (M5/M3)", () => {
     }
   });
 
-  it("renders a real F6-served thumbnail for photos that have an image", async () => {
+  // AI-CONTEXT: a photograph is an ORDINARY IMAGE now, and the assertion changed shape
+  // with it. It used to prove the surface fetched bytes with a bearer token, read a Blob
+  // and rendered an object URL — which is exactly what made this screen slow: an <img>
+  // cannot send an Authorization header, so nothing could be lazy-loaded, nothing
+  // decoded progressively, every byte went through JS memory, and the fetches were
+  // awaited one at a time in a loop. The server now mints a short-lived signed URL.
+  it("renders each photo as a lazy, browser-cached image from its signed URL", async () => {
     setToken("tok-ev2");
-    const orig = URL.createObjectURL;
-    URL.createObjectURL = vi.fn(() => "blob:evidence-thumb");
     const fetchStub = vi.fn().mockImplementation((url) => {
       const u = String(url);
-      if (u.includes("/evidence/photo/")) {
-        return Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob(["x"])) });
-      }
       if (u.includes("/load/stop-img/evidence")) {
         return jsonOk({
           stop_id: "stop-img", facility: "Perth Dock", chain_valid: true,
           record_count: 1, photo_count: 1, documents: [],
-          photos: [{ artifact_id: "art-1", has_image: true, prompt: "seals", content_hash: "abc123", captured_at: "2026-07-21T10:05:00Z" }],
+          photos: [{ artifact_id: "art-1", has_image: true, prompt: "seals", content_hash: "abc123", captured_at: "2026-07-21T10:05:00Z", thumb_url: "/media/evidence/art-1?size=thumb&exp=1&sig=z" }],
           timeline: [{ type: "PHOTO", occurred_at: "2026-07-21T10:05:00Z" }],
         });
       }
@@ -1777,9 +1778,17 @@ describe("EvidenceSurface — consolidated evidence locker (M5/M3)", () => {
       await flushPromises();
       const img = w.find(".photo__img");
       expect(img.exists()).toBe(true);
-      expect(img.attributes("src")).toBe("blob:evidence-thumb");
+      expect(img.attributes("src")).toBe("/media/evidence/art-1?size=thumb&exp=1&sig=z");
+      expect(img.attributes("loading")).toBe("lazy");
+      expect(img.attributes("decoding")).toBe("async");
+
+      // and the surface no longer fetches image bytes itself: one request for the
+      // record, none per photograph
+      const imageFetches = fetchStub.mock.calls.filter((c) =>
+        String(c[0]).includes("/evidence/photo/"),
+      );
+      expect(imageFetches).toHaveLength(0);
     } finally {
-      URL.createObjectURL = orig;
       vi.unstubAllGlobals();
       logout();
     }

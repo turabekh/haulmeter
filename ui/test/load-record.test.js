@@ -48,8 +48,13 @@ const RECORD = {
       facility_name: "Harvest Foods DC",
       detention_cents: null,
       photos: [
-        { artifact_id: "p1", prompt: "seals", captured_at: "2026-08-07T13:00:00+00:00", has_image: true },
-        { artifact_id: "p2", prompt: "seals", captured_at: "2026-08-07T13:01:00+00:00", has_image: true },
+        // AI-CONTEXT: `thumb_url` is how a photograph reaches the screen now. The server
+        // mints a short-lived signed URL per photo so the browser can load it from a
+        // plain <img src> — an <img> cannot send an Authorization header, and that one
+        // constraint is what forced the old fetch-blob-objectURL loop and cost this
+        // surface its lazy-loading, its parallelism and its cache.
+        { artifact_id: "p1", prompt: "seals", captured_at: "2026-08-07T13:00:00+00:00", has_image: true, thumb_url: "/media/evidence/p1?size=thumb&exp=1&sig=x" },
+        { artifact_id: "p2", prompt: "seals", captured_at: "2026-08-07T13:01:00+00:00", has_image: true, thumb_url: "/media/evidence/p2?size=thumb&exp=1&sig=y" },
       ],
       document_types: ["bol"],
       gps_events: 1,
@@ -147,7 +152,14 @@ describe("Seeing a past load before doing anything with it", () => {
     await flushPromises();
 
     expect(w.findAll(".shots__item").length).toBe(3);
-    expect(w.findAll(".shots__img").length).toBeGreaterThan(0);
+    const imgs = w.findAll(".shots__img");
+    expect(imgs.length).toBe(2); // the third photo has no image
+
+    // the photographs are ordinary images the browser owns: deferred below the fold,
+    // decoded off the main thread, cached by the browser rather than held in JS memory
+    expect(imgs[0].attributes("src")).toContain("/media/evidence/p1");
+    expect(imgs[0].attributes("loading")).toBe("lazy");
+    expect(imgs[0].attributes("decoding")).toBe("async");
   });
 
   it("reaches each dock's full evidence from the dock it belongs to", async () => {

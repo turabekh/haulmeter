@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     # scanner — so this rejects the absurd without ever refusing a real document.
     max_upload_mb: int = Field(default=25)
 
+    # AI-CONTEXT: signs the short-lived image URLs an `<img src>` can load without a
+    # header (api/media.py). Unset is supported and safe — a per-process key is generated
+    # and the URLs simply stop working across a restart, which for a one-hour image
+    # capability means the next render re-mints them. Set it to keep them stable.
+    media_signing_secret: str = Field(default="")
+    # one hour: long enough that scrolling a contact sheet never re-mints, short enough
+    # that a URL copied out of a browser history is not a lasting grant.
+    media_url_ttl_seconds: int = Field(default=3600)
+
     minio_endpoint: str = Field(default="minio:9018")
     minio_access_key: str = Field(default="longhaul")
     minio_secret_key: str = Field(default="longhaul")

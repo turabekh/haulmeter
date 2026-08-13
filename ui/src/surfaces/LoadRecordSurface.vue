@@ -24,14 +24,13 @@
      never-sent packet, and it is the action that gets the driver paid. Download is
      Secondary. §8: one Primary per screen. -->
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { ArrowLeft, Check, Camera, MapPin, FileText, ShieldAlert, ChevronRight } from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import {
   fetchLoadRecord,
-  fetchEvidencePhoto,
   exportProtectionPack,
   shareProtectionPack,
   online,
@@ -50,8 +49,6 @@ const { isDriving } = useDriverState();
 const state = ref(LoadState.LOADING);
 const failure = ref(null);
 const data = ref(null);
-// object URLs for the real F6-served images, keyed by artifact_id, revoked on unmount
-const thumbs = ref({});
 
 const loadId = computed(() => route.params.loadId);
 const stops = computed(() => data.value?.stops ?? []);
@@ -95,21 +92,16 @@ onMounted(async () => {
     state.value = LoadState.FAILED;
     return;
   }
-  // the images, after the structure. A photo that will not load must not stop the rest
-  // of the record rendering — the counts and the paperwork are the argument.
-  for (const s of stops.value) {
-    for (const p of s.photos || []) {
-      if (!p.has_image || !p.artifact_id) continue;
-      const url = await fetchEvidencePhoto(s.stop_id, p.artifact_id);
-      if (url) thumbs.value = { ...thumbs.value, [p.artifact_id]: url };
-    }
-  }
-});
-
-onBeforeUnmount(() => {
-  for (const url of Object.values(thumbs.value)) {
-    try { URL.revokeObjectURL(url); } catch { /* noop */ }
-  }
+  /* AI-CONTEXT: the image loop that was here is gone, and this was the worst instance of
+   * it in the product — a NESTED sequential fetch, stops × photos. A four-stop route with
+   * six photographs each fetched twenty-four FULL-SIZE images one after another before
+   * the last thumbnail appeared, each one cloning the whole `thumbs` map on arrival.
+   *
+   * The record now arrives with a signed `thumb_url` per photo, and the browser fetches
+   * them in parallel, defers everything below the fold, and caches them itself. The
+   * original comment's point still holds and holds better: a photograph that will not
+   * load cannot stop the rest of the record rendering, because the record no longer waits
+   * for any of them. */
 });
 
 // --- send ---
@@ -244,10 +236,14 @@ async function onDownload() {
         <ul v-if="s.photos.length" class="shots">
           <li v-for="p in s.photos" :key="p.artifact_id" class="shots__item">
             <img
-              v-if="thumbs[p.artifact_id]"
-              :src="thumbs[p.artifact_id]"
+              v-if="p.thumb_url"
+              :src="p.thumb_url"
               class="shots__img"
               :alt="photoLabel(p.prompt)"
+              loading="lazy"
+              decoding="async"
+              width="72"
+              height="72"
             />
             <span v-else class="shots__pending" aria-hidden="true"></span>
           </li>
