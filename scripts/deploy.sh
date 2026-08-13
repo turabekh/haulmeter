@@ -54,6 +54,21 @@ find . -name '.DS_Store' -delete
 test -f infra/.env || { echo 'infra/.env missing on the VM — create it before deploying'; exit 1; }
 cd infra
 $COMPOSE up -d --build
+# AI-CONTEXT: caddy is FORCE-RECREATED, and the reason is a trap that hid a live defect
+# for as long as the edge config had been wrong.
+#
+# The Caddyfile is a SINGLE-FILE bind mount (`./Caddyfile:/etc/caddy/Caddyfile`). This
+# script replaces files by unpacking a tar over them, which writes a NEW INODE — and a
+# file bind mount resolves to the inode it was created with, so the container goes on
+# serving the old contents forever. `up -d --build` does not recreate it, because nothing
+# about the service DEFINITION changed. `caddy reload` does not help either: it re-reads
+# the same stale inode and reports success.
+#
+# Measured: the box had the corrected config on disk and caddy was adapting a twelve-day-
+# old copy, so every broker following a link from a counterparty email still reached the
+# driver app's sign-in screen. Recreating is cheap, and the alternative is a class of
+# change that deploys, reports success and does nothing.
+$COMPOSE up -d --force-recreate caddy
 $COMPOSE ps --format 'table {{.Service}}\t{{.Status}}'
 "
 
