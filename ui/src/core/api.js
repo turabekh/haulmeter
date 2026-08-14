@@ -325,17 +325,28 @@ function saveQueue(q) {
   queueItems.value = [...q];
 }
 
-const DOCUMENT_PATH = "/protection/documents";
-/* AI-CONTEXT: the wallet's queued captures, and the two filters are both load-bearing.
+/* AI-CONTEXT: what is waiting, by the path it is waiting on. Reactive by construction —
+ * it reads `queueItems.value`, so a caller wrapping it in a `computed` re-runs when the
+ * queue changes, and a caller that does not gets a plain snapshot.
  *
- * The PATH filter is why a queued lot report does not grow a phantom document row. The
- * `doc_type` filter is for a queue written by an OLDER BUILD — this queue lives in a
- * driver's localStorage and is replayed by whatever version loads next, so an entry whose
- * shape predates a change is a normal thing to meet rather than an impossible one. A row
- * with no label helps nobody, and throwing empties the whole screen. */
+ * The path is matched EXACTLY. `startsWith` would make `/protection/documents/{id}/archive`
+ * look like a capture and `/facility/{id}/review` look like a profile read; both are real
+ * queued writes in this app, so the loose version is wrong rather than merely lax.
+ *
+ * Entries with no `body` are skipped: this queue lives in a driver's localStorage and is
+ * replayed by whatever build loads NEXT, so meeting a shape written by an older version is
+ * normal. A surface that cannot render an entry leaves it out; throwing empties a screen. */
+export function pendingByPath(path) {
+  return queueItems.value.filter((i) => i && i.path === path && i.body);
+}
+
+const DOCUMENT_PATH = "/protection/documents";
+/* AI-CONTEXT: the wallet's queued captures. `doc_type` is what the row is LABELLED with,
+ * so an entry without one is skipped for the same reason as above — a row with no label
+ * helps nobody. */
 export const pendingDocuments = computed(() =>
-  queueItems.value
-    .filter((i) => i && i.path === DOCUMENT_PATH && i.body && i.body.doc_type)
+  pendingByPath(DOCUMENT_PATH)
+    .filter((i) => i.body.doc_type)
     .map((i) => ({ opId: i.opId, doc_type: i.body.doc_type, stop_id: i.body.stop_id ?? null })),
 );
 // AI-CONTEXT: seeds the replay queue for tests. `pendingWrites` is derived state that

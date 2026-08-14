@@ -968,6 +968,34 @@ const SURFACES = [
   // `facility` above, which deliberately renders from fixtures: this row appears only
   // after the server answers, so it needs an intercepted route to exist at all. Every
   // other call 404s and the surface falls back to its fixtures exactly as it does today.
+  // AI-CONTEXT: §15.1's queued contributions, in the state a driver actually meets them —
+  // the facility RENDERS (apiGet serves its cache offline) while the Q&A list, which does
+  // not cache, has nothing to show. Both queued items are free text a driver typed, so
+  // the long one is deliberately long: this is the row most likely to reflow at 360 dp
+  // under +40%, sharing its line with a glyph, and Gurmukhi carries matras above and below.
+  // Same lesson as `docs-queued`: the POST hangs, because online the harness's own
+  // `flushQueue` drains the queue before the first assertion.
+  ["facility-queued", `/facility/${FACILITY_ID}`, {
+    mocks: FACILITY_MOCKS,
+    // `/facility/` alone would hang the PROFILE too and leave the whole surface in its
+    // skeleton — the suffix is what separates the queued review's POST from the read.
+    hang: ["/community/questions", "/review"],
+    storage: {
+      "longhaul.write_queue": JSON.stringify([
+        {
+          path: "/community/questions",
+          body: { facility_id: FACILITY_ID, text: "Is the north gate still closed after 8pm, or is that only on weekends?" },
+          opId: "op-q-layout",
+        },
+        {
+          path: `/facility/${FACILITY_ID}/review`,
+          body: { ratings: { overall: 4 }, text: "Quick in and out. Dock 12 is the fast one; the office wants paperwork before you back in." },
+          opId: "op-r-layout",
+        },
+      ]),
+    },
+    ready: ".qa__item--pending",
+  }],
   ["facility-prompt-mute", `/facility/${FACILITY_ID}`, {
     mocks: {
       ...FACILITY_MOCKS,

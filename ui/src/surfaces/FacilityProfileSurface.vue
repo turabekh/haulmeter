@@ -5,7 +5,7 @@
      Fixture-backed pending auth; swaps to the live M2 API behind api.js. -->
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { ArrowLeft, Star } from "lucide-vue-next";
+import { ArrowLeft, Star, Clock } from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import ReviewSheet from "../core/components/ReviewSheet.vue";
@@ -20,6 +20,7 @@ import {
   fetchQuestions,
   fetchServiceCenter,
   askQuestion,
+  pendingByPath,
   fetchPromptPref,
   mutePrompts,
   unmutePrompts,
@@ -166,9 +167,39 @@ async function onReview(payload) {
     await submitReview(route.params.id, payload.ratings, payload.text);
     await load();
   } catch {
-    /* queued/offline in a later pass */
+    /* the queued row below is what says so now (§23 entry 151) */
   }
 }
+
+/* AI-CONTEXT: §15.1's pending glyph on the two things a driver TYPES here, and entry 150's
+ * lesson applied rather than repeated.
+ *
+ * Both writes queue safely; neither appeared anywhere. `onAsk` clears the input, closes the
+ * sheet and re-reads the SERVER — offline the question is not there, and the read that
+ * would have shown it fails too, so a driver who has just written a question is looking at
+ * "No connection. This loads when you have signal." The text exists in exactly one place
+ * on earth at that moment, and the app was the thing not admitting it.
+ *
+ * FILTERED BY FACILITY, which a path check alone cannot do: `/community/questions` carries
+ * its facility in the BODY, so every facility page would otherwise show a question written
+ * about a lot 600 miles away — on the screen a driver is using to decide whether to pull in
+ * HERE. The review path carries the id in the URL instead, so the two are matched
+ * differently on purpose.
+ *
+ * Both render OUTSIDE their section's load-state chain (entry 150): offline is exactly when
+ * that chain is in its failed branch and exactly when the queued item exists. The COLD case
+ * — offline on a facility never opened, where `apiGet` has no cache to serve — is
+ * deliberately not covered: there is no facility on the screen to attach anything to. */
+const pendingQuestions = computed(() =>
+  pendingByPath("/community/questions")
+    .filter((i) => i.body.facility_id === route.params.id && i.body.text)
+    .map((i) => ({ opId: i.opId, text: i.body.text })),
+);
+const pendingReviews = computed(() =>
+  pendingByPath(`/facility/${route.params.id}/review`)
+    .filter((i) => i.body.text)
+    .map((i) => ({ opId: i.opId, text: i.body.text })),
+);
 </script>
 
 <template>
@@ -265,15 +296,40 @@ async function onReview(payload) {
 
     <section class="card">
       <h2 class="card__title">{{ t("profile.reviews") }}</h2>
+      <!-- §15.1: the driver's own, waiting. Above the landed ones because it is the one
+           they just wrote, and outside the `v-else` so an empty list still shows it. -->
+      <ul v-if="pendingReviews.length" class="reviews">
+        <li v-for="r in pendingReviews" :key="r.opId" class="reviews__item reviews__item--pending">
+          {{ r.text }}
+          <span class="queued__glyph" :title="t('docs.cap_queued')">
+            <Clock :size="14" :stroke-width="2" aria-hidden="true" />
+          </span>
+        </li>
+      </ul>
       <ul v-if="profile.reviews.length" class="reviews">
         <li v-for="r in profile.reviews" :key="r.id" class="reviews__item">{{ r.text }}</li>
       </ul>
-      <p v-else class="muted">{{ t("profile.no_reviews") }}</p>
+      <p v-else-if="!pendingReviews.length" class="muted">{{ t("profile.no_reviews") }}</p>
     </section>
 
     <!-- M10-FR4: moderated driver Q&A pinned to the facility page -->
     <section class="card">
       <h2 class="card__title">{{ t("qa.title") }}</h2>
+      <!-- AI-CONTEXT: OUTSIDE the three-state chain below, which is the whole lesson of
+           entry 150. Inside it, a queued question would render in every case except the
+           one it exists for: offline `fetchQuestions` fails, §15.4's line takes the
+           section, and the question the driver just typed — the only copy of that text
+           anywhere — would vanish with it. -->
+      <ul v-if="pendingQuestions.length" class="qa">
+        <li v-for="q in pendingQuestions" :key="q.opId" class="qa__item qa__item--pending">
+          <p class="qa__q">
+            {{ q.text }}
+            <span class="queued__glyph" :title="t('docs.cap_queued')">
+              <Clock :size="14" :stroke-width="2" aria-hidden="true" />
+            </span>
+          </p>
+        </li>
+      </ul>
       <p v-if="questionsState === LoadState.FAILED" class="profile__failed">
         {{ questionsFailure === Failure.OFFLINE ? t("system.load_offline") : t("facility.questions_failed") }}
       </p>
@@ -286,7 +342,8 @@ async function onReview(payload) {
           </p>
         </li>
       </ul>
-      <p v-else-if="questionsState === LoadState.LOADED" class="muted">{{ t("qa.empty") }}</p>
+      <p v-else-if="questionsState === LoadState.LOADED && !pendingQuestions.length"
+         class="muted">{{ t("qa.empty") }}</p>
       <!-- SM-3: the intel stays readable at speed — that is the point of it — but
            writing a question or a review is composition, and Forbidden #11 rules out
            interactive prompts in motion. -->
@@ -462,6 +519,21 @@ async function onReview(payload) {
 .reviews__item {
   font-size: var(--type-body-size);
   color: var(--text-1);
+}
+/* §15.1's queued contribution, wearing the same treatment as the landed ones — the glyph
+   is the whole difference, and `--text-3` on a dashed left rule is the calm the status
+   strip already sets ("Offline — everything saves to your phone"). Same Clock the wallet
+   and the condition sheet use (§22.2: compose, never invent). */
+.reviews__item--pending,
+.qa__item--pending {
+  padding-left: var(--s-3);
+  border-left: 1px dashed var(--line-1);
+}
+.queued__glyph {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: var(--s-2);
+  color: var(--text-3);
 }
 .muted {
   margin: 0;
