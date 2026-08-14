@@ -1,7 +1,7 @@
 # HANDOFF-124 — the request thread gave back everything it was holding
 
 > **Stack UP · everything PUSHED · DEPLOYED · `haulmeter.online` CURRENT at `0076`.**
-> Fifteen commits, §23 entries **144–149**, six migrations applied on the box
+> Seventeen commits, §23 entries **144–150**, six migrations applied on the box
 > (`0071`→`0076`), a backup taken and verified offsite before each of the seven deploys.
 >
 > **F-01 IS CLOSED. Every Critical in the 2026-08-07 audit is now closed.** Production
@@ -77,7 +77,7 @@
 | | |
 |---|---|
 | Branch | `main`, **0 ahead / 0 behind `origin/main`** at `4a33288` (OBSERVED) |
-| Gates | **pytest 1935 · vitest 905 (52 files) · layout 325 · `make ui-image` · `make ui-pwa` · import-linter 30/30 · ruff clean** |
+| Gates | **pytest 1935 · vitest 912 (53 files) · layout 329 · `make ui-image` · `make ui-pwa` · import-linter 30/30 · ruff clean** |
 | Migrations | local **and production** at **`0076_message_attachment`**. Nothing pending |
 | Working tree | clean |
 | Stack | **UP** |
@@ -85,7 +85,7 @@
 | Email | **PRODUCTION SENDS REAL MAIL NOW.** dev still points at the same live Gmail |
 
 **Baseline at session start: pytest 1842 / vitest 885 / layout 325.**
-Net: **+93 pytest, +20 vitest, +1 make target (`ui-image`, in `make ci`).**
+Net: **+93 pytest, +27 vitest, +4 layout, +1 make target (`ui-image`, in `make ci`).**
 
 ### The audit queue is nearly empty
 
@@ -139,6 +139,15 @@ bytes are byte-identical to what the link serves. Verified against real SMTP:
 `already_sent` now, and `force` is the driver's deliberate override. A forced detention
 notice sends a copy and **does not move the dispute anchor**.
 
+**150 — the capture that never left the phone is on the screen.** §15.1's glyph reached
+the wallet, and the first build of it was wrong in a way worth keeping: it sat INSIDE the
+four-state chain, so it rendered in every case except the one it exists for — offline the
+wallet fetch fails, §15.4's line takes the screen, and the queued capture would have
+vanished with it. The capture chip below it has been outside that chain for exactly this
+reason since it was built. **Found by the layout harness**, which could not render the
+state either. The queue is introspectable per-path now (`pendingDocuments`), and
+`pendingWrites` is derived from it rather than maintained beside it.
+
 **149 — the wallet shows the documents, and keeps the URL that made it trustworthy.**
 Measured on production before building anything: credentials are 1–12 KB, but load paperwork
 averages **261–853 KB and reaches 6.3 MB**, and every one of them opened onto "Loading…" for
@@ -175,10 +184,10 @@ device fixes finally enter the chain.
 
 **Then, the work I would pick up first:**
 
-- **§15.1's pending glyph on the other queued writes.** It exists only on
-  `ConditionSurface`; everywhere else a queued write still shows nothing but the global
-  strip count. **This is the last loose end of the image work** — the wallet read path,
-  which stood here, is entry 149.
+- **§15.1's pending glyph on the REMAINING queued writes.** Entry 150 gave it to the
+  wallet, which was the worst case; a queued lot report, facility review, incident and
+  Q&A still show nothing but the global strip count. Every one of them can now be
+  rendered from `pendingDocuments`'s pattern — the queue is introspectable per-path.
 - **The wallet's remaining gap is the FULL document, not the thumbnail.** A 6.3 MB BOL still
   downloads in full behind the derivative, on whatever connection a truck stop has. The
   honest fix is a mid-size derivative (the job makes one edge today, 320 px), not another
@@ -276,7 +285,7 @@ device fixes finally enter the chain.
 ```
 make up                              # preflight, then the full stack
 make seed-where                      # the Tampa origin — paste into Sensors
-make test                            # 1935 pytest + 905 vitest — do NOT pipe it
+make test                            # 1935 pytest + 912 vitest — do NOT pipe it
 make lint                            # ruff + import-linter (30 contracts)
 make ui-layout                       # 325 checks, ~3.6 min, runs ALONE
 make ui-image                        # 3 checks, real browser, needs the DEV server
