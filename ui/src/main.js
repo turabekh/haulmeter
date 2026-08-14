@@ -9,8 +9,14 @@ import App from "./App.vue";
 import { createAppRouter } from "./router.js";
 import { initTheme } from "./core/theme.js";
 import { registerServiceWorker } from "./core/pwa.js";
+import { initInstall } from "./core/install.js";
 
 initTheme(); // §6.1 C-3: a stored override wins over the system setting, from boot
+// AI-CONTEXT: BEFORE the mount, not inside a component (§23 entry 152).
+// `beforeinstallprompt` fires once and early, and a listener attached after it has
+// fired never hears it — the app would go on being installable and silent, which is
+// the defect this module exists to end.
+initInstall();
 createApp(App).use(createAppRouter()).mount("#app");
 // AI-CONTEXT: on boot, for EVERY driver (§23 entry 143). The worker used to be
 // registered inside push.js's `enable()`, so the offline shell would have existed only

@@ -882,6 +882,14 @@ const SURFACES = [
     ready: ".queued__row",
   }],
   ["more", "/more"],
+  // AI-CONTEXT: §23 entry 152 — the app asking to be installed, on both surfaces that
+  // ask. The strip row is measured on the MAP because that is where the strip's height
+  // is most expensive (entry 89 returned 56 dp of map by emptying it), and because the
+  // row is 48 dp rather than the strip's 32: §6.5's floor is MET here rather than
+  // excused, so the sweep has to see it. The More card is a separate state because it
+  // renders on a different gate — the strip respects a dismissal and the card does not.
+  ["install-offer", "/map", { installOffer: true, ready: ".strip__install" }],
+  ["install-card", "/more", { installOffer: true, ready: ".install__why" }],
   // §23 entry 102: F8's inbox, the first surface that renders anything the
   // notification system decided. New sheet, so it gets measured at 360 dp with the
   // rest rather than shipping unseen. Mocked empty AND populated is overkill here —
@@ -1469,6 +1477,28 @@ async function prepare(page, { theme, pseudo, live }) {
     },
     [theme, pseudo, live ? live.stop : null, live ? live.storage : null, live ? !!live.anon : false],
   );
+
+  // AI-CONTEXT: the install offer, which no amount of seeded storage can produce
+  // (§23 entry 152). It is driven by `beforeinstallprompt` — an event the BROWSER
+  // fires, and headless Chromium never does — so the state is reached by dispatching
+  // the real event, carrying the two members the app reads. This is the same class of
+  // problem as entry 143's known gap for the update strip, solved rather than recorded:
+  // the strip's install row and the More card are both measurable now.
+  //
+  // It is dispatched on `load`, which is AFTER main.js's module evaluation and so after
+  // `initInstall()` has bound its listener. Dispatched earlier the app hears nothing —
+  // which is precisely the production defect this entry fixed, and would make the state
+  // measure a strip with no row in it under the name "install-offer".
+  if (live?.installOffer) {
+    await page.addInitScript(() => {
+      window.addEventListener("load", () => {
+        const evt = new Event("beforeinstallprompt", { cancelable: true });
+        evt.prompt = () => {};
+        evt.userChoice = Promise.resolve({ outcome: "dismissed" });
+        window.dispatchEvent(evt);
+      });
+    });
+  }
 }
 
 async function settle(page, live) {

@@ -12,6 +12,8 @@ import { email, logout, fetchPoints, fetchMe, verifyAuthority, saveEquipment, se
 import SkeletonCard from "../core/components/SkeletonCard.vue";
 import { LoadState, Failure, failureOf } from "../core/load-state.js";
 import BottomSheet from "../core/components/BottomSheet.vue";
+import InstallSheet from "../core/components/InstallSheet.vue";
+import { installable, manualInstall, promptInstall } from "../core/install.js";
 import LocalePicker from "../core/components/LocalePicker.vue";
 import NotificationsSheet from "../core/components/NotificationsSheet.vue";
 import { fetchNotifications, markNotificationRead } from "../core/api.js";
@@ -52,6 +54,18 @@ async function openNotification(n) {
   // §13.5: land on the exact screen and state it describes, never a tab root
   if (n.deep_link) router.push(n.deep_link);
 }
+// iOS has no install API at all, so the sheet showing the Share gesture IS the path
+// there rather than a fallback from one. Same branch as the strip's, deliberately —
+// one module decides which platform can be prompted, and both callers ask it.
+const installSheet = ref(false);
+async function onInstall() {
+  if (manualInstall.value) {
+    installSheet.value = true;
+    return;
+  }
+  await promptInstall();
+}
+
 const { mode, setMode, modes } = useTheme();
 // AI-CONTEXT: §23 entry 131 — this was `ref(SAMPLE_POINTS)`, so More opened showing a
 // balance and a loyalty LEVEL the driver had not earned. A points balance is a promise
@@ -180,6 +194,20 @@ function signOut() {
       <button class="cta" type="button" @click="router.push('/bookings')">
         {{ t("bookings.view") }}
       </button>
+    </section>
+
+    <!-- AI-CONTEXT: the install offer's permanent home (§23 entry 152).
+         It deliberately does NOT consult the strip's dismissal: tapping × silences an
+         interruption, it does not withdraw a capability, and §15.5's "never nags beyond
+         that card" only works if the card is somewhere the driver can come back to.
+         Gated on `installable` rather than rendered always, because a button that
+         cannot install is the dead mic entry 89 cleared off thirteen screens — and it
+         disappears once the app IS installed, since `initInstall` returns early in
+         standalone and neither ref is ever set. -->
+    <section v-if="installable" class="card">
+      <h2 class="card__title">{{ t("install.title") }}</h2>
+      <p class="install__why">{{ t("install.why") }}</p>
+      <button class="cta" type="button" @click="onInstall">{{ t("install.action_long") }}</button>
     </section>
 
     <!-- M10 points + contributor level. The whole CARD is the unit of loading, per
@@ -346,6 +374,10 @@ function signOut() {
 
     <BottomSheet :open="notifOpen" :title="t('notifications.title')" @close="notifOpen = false">
       <NotificationsSheet :notifications="notifications" :now="nowMs" @open="openNotification" />
+    </BottomSheet>
+
+    <BottomSheet :open="installSheet" :title="t('install.title')" @close="installSheet = false">
+      <InstallSheet />
     </BottomSheet>
   </div>
 </template>
@@ -531,6 +563,12 @@ function signOut() {
   margin: 0;
   color: var(--flare-500);
   font-size: var(--type-caption-size);
+}
+.install__why {
+  margin: 0 0 var(--s-3);
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
 }
 .cta--accent {
   background: var(--accent-fill);
