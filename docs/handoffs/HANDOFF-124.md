@@ -1,17 +1,28 @@
 # HANDOFF-124 — the request thread gave back everything it was holding
 
 > **Stack UP · everything PUSHED · DEPLOYED · `haulmeter.online` CURRENT at `0076`.**
-> Fourteen commits, §23 entries **144–148**, six migrations applied on the box
-> (`0071`→`0076`), a backup taken and verified offsite before each of the six deploys.
+> Fifteen commits, §23 entries **144–149**, six migrations applied on the box
+> (`0071`→`0076`), a backup taken and verified offsite before each of the seven deploys.
 >
 > **F-01 IS CLOSED. Every Critical in the 2026-08-07 audit is now closed.** Production
 > email leaves the box for the first time in the product's life — verified by a rehearsal
 > notice to an owner-controlled inbox carrying a real Gmail Message-ID.
 >
-> One session, six owner instructions: make images faster, move email to background jobs,
-> deploy, stop duplicate emails, and send the broker the actual PDF. Each one ended somewhere
-> further down than it started — and **the last one, a single question about whether the
-> link needed a sign-in, found the sharpest defect of the session.**
+> One session, seven owner instructions: make images faster, move email to background jobs,
+> deploy, stop duplicate emails, send the broker the actual PDF, and finish the wallet. Each
+> one ended somewhere further down than it started — and **the fifth, a single question about
+> whether the link needed a sign-in, found the sharpest defect of the session.**
+>
+> **The last one is the counterweight to everything below.** Entry 149's whole content is a
+> fix NOT made: the obvious move was to give the wallet the signed `/media` URLs that made
+> the contact sheets fast, and it would have broken the one thing that surface exists for.
+> A signed URL carries a fresh `exp` and `sig` per render, so the cache key changes every
+> time, and the viewer's contract — *"a document opened at home opens again at the scale"* —
+> holds only while the immutable year-long cache is hit by the SAME url twice. **On the
+> screen that produces a CDL to a DOT officer, a changed cache key with no signal is the
+> document not existing.** I had called the wallet "overlooked" in this very document; the
+> stable URL was load-bearing. Two surfaces, two mechanisms, now stated in both places
+> instead of one being propagated into the other for consistency's sake.
 >
 > ---
 >
@@ -65,16 +76,16 @@
 
 | | |
 |---|---|
-| Branch | `main`, **0 ahead / 0 behind `origin/main`** at `3767e05` (OBSERVED) |
-| Gates | **pytest 1929 · vitest 905 (52 files) · layout 325 · `make ui-image` · `make ui-pwa` · import-linter 30/30 · ruff clean** |
+| Branch | `main`, **0 ahead / 0 behind `origin/main`** at `4a33288` (OBSERVED) |
+| Gates | **pytest 1935 · vitest 905 (52 files) · layout 325 · `make ui-image` · `make ui-pwa` · import-linter 30/30 · ruff clean** |
 | Migrations | local **and production** at **`0076_message_attachment`**. Nothing pending |
 | Working tree | clean |
 | Stack | **UP** |
-| Deploy | **DONE ×6 and verified.** Latest backup `haulmeter-20260813T180615Z.dump`, offsite |
+| Deploy | **DONE ×7 and verified.** Latest backup `haulmeter-20260814T013920Z.dump`, offsite |
 | Email | **PRODUCTION SENDS REAL MAIL NOW.** dev still points at the same live Gmail |
 
 **Baseline at session start: pytest 1842 / vitest 885 / layout 325.**
-Net: **+87 pytest, +20 vitest, +1 make target (`ui-image`, in `make ci`).**
+Net: **+93 pytest, +20 vitest, +1 make target (`ui-image`, in `make ci`).**
 
 ### The audit queue is nearly empty
 
@@ -128,6 +139,19 @@ bytes are byte-identical to what the link serves. Verified against real SMTP:
 `already_sent` now, and `force` is the driver's deliberate override. A forced detention
 notice sends a copy and **does not move the dispute anchor**.
 
+**149 — the wallet shows the documents, and keeps the URL that made it trustworthy.**
+Measured on production before building anything: credentials are 1–12 KB, but load paperwork
+averages **261–853 KB and reaches 6.3 MB**, and every one of them opened onto "Loading…" for
+as long as it took. `?size=thumb` on the existing session-authenticated document route serves
+the derivative the job already makes — **1,836,147 → 3,988 bytes on production, 460×** — and
+the viewer shows it immediately at `0.55` opacity while the document loads, so the frame is
+never blank and never claims to be the document yet. The grid gained a thumbnail per row,
+fetched in parallel: inspection mode's own comment already argued this one screen over
+(*"a list of types and dates is our CLAIM that the driver holds them"*), and a busy account
+holds 31 BOLs and 47 rate cons. **`load_paperwork` deliberately gets none** — those rows are
+per-load summaries carrying a count, with no single document to show. No derivative yet, a
+PDF, or an unknown size all fall back to the document itself.
+
 ---
 
 ## 3. Exact next task
@@ -151,13 +175,15 @@ device fixes finally enter the chain.
 
 **Then, the work I would pick up first:**
 
-- **The wallet read path.** `DocumentViewer` still does fetch → blob → objectURL at full
-  size: no thumbnail, no lazy load, no browser cache. The contact sheets are fast; opening
-  a CDL at a scale house is exactly as slow as it was. The whole apparatus (`media.py`,
-  the derivative job, `mediaUrl`) already exists and is tested.
 - **§15.1's pending glyph on the other queued writes.** It exists only on
   `ConditionSurface`; everywhere else a queued write still shows nothing but the global
-  strip count.
+  strip count. **This is the last loose end of the image work** — the wallet read path,
+  which stood here, is entry 149.
+- **The wallet's remaining gap is the FULL document, not the thumbnail.** A 6.3 MB BOL still
+  downloads in full behind the derivative, on whatever connection a truck stop has. The
+  honest fix is a mid-size derivative (the job makes one edge today, 320 px), not another
+  URL scheme — and it is worth measuring whether a driver ever needs more than the
+  thumbnail plus pinch-zoom on a screen this size before building it.
 
 ### Owner decisions still open
 
@@ -217,6 +243,13 @@ device fixes finally enter the chain.
     `test_broker_link_is_reachable.py` asserts against `infra/Caddyfile`, which is mounted
     at `/repo/infra` beside the compose files for exactly that reason.
 14. **The API wedges mid-reload if SSE streams are open.** (Carried from 122 §5.10.)
+15. **THE TWO IMAGE URL SCHEMES ARE NOT AN INCONSISTENCY TO TIDY UP.** Signed `/media` URLs
+    go in an `<img src>` and are fast; the wallet's `/protection/documents/{id}` is
+    session-authenticated, needs a fetch-to-blob, and is the RIGHT one there — because a
+    signed URL's `exp`/`sig` change per render, so the immutable cache is never hit twice and
+    the offline guarantee dies silently. Anyone "unifying" these will make the wallet fast
+    on a good connection and empty at a scale house. Both are documented at the top of
+    `test_document_thumb.py`.
 
 ---
 
@@ -243,7 +276,7 @@ device fixes finally enter the chain.
 ```
 make up                              # preflight, then the full stack
 make seed-where                      # the Tampa origin — paste into Sensors
-make test                            # 1929 pytest + 905 vitest — do NOT pipe it
+make test                            # 1935 pytest + 905 vitest — do NOT pipe it
 make lint                            # ruff + import-linter (30 contracts)
 make ui-layout                       # 325 checks, ~3.6 min, runs ALONE
 make ui-image                        # 3 checks, real browser, needs the DEV server
