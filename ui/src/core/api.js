@@ -306,15 +306,38 @@ function readQueue() {
     return [];
   }
 }
-export const pendingWrites = ref(readQueue().length);
+/* AI-CONTEXT: the queue is held as ITEMS now and the count is derived, because a count
+ * cannot answer the question a screen actually has.
+ *
+ * `pendingWrites` is global: a queued condition photo, incident report and lot report all
+ * increment the same number, so a driver reading "1 pending" at a dock cannot tell whether
+ * the thing being counted is the BOL they just photographed. §15.1 asks for a glyph on the
+ * QUEUED ITEM, and no surface could render one without being able to name what is in here.
+ * Nothing outside this module writes the count, so deriving it changes no caller. */
+const queueItems = ref(readQueue());
+export const pendingWrites = computed(() => queueItems.value.length);
 function saveQueue(q) {
   try {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
   } catch {
     /* best-effort */
   }
-  pendingWrites.value = q.length;
+  queueItems.value = [...q];
 }
+
+const DOCUMENT_PATH = "/protection/documents";
+/* AI-CONTEXT: the wallet's queued captures, and the two filters are both load-bearing.
+ *
+ * The PATH filter is why a queued lot report does not grow a phantom document row. The
+ * `doc_type` filter is for a queue written by an OLDER BUILD — this queue lives in a
+ * driver's localStorage and is replayed by whatever version loads next, so an entry whose
+ * shape predates a change is a normal thing to meet rather than an impossible one. A row
+ * with no label helps nobody, and throwing empties the whole screen. */
+export const pendingDocuments = computed(() =>
+  queueItems.value
+    .filter((i) => i && i.path === DOCUMENT_PATH && i.body && i.body.doc_type)
+    .map((i) => ({ opId: i.opId, doc_type: i.body.doc_type, stop_id: i.body.stop_id ?? null })),
+);
 // AI-CONTEXT: seeds the replay queue for tests. `pendingWrites` is derived state that
 // only `saveQueue` updates, so a test writing localStorage directly would assert against
 // a stale count — and the count IS what the driver sees. Matches the `__…ForTests`

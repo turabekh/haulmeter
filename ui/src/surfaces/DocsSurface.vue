@@ -21,7 +21,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { ShieldCheck, Plus, Archive, RotateCcw, ChevronRight } from "lucide-vue-next";
+import { ShieldCheck, Plus, Archive, RotateCcw, ChevronRight, Clock } from "lucide-vue-next";
 import BottomSheet from "../core/components/BottomSheet.vue";
 import DocumentCaptureSheet from "../core/components/DocumentCaptureSheet.vue";
 import DocumentViewer from "../core/components/DocumentViewer.vue";
@@ -33,6 +33,7 @@ import {
   fetchArchivedDocuments,
   archiveDocument,
   restoreDocument,
+  pendingDocuments,
 } from "../core/api.js";
 import SkeletonRow from "../core/components/SkeletonRow.vue";
 import { LoadState, Failure, failureOf } from "../core/load-state.js";
@@ -344,6 +345,32 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
       {{ t("docs.inspection") }}
     </button>
 
+    <!-- AI-CONTEXT: §15.1's pending glyph, on the surface where its absence was worst —
+         and OUTSIDE the four-state chain below, which is the whole point.
+         `onCaptured` refreshes from the SERVER, so a BOL photographed in a dead zone
+         appeared nowhere: the sheet said "Saved on your phone", closed, and returned the
+         driver to a wallet with no trace of it. The document EXISTS — it is in IndexedDB
+         with a stable idempotency key — so rendering it states a local fact, and the
+         glyph carries the only uncertain part (entry 144's argument, applied to the
+         second surface it was always about).
+
+         Inside the chain it would render in every case EXCEPT the one it is for: offline
+         the wallet fetch fails, §15.4's line takes the screen, and the queued capture —
+         the one thing on that screen not in doubt — would vanish with it. Same reasoning
+         as the capture chip at the bottom of this file, which is outside for the same
+         reason. NOT behind an accordion either: a driver who just captured something and
+         has to open a section to find it has been told nothing. It ends silently when the
+         real row arrives (§15.1: "sync completion is silent"). -->
+    <ul v-if="pendingDocuments.length" class="queued" :aria-label="t('docs.cap_queued')">
+      <li v-for="q in pendingDocuments" :key="q.opId" class="queued__row">
+        <span class="queued__type">{{ docLabel(q.doc_type) }}</span>
+        <span class="queued__glyph" :title="t('docs.cap_queued')">
+          <Clock :size="14" :stroke-width="2" aria-hidden="true" />
+        </span>
+        <span class="queued__note">{{ t("docs.cap_queued") }}</span>
+      </li>
+    </ul>
+
     <!-- §8's skeleton: rows, because that is what the wallet is (§23 entry 131) -->
     <SkeletonRow v-if="wallet === LoadState.LOADING" :count="4" />
     <!-- §15.4: a driver reaching for a credential at a roadside needs to know the app
@@ -370,9 +397,11 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
          is labelled, never linked) left literally nothing on the screen, which is
          how this surface was found looking broken rather than empty. The action came
          back with `POST /protection/documents`, so §15.3 now has both halves. -->
-    <p v-if="!data.documents.length && !paperwork.length && !unattached.length"
+    <p v-if="!data.documents.length && !paperwork.length && !unattached.length
+             && !pendingDocuments.length"
        class="docs__empty">{{ t("docs.empty") }}</p>
-    <div v-else class="groups">
+    <div v-else-if="data.documents.length || paperwork.length || unattached.length"
+         class="groups">
       <!-- AI-CONTEXT: the wallet is the driver's OWN documents (§23 entry 79). It
            returned everything on the account grouped by type, so a CDL sat between
            rate cons — measured on a real account, 40 documents of which 5 were
@@ -754,6 +783,46 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
   font-size: var(--type-label-size);
   font-weight: 500;
   color: var(--text-3);
+}
+/* §15.1's queued capture. It wears `.paper__row`'s geometry and tokens (§22.2: compose,
+   never invent) minus everything that says "tap me" — no `cursor`, no hover, because it
+   is a statement rather than a control. `--text-3` and `Clock`, matching the glyph
+   `ConditionSurface` already uses: waiting for signal is a MODE, not an error, and the
+   status strip's own wording is the restraint being matched. */
+.queued {
+  list-style: none;
+  margin: var(--s-4) var(--s-4) 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.queued__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+  min-height: 48px;
+  padding: var(--s-3);
+  background: var(--ink-1);
+  border: 1px dashed var(--line-1);
+  border-radius: var(--r-card);
+}
+.queued__type {
+  color: var(--text-1);
+  font-size: var(--type-body-size);
+}
+.queued__glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+}
+.queued__note {
+  grid-column: 1 / -1;
+  color: var(--text-3);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
 }
 .paper {
   list-style: none;

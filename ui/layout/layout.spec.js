@@ -850,6 +850,37 @@ const SURFACES = [
     open: [{ click: ".group__head", nth: 1 }, { click: ".group__head", nth: 2 }],
     ready: ".paper__row",
   }],
+  // AI-CONTEXT: §15.1's queued capture, seeded through the write queue itself rather
+  // than mocked — the row is derived from `longhaul.write_queue`, so seeding localStorage
+  // drives the real code path a driver reaches by photographing a BOL in a dead zone.
+  //
+  // It is measured for one specific reason: the note is a SENTENCE ("Saved on your phone.
+  // Syncs when you have signal.") sharing a row with a type label and a glyph, at 360 dp
+  // under +40% text, in six locales — the exact shape that reflows. Deliberately with an
+  // EMPTY wallet, because that is the state a new driver's first offline capture lands in
+  // and the one where the row is the only thing on the screen.
+  ["docs-queued", "/docs", {
+    // AI-CONTEXT: DELIBERATELY no wallet mock — an unmocked route 404s, which is the
+    // FAILED state, which is the state a driver in a dead zone is actually looking at.
+    // It is also the stacking that was broken: built inside the four-state chain, the
+    // queued row rendered in every case except this one. `.docs__failed` had never been
+    // measured at 360 dp either, so this state carries both.
+    mocks: {},
+    // AI-CONTEXT: the replay has to HANG, and finding that out was worth the detour.
+    // Seeding the queue alone measured nothing: the harness's app is online, `flushQueue`
+    // drained both entries against the mock before the first assertion ran, and the state
+    // rendered an empty wallet under the name "docs-queued". A hanging POST is what "no
+    // signal" actually is — the replay is in flight and the row stays queued, which is
+    // the state a driver is looking at.
+    hang: ["/protection/documents"],
+    storage: {
+      "longhaul.write_queue": JSON.stringify([
+        { path: "/protection/documents", body: { doc_type: "bol" }, opId: "op-layout-1" },
+        { path: "/protection/documents", body: { doc_type: "rate_con" }, opId: "op-layout-2" },
+      ]),
+    },
+    ready: ".queued__row",
+  }],
   ["more", "/more"],
   // §23 entry 102: F8's inbox, the first surface that renders anything the
   // notification system decided. New sheet, so it gets measured at 360 dp with the
