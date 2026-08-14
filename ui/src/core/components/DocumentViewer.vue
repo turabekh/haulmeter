@@ -34,6 +34,14 @@ const { t } = useI18n();
 const { isDriving } = useDriverState();
 
 const url = ref(null);
+// AI-CONTEXT: the derivative, shown IMMEDIATELY so the frame is never blank.
+//
+// Measured on production: a credential is 1–12 KB but load paperwork averages 261–853 KB
+// and reaches 6.3 MB, and until now every one of them opened onto "Loading…" for as long
+// as it took. The thumbnail is ~6 KB from the same stable URL, so it arrives first, gets
+// replaced the moment the full document lands, and costs nothing offline — both responses
+// carry the same immutable year-long cache.
+const thumb = ref(null);
 const failed = ref(false);
 const loading = ref(true);
 const isPdf = computed(() => (props.document.content_type || "").includes("pdf"));
@@ -66,6 +74,17 @@ async function save() {
 }
 
 onMounted(async () => {
+  // not awaited: the whole point is that it renders while the full document is still on
+  // the wire. A PDF has no derivative, so this simply never resolves to anything.
+  if (!isPdf.value) {
+    fetchDocumentBytes(props.document.id, "thumb")
+      .then((u) => {
+        if (!url.value) thumb.value = u;
+      })
+      .catch(() => {
+        /* no derivative yet — the frame stays as it was */
+      });
+  }
   try {
     url.value = await fetchDocumentBytes(props.document.id);
   } catch {
@@ -77,12 +96,21 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (url.value) URL.revokeObjectURL(url.value);
+  if (thumb.value) URL.revokeObjectURL(thumb.value);
 });
 </script>
 
 <template>
   <div class="viewer">
-    <p v-if="loading" class="viewer__state">{{ t("docs.view_loading") }}</p>
+    <!-- the derivative, while the document itself is still arriving. §15.2 asks for
+         content to appear progressively rather than a spinner over a blank frame. -->
+    <img
+      v-if="loading && thumb"
+      :src="thumb"
+      class="viewer__frame viewer__frame--pending"
+      :alt="document.label"
+    />
+    <p v-else-if="loading" class="viewer__state">{{ t("docs.view_loading") }}</p>
 
     <p v-else-if="failed" class="viewer__state viewer__state--bad" role="alert">
       <TriangleAlert :size="18" :stroke-width="2" aria-hidden="true" />
@@ -163,6 +191,11 @@ onBeforeUnmount(() => {
   border-radius: var(--r-card);
   background: var(--ink-0);
   object-fit: contain;
+}
+/* the derivative is a smaller image in the same frame; dimming it is what says "this is
+   not the document yet" without inventing a second treatment (§22.2). */
+.viewer__frame--pending {
+  opacity: 0.55;
 }
 .viewer__state {
   margin: var(--s-5) 0;

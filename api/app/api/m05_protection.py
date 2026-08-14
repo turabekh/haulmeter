@@ -956,9 +956,17 @@ def _replaced_id(db: Session, new_doc):
     return str(prior.id) if prior is not None else None
 
 
+def _document_bytes_or_404(db: Session, doc) -> bytes:
+    try:
+        return documents.get_document_bytes(db, doc)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "document unavailable") from exc
+
+
 @router.get("/documents/{document_id}")
 def view_document(
     document_id: uuid.UUID,
+    size: str = "full",
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ):
@@ -980,13 +988,40 @@ def view_document(
     if doc is None or doc.account_id != account.id:
         # a stranger's document id must not be distinguishable from a missing one
         raise HTTPException(status.HTTP_404_NOT_FOUND, "document not found")
-    try:
-        content = documents.get_document_bytes(db, doc)
-    except Exception as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "document unavailable") from exc
+
+    # AI-CONTEXT: `?size=thumb` serves the derivative the `image_thumbnails` job already
+    # makes for every stored image — and it stays on THIS route, session-authenticated,
+    # rather than on the signed `/media` one, which is the whole decision.
+    #
+    # A signed URL carries a fresh `exp` and `sig` on every render, so the browser's cache
+    # key changes every time. This route's URL is STABLE, and the wallet's contract depends
+    # on that: "a document opened at home opens again at the scale" is only true because
+    # the immutable year-long cache below is hit by the same URL a second time. On the one
+    # surface that exists to produce a CDL to a DOT officer, a cache miss with no signal is
+    # the document not existing.
+    #
+    # The trade-off it pays is the one `/media` was built to escape — an `<img src>` cannot
+    # send an Authorization header, so the wallet fetches and holds object URLs where the
+    # contact sheets do not. Different requirement, different mechanism, stated rather than
+    # inherited.
+    content_type = doc.content_type or "application/octet-stream"
+    if size == "thumb":
+        try:
+            content = documents.default_storage().get(
+                documents.thumbnail_key(doc.storage_key)
+            )
+            content_type = documents.THUMB_CONTENT_TYPE
+        except Exception:
+            # no derivative yet (the job runs every five minutes), or the document is a
+            # PDF with nothing to derive. Falling back to the original keeps the caller
+            # simple: it asked for something to show, and this is something to show.
+            content = _document_bytes_or_404(db, doc)
+    else:
+        content = _document_bytes_or_404(db, doc)
+
     return Response(
         content=content,
-        media_type=doc.content_type or "application/octet-stream",
+        media_type=content_type,
         headers={
             "Content-Disposition": _content_disposition(doc.filename or doc.doc_type.value),
             "Cache-Control": "private, max-age=31536000, immutable",

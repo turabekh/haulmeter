@@ -19,7 +19,7 @@
      ladder while the row and the bytes stay exactly where they are, restorable from
      the archive sheet. -->
 <script setup>
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { ShieldCheck, Plus, Archive, RotateCcw, ChevronRight } from "lucide-vue-next";
 import BottomSheet from "../core/components/BottomSheet.vue";
@@ -29,6 +29,7 @@ import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import {
   fetchWallet,
+  fetchDocumentBytes,
   fetchArchivedDocuments,
   archiveDocument,
   restoreDocument,
@@ -194,6 +195,48 @@ async function restore(row) {
 // a document renewed and superseded before the driver tapped the notification — simply
 // lands them on the wallet, which is where they wanted to be anyway.
 const highlighted = ref(null);
+
+/* AI-CONTEXT: a thumbnail per row, because a wallet of type-and-date text is our CLAIM
+ * that the driver holds these documents rather than the documents.
+ *
+ * The same argument inspection mode's own comment makes one screen over — "a list of types
+ * and dates is our CLAIM that the driver holds them, not the documents" — applied to the
+ * list a driver uses to FIND one. On a busy account this tab holds 31 BOLs and 47 rate
+ * cons; picking the right one out of a column of identical labels is the whole task.
+ *
+ * FETCHED IN PARALLEL and from the stable authenticated URL, not the signed one: the
+ * wallet must open with no signal, and that is only true while the cache key does not
+ * change per render (see `fetchDocumentBytes`). ~6 KB each, so the whole tab costs less
+ * than one of the documents on it.
+ */
+const thumbs = ref({});
+
+async function loadThumbs(docs) {
+  const wanted = (docs || []).filter((d) => d && d.id && !thumbs.value[d.id]);
+  if (!wanted.length) return;
+  const pairs = await Promise.all(
+    wanted.map(async (d) => {
+      try {
+        return [d.id, await fetchDocumentBytes(d.id, "thumb")];
+      } catch {
+        return null; // a document with no derivative keeps its glyph
+      }
+    }),
+  );
+  const next = { ...thumbs.value };
+  for (const pair of pairs) if (pair) next[pair[0]] = pair[1];
+  thumbs.value = next;
+}
+
+onBeforeUnmount(() => {
+  for (const url of Object.values(thumbs.value)) {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* nothing to revoke */
+    }
+  }
+});
 function honourDeepLink() {
   // the surface is mounted without a router in several tests and in inspection mode
   const wanted = route?.query?.doc;
@@ -211,6 +254,13 @@ async function loadWallet() {
     data.value = await fetchWallet();
     wallet.value = LoadState.LOADED;
     walletFailure.value = null;
+    // not awaited: the list is the screen, and a derivative that is slow to arrive must
+    // never hold it back. Each row keeps its glyph until its own thumbnail lands.
+    // AI-CONTEXT: `documents` and `unattached` only. `load_paperwork` rows are per-LOAD
+    // summaries carrying `doc_types` and a count rather than individual documents, so
+    // there is nothing there to show a thumbnail OF — the row already names the route,
+    // which is the thing a driver is picking between at that level.
+    loadThumbs([...(data.value.documents ?? []), ...(data.value.unattached ?? [])]);
   } catch (e) {
     data.value = EMPTY_WALLET;
     walletFailure.value = failureOf(e);
@@ -349,6 +399,13 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
                 type="button"
                 @click="open(d)"
               >
+                <img
+                  v-if="thumbs[d.id]"
+                  :src="thumbs[d.id]"
+                  class="doc__thumb"
+                  alt=""
+                  decoding="async"
+                />
                 <span class="doc__type">{{ g.label }}</span>
                 <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
               </button>
@@ -439,6 +496,13 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
       <ul class="grid">
         <li v-for="d in inspectionDocs" :key="d.id">
           <button class="doc doc--inspect" type="button" @click="open(d)">
+            <img
+              v-if="thumbs[d.id]"
+              :src="thumbs[d.id]"
+              class="doc__thumb"
+              alt=""
+              decoding="async"
+            />
             <span class="doc__type">{{ docLabel(d.doc_type) }}</span>
             <span class="doc__expiry">{{ d.expires_on || "—" }}</span>
           </button>
@@ -595,6 +659,19 @@ const statusToken = { ok: "--text-3", expiring: "--marker-500", expired: "--flar
    same one the expiring pills already use, so the mark agrees with the strip above it. */
 .doc--marked {
   border-color: var(--marker-500);
+}
+/* AI-CONTEXT: composed from the existing card treatment rather than invented (§22.2) —
+   `--ink-2` resting fill, `--r-control`, and the same `--s-*` rhythm the row already uses.
+   `alt=""` because the type and expiry beside it already say what this is; a screen reader
+   announcing the image as well would read every credential twice (§16). */
+.doc__thumb {
+  width: 100%;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--r-control);
+  background: var(--ink-2, var(--line-1));
+  margin-bottom: var(--s-2);
+  display: block;
 }
 .doc__type {
   font-size: var(--type-body-size);

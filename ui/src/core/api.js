@@ -1824,9 +1824,23 @@ export async function captureDocument({
 // the document itself. Held as an object URL by the caller, which revokes it —
 // inspection mode may open several in a row and leaking a blob per tap on a phone
 // that is already low on memory is not acceptable.
-export async function fetchDocumentBytes(documentId) {
+/* AI-CONTEXT: fetched and held as an object URL, deliberately, where the contact sheets
+ * use a plain `<img src>`.
+ *
+ * The wallet's contract is different from theirs: "a document opened at home opens again
+ * at the scale" (§10.4 / inspection mode). That is true only because this URL is STABLE —
+ * the immutable year-long cache is hit by the same URL a second time. A signed `/media`
+ * URL carries a fresh `exp` and `sig` per render, so the cache key changes and an offline
+ * driver gets a miss, which on the screen that produces a CDL to a DOT officer is the
+ * document not existing.
+ *
+ * The price is that a stable authenticated URL cannot go in an `<img src>` at all, so the
+ * bytes come through `fetch` and the caller revokes. Different requirement, different
+ * mechanism, stated rather than inherited. */
+export async function fetchDocumentBytes(documentId, size = "full") {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
-  const resp = await fetch(`${API_BASE}/protection/documents/${documentId}`, {
+  const query = size === "full" ? "" : `?size=${encodeURIComponent(size)}`;
+  const resp = await fetch(`${API_BASE}/protection/documents/${documentId}${query}`, {
     headers: headers(),
   });
   if (!resp.ok) throw new Error(`document ${resp.status}`);
