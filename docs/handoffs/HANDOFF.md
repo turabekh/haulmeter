@@ -3,7 +3,52 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-124.md](HANDOFF-124.md)** — read this first, every session.
+➡️ **[HANDOFF-125.md](HANDOFF-125.md)** — read this first, every session.
+
+> **125** closes the session that ran to nine owner instructions and **§23 entries
+> 144–151**. Gates across the whole run: **pytest 1842 → 1935, vitest 885 → 918, layout
+> 325 → 333**, plus a new `make ui-image` in `make ci`. Six migrations (`0071`→`0076`).
+>
+> **Stack DOWN · everything PUSHED · production CURRENT at `0076`.** **149 and 150 are
+> LIVE and verified; §23 entry 151 IS NOT DEPLOYED.** Seven deploys, a verified offsite
+> backup before each.
+>
+> **THE PATTERN, and it is the fourth face of the coin 122, 123 and 124 each turned:
+> A THING THAT RENDERS IN EVERY CASE EXCEPT THE ONE IT EXISTS FOR.** §15.1's queued-item
+> row went inside the surface's four-state load chain — the obvious place — and that chain
+> is in its FAILED branch precisely when the driver is offline, which is precisely when the
+> queued item exists and is the only thing on the screen not in doubt. **It would have
+> shipped rendering perfectly in every state a developer looks at.** The capture chip at
+> the foot of `DocsSurface` has been outside that chain for exactly this reason since it
+> was built, with a comment saying so; the reasoning had never been carried up the file.
+>
+> **AND THE LAYOUT HARNESS MEASURED NOTHING, TWICE — the same shape as the defect it was
+> measuring.** Seeding the write queue is not enough: the harness's app is ONLINE, so
+> `flushQueue` drained the queue against the mocks before the first assertion, and
+> `docs-queued` cheerfully measured an empty wallet under that name. A hanging POST is what
+> "no signal" actually is. *The harness is also what caught the chain defect above, because
+> it could not render the state either.*
+>
+> **The counterweight — entry 149 is a fix deliberately NOT made.** The obvious move was to
+> give the wallet the signed `/media` URLs that made the contact sheets fast. A signed URL
+> carries a fresh `exp` and `sig` per render, so the browser cache key changes every time,
+> and the viewer's contract — *"a document opened at home opens again at the scale"* —
+> holds only while the immutable year-long cache is hit by the SAME url twice. **On the
+> screen that produces a CDL to a DOT officer, a changed cache key with no signal is the
+> document not existing.** Two surfaces, two mechanisms, deliberately not unified.
+>
+> **Measured, not asserted:** a production credential **1,836,147 → 3,988 bytes (460×)**;
+> load paperwork averaging 261–853 KB and reaching **6.3 MB**, all of it previously opening
+> onto "Loading…"; a camera frame **6.7 MB → 731 KB in 187 ms**; a notice tap **2,490 ms →
+> 25.9 ms**. And a deploy is now verified by reading the SERVED bundle, because twice this
+> session a deploy reported success and changed nothing.
+>
+> **The owner's next action is unchanged and is not code: 140 production records have no
+> bytes** — everything uploaded 26–28 July, from the swallowed `SignatureDoesNotMatch` era.
+> Leave them, purge them, or tell the drivers. **125 §3.**
+
+➡️ **[HANDOFF-124.md](HANDOFF-124.md)** — the session before, and still the reference for
+the email, dedupe and broker-attachment detail.
 
 > **124** was six owner instructions — make images faster, move email to background jobs,
 > deploy, stop duplicate emails, send the broker the actual PDF — and each ended somewhere
@@ -58,7 +103,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > production records have no bytes** — everything uploaded 26–28 July, from the swallowed
 > `SignatureDoesNotMatch` era. Leave them, purge them, or tell the drivers. **124 §3.**
 
-➡️ **[HANDOFF-123.md](HANDOFF-123.md)** — the session before.
+➡️ **[HANDOFF-123.md](HANDOFF-123.md)** — two sessions before.
 
 > **123** was driven entirely by the owner looking at real screens on a real phone and
 > saying what was confusing. Nine commits, **§23 entries 135–143**. Gates went
@@ -97,7 +142,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > edit on the VM (F-01, open since 121). The post-deploy worker log names the scale —
 > `dunning … skipped_no_email: 11` of 14. **123 §3.**
 
-➡️ **[HANDOFF-122.md](HANDOFF-122.md)** — two sessions before.
+➡️ **[HANDOFF-122.md](HANDOFF-122.md)** — three sessions before.
 
 > **122** was six owner-supplied work contracts run back to back, each with its own report at
 > the repo root: **M3 detention**, **wedge delivery**, **location integrity**, **evidence
@@ -130,7 +175,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > to an owner-controlled inbox — two independent blockers lift at once and that is the only
 > test covering both. **122 §4.**
 
-➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — three sessions before.
+➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — four sessions before.
 
 > **121** was two instructions. *"Approved, do the loading-state work"* closed **five
 > findings — U-06, U-09, U-10 (criticals), U-11 and U-12** — every finding that decision was
@@ -230,7 +275,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > logged zero errors where it had failed all seven jobs — then observed on production, where
 > `migrate` exits before api and worker start. **HANDOFF-121 §11.**
 
-➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — four sessions before.
+➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — five sessions before.
 
 > **120** was one instruction — *"read the latest handoff and restart the app"*, then
 > *"proceed using your best judgement"* — and it worked the audit queue to the end:
@@ -293,7 +338,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack UP · thirty-five commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — five sessions before.
+➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — six sessions before.
 
 > **119** worked the 2026-08-07 audit queue: **nineteen findings closed, two partial**, and
 > answered one of the audit's three open questions. Three of
@@ -353,7 +398,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · twenty-four commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — six sessions before.
+➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — seven sessions before.
 
 > **118** is a short session with **no source changes**: the owner asked for the stack to be
 > restarted, then for a handoff and a shutdown.
@@ -374,7 +419,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > session (no credential), so the ahead-count is arithmetic, not observation — **re-fetch
 > before pushing.** The next task is still the handset background-sensor test.
 
-➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — seven sessions before.
+➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — eight sessions before.
 
 > **117** did two things the owner asked for, and both turned up something under them.
 >
@@ -402,7 +447,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > **Stack DOWN · four commits UNPUSHED · nothing deployed.** The next task is still the
 > handset background-sensor test.
 
-➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — eight sessions before.
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — nine sessions before.
 
 > **116** walked the stop auto-pilot end to end in a real browser, which is what two
 > sessions of building had never been subjected to. **It works.** A human adds a load,
@@ -431,7 +476,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > HANDOFF-116.md's own header contradicted, and its "everything from `a4e282c` onward
 > UNPUSHED" was overtaken by the 2026-08-03 push. Corrected in 117.)
 
-➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — nine sessions before.
+➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — ten sessions before.
 
 > **115** was scoped as a **surfacing rework** — the A1 automation is built and correct,
 > only the way its result reaches the driver is wrong. Re-grepping the seams before
