@@ -76,7 +76,7 @@
 
 | | |
 |---|---|
-| Branch | `main`, **0 ahead / 0 behind `origin/main`** at `4a33288` (OBSERVED) |
+| Branch | `main`, **0 ahead / 0 behind `origin/main`** at `86be594` (OBSERVED) |
 | Gates | **pytest 1935 · vitest 912 (53 files) · layout 329 · `make ui-image` · `make ui-pwa` · import-linter 30/30 · ruff clean** |
 | Migrations | local **and production** at **`0076_message_attachment`**. Nothing pending |
 | Working tree | clean |
