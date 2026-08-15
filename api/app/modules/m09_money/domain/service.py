@@ -24,7 +24,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.foundation.f06_documents import public as documents
@@ -139,17 +139,50 @@ def upload_settlement(
     gross_cents: int | None = None,
     doc_ref=None,
 ) -> Settlement:
-    settlement = Settlement(
-        driver_account_id=account_id,
-        carrier=carrier,
-        period_start=period_start,
-        period_end=period_end,
-        gross_cents=gross_cents
-        if gross_cents is not None
-        else sum(x["amount_cents"] for x in lines),
-        doc_ref=doc_ref,
+    """AI-CONTEXT: re-auditing a pay period REPLACES it rather than adding another
+    (§23 entry 154).
+
+    A settlement is a document that exists once. The driver types what their carrier paid,
+    and typing it again — after a typo, or with the layover line they missed the first
+    time — is a correction to that one document, not a second settlement. Measured before
+    the fix: three runs, three settlements, `flagged_cents` 15000 → 30000 → 45000.
+
+    The gross is recomputed from the new lines unless the caller states one, because a
+    stale gross beside corrected lines is a document that disagrees with itself.
+    """
+    total = gross_cents if gross_cents is not None else sum(x["amount_cents"] for x in lines)
+    settlement = db.scalar(
+        select(Settlement).where(
+            Settlement.driver_account_id == account_id,
+            Settlement.carrier == carrier,
+            Settlement.period_start == period_start,
+            Settlement.period_end == period_end,
+        )
     )
-    db.add(settlement)
+    if settlement is None:
+        settlement = Settlement(
+            driver_account_id=account_id,
+            carrier=carrier,
+            period_start=period_start,
+            period_end=period_end,
+            gross_cents=total,
+            doc_ref=doc_ref,
+        )
+        db.add(settlement)
+    else:
+        settlement.gross_cents = total
+        # a re-upload that names no document must not erase the one already attached
+        if doc_ref is not None:
+            settlement.doc_ref = doc_ref
+        # AI-CONTEXT: the lines ARE the correction, so the old ones go rather than
+        # accumulate — and this is a statement, not a collection edit, because the
+        # relationship collections on this object are NOT reliable here. `audit_settlement`
+        # writes discrepancies with `db.add` rather than through `settlement.discrepancies`,
+        # so an in-memory collection can be stale the moment a caller re-uses a settlement
+        # it already audited. Deleting by query and expiring is the version that does not
+        # depend on which of the two paths last touched the object.
+        db.execute(delete(SettlementLine).where(SettlementLine.settlement_id == settlement.id))
+        db.expire(settlement, ["lines"])
     db.flush()
     for line in lines:
         db.add(
@@ -218,6 +251,31 @@ def _owed_by_kind(db: Session, account_id, period_start, period_end) -> tuple[di
 
 
 def audit_settlement(db: Session, settlement: Settlement) -> list[Discrepancy]:
+    """AI-CONTEXT: re-auditing clears the previous FLAGGED findings and keeps the acted-on
+    ones (§23 entry 154).
+
+    `_flagged_total` counts every `flagged` discrepancy the driver has, so a second run
+    over the same settlement used to stack a second copy of the same finding into the
+    figure on the Money tab. Clearing them is what makes a re-run a re-run.
+
+    `submitted` and `resolved` are NOT cleared, and the asymmetry is the point: those are
+    a record of the driver acting — sending the discrepancy to their carrier, or the
+    carrier settling it — and re-running an audit is not permission to erase what someone
+    did. They also cost nothing to keep, because neither status is counted by
+    `_flagged_total`. A kind that is still genuinely owed is re-flagged beside its
+    submitted history, which is one flagged row and therefore counted once.
+    """
+    # by QUERY, for the reason given in `upload_settlement`: this function adds
+    # discrepancies with `db.add`, so `settlement.discrepancies` may not reflect what a
+    # previous run wrote. Expiring afterwards makes the collection correct for the caller.
+    db.execute(
+        delete(Discrepancy).where(
+            Discrepancy.settlement_id == settlement.id,
+            Discrepancy.status == DiscrepancyStatus.flagged,
+        )
+    )
+    db.expire(settlement, ["discrepancies"])
+
     paid: dict[str, int] = {}
     for line in settlement.lines:
         paid[line.kind] = paid.get(line.kind, 0) + line.amount_cents
@@ -246,6 +304,7 @@ def audit_settlement(db: Session, settlement: Settlement) -> list[Discrepancy]:
         db.add(disc)
         found.append(disc)
     db.flush()
+    db.expire(settlement, ["discrepancies"])
     return found
 
 

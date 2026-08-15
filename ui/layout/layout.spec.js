@@ -713,6 +713,44 @@ const SURFACES = [
   ["load-calc-prefilled", "/load/calc", {
     stop: LIVE_STOP, mocks: LIVE_MOCKS, ready: ".field__from",
   }],
+  /* AI-CONTEXT: the RESULT, which no state has ever rendered (§23 entry 154).
+   *
+   * Both states above measure the empty form and stop at the button. The card underneath
+   * it — a Meter-treatment headline, a four-row breakdown and now a basis list — appears
+   * only after a calculation, so the half of this surface carrying figures and sentences
+   * has never been measured at 360 dp in any locale.
+   *
+   * It is the PRE-ACCEPTANCE result specifically: no active stop, no receiver named, so
+   * the breakdown carries "not included" where two of its four rows would otherwise carry
+   * money, plus the excludes line and three basis sentences. That is the longest this card
+   * ever gets and the shape most likely to reflow under +40% in Gurmukhi.
+   *
+   * `open` submits the form, because `ready` cannot wait for something no interaction has
+   * produced — the button is a `type="submit"` inside a `@submit.prevent` form.
+   */
+  ["load-calc-result", "/load/calc", {
+    mocks: {
+      ...NO_LOAD_MOCKS,
+      "/intel/true-profit": {
+        revenue_cents: 200000,
+        fuel_cost_cents: 32833,
+        tolls_cents: 3000,
+        expected_detention_cents: 0,
+        net_cents: 164167,
+        rpm_after_cents: 328,
+        fuel_net_cents_per_gal: 394,
+        basis: {
+          fuel: "no_network_fuel",
+          detention_sample_size: 0,
+          detention_confidence: "heuristic",
+          detention_recovery: "assumed_none",
+          rpm: "computed",
+        },
+      },
+    },
+    open: [".cta"],
+    ready: ".result__excludes",
+  }],
   // `ready` is the selector that PROVES the mocked state rendered. Without it a
   // mock that stops matching turns this surface back into a second copy of `load`,
   // and the harness goes green over the screen it was added to measure — the same

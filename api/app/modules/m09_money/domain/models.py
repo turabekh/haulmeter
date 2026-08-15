@@ -8,6 +8,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     String,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -21,8 +22,34 @@ ACCOUNT_FK = "f01.account.id"
 
 
 class Settlement(Base):
+    """AI-CONTEXT: ONE settlement per driver, carrier and pay period (§23 entry 154).
+
+    Measured before the fix: pressing "Run audit" three times on the same period produced
+    three settlements, three sets of flagged discrepancies, and a `flagged_cents` of
+    **15000 → 30000 → 45000** on the Money tab. A driver correcting a typo in what they
+    were paid tripled the money the app told them they were owed.
+
+    Audit F-23 fixed the neighbouring version of this — an all-time `owed` compared
+    against a period-scoped `paid`, so the same balance was re-flagged on every LATER
+    settlement. Re-running the SAME period was left, and it is the one a driver actually
+    does, because the figures are typed by hand.
+
+    The constraint is declared on the MODEL as well as in migration 0077 deliberately:
+    the test database is built by `Base.metadata.create_all`, so a migration-only
+    constraint is invisible to the entire suite (HANDOFF-125 §4.10).
+    """
+
     __tablename__ = "settlement"
-    __table_args__ = {"schema": SCHEMA}
+    __table_args__ = (
+        UniqueConstraint(
+            "driver_account_id",
+            "carrier",
+            "period_start",
+            "period_end",
+            name="uq_settlement_driver_carrier_period",
+        ),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     driver_account_id: Mapped[uuid.UUID] = mapped_column(

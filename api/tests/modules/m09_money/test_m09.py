@@ -1,5 +1,7 @@
 from datetime import UTC, date, datetime, timedelta
 
+from sqlalchemy import select
+
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility
 from app.foundation.f07_ledger import public as ledger
@@ -64,6 +66,95 @@ def test_upload_and_audit_flags_missed_detention(db):
     assert d.missed_cents == 10000
     assert d.evidence_ref is not None  # anchored to the GPS-backed receivable
     assert d.status == m9.DiscrepancyStatus.flagged
+
+
+def _audit(db, driver, *, detention_paid, carrier="Acme Carrier"):
+    settlement = m9.upload_settlement(
+        db,
+        driver.id,
+        carrier,
+        PERIOD_START,
+        PERIOD_END,
+        lines=[{"kind": "detention", "amount_cents": detention_paid}],
+    )
+    m9.audit_settlement(db, settlement)
+    return settlement
+
+
+def test_re_auditing_a_pay_period_does_not_stack_the_flagged_total(db):
+    """AI-CONTEXT: §23 entry 154 — the defect measured on the running system.
+
+    Pressing "Run audit" three times on the same period — which is what a driver does
+    after a typo, because these figures are typed by hand — produced three settlements
+    and a `flagged_cents` of 15000 → 30000 → 45000 on the Money tab. The app reported
+    the same $150 three times as money the carrier owed.
+
+    Audit F-23 closed the neighbouring case (one balance re-flagged on every LATER
+    settlement); this is the same period, and it is the one that actually happens.
+    """
+    driver = _driver(db)
+    _owe(db, driver.id, ledger.ReceivableKind.detention, 15000)
+
+    totals = []
+    for _ in range(3):
+        _audit(db, driver, detention_paid=0)
+        totals.append(m9.earnings_dashboard(db, driver.id).flagged_cents)
+
+    assert totals == [15000, 15000, 15000]
+    # and it is one settlement being corrected, not three documents
+    rows = db.scalars(
+        select(m9.Settlement).where(m9.Settlement.driver_account_id == driver.id)
+    ).all()
+    assert len(rows) == 1
+
+
+def test_a_correction_replaces_the_earlier_figures(db):
+    # the reason re-running has to be allowed at all: the driver mistyped what they were
+    # paid. The second run is the truth and the first must not survive beside it.
+    driver = _driver(db)
+    _owe(db, driver.id, ledger.ReceivableKind.detention, 15000)
+
+    _audit(db, driver, detention_paid=0)
+    assert m9.earnings_dashboard(db, driver.id).flagged_cents == 15000
+
+    settlement = _audit(db, driver, detention_paid=10000)  # "they did pay me $100"
+    assert m9.earnings_dashboard(db, driver.id).flagged_cents == 5000
+    assert [(line.kind, line.amount_cents) for line in settlement.lines] == [("detention", 10000)]
+    assert settlement.gross_cents == 10000
+
+
+def test_re_auditing_keeps_a_discrepancy_the_driver_already_acted_on(db):
+    """A re-run clears FLAGGED findings and nothing else.
+
+    `submitted` and `resolved` are a record of a person doing something — sending the
+    discrepancy to their carrier, or the carrier settling it — and re-running an audit is
+    not permission to erase that. Neither status is counted by `_flagged_total`, so
+    keeping them costs the figure nothing.
+    """
+    driver = _driver(db)
+    _owe(db, driver.id, ledger.ReceivableKind.detention, 15000)
+
+    settlement = _audit(db, driver, detention_paid=0)
+    acted = settlement.discrepancies[0]
+    acted.status = m9.DiscrepancyStatus.submitted
+    db.flush()
+
+    _audit(db, driver, detention_paid=0)
+    statuses = sorted(d.status.value for d in settlement.discrepancies)
+    assert statuses == ["flagged", "submitted"]
+    # still owed, so still flagged — but counted ONCE, not once per run
+    assert m9.earnings_dashboard(db, driver.id).flagged_cents == 15000
+
+
+def test_a_different_carrier_or_period_is_a_different_settlement(db):
+    # the constraint must not collapse genuinely separate documents
+    driver = _driver(db)
+    _audit(db, driver, detention_paid=0, carrier="Acme Carrier")
+    _audit(db, driver, detention_paid=0, carrier="Beta Logistics")
+    rows = db.scalars(
+        select(m9.Settlement).where(m9.Settlement.driver_account_id == driver.id)
+    ).all()
+    assert len(rows) == 2
 
 
 def test_parse_settlement_lines_via_f9_seam(db):
