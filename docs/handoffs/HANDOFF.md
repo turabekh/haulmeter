@@ -3,7 +3,50 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-126.md](HANDOFF-126.md)** — read this first, every session.
+➡️ **[HANDOFF-127.md](HANDOFF-127.md)** — read this first, every session.
+
+> **127** is two sessions in one document: **M14 slice 1 built** (PRD Extension E2, owner
+> decision **D8**), then **deployed and staged for the pilot** in an autonomous session where
+> the owner waived plan approval. **§23 entries 155–156**, migrations `0078`→`0080`, three
+> commits. Gates: **pytest 1942 → 1991, vitest 962, layout 349 → 353, import-linter 30 → 31.**
+>
+> **Stack UP · everything PUSHED · production CURRENT at `0080` · slice 1 is LIVE AND INERT.**
+> `m14_overlay` has no operator decision, both gates are unsatisfied, `can_send` refuses, the
+> routes 404. **That is not unfinished — it is the finished state of slice 1.**
+>
+> **THE PATTERN, and it is the sixth face of the coin: A CHECK THAT LOOKS LIKE THE STRONGEST
+> AVAILABLE, AND ISN'T.** `make m14-prove`'s first run ingested six pings with the right
+> sources and correct idempotence and produced **zero geofence events** — coordinates
+> swapped, truck in the Southern Ocean. A sabotage made M3 label **every pack
+> `phone_verified`** and the suite stayed green: the wording was tested, the derivation was
+> tested, and the wire between them was not. The onboarding CLI printed **"connector marked
+> active"** immediately after the provider returned 401. And the parser's position guard had
+> no fixture row that was dropped for a missing position *alone*. **Every one was found by
+> running something, not by reading it.**
+>
+> **The kickoff insisted step 4 be an observation rather than a test, and was right the first
+> time it ran.** ENTER / DWELL_TICK×3 / EXIT at `source='eld:motive'`, on a stop armed
+> through the existing `f05.arm_stop` — M14 feeds M3, it does not fork it.
+>
+> **Deployed inert and verified by QUERYING the box:** alembic `0080`, **476/476 pings
+> backfilled to `device`**, **51/51 packs to `phone_verified`**, `m14_overlay` NULL, both
+> gates false, `can_send` refusing with `blocked by: legal_signoff`. 96 claims and 18,333
+> facilities intact. Backup taken and verified offsite first.
+>
+> **OWNER DECISION THAT MUST NOT BE REVERSED AS A DRIFT: Gmail stays the SMTP target in
+> EVERY environment.** The corollary binds every future session — **every environment is
+> live-fire for email**, and nothing is ever addressed to an inbox the owner does not
+> control. The slice-1 kickoff's Mailpit precondition is stale; F-01 closed in 124.
+>
+> **The pilot path is a CLI and §3 says why** — a mapping surface needs a two-column picker
+> that does not exist, and §22.2 does not let a session invent a component pattern.
+> `make m14-onboard` is five guided steps; `make m14-validate` **refuses circularity in
+> code**, because Motive validating Motive proves only that the poller copies faithfully.
+>
+> **The owner's three, and none is code: D13 · a pilot fleet · the handset sensor test —
+> now deferred TWELVE times, and it rides along on the pilot visit. 127 §5.**
+
+➡️ **[HANDOFF-126.md](HANDOFF-126.md)** — the session before.
 
 > **126** was three owner instructions — fix the PWA install, fix viewing and rating
 > facilities, then explain and repair `/load/calc` and `/money/audit`. **§23 entries
@@ -46,7 +89,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > bytes, `--marker-500`'s contrast, and the handset sensor test — now deferred eleven
 > times and upstream of the whole condition flow. 126 §3.**
 
-➡️ **[HANDOFF-125.md](HANDOFF-125.md)** — the session before, and still the reference for
+➡️ **[HANDOFF-125.md](HANDOFF-125.md)** — two sessions before, and still the reference for
 the wallet, queued-capture and image-pipeline detail.
 
 > **125** closes the session that ran to nine owner instructions and **§23 entries
@@ -93,7 +136,7 @@ the wallet, queued-capture and image-pipeline detail.
 > bytes** — everything uploaded 26–28 July, from the swallowed `SignatureDoesNotMatch` era.
 > Leave them, purge them, or tell the drivers. **125 §3.**
 
-➡️ **[HANDOFF-124.md](HANDOFF-124.md)** — two sessions before, and still the reference for
+➡️ **[HANDOFF-124.md](HANDOFF-124.md)** — three sessions before, and still the reference for
 the email, dedupe and broker-attachment detail.
 
 > **124** was six owner instructions — make images faster, move email to background jobs,
@@ -149,7 +192,7 @@ the email, dedupe and broker-attachment detail.
 > production records have no bytes** — everything uploaded 26–28 July, from the swallowed
 > `SignatureDoesNotMatch` era. Leave them, purge them, or tell the drivers. **124 §3.**
 
-➡️ **[HANDOFF-123.md](HANDOFF-123.md)** — three sessions before.
+➡️ **[HANDOFF-123.md](HANDOFF-123.md)** — four sessions before.
 
 > **123** was driven entirely by the owner looking at real screens on a real phone and
 > saying what was confusing. Nine commits, **§23 entries 135–143**. Gates went
@@ -188,7 +231,7 @@ the email, dedupe and broker-attachment detail.
 > edit on the VM (F-01, open since 121). The post-deploy worker log names the scale —
 > `dunning … skipped_no_email: 11` of 14. **123 §3.**
 
-➡️ **[HANDOFF-122.md](HANDOFF-122.md)** — four sessions before.
+➡️ **[HANDOFF-122.md](HANDOFF-122.md)** — five sessions before.
 
 > **122** was six owner-supplied work contracts run back to back, each with its own report at
 > the repo root: **M3 detention**, **wedge delivery**, **location integrity**, **evidence
@@ -221,7 +264,7 @@ the email, dedupe and broker-attachment detail.
 > to an owner-controlled inbox — two independent blockers lift at once and that is the only
 > test covering both. **122 §4.**
 
-➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — five sessions before.
+➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — six sessions before.
 
 > **121** was two instructions. *"Approved, do the loading-state work"* closed **five
 > findings — U-06, U-09, U-10 (criticals), U-11 and U-12** — every finding that decision was
@@ -321,7 +364,7 @@ the email, dedupe and broker-attachment detail.
 > logged zero errors where it had failed all seven jobs — then observed on production, where
 > `migrate` exits before api and worker start. **HANDOFF-121 §11.**
 
-➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — six sessions before.
+➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — seven sessions before.
 
 > **120** was one instruction — *"read the latest handoff and restart the app"*, then
 > *"proceed using your best judgement"* — and it worked the audit queue to the end:
@@ -384,7 +427,7 @@ the email, dedupe and broker-attachment detail.
 > **Stack UP · thirty-five commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — seven sessions before.
+➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — eight sessions before.
 
 > **119** worked the 2026-08-07 audit queue: **nineteen findings closed, two partial**, and
 > answered one of the audit's three open questions. Three of
@@ -444,7 +487,7 @@ the email, dedupe and broker-attachment detail.
 > **Stack DOWN · twenty-four commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — eight sessions before.
+➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — nine sessions before.
 
 > **118** is a short session with **no source changes**: the owner asked for the stack to be
 > restarted, then for a handoff and a shutdown.
@@ -465,7 +508,7 @@ the email, dedupe and broker-attachment detail.
 > session (no credential), so the ahead-count is arithmetic, not observation — **re-fetch
 > before pushing.** The next task is still the handset background-sensor test.
 
-➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — nine sessions before.
+➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — ten sessions before.
 
 > **117** did two things the owner asked for, and both turned up something under them.
 >
@@ -493,7 +536,7 @@ the email, dedupe and broker-attachment detail.
 > **Stack DOWN · four commits UNPUSHED · nothing deployed.** The next task is still the
 > handset background-sensor test.
 
-➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — ten sessions before.
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — eleven sessions before.
 
 > **116** walked the stop auto-pilot end to end in a real browser, which is what two
 > sessions of building had never been subjected to. **It works.** A human adds a load,
@@ -522,7 +565,7 @@ the email, dedupe and broker-attachment detail.
 > HANDOFF-116.md's own header contradicted, and its "everything from `a4e282c` onward
 > UNPUSHED" was overtaken by the 2026-08-03 push. Corrected in 117.)
 
-➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — eleven sessions before.
+➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — twelve sessions before.
 
 > **115** was scoped as a **surfacing rework** — the A1 automation is built and correct,
 > only the way its result reaches the driver is wrong. Re-grepping the seams before
