@@ -149,6 +149,12 @@ class PackContext:
     # below F4's callers and F4 may not reach sideways for it. None omits the section
     # entirely — a pack composed by something that never asked should not invent an answer.
     location_basis: dict | None = None
+    # AI-CONTEXT: M14-FR3. WHAT the location trail rests on, and WHO reported it.
+    # Supplied by the caller for the same reason `location_basis` is: F4 owns the chain
+    # and refuses to infer the provenance of data it did not produce. Defaulting to
+    # `phone_verified` is a statement of fact about every pack that existed before M14.
+    evidence_class: str = "phone_verified"
+    evidence_providers: list[str] = field(default_factory=list)
     # §9 The Meter: (label, figure) pairs. §17 puts "total detention · total $" here,
     # and §9 requires the same numbers, order and wording as every other surface.
     meter: list[tuple[str, str]] = field(default_factory=list)
@@ -566,6 +572,79 @@ def _anchor_line(v) -> str:
     return "not yet anchored"
 
 
+# AI-CONTEXT: the phone sentence, UNCHANGED and named so it cannot drift (M14-FR3).
+# Every pack this product has ever sent a broker says exactly this, so altering it would
+# alter documents already in AP inboxes. New classes are added beside it, never over it.
+_PHONE_BASIS = (
+    "Location data as reported by the driver's device. The hash chain shows these "
+    "records are unaltered since capture; it does not attest how they were produced."
+)
+_TRAIL_ABSENT = (
+    "Position trail not available for this period — it was not recorded, or has passed "
+    "the retention window. No further claim is made about it."
+)
+
+
+def _provider_label(providers) -> str:
+    """`motive` → `Motive`. Named, because §11.7 is state WHO said what: a pack that says
+    "a telematics provider" gives a clerk nothing they can check."""
+    names = [str(p).replace("_", " ").title() for p in (providers or []) if p]
+    if not names:
+        return "the vehicle's telematics provider"
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def location_basis_text(context) -> str:
+    """What the pack says about where its positions came from (M14-FR3).
+
+    Extracted from the renderer so the WORDING can be asserted without rendering a PDF
+    and grepping bytes — the sentence is the thing under test, not the layout.
+
+    §11.7 AIMED AT A COUNTERPARTY. The pack must never imply a chain of custody it does
+    not have. An AP clerk who catches one pack overclaiming distrusts every pack after
+    it, and this product's whole argument to a broker is that its documents are worth
+    more than a screenshot — so the strongest sentence available is the one that must be
+    earned, not the one that is easiest to justify.
+
+    WHAT EACH CLASS MAY CLAIM:
+      · `phone_verified` — capture on the driver's device, hash-chained since capture.
+      · `eld_derived`    — the PROVIDER's own timestamps and positions, provider NAMED,
+        and explicitly NOT covered by the capture chain. There was no capture: the chain
+        attests that OUR COPY is unaltered since we received it, which is a strictly
+        weaker statement and is written as one.
+      · `mixed`          — both, saying which side each sits on.
+    """
+    basis = (context.location_basis if context else None) or {}
+    evidence_class = getattr(context, "evidence_class", "phone_verified") or "phone_verified"
+    providers = getattr(context, "evidence_providers", []) or []
+    who = _provider_label(providers)
+
+    if evidence_class == "eld_derived":
+        text = (
+            f"Location data as reported by {who} from the vehicle's telematics unit. "
+            "These are the provider's own timestamps and positions. They are not covered "
+            "by this pack's capture chain, which attests only that our copy is unaltered "
+            "since we received it — it does not attest how the readings were produced."
+        )
+    elif evidence_class == "mixed":
+        text = (
+            f"{_PHONE_BASIS} Some positions in this period were instead reported by {who} "
+            "from the vehicle's telematics unit; those are the provider's own timestamps "
+            "and are not covered by the capture chain."
+        )
+    else:
+        text = _PHONE_BASIS
+
+    # HONEST ABSENCE survives every class. A trail that is gone asserts nothing at all,
+    # and a zero rendered as "0 implausible movements" would be the strongest sentence on
+    # the page and completely unearned.
+    if not basis.get("pings"):
+        return f"{text} {_TRAIL_ABSENT}"
+    return text
+
+
 def _location_basis(cur, context):
     """§17: what the location data IS — stated, not implied (D6).
 
@@ -585,23 +664,12 @@ def _location_basis(cur, context):
     cur.need(S6)
     cur.text("Location basis", SANS_SEMI, TITLE)
     cur.space(S4 + S2)
-    cur.text(
-        "Location data as reported by the driver's device. The hash chain shows these "
-        "records are unaltered since capture; it does not attest how they were produced.",
-        SANS,
-        CAPTION,
-        TEXT_3,
-    )
+    cur.text(location_basis_text(context), SANS, CAPTION, TEXT_3)
     cur.space(BODY_LINE)
 
     if not basis.get("pings"):
-        cur.text(
-            "Position trail not available for this period — it was not recorded, or has "
-            "passed the retention window. No further claim is made about it.",
-            SANS,
-            CAPTION,
-            TEXT_3,
-        )
+        # the absence sentence is part of `location_basis_text` now, so it has already
+        # been printed above — printing it again would say it twice
         cur.space(S5)
         cur.rule()
         return

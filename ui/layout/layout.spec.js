@@ -869,6 +869,49 @@ const SURFACES = [
     storage: { "longhaul.cache.active_fleet": FLEET_ID },
     ready: ".kpi__figure",
   }],
+  /* AI-CONTEXT: M14 slice 1's approvals queue (PRD Extension E2, D8) — registered in the
+   * SAME COMMIT as the surface, which is v2.0 acceptance #3 and the kickoff's third
+   * acceptance criterion.
+   *
+   * §18 exempts portals from LAW 0's ORDER, not from §6's floors — HANDOFF-121 §13.13,
+   * which found seven portal controls below 48 dp and a `.switch` at 233 × 20 with no
+   * height declared. These are two decision buttons on a money row, so they are exactly
+   * the shape that regresses.
+   *
+   * `active_fleet` is planted for the reason the state below it documents: without it the
+   * surface renders the PICKER and the harness measures a two-row list under the
+   * workspace's name.
+   *
+   * The BLOCKED banner is deliberately part of this state rather than a separate one:
+   * D13 is open, so `can_send: false` is the shape a real operator sees today, and it is
+   * the longest string on the panel — a sentence about counsel sign-off sharing a row
+   * with nothing, above a table with two 48 dp buttons in its last column.
+   */
+  ["fleet-approvals", "/fleet", {
+    mocks: {
+      ...FLEET_MOCKS,
+      [`/fleet/${FLEET_ID}/holds`]: {
+        can_send: false,
+        send_blocked_by: "carrier_invoicing_counsel",
+        holds: [
+          {
+            hold_id: "h-1", claim_ref: "c-1", stop_ref: "s-1",
+            account_id: "00000000-0000-0000-0000-000000000001",
+            evidence_class: "eld_derived", state: "held",
+            send_blocked_by: null, created_at: "2026-08-15T09:00:00Z",
+          },
+          {
+            hold_id: "h-2", claim_ref: "c-2", stop_ref: "s-2",
+            account_id: "00000000-0000-0000-0000-000000000002",
+            evidence_class: "mixed", state: "held",
+            send_blocked_by: null, created_at: "2026-08-15T10:30:00Z",
+          },
+        ],
+      },
+    },
+    storage: { "longhaul.cache.active_fleet": FLEET_ID },
+    ready: ".holds__approve",
+  }],
   ["owner-portal", "/owner", { mocks: OWNER_MOCKS, ready: ".payout__figure" }],
   // §23 entry 80: the sections collapse and start collapsed, so the grid is behind a
   // disclosure. Every state that reaches a document opens its section first —

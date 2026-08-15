@@ -23,11 +23,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.foundation.f03_location import public as location
+from app.foundation.f05_load import public as loads
 from app.foundation.f13_flags import public as flags
+from app.modules.m03_detention import public as m3
 
 from .crypto import decrypt_key, encrypt_key, last4
-from .enums import ConnectorStatus, EvidenceClass, Provider
-from .models import Connector, TraceImport, VehicleMap
+from .enums import ConnectorStatus, EvidenceClass, HoldState, Provider
+from .models import Connector, HeldClaim, TraceImport, VehicleMap
 from .provider import Breadcrumb, MotiveClient
 
 FLAG_KEY = "m14_overlay"
@@ -257,6 +259,10 @@ def poll_connector(db: Session, connector: Connector, client=None, *, now=None) 
         raise
 
     result = ingest_breadcrumbs(db, connector, crumbs, now=now)
+    # FR4: an arrival the ELD saw becomes a HELD claim. Drafting lives here rather than
+    # inside `ingest_breadcrumbs` so that the ingest path stays usable on its own — the
+    # step-4 probe exercises exactly that, traces without a claim path.
+    draft_holds_for_events(db, connector, result.events, now=now)
     connector.status = ConnectorStatus.active
     connector.health_detail = None
     connector.last_sync_at = now or datetime.now(UTC)
@@ -333,3 +339,165 @@ def can_send(db: Session) -> tuple[bool, str | None]:
         if gate is None or not gate.satisfied:
             return False, name
     return True, None
+
+
+# --- FR4: draft from ELD dwell, and HOLD ---------------------------------------------
+
+
+class NotHeld(Exception):
+    """A decision was asked of a hold that has already been decided."""
+
+
+def _sources_for_window(db: Session, account_id, since: datetime, until: datetime) -> set[str]:
+    """Which ping sources back this claim's window — the input to the evidence class.
+
+    AI-CONTEXT: read from the PINGS rather than from what drafted the claim. A stop the
+    ELD saw and the driver also photographed is `mixed`, and the only way to know that is
+    to look at what is actually there.
+
+    THE WINDOW MUST START AT THE ARRIVAL, and getting that wrong is not a cosmetic bug.
+    The first version anchored on `claim.clock_since`, which is NULL at draft time — so
+    the window began at `now`, found no pings at all, and `evidence_class_for([])`
+    returned its conservative default. The result was an ELD-only claim labelled
+    **`phone_verified`**: a pack that would have told a broker a driver's device produced
+    readings a telematics API produced. Caught by the test, not by reading it.
+    """
+    return location.ping_sources(db, account_id, since, until)
+
+
+def draft_holds_for_events(db: Session, connector: Connector, events, *, now=None) -> list:
+    """Turn ELD-derived arrivals into HELD M3 claims. The FR4 path, and nothing more.
+
+    AI-CONTEXT: THE CLAIM IS AN ORDINARY M3 CLAIM. `m03.start_claim` is get-or-create and
+    is the same call the driver-app path makes; the pipeline, templates and ledger that
+    follow are M3's, untouched. What M14 adds is a row saying no human has approved it.
+
+    HOLD-ALL IS THE RULES ENGINE FOR THIS SLICE and the fleet admin is the rule. There is
+    deliberately no threshold, no timer and no auto-send: FR5's engine is PROPOSED, and
+    inventing one here is the "drift" the kickoff forbids by name.
+
+    Only ENTER matters for drafting. A DWELL_TICK on an already-drafted stop must not
+    queue a second claim, and `uq_held_claim_claim` makes that a database fact rather
+    than a loop invariant — a fleet admin shown one detention twice approves it twice.
+    """
+    now = now or datetime.now(UTC)
+    drafted = []
+    seen: set = set()
+
+    for event in events:
+        account_id = getattr(event, "account_id", None)
+        facility_id = getattr(event, "facility_id", None)
+        if account_id is None or facility_id is None:
+            continue
+        key = (account_id, facility_id)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        # the stop this arrival belongs to, through F5's own accessor — M14 does not
+        # reimplement "which stop is live", and a stop at a DIFFERENT facility is not
+        # this event's stop
+        stop = loads.active_stop_for_account(db, account_id)
+        if stop is None or stop.facility_id != facility_id:
+            continue
+
+        # AI-CONTEXT: `started_at` is the ARRIVAL, not the moment the poller ran.
+        # `start_claim` defaults `clock_since` to `datetime.now()`, and a claim drafted
+        # from a three-hour-old breadcrumb would otherwise record the detention clock as
+        # starting when we happened to poll — understating the driver's own detention and,
+        # because the evidence window is anchored on it, finding no pings and labelling an
+        # ELD-only pack `phone_verified`. Both were real; the second is the one that would
+        # have put a false custody claim in front of a broker.
+        arrived_at = getattr(event, "occurred_at", None) or now
+        claim = m3.start_claim(
+            db, stop, trigger=m3.DetentionTrigger.arrival, started_at=arrived_at
+        )
+        state = m3.clock(db, claim, now)
+        # nothing is drafted until the meter is actually running. Within free time there
+        # is no money owed, and a claim queued for a stop that never ran long would put a
+        # $0 invoice in front of a fleet admin.
+        if state.phase is m3.DetentionPhase.within_free_time:
+            continue
+
+        existing = db.scalar(select(HeldClaim).where(HeldClaim.claim_ref == claim.id))
+        if existing is not None:
+            continue
+
+        held = HeldClaim(
+            fleet_id=connector.fleet_id,
+            claim_ref=claim.id,
+            stop_ref=stop.id,
+            account_id=account_id,
+            # anchored on the ARRIVAL this event represents — see `_sources_for_window`
+            evidence_class=evidence_class_for(
+                _sources_for_window(db, account_id, arrived_at, now)
+            ).value,
+        )
+        db.add(held)
+        drafted.append(held)
+    db.flush()
+    return drafted
+
+
+def held_claims(db: Session, fleet_id, state: HoldState = HoldState.held) -> list[HeldClaim]:
+    return list(
+        db.scalars(
+            select(HeldClaim)
+            .where(HeldClaim.fleet_id == fleet_id, HeldClaim.state == state)
+            .order_by(HeldClaim.created_at)
+        )
+    )
+
+
+def approve(db: Session, held: HeldClaim, account_id, gateway=None, *, now=None) -> HeldClaim:
+    """A fleet admin says yes. Whether it LEAVES is a separate question, deliberately.
+
+    AI-CONTEXT: the approval is recorded UNCONDITIONALLY and the send is gated — the
+    owner's decision (2026-08-15), taken over leaving the send path unwired, so that the
+    day D13 lands the change is `satisfy_gate(...)` rather than a deploy of code first
+    exercised in production.
+
+    The two facts are kept apart because collapsing them is F-01 exactly: F8 wrote
+    `sent_at` for notices that reached a container on the VM and everything downstream
+    believed them. An approved-but-blocked claim says `approved` with `send_blocked_by`
+    naming the gate, and the screen can therefore say WHY rather than going quiet.
+    """
+    if held.state is not HoldState.held:
+        raise NotHeld(f"hold {held.id} is {held.state.value}")
+    now = now or datetime.now(UTC)
+
+    held.state = HoldState.approved
+    held.decided_by = account_id
+    held.decided_at = now
+
+    allowed, blocker = can_send(db)
+    if not allowed:
+        held.send_blocked_by = blocker
+        db.flush()
+        return held
+
+    # M3's own filing and send. Reached through `public` only.
+    claim = m3.get_claim(db, held.claim_ref)
+    if claim is not None:
+        m3.generate_pack(db, claim, now, gateway=gateway)
+        m3.send_detention_start_notice(db, claim, gateway, now)
+    held.state = HoldState.sent
+    held.send_blocked_by = None
+    db.flush()
+    return held
+
+
+def reject(db: Session, held: HeldClaim, account_id, *, now=None) -> HeldClaim:
+    """A fleet admin says no, and the claim stays exactly where it is.
+
+    Rejecting the HOLD does not touch the M3 claim: the detention happened, the clock ran
+    and the receivable question is the driver's own. What this records is that the fleet
+    is not invoicing for it in the carrier's name.
+    """
+    if held.state is not HoldState.held:
+        raise NotHeld(f"hold {held.id} is {held.state.value}")
+    held.state = HoldState.rejected
+    held.decided_by = account_id
+    held.decided_at = now or datetime.now(UTC)
+    db.flush()
+    return held

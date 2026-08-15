@@ -925,6 +925,27 @@ IMPLAUSIBLE_SPEED_MPS = 60.0
 IMPLAUSIBLE_MIN_DT_SECONDS = 5.0
 
 
+def ping_sources(db: Session, account_id, since: datetime, until: datetime) -> set[str]:
+    """Which sources produced the positions in this window (M14-FR3).
+
+    AI-CONTEXT: the input to a pack's evidence class, and it is READ FROM THE PINGS rather
+    than inferred from whatever drafted the claim. A stop an ELD saw and a driver also
+    photographed is genuinely `mixed`, and the only way to know that is to look at what is
+    actually there — deriving it from "M14 drafted this" would label such a pack
+    `eld_derived` and make it claim LESS than it can prove.
+    """
+    rows = db.scalars(
+        select(LocationPing.source)
+        .where(
+            LocationPing.account_id == account_id,
+            LocationPing.occurred_at >= _as_utc(since),
+            LocationPing.occurred_at <= _as_utc(until),
+        )
+        .distinct()
+    )
+    return {r for r in rows if r}
+
+
 def location_basis(db: Session, account_id, since: datetime, until: datetime) -> dict:
     """What the location trail for this window actually consists of.
 

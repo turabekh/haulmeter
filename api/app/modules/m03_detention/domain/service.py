@@ -1010,10 +1010,71 @@ def render_pack_bytes(db: Session, pack, claim: DetentionClaim | None = None) ->
     what carries the artifact images. M5 builds the same thing one module over; this
     stays minimal deliberately, because M3's pack is composed from the evidence log
     rather than from a photo set."""
-    context = evidence.PackContext(
-        location_basis=_location_basis_for(db, claim) if claim is not None else None
+    # AI-CONTEXT: the evidence class is DERIVED from the ping sources backing this
+    # claim's window (M14-FR3), never asserted by a caller. If M3 could be TOLD the class
+    # the pack's honesty would depend on the caller being right, and the one thing this
+    # document must never do is credit a driver's device for readings a telematics
+    # provider produced. M3 does not import M14 — it may not, m14 sits above it — so the
+    # derivation is F3's own `source` column read here, and the vocabulary is shared.
+    return evidence.render_pack_pdf(pack, pack_context_for(db, claim))
+
+
+def pack_context_for(db: Session, claim: DetentionClaim | None) -> "evidence.PackContext":
+    """The context a pack is rendered with — NAMED so the wiring can be asserted.
+
+    AI-CONTEXT: this was inline in `render_pack_bytes`, and a sabotage pass caught what
+    that cost: `_evidence_class_for_sources` could be made to return `phone_verified` for
+    every pack and **the whole suite stayed green**. The wording function was covered, the
+    derivation was covered, and the wire between them was not — the "built and reached by
+    nothing" shape one layer up, which is what HANDOFF-126 recorded as this codebase's
+    recurring finding.
+
+    A pack labelled `phone_verified` over provider timestamps is the single worst thing
+    this module can produce: it tells a broker a driver's device recorded something a
+    telematics API recorded. So the seam has a name and a test.
+    """
+    sources = _ping_sources_for(db, claim) if claim is not None else set()
+    return evidence.PackContext(
+        location_basis=_location_basis_for(db, claim) if claim is not None else None,
+        evidence_class=_evidence_class_for_sources(sources),
+        evidence_providers=sorted(
+            {s.split(":", 1)[1] for s in sources if ":" in s and s.startswith("eld:")}
+        ),
     )
-    return evidence.render_pack_pdf(pack, context)
+
+
+# AI-CONTEXT: the class vocabulary lives in `m14.EvidenceClass`, and M3 CANNOT IMPORT IT —
+# m14 is above m03 in the spine and the contract holds. So the strings are duplicated here
+# on purpose, the way `sw.js` duplicates the IndexedDB version for a reason it states out
+# loud: what they must do is AGREE. `test_evidence_class_wording.py` and M14's own tests
+# both assert against these literals, so a divergence goes red rather than silently
+# labelling a pack.
+_CLASS_PHONE = "phone_verified"
+_CLASS_ELD = "eld_derived"
+_CLASS_MIXED = "mixed"
+
+
+def _evidence_class_for_sources(sources) -> str:
+    eld = {s for s in sources if s and s.startswith("eld:")}
+    phone = {s for s in sources if s} - eld
+    if eld and phone:
+        return _CLASS_MIXED
+    if eld:
+        return _CLASS_ELD
+    # no trail at all is `phone_verified`: every pack before M14 was phone-based, and a
+    # pack with no positions says so in its own honest-absence sentence rather than here
+    return _CLASS_PHONE
+
+
+def _ping_sources_for(db: Session, claim: DetentionClaim) -> set[str]:
+    """The same window `_location_basis_for` asks about, so the class and the figures
+    beneath it describe one period rather than two."""
+    arrival, departure = _arrival_departure(db, claim)
+    since = arrival or claim.clock_since
+    until = departure or datetime.now(UTC)
+    if since is None:
+        return set()
+    return location.ping_sources(db, claim.account_id, since, until)
 
 
 def _notice_body(db: Session, shared) -> str:

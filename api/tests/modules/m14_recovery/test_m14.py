@@ -290,3 +290,235 @@ def test_an_absent_gate_is_treated_as_unsatisfied(db):
     allowed, blocker = m14.can_send(db)  # register_module deliberately NOT called
     assert allowed is False
     assert blocker == "legal_signoff"
+
+
+# --- FR4: draft, hold, approve ------------------------------------------------------
+
+
+def _armed_stop(db, driver):
+    """A stop armed through the EXISTING path — the same arming M3 rides."""
+    from app.foundation.f02_facility import public as facility
+    from app.foundation.f05_load import public as loads
+
+    fac = facility.create_facility(db, facility.FacilityType.shipper_receiver, "Dock", *DALLAS)
+    load = loads.create_load(
+        db,
+        driver.id,
+        reference_number="M14-T",
+        free_time_minutes=60,
+        detention_rate_cents_per_hour=7500,
+    )
+    stop = loads.add_stop(db, load, fac.id, loads.StopType.delivery, sequence=1)
+    loads.arm_stop(db, stop)
+    db.flush()
+    return fac, stop
+
+
+def _drive_in(db, connector, driver, fac, *, hours_ago=3, now=None):
+    """AI-CONTEXT: a REAL arrival, through the real ingest path — not a synthetic event.
+
+    The first version of these tests hand-built an event object and set `claim.clock_since`,
+    and nothing drafted. `m3.clock` derives arrival from GEOFENCE PRESENCE, so a claim with
+    no presence behind it is forever `within_free_time` no matter what its columns say. A
+    test that fabricates the appearance of an arrival is the shape HANDOFF-122 §5 catalogues
+    — *the test arranged the appearance of the condition rather than the condition* — so
+    these breadcrumbs walk the truck in for real and let F3 decide.
+    """
+    from app.foundation.f02_facility import public as facility
+
+    now = now or datetime.now(UTC)
+    lat, lon = facility.coordinates(db, fac)
+    arrived = now - timedelta(hours=hours_ago)
+    crumbs = [
+        m14.Breadcrumb("veh-1", lat + 0.01, lon, arrived - timedelta(minutes=5), speed_mps=20.0),
+        m14.Breadcrumb("veh-1", lat, lon, arrived, speed_mps=0.0),
+        m14.Breadcrumb("veh-1", lat, lon, now - timedelta(minutes=1), speed_mps=0.0),
+    ]
+    return m14.ingest_breadcrumbs(db, connector, crumbs, now=now)
+
+
+def test_dwell_past_free_time_drafts_a_HELD_claim(db):
+    """The claim is an ORDINARY m03 claim; the hold is M14's own record that nobody has
+    approved it. M14 does not fork M3 and does not extend its state machine."""
+    from app.modules.m03_detention import public as m3
+
+    driver = _driver(db)
+    connector = _connector(db)
+    m14.map_vehicle(db, connector, "veh-1", driver.id)
+    fac, _stop = _armed_stop(db, driver)
+    now = datetime.now(UTC)
+
+    result = _drive_in(db, connector, driver, fac, now=now)
+    drafted = m14.draft_holds_for_events(db, connector, result.events, now=now)
+
+    assert len(drafted) == 1
+    held = drafted[0]
+    assert held.state is m14.HoldState.held
+    # the claim itself is untouched M3 — still `open`, not some M14 state
+    assert m3.get_claim(db, held.claim_ref).state is m3.ClaimState.open
+    # and it is labelled from the SOURCES that actually back it
+    assert held.evidence_class == m14.EvidenceClass.eld_derived.value
+
+
+def test_a_second_poll_does_not_queue_the_same_claim_twice(db):
+    """A fleet admin shown one detention twice approves it twice, and `generate_pack`'s
+    state guard is the only thing between that and two invoices to one broker."""
+    driver = _driver(db)
+    connector = _connector(db)
+    m14.map_vehicle(db, connector, "veh-1", driver.id)
+    fac, _stop = _armed_stop(db, driver)
+    now = datetime.now(UTC)
+
+    result = _drive_in(db, connector, driver, fac, now=now)
+    first = m14.draft_holds_for_events(db, connector, result.events, now=now)
+    second = m14.draft_holds_for_events(db, connector, result.events, now=now)
+
+    assert len(first) == 1
+    assert second == []
+    assert len(m14.held_claims(db, connector.fleet_id)) == 1
+
+
+def test_nothing_is_drafted_while_still_inside_free_time(db):
+    """A claim queued for a stop that never ran long puts a $0 invoice in front of a
+    fleet admin."""
+    driver = _driver(db)
+    connector = _connector(db)
+    m14.map_vehicle(db, connector, "veh-1", driver.id)
+    fac, _stop = _armed_stop(db, driver)
+    now = datetime.now(UTC)
+
+    # arrived five minutes ago against sixty minutes of free time
+    result = _drive_in(db, connector, driver, fac, hours_ago=0.08, now=now)
+    drafted = m14.draft_holds_for_events(db, connector, result.events, now=now)
+    assert drafted == []
+
+
+def test_an_event_at_a_DIFFERENT_facility_is_not_this_stops_arrival(db):
+    from app.foundation.f02_facility import public as facility
+
+    driver = _driver(db)
+    connector = _connector(db)
+    m14.map_vehicle(db, connector, "veh-1", driver.id)
+    _fac, _stop = _armed_stop(db, driver)
+    elsewhere = facility.create_facility(
+        db, facility.FacilityType.truck_stop, "Somewhere else", 30.0, -90.0
+    )
+
+    class _E:
+        account_id = driver.id
+        facility_id = elsewhere.id
+
+    assert m14.draft_holds_for_events(db, connector, [_E()]) == []
+
+
+# --- approve, and the gate that holds the send --------------------------------------
+
+
+def _held(db, driver, connector):
+    m14.map_vehicle(db, connector, "veh-1", driver.id)
+    fac, _stop = _armed_stop(db, driver)
+    now = datetime.now(UTC)
+    result = _drive_in(db, connector, driver, fac, now=now)
+    return m14.draft_holds_for_events(db, connector, result.events, now=now)[0]
+
+
+def test_approving_records_the_decision_and_REFUSES_the_send_while_D13_is_open(db):
+    """The two facts are kept apart because collapsing them is F-01 exactly: F8 wrote
+    `sent_at` for notices that reached a container, and everything downstream believed
+    them. An approved-but-blocked claim says so, and names the gate."""
+    m14.register_module(db)
+    driver = _driver(db)
+    connector = _connector(db)
+    held = _held(db, driver, connector)
+
+    m14.approve(db, held, driver.id)
+
+    assert held.state is m14.HoldState.approved  # a human genuinely decided
+    assert held.state is not m14.HoldState.sent  # and it genuinely did not go
+    assert held.send_blocked_by in m14.GATES
+    assert held.decided_by == driver.id
+    assert held.decided_at is not None
+
+
+def test_the_send_runs_once_both_gates_are_satisfied(db):
+    """The point of gating in code rather than leaving the path unwired: the day D13
+    lands, the change is `satisfy_gate(...)` and not a deploy of code first exercised in
+    production."""
+    from app.foundation.f08_notifications import public as notify
+
+    m14.register_module(db)
+    for name in m14.GATES:
+        flags.satisfy_gate(db, flags.get_gate(db, m14.FLAG_KEY, name), note="test")
+    driver = _driver(db)
+    connector = _connector(db)
+    held = _held(db, driver, connector)
+
+    m14.approve(db, held, driver.id, gateway=notify.RecordingNotificationGateway())
+
+    assert held.state is m14.HoldState.sent
+    assert held.send_blocked_by is None
+
+
+def test_a_hold_cannot_be_decided_twice(db):
+    m14.register_module(db)
+    driver = _driver(db)
+    connector = _connector(db)
+    held = _held(db, driver, connector)
+
+    m14.approve(db, held, driver.id)
+    with pytest.raises(m14.NotHeld):
+        m14.approve(db, held, driver.id)
+    with pytest.raises(m14.NotHeld):
+        m14.reject(db, held, driver.id)
+
+
+def test_rejecting_records_the_decision_and_sends_nothing(db):
+    m14.register_module(db)
+    driver = _driver(db)
+    connector = _connector(db)
+    held = _held(db, driver, connector)
+
+    m14.reject(db, held, driver.id)
+    assert held.state is m14.HoldState.rejected
+    assert held.decided_by == driver.id
+    # and it leaves the queue
+    assert m14.held_claims(db, connector.fleet_id) == []
+
+
+# --- FR3 wiring: the pack must be LABELLED from what actually backs it ---------------
+
+
+def test_a_pack_backed_by_ELD_pings_is_labelled_eld_derived(db):
+    """AI-CONTEXT: THE WIRE, not the wording. A sabotage pass made M3's derivation return
+    `phone_verified` for every pack and the entire suite stayed green — the wording
+    function was covered, the derivation was covered, and nothing asserted that one
+    reached the other. That is the "built and reached by nothing" shape one layer up.
+
+    A pack labelled `phone_verified` over provider timestamps tells a broker a driver's
+    device recorded something a telematics API recorded. It is the worst artifact this
+    module can produce, so the wire has a test.
+    """
+    from app.modules.m03_detention.domain import service as m3_service
+
+    driver = _driver(db)
+    connector = _connector(db)
+    m14.map_vehicle(db, connector, "veh-1", driver.id)
+    fac, _stop = _armed_stop(db, driver)
+    now = datetime.now(UTC)
+    result = _drive_in(db, connector, driver, fac, now=now)
+    held = m14.draft_holds_for_events(db, connector, result.events, now=now)[0]
+
+    from app.modules.m03_detention import public as m3
+
+    claim = m3.get_claim(db, held.claim_ref)
+    context = m3_service.pack_context_for(db, claim)
+
+    assert context.evidence_class == m14.EvidenceClass.eld_derived.value
+    assert context.evidence_providers == ["motive"]
+
+    # and the sentence that reaches the broker follows from it
+    from app.foundation.f04_evidence.domain import render
+
+    text = render.location_basis_text(context)
+    assert "Motive" in text
+    assert "as reported by the driver's device" not in text

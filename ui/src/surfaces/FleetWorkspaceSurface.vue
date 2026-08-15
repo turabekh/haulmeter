@@ -18,6 +18,8 @@ import {
   createFleet,
   fetchFleetReport,
   fetchFleetClaims,
+  fetchFleetHolds,
+  decideFleetHold,
 } from "../core/api.js";
 
 const { t } = useI18n();
@@ -33,11 +35,51 @@ const myFleets = ref([]);
 const fleetName = ref("");
 const newName = ref("");
 
+/* AI-CONTEXT: M14 slice 1's approvals queue (E2, D8) — the one place a human decides
+ * whether an ELD-derived detention claim is invoiced in the carrier's name.
+ *
+ * HOLD-ALL IS THE RULES ENGINE for this slice and this screen IS the rule: FR5's engine
+ * is PROPOSED and absent, so there is no threshold, no timer and no auto-send anywhere
+ * behind this panel.
+ *
+ * It fails SOFT and separately from the workspace. `holds` is a fourth fetch beside the
+ * report and the claims desk, and a fleet whose overlay flag is off gets a 404 from a
+ * route gated on `m14_overlay` — which must not blank a workspace whose money figures
+ * loaded perfectly. Entry 131's rule, one surface over: independent fetches, independent
+ * states.
+ */
+const holds = ref(null);
+const holdsBusy = ref(null);
+
+async function loadHolds(id) {
+  try {
+    holds.value = await fetchFleetHolds(id);
+  } catch {
+    // the overlay is off for this fleet, or the module is not enabled on this box. The
+    // panel simply is not there — it does not render an error over a working workspace.
+    holds.value = null;
+  }
+}
+
+async function decide(holdId, decision) {
+  holdsBusy.value = holdId;
+  try {
+    await decideFleetHold(activeFleetId.value, holdId, decision);
+    await loadHolds(activeFleetId.value);
+  } catch {
+    /* leave the row where it is — a decision that did not land must not look like one
+       that did, which is the whole reason `send_blocked_by` exists on the row */
+  } finally {
+    holdsBusy.value = null;
+  }
+}
+
 async function loadWorkspace(id, name) {
   const [report, claims] = await Promise.all([fetchFleetReport(id), fetchFleetClaims(id)]);
   fleet.value = { report, claims };
   fleetName.value = name || "";
   view.value = "workspace";
+  await loadHolds(id);
 }
 
 async function init() {
@@ -202,12 +244,101 @@ function driverLabel(id) {
         </table>
         </div>
       </section>
+
+      <!-- AI-CONTEXT: M14 slice 1's approvals queue (PRD Extension E2, owner decision D8).
+           The one place a human decides whether an ELD-derived detention claim is invoiced
+           in the carrier's name. Hold-all is the rules engine for this slice and this
+           panel IS the rule — there is no threshold, no timer and no auto-send behind it.
+
+           Rendered only when the overlay answered: a fleet without the flag gets a 404
+           from a gated route, and that must not put an error over a workspace whose money
+           figures loaded perfectly (entry 131's independent-fetch rule, one surface over). -->
+      <section v-if="holds" class="panel holds">
+        <h2 class="panel__title">{{ t("fleet.approvals") }}</h2>
+
+        <!-- §11.7 aimed at the operator: the blocker is stated BEFORE they approve, not
+             discovered afterwards when nothing happens. A queue that says "approved"
+             while nothing left the box is F-01's shape exactly. -->
+        <p v-if="!holds.can_send" class="holds__blocked">
+          {{ t("fleet.approvals_blocked") }}
+        </p>
+
+        <p v-if="!holds.holds.length" class="holds__empty">{{ t("fleet.approvals_none") }}</p>
+        <div v-else class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>{{ t("fleet.driver") }}</th>
+                <th>{{ t("fleet.evidence_basis") }}</th>
+                <th class="num">{{ t("fleet.decide") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="h in holds.holds" :key="h.hold_id" class="holds__row">
+                <td>{{ driverLabel(h.account_id) }}</td>
+                <!-- an admin approving an `eld_derived` claim should know that is what
+                     they are about to send a broker -->
+                <td>{{ t(`fleet.basis.${h.evidence_class}`) }}</td>
+                <td class="num holds__actions">
+                  <button
+                    class="cta cta--sm holds__approve"
+                    type="button"
+                    :disabled="holdsBusy === h.hold_id"
+                    @click="decide(h.hold_id, 'approve')"
+                  >
+                    {{ t("fleet.approve") }}
+                  </button>
+                  <button
+                    class="cta cta--sm holds__reject"
+                    type="button"
+                    :disabled="holdsBusy === h.hold_id"
+                    @click="decide(h.hold_id, 'reject')"
+                  >
+                    {{ t("fleet.reject") }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
     </template>
   </div>
 </template>
 
 <style scoped>
+/* AI-CONTEXT: §18 exempts portals from LAW 0's ORDER, not from §6's floors — HANDOFF-121
+   §13.13, which found seven portal controls below 48 dp and one `.switch` at 233 × 20.
+   These are decision buttons on money, so they are sized like it. */
+.holds__actions {
+  display: flex;
+  gap: var(--s-2);
+  justify-content: flex-end;
+}
+.holds__approve,
+.holds__reject {
+  min-height: 48px;
+  min-width: 96px;
+}
+.holds__reject {
+  background: transparent;
+  border: 1px solid var(--line-1);
+  color: var(--text-1);
+}
+/* calm, not red: a pending counsel sign-off is a MODE, not a failure — the same
+   restraint §15.1 sets for offline. It is stated plainly and once. */
+.holds__blocked {
+  margin: 0 0 var(--s-3);
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+}
+.holds__empty {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--type-body-size);
+}
 .fleet {
   padding: var(--s-5);
 }

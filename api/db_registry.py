@@ -34,6 +34,14 @@ MODEL_MODULES = [
     "app.modules.m10_community.domain.models",
     "app.modules.m12_fleet.domain.models",
     "app.modules.m13_vendor.domain.models",
+    # AI-CONTEXT: M14 (PRD Extension E2, D8). Missing this is not cosmetic — it is what
+    # `Base.metadata` is built from, so alembic autogenerate cannot see the module and
+    # `drop_all` in the test harness cannot drop its tables. The symptom is remote from
+    # the cause: `cannot drop table f01.account because other objects depend on it`,
+    # every test erroring at fixture setup, on a suite that has nothing to do with M14.
+    # It hid for a while because pytest COLLECTING m14's own test file imports the models
+    # as a side effect — so the full suite passed and a subset failed.
+    "app.modules.m14_recovery.domain.models",
 ]
 
 

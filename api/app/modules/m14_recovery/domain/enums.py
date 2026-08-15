@@ -40,3 +40,20 @@ class EvidenceClass(enum.Enum):
     phone_verified = "phone_verified"
     eld_derived = "eld_derived"
     mixed = "mixed"
+
+
+class HoldState(enum.Enum):
+    """AI-CONTEXT: hold-all IS the rules engine for this slice, and the fleet admin is
+    the rule (E2 slice 1 — FR5's engine beyond hold-all is PROPOSED and absent).
+
+    Four states rather than three, because `approved` and `sent` are different facts and
+    collapsing them is the F-01 failure in miniature: F8 wrote `sent_at` for notices that
+    reached a container on the VM, and everything downstream believed them. A fleet admin
+    approving a claim while `carrier_invoicing_counsel` is unsatisfied has genuinely
+    approved it, and it has genuinely not gone anywhere. The row says both.
+    """
+
+    held = "held"
+    approved = "approved"  # a human decided; whether it LEFT is `sent`
+    sent = "sent"
+    rejected = "rejected"

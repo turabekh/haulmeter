@@ -1287,6 +1287,29 @@ export async function fetchFleetClaims(fleetId) {
   return resp.json();
 }
 
+// AI-CONTEXT: M14 slice 1 — the approvals queue a fleet admin works (E2, D8).
+//
+// `can_send` travels WITH the list rather than being discovered on failure: a claim that
+// cannot leave the box while D13 is unanswered must say so BEFORE an admin approves it,
+// not explain afterwards why nothing happened. That is the F-01 posture inverted — the
+// screen states the blocker up front instead of reporting a success that did not occur.
+export async function fetchFleetHolds(fleetId) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/fleet/${fleetId}/holds`, { headers: headers() });
+  if (!resp.ok) throw new Error(`fleet holds failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function decideFleetHold(fleetId, holdId, decision) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/fleet/${fleetId}/holds/${holdId}/${decision}`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`fleet hold ${decision} failed: ${resp.status}`);
+  return resp.json();
+}
+
 // AI-CONTEXT: F14 admin console reads/toggles (platform_admin gated server-side;
 // a 403 surfaces as "no access"). Not part of the driver app.
 export async function fetchAdminFlags() {

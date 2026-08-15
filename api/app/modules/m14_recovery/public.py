@@ -11,8 +11,8 @@ inside `poll_connector` and it never leaves that call.
 """
 
 from .domain.crypto import ConnectorKeyUnavailable
-from .domain.enums import ConnectorStatus, EvidenceClass, Provider
-from .domain.models import Connector, TraceImport, VehicleMap
+from .domain.enums import ConnectorStatus, EvidenceClass, HoldState, Provider
+from .domain.models import Connector, HeldClaim, TraceImport, VehicleMap
 from .domain.provider import Breadcrumb, FakeMotiveClient, MotiveClient, parse_vehicle_locations
 from .domain.service import (
     FLAG_KEY,
@@ -20,16 +20,21 @@ from .domain.service import (
     MODULE,
     SOURCE_PREFIX,
     IngestResult,
+    NotHeld,
     active_connectors,
+    approve,
     can_send,
     connect_fleet,
+    draft_holds_for_events,
     evidence_class_for,
+    held_claims,
     ingest_breadcrumbs,
     is_enabled,
     map_vehicle,
     poll_connector,
     provider_names,
     register_module,
+    reject,
 )
 
 __all__ = [
@@ -43,15 +48,21 @@ __all__ = [
     "ConnectorStatus",
     "EvidenceClass",
     "FakeMotiveClient",
+    "HeldClaim",
+    "HoldState",
     "IngestResult",
+    "NotHeld",
     "MotiveClient",
     "Provider",
     "TraceImport",
     "VehicleMap",
     "active_connectors",
+    "approve",
     "can_send",
     "connect_fleet",
+    "draft_holds_for_events",
     "evidence_class_for",
+    "held_claims",
     "ingest_breadcrumbs",
     "is_enabled",
     "map_vehicle",
@@ -59,4 +70,5 @@ __all__ = [
     "poll_connector",
     "provider_names",
     "register_module",
+    "reject",
 ]

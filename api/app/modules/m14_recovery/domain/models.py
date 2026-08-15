@@ -15,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
 
-from .enums import ConnectorStatus, Provider
+from .enums import ConnectorStatus, HoldState, Provider
 
 SCHEMA = "m14"
 ACCOUNT_FK = "f01.account.id"
@@ -133,3 +133,53 @@ class TraceImport(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class HeldClaim(Base):
+    """An ELD-derived claim waiting for a human (M14-FR4, E2 slice 1).
+
+    AI-CONTEXT: M14 DOES NOT FORK M3 AND DOES NOT EXTEND ITS STATE MACHINE. The claim
+    itself is an ordinary `m03.DetentionClaim` in its ordinary `open` state, reached
+    through `m03.public.start_claim` — same states, same templates, same ledger. This row
+    is M14's own record of a decision M3 has no concept of: *nobody has approved this
+    yet*. Adding a `held` state to `ClaimState` would have made every M3 reader handle a
+    case that is not M3's business.
+
+    WHY `approved` AND `sent` ARE SEPARATE. A fleet admin approving while D13 is
+    unanswered has genuinely approved, and the claim has genuinely not gone anywhere.
+    Collapsing the two is precisely F-01: F8 recorded `sent_at` for notices that reached a
+    container, and everything downstream believed them. `send_blocked_by` names the gate.
+
+    ONE HOLD PER CLAIM, in Postgres. A second poll that re-drafts the same stop must find
+    this row rather than queue the claim twice — a fleet admin seeing one detention twice
+    would approve it twice, and `generate_pack` is the only thing standing between that
+    and two invoices to one broker.
+    """
+
+    __tablename__ = "held_claim"
+    __table_args__ = (
+        UniqueConstraint("claim_ref", name="uq_held_claim_claim"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    fleet_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    # the m03 claim this is holding. NOT a ForeignKey: m14 sits above m03 in the spine and
+    # a database-level dependency pointing down would outlive any import-linter contract.
+    claim_ref: Mapped[uuid.UUID] = mapped_column(index=True)
+    stop_ref: Mapped[uuid.UUID] = mapped_column(index=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="CASCADE"), index=True
+    )
+    # DERIVED from the ping sources backing the claim window, never asserted by a caller
+    evidence_class: Mapped[str] = mapped_column(String(20), default="eld_derived")
+    state: Mapped[HoldState] = mapped_column(
+        Enum(HoldState, name="hold_state", schema=SCHEMA), default=HoldState.held
+    )
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(ACCOUNT_FK, ondelete="SET NULL"), nullable=True
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # which gate refused the send, so the screen can say WHY rather than "not sent"
+    send_blocked_by: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
