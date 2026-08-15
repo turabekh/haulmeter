@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import canonical_facility_id, current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
+from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f09_ai_gateway import public as ai
 from app.modules.m02_facility_intel import public as m2
 from app.modules.m03_detention import public as m3
@@ -44,8 +45,19 @@ def profile(
 ) -> dict:
     prof = m2.get_or_create_profile(db, facility_id)
     dwell = m2.dwell_stats(db, facility_id)
+    # AI-CONTEXT: the facility's NAME, which this response has never carried (§23 entry 153).
+    #
+    # `FacilityProfileSurface` renders `profile.name` in its `<h1>`, so every facility
+    # page in this product has shown an EMPTY heading — measured in a real browser
+    # against this endpoint on three facilities. The name was never missing from the
+    # database; `/public/facility/{id}` returns it, so an anonymous visitor to the public
+    # scorecard has been told which place they are looking at while the signed-in driver
+    # deciding whether to pull in has not.
+    facility = facility_registry.get_facility(db, facility_id)
     return {
         "facility_id": str(facility_id),
+        "name": facility.name if facility else None,
+        "facility_type": facility.facility_type.value if facility else None,
         "check_in_procedure": prof.check_in_procedure,
         "ppe_rules": prof.ppe_rules,
         "restrooms": prof.restrooms,

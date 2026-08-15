@@ -110,6 +110,27 @@ def _validate_ratings(ratings: dict) -> None:
 def submit_review(
     db: Session, facility_id, account_id, ratings: dict, text: str | None = None
 ) -> FacilityReview:
+    """AI-CONTEXT: a review is PUBLISHED on submission and moderated afterwards
+    (§23 entry 153, owner decision).
+
+    It used to land as `pending` and wait for an approval that never came. Measured on
+    the dev box before changing anything: **8 pending, 2 approved, and both approvals
+    were the 2026-07-25 seed** — so no review written by a driver in this product's life
+    had ever become visible, to them or to anyone. The driver submitted, the sheet
+    closed, the list did not change, and nothing on the screen said why. That is the
+    §11.7 failure this codebase keeps finding: the app took a contribution and showed a
+    state that was not true.
+
+    A queue nobody works is not a safety control, it is a silent discard. Moderation
+    stays real and becomes TAKE-DOWN: the item is still enqueued, `moderate_review`
+    still decides, and a rejection still removes the review from every read. What
+    changes is which way the default falls while nobody is looking, and it now falls
+    towards the driver's words existing.
+
+    The points move here with it, because they were the reward for an approval that is
+    now immediate; `moderate_review` no longer issues them for an already-published
+    review, so a later take-down-and-restore cannot mint a second helping.
+    """
     if facility_registry.get_facility(db, facility_id) is None:
         raise FacilityNotFound(str(facility_id))
     _validate_ratings(ratings)
@@ -118,13 +139,15 @@ def submit_review(
         account_id=account_id,
         ratings=ratings,
         text=text,
-        status=ReviewStatus.pending,
+        status=ReviewStatus.approved,
+        decided_at=datetime.now(UTC),
     )
     db.add(review)
     db.flush()
     item = admin.enqueue_moderation(db, "review", review.id, submitted_by=account_id)
     review.moderation_ref = item.id
     db.flush()
+    crowd.issue_points(db, account_id, REVIEW_POINTS)
     return review
 
 
@@ -135,6 +158,12 @@ def moderate_review(
     provider=None,
     moderator_account_id=None,
 ) -> FacilityReview:
+    # AI-CONTEXT: whether this review was ALREADY published, read before the write
+    # below overwrites it (§23 entry 153). Submission now approves and pays the points,
+    # so paying again here would mint a second helping every time a moderator confirmed
+    # a review that was already live — and confirming is the common case now that this
+    # function's main job is take-down.
+    was_published = review.status == ReviewStatus.approved
     status = ReviewStatus.approved if approve else ReviewStatus.rejected
     review.status = status
     review.decided_at = datetime.now(UTC)
@@ -148,7 +177,8 @@ def moderate_review(
                 moderator_account_id=moderator_account_id,
             )
     if approve:
-        crowd.issue_points(db, review.account_id, REVIEW_POINTS)
+        if not was_published:
+            crowd.issue_points(db, review.account_id, REVIEW_POINTS)
         if provider is not None and review.text:
             # AI-CONTEXT: embedding is a best-effort enhancement — the HTTP embed
             # runs before any DB write, so a Voyage failure (e.g. a free-tier 429)

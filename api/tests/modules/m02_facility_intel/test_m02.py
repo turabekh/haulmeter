@@ -50,27 +50,67 @@ def test_profile_factual_claim_rejects_non_factual(db):
         m2.update_factual_attributes(db, fac.id, {"ratings": {"safety": 5}})
 
 
-def test_review_moderation_awards_points_on_approval(db):
+def _points_balance(db, account):
+    points = ledger.get_or_create_account(
+        db,
+        ledger.LedgerAccountKind.points_balance,
+        f"points:{account.id}",
+        currency=ledger.Currency.points,
+        owner_ref=account.id,
+    )
+    return ledger.balance(db, points)
+
+
+def test_review_is_published_on_submission_and_pays_its_points(db):
+    """AI-CONTEXT: §23 entry 153 — a review is live when it is written.
+
+    This test asserted the OPPOSITE until the owner's decision, and it was right about
+    the code and wrong about the product: measured on the dev box, 8 reviews sat pending
+    and the only 2 approvals were the seed, so no review a driver wrote had ever been
+    seen by anyone. Moderation is take-down now, and the default while nobody is looking
+    falls towards the driver's words existing.
+    """
     fac = _receiver(db)
     author = _account(db, "author@example.com")
     review = m2.submit_review(
         db, fac.id, author.id, {"safety": 5, "check_in_speed": 4}, text="Quick and safe"
     )
-    assert review.status == m2.ReviewStatus.pending
-    assert m2.list_reviews(db, fac.id) == []  # pending not visible
+    assert review.status == m2.ReviewStatus.approved
+    assert review.decided_at is not None
+    # visible to everyone immediately — the half a driver could not previously see
+    assert len(m2.list_reviews(db, fac.id)) == 1
+    # and it counts towards the figure on the card, which is the half OTHER drivers read
+    assert m2.aggregate_ratings(db, fac.id)["review_count"] == 1
+    assert _points_balance(db, author) == m2.REVIEW_POINTS
+
+    # the moderation item still exists, because take-down has to have something to act on
+    assert review.moderation_ref is not None
+
+
+def test_confirming_an_already_published_review_does_not_pay_twice(db):
+    # the common path now: a moderator looks at a live review and leaves it live. Paying
+    # on approval as well as on submission would mint a second helping every time.
+    fac = _receiver(db)
+    author = _account(db, "author@example.com")
+    review = m2.submit_review(db, fac.id, author.id, {"safety": 5}, text="Quick and safe")
+    assert _points_balance(db, author) == m2.REVIEW_POINTS
 
     m2.moderate_review(db, review, approve=True, provider=ai.FakeModelProvider())
-    assert review.status == m2.ReviewStatus.approved
+    assert _points_balance(db, author) == m2.REVIEW_POINTS
+
+
+def test_moderation_can_still_take_a_review_down(db):
+    # the control that makes publish-first honest: a rejection removes the review from
+    # every read and from the aggregate other drivers are shown
+    fac = _receiver(db)
+    author = _account(db, "author@example.com")
+    review = m2.submit_review(db, fac.id, author.id, {"safety": 1}, text="abusive text")
     assert len(m2.list_reviews(db, fac.id)) == 1
 
-    points = ledger.get_or_create_account(
-        db,
-        ledger.LedgerAccountKind.points_balance,
-        f"points:{author.id}",
-        currency=ledger.Currency.points,
-        owner_ref=author.id,
-    )
-    assert ledger.balance(db, points) == m2.REVIEW_POINTS
+    m2.moderate_review(db, review, approve=False)
+    assert review.status == m2.ReviewStatus.rejected
+    assert m2.list_reviews(db, fac.id) == []
+    assert m2.aggregate_ratings(db, fac.id)["review_count"] == 0
 
 
 def test_approval_survives_an_embedding_failure(db):

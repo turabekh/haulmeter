@@ -184,8 +184,12 @@ const PROFILE = {
     const before = w.text();
     expect(before).toContain(en["prompts.lot_mute"]);
 
-    const buttons = w.findAll(".cta--ghost");
-    await buttons.at(buttons.length - 1).trigger("click");
+    // AI-CONTEXT: named, not positional (§23 entry 153). This was
+    // `findAll(".cta--ghost").at(-1)`, and the moment "Ask a question" became a screen
+    // action there were two ghost buttons — so the click landed on the ask sheet and the
+    // assertion below failed on a screen where nothing was wrong with the mute at all.
+    // A selector standing in for an idea stops standing for it when the page grows.
+    await w.find(".prompt-mute__toggle").trigger("click");
     await flushPromises();
 
     expect(w.text()).toContain(en["prompts.lot_unmute"]);

@@ -73,9 +73,18 @@ def test_scorecard_shows_only_approved_deidentified_snippets(client, db):
         db, fac.id, driver.id, {"check_in_speed": 5}, text="Quick in and out."
     )
     m2.moderate_review(db, approved, approve=True)
+    # AI-CONTEXT: a LEGACY pending row, forced rather than submitted (§23 entry 153).
+    #
+    # Submission publishes now, so nothing in the product creates this state any more —
+    # but rows created under the old policy still exist (measured: 8 on the dev box) and
+    # they must stay hidden, which is exactly what this test is for. Forcing the status is
+    # the only way to construct a state the code no longer produces, and testing it still
+    # matters because the rows are real.
     pending = m2.submit_review(
         db, fac.id, driver.id, {"check_in_speed": 2}, text="Pending, not shown."
     )
+    pending.status = m2.ReviewStatus.pending
+    db.flush()
     rejected = m2.submit_review(
         db, fac.id, driver.id, {"check_in_speed": 1}, text="Rejected, not shown."
     )

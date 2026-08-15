@@ -1004,6 +1004,36 @@ const SURFACES = [
     },
     ready: ".qa__item--pending",
   }],
+  /* AI-CONTEXT: the facility 99.8% of pins lead to (§23 entry 153).
+   *
+   * MEASURED on the dev box: **41 of 18,326 facilities have a profile.** Everything the
+   * `facility` state above measures — a dock-time median, a rating, a review, a question
+   * — is the rare case. The ordinary one is a name and nothing else, and until this entry
+   * it rendered six cards each announcing a heading and then that it had nothing, under a
+   * blank `<h1>` (the API sent no name; the mock above DOES, which is how the harness
+   * showed a titled page while every real facility showed an untitled one).
+   *
+   * It is measured because §15.3's one sentence is the longest string on the screen with
+   * nothing to share the row, at 360 dp under +40% in Gurmukhi, above two stacked
+   * actions — and because a state nothing selects is a state that ships unseen. */
+  ["facility-bare", `/facility/${FACILITY_ID}`, {
+    mocks: {
+      [`/facility/${FACILITY_ID}/profile`]: {
+        facility_id: FACILITY_ID,
+        name: "Blue Beacon Truck Wash — I-40 Exit 286",
+        facility_type: "truck_stop",
+        dwell: { overall: { median_seconds: null, p90_seconds: null, sample_size: 0 }, by_hour: {} },
+        ratings: { overall: null, review_count: 0, per_aspect: {} },
+        detention_risk: { exceed_rate: null, sample_size: 0, basis: "tracked_stops" },
+        reviews: [],
+      },
+      [`/intel/detention-risk/${FACILITY_ID}`]: { exceed_rate: null, sample_size: 0, basis: "tracked_stops" },
+      [`/intel/appointment-hours/${FACILITY_ID}`]: [],
+      [`/community/questions/${FACILITY_ID}`]: [],
+      [`/vendors/service-center/${FACILITY_ID}`]: null,
+    },
+    ready: ".profile__bare",
+  }],
   ["facility-prompt-mute", `/facility/${FACILITY_ID}`, {
     mocks: {
       ...FACILITY_MOCKS,

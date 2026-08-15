@@ -40,7 +40,19 @@ const intel = ref(null);
 const questions = ref([]);
 const serviceCenter = ref(null);
 const reviewing = ref(false);
-const asking = ref(false);
+// AI-CONTEXT: TWO refs, and the single ref they replace is why no driver could ever ask
+// a question (§23 entry 153).
+//
+// `asking` was the sheet's open flag AND the submit button's busy flag. The sheet renders
+// when it is true, so the button inside it was `:disabled="asking"` — disabled in every
+// state where it is on screen. Measured in a real browser against the live API: the
+// control reads " Sending…" before a character is typed, `isDisabled() === true`, and the
+// click is refused. **The Q&A feature has never been usable by anybody.**
+//
+// Nothing caught it because every test calls `askQuestion()` directly — the API function
+// under the button — so the suite exercised the thing the button was unable to reach.
+const askOpen = ref(false);
+const askBusy = ref(false);
 const questionText = ref("");
 const profileState = ref(LoadState.LOADING);
 const profileFailure = ref(null);
@@ -135,14 +147,20 @@ async function toggleMute() {
 
 async function onAsk() {
   const text = questionText.value.trim();
-  asking.value = false;
-  questionText.value = "";
-  if (!text) return;
+  if (!text || askBusy.value) return;
+  askBusy.value = true;
   try {
     await askQuestion(route.params.id, text);
     await loadQuestions();
   } catch {
-    /* queued/offline in a later pass (F12) */
+    /* the queued row below is what says so (§23 entry 151) — offline the write is in
+       F12's queue and the driver's own words are on the screen either way */
+  } finally {
+    // closed and cleared only AFTER the write, so a failure that queues still leaves the
+    // sheet's text accounted for by the pending row rather than gone from both
+    askBusy.value = false;
+    askOpen.value = false;
+    questionText.value = "";
   }
 }
 
@@ -153,22 +171,39 @@ const claimTier = computed(() =>
   serviceCenter.value ? verificationPresentation(serviceCenter.value.verify_status) : null,
 );
 
-// M8-FR6/FR2 presentation: percentage + a readable "06:00" hour label
-const riskPct = computed(() =>
-  intel.value?.risk?.exceed_rate != null ? Math.round(intel.value.risk.exceed_rate * 100) : null,
-);
+/* AI-CONTEXT: a percentage needs a sample big enough to be one (§23 entry 153).
+ *
+ * Measured on a real facility: `exceed_rate 0.67` over `sample_size 3` rendered as a
+ * display-size **67%** in `--flare-500`, the alarm token, because `.hot` fires at 40.
+ * Two stops out of three is not a two-in-three chance of detention, and red is the
+ * strongest thing this palette can say.
+ *
+ * The decision log already settled this shape for vendor reliability: reliability
+ * "displays as a raw pair ('shows up 19 of 20'), never a percentage — a fraction
+ * carries its own sample size, and '95%' over two appearances would overstate what we
+ * know." Same argument, same answer. Below the floor the card says what is true —
+ * "Not enough tracked stops yet", copy that already exists for exactly this state.
+ *
+ * The floor is a named constant rather than F13 config: it is a statement about what a
+ * number means, not a tuning knob (the same reasoning as the evidence renderer's
+ * five-minute clock-divergence threshold).
+ */
+const MIN_RATE_SAMPLE = 5;
+
+const riskPct = computed(() => {
+  const risk = intel.value?.risk;
+  if (!risk || risk.exceed_rate == null) return null;
+  if ((risk.sample_size ?? 0) < MIN_RATE_SAMPLE) return null;
+  return Math.round(risk.exceed_rate * 100);
+});
+// the fastest hour is a median over its own sample and answers a sharper question than
+// the risk rate — "00:00", drawn from two stops, is a midnight that means nothing
+const bestHour = computed(() => {
+  const h = intel.value?.best_hour;
+  return h && (h.sample_size ?? 0) >= MIN_RATE_SAMPLE ? h : null;
+});
 function hourLabel(h) {
   return `${String(h).padStart(2, "0")}:00`;
-}
-
-async function onReview(payload) {
-  reviewing.value = false;
-  try {
-    await submitReview(route.params.id, payload.ratings, payload.text);
-    await load();
-  } catch {
-    /* the queued row below is what says so now (§23 entry 151) */
-  }
 }
 
 /* AI-CONTEXT: §15.1's pending glyph on the two things a driver TYPES here, and entry 150's
@@ -200,6 +235,64 @@ const pendingReviews = computed(() =>
     .filter((i) => i.body.text)
     .map((i) => ({ opId: i.opId, text: i.body.text })),
 );
+
+/* AI-CONTEXT: §15.3 applied to the surface rather than to each card (§23 entry 153).
+ *
+ * MEASURED FIRST: **41 of 18,326 facilities have a profile.** For 99.8% of the pins on
+ * the map this screen was six cards and a blank heading, each card announcing a heading
+ * and then that it had nothing — "No dock-time data yet", "Not enough tracked stops
+ * yet", "— · 0 reviews", "No reviews yet", "No questions yet" — under a title that was
+ * empty because the API never sent a name. That is the normal case, not the edge one,
+ * and it is what "noisy" meant.
+ *
+ * §15.3 asks an empty state for "one sentence of purpose + one starting action", and
+ * §22.2's first heuristic is remove rather than add. So a card renders when it has
+ * something to say, and when NOTHING does, the screen is the facility's name, one
+ * sentence, and the two things a driver can actually do about it.
+ */
+const hasDwell = computed(() => (profile.value?.dwell?.overall?.sample_size ?? 0) > 0);
+const hasIntel = computed(() => riskPct.value !== null || bestHour.value !== null);
+const hasRating = computed(() => (profile.value?.ratings?.review_count ?? 0) > 0);
+const hasReviews = computed(
+  () => (profile.value?.reviews?.length ?? 0) > 0 || pendingReviews.value.length > 0,
+);
+const hasQuestions = computed(() => questions.value.length > 0 || pendingQuestions.value.length > 0);
+
+// the intel card must also appear when it FAILED — a fetch that broke is something to
+// say, and §15.4 says so inline rather than by rendering nothing
+const showIntelCard = computed(() => hasIntel.value || intelState.value === LoadState.FAILED);
+const showQaCard = computed(
+  () => hasQuestions.value || questionsState.value === LoadState.FAILED,
+);
+
+const isBare = computed(
+  () =>
+    !serviceCenter.value &&
+    !hasDwell.value &&
+    !showIntelCard.value &&
+    !hasRating.value &&
+    !hasReviews.value &&
+    !showQaCard.value,
+);
+
+/* The mute control is the one row that must survive the collapse when it is ON.
+ * Entry 114 put it here on the argument that "a mute a driver cannot see is a mute they
+ * cannot undo" — so hiding it on a bare facility would strand anyone who had muted that
+ * lot. Muted, it always renders. Un-muted on a facility with nothing else on it, it is a
+ * setting for a prompt that has not happened, which is exactly the noise being removed. */
+const showMuteCard = computed(
+  () => promptsMuted.value !== null && (promptsMuted.value === true || !isBare.value),
+);
+
+async function onReview(payload) {
+  reviewing.value = false;
+  try {
+    await submitReview(route.params.id, payload.ratings, payload.text);
+    await load();
+  } catch {
+    /* the queued row above is what says so now (§23 entry 151) */
+  }
+}
 </script>
 
 <template>
@@ -219,6 +312,12 @@ const pendingReviews = computed(() =>
       <button class="back" type="button" :aria-label="'Back'" @click="router.back()">
         <ArrowLeft :size="24" :stroke-width="2" aria-hidden="true" />
       </button>
+      <!-- AI-CONTEXT: this rendered EMPTY on every facility in the product's life (§23
+           entry 153). The surface has always read `profile.name`; the endpoint has never
+           sent one. Measured in a real browser on three facilities: `h1` present, text
+           "". A driver arrived from a map pin at a page that never said where they were.
+           The name is in F2 and `/public/facility/{id}` already returned it, so the
+           public scorecard named the place and the driver's own screen did not. -->
       <h1 class="profile__name">{{ profile.name }}</h1>
     </header>
 
@@ -247,15 +346,17 @@ const pendingReviews = computed(() =>
       <p class="sc__source">{{ t("profile.sc_source") }}</p>
     </section>
 
-    <section class="card">
+    <!-- AI-CONTEXT: every card below renders only when it HAS something (§23 entry 153).
+         The empty branches they used to carry are gone; `isBare` answers for all of them
+         at once, once, at the foot of the screen. -->
+    <section v-if="hasDwell" class="card">
       <h2 class="card__title">{{ t("profile.dock_time") }}</h2>
-      <div v-if="profile.dwell.overall.sample_size > 0" class="dwell">
+      <div class="dwell">
         <span class="dwell__figure">{{ formatDwell(profile.dwell.overall.median_seconds) }}</span>
         <span class="dwell__meta">
           {{ t("profile.median") }} · {{ profile.dwell.overall.sample_size }} {{ t("profile.stops") }}
         </span>
       </div>
-      <p v-else class="muted">{{ t("profile.no_dwell") }}</p>
     </section>
 
     <!-- M8 decision intel: detention-risk pre-acceptance flag + fastest hour -->
@@ -268,24 +369,23 @@ const pendingReviews = computed(() =>
         {{ intelFailure === Failure.OFFLINE ? t("system.load_offline") : t("facility.intel_failed") }}
       </p>
     </section>
-    <section v-else-if="intel" class="card">
+    <section v-else-if="hasIntel" class="card">
       <h2 class="card__title">{{ t("profile.risk") }}</h2>
       <p v-if="riskPct !== null" class="risk">
         <span class="risk__figure" :class="{ hot: riskPct >= 40 }">{{ riskPct }}%</span>
         <span class="dwell__meta">· {{ intel.risk.sample_size }} {{ t("profile.stops_basis") }}</span>
       </p>
-      <p v-else class="muted">{{ t("profile.risk_none") }}</p>
-      <p v-if="intel.best_hour" class="best-hour">
+      <p v-if="bestHour" class="best-hour">
         <span class="best-hour__label">{{ t("profile.best_hour") }}</span>
-        <span class="best-hour__figure">{{ hourLabel(intel.best_hour.hour) }}</span>
+        <span class="best-hour__figure">{{ hourLabel(bestHour.hour) }}</span>
         <span class="dwell__meta">
-          · {{ formatDwell(intel.best_hour.median_seconds) }} · {{ intel.best_hour.sample_size }}
+          · {{ formatDwell(bestHour.median_seconds) }} · {{ bestHour.sample_size }}
           {{ t("profile.stops_basis") }}
         </span>
       </p>
     </section>
 
-    <section class="card">
+    <section v-if="hasRating" class="card">
       <h2 class="card__title">{{ t("profile.rating") }}</h2>
       <div class="rating">
         <Star :size="20" :stroke-width="2" class="rating__star" aria-hidden="true" />
@@ -294,8 +394,11 @@ const pendingReviews = computed(() =>
       </div>
     </section>
 
-    <section class="card">
-      <h2 class="card__title">{{ t("profile.reviews") }}</h2>
+    <!-- `profile.reviews_title` and not `profile.reviews`: the latter is the SUFFIX in
+         "· 2 reviews" and was doing duty as this heading too, so the card was titled a
+         lowercase "reviews" between "Dock time" and "Driver Q&A" (§23 entry 153). -->
+    <section v-if="hasReviews" class="card">
+      <h2 class="card__title">{{ t("profile.reviews_title") }}</h2>
       <!-- §15.1: the driver's own, waiting. Above the landed ones because it is the one
            they just wrote, and outside the `v-else` so an empty list still shows it. -->
       <ul v-if="pendingReviews.length" class="reviews">
@@ -309,11 +412,10 @@ const pendingReviews = computed(() =>
       <ul v-if="profile.reviews.length" class="reviews">
         <li v-for="r in profile.reviews" :key="r.id" class="reviews__item">{{ r.text }}</li>
       </ul>
-      <p v-else-if="!pendingReviews.length" class="muted">{{ t("profile.no_reviews") }}</p>
     </section>
 
     <!-- M10-FR4: moderated driver Q&A pinned to the facility page -->
-    <section class="card">
+    <section v-if="showQaCard" class="card">
       <h2 class="card__title">{{ t("qa.title") }}</h2>
       <!-- AI-CONTEXT: OUTSIDE the three-state chain below, which is the whole lesson of
            entry 150. Inside it, a queued question would render in every case except the
@@ -342,14 +444,6 @@ const pendingReviews = computed(() =>
           </p>
         </li>
       </ul>
-      <p v-else-if="questionsState === LoadState.LOADED && !pendingQuestions.length"
-         class="muted">{{ t("qa.empty") }}</p>
-      <!-- SM-3: the intel stays readable at speed — that is the point of it — but
-           writing a question or a review is composition, and Forbidden #11 rules out
-           interactive prompts in motion. -->
-      <button v-if="!isDriving" class="cta cta--ghost" type="button" @click="asking = true">
-        {{ t("qa.ask") }}
-      </button>
     </section>
 
     <!-- The prompt's own off switch, at the lot it is about. Muting is not composition
@@ -359,12 +453,21 @@ const pendingReviews = computed(() =>
     <!-- `prompt-mute` exists for the §22.3 harness to aim at: a state it cannot select
          is a state that ships unmeasured, and this row only renders once the server has
          answered — so the harness needs a selector to wait for. -->
-    <section v-if="!isDriving && promptsMuted !== null" class="card prompt-mute">
+    <section v-if="!isDriving && showMuteCard" class="card prompt-mute">
       <h2 class="card__title">{{ t("prompts.lot_title") }}</h2>
       <p class="muted">
         {{ promptsMuted ? t("prompts.lot_muted") : t("prompts.lot_elsewhere") }}
       </p>
-      <button class="cta cta--ghost" type="button" :disabled="muteBusy" @click="toggleMute">
+      <!-- `prompt-mute__toggle` names this control rather than leaving it as "the ghost
+           button on this screen". There are two now — asking is a screen action (§23
+           entry 153) — and `findAll(".cta--ghost")[0]` silently became the wrong one,
+           which is entry 143's selector-standing-in-for-an-idea trap in miniature. -->
+      <button
+        class="cta cta--ghost prompt-mute__toggle"
+        type="button"
+        :disabled="muteBusy"
+        @click="toggleMute"
+      >
         <Spinner v-if="muteBusy" />
         {{ muteBusy
           ? t("busy.saving")
@@ -372,16 +475,38 @@ const pendingReviews = computed(() =>
       </button>
     </section>
 
-    <button v-if="!isDriving" class="add-review" type="button" @click="reviewing = true">
-      {{ t("profile.add_review") }}
-    </button>
+    <!-- AI-CONTEXT: §15.3's empty state for the surface — "one sentence of purpose + one
+         starting action" — reached when no card had anything (§23 entry 153). It is the
+         NORMAL case: 41 of 18,326 facilities carry a profile. `.profile__bare` is the
+         selector the harness aims at, because a state it cannot select ships unmeasured. -->
+    <p v-if="isBare" class="profile__bare">{{ t("profile.empty") }}</p>
+
+    <!-- AI-CONTEXT: the two actions belong to the SCREEN, not to a card (§23 entry 153).
+         SM-3: the intel stays readable at speed — that is the point of it — but writing a
+         question or a review is composition, and Forbidden #11 rules out interactive
+         prompts in motion, so both withdraw together while DRIVING.
+
+         Asking used to live INSIDE the Q&A card, which was fine while that card always
+         rendered and became a trap the moment it stopped: on a facility with dock times
+         and reviews but no questions yet, the card is empty and hidden and the only way
+         to ask a question went with it. A test caught it. An action is not a property of
+         the data it happens to sit near — §8's one-Primary rule is why review is the
+         filled control and asking is the outline one. -->
+    <div v-if="!isDriving" class="profile__actions">
+      <button class="add-review" type="button" @click="reviewing = true">
+        {{ t("profile.add_review") }}
+      </button>
+      <button class="cta cta--ghost" type="button" @click="askOpen = true">
+        {{ t("qa.ask") }}
+      </button>
+    </div>
     <p v-else class="driving-note">{{ t("driving.paused") }}</p>
 
     <BottomSheet :open="reviewing && !isDriving" :title="t('profile.add_review')" @close="reviewing = false">
       <ReviewSheet @submit="onReview" />
     </BottomSheet>
 
-    <BottomSheet :open="asking && !isDriving" :title="t('qa.ask')" @close="asking = false">
+    <BottomSheet :open="askOpen && !isDriving" :title="t('qa.ask')" @close="askOpen = false">
       <div class="ask">
         <textarea
           v-model="questionText"
@@ -389,9 +514,16 @@ const pendingReviews = computed(() =>
           :placeholder="t('qa.placeholder')"
           rows="3"
         ></textarea>
-        <button class="cta" type="button" :disabled="asking" @click="onAsk">
-          <Spinner v-if="asking" />
-          {{ asking ? t("busy.sending") : t("qa.submit") }}
+        <!-- disabled on the WRITE being in flight and on there being nothing to send —
+             never on the sheet being open, which is what made this button unusable -->
+        <button
+          class="cta"
+          type="button"
+          :disabled="askBusy || !questionText.trim()"
+          @click="onAsk"
+        >
+          <Spinner v-if="askBusy" />
+          {{ askBusy ? t("busy.sending") : t("qa.submit") }}
         </button>
       </div>
     </BottomSheet>
@@ -425,7 +557,19 @@ const pendingReviews = computed(() =>
   gap: var(--s-2);
   margin-bottom: var(--s-4);
 }
+/* AI-CONTEXT: `flex: 0 0 auto`, and it is load-bearing (§23 entry 153).
+ *
+ * A flex item's default `min-width: auto` lets it shrink below its declared width, so
+ * `width: 48px` was a suggestion the moment the heading beside it had anything to say —
+ * measured by the harness at **39 × 48**, under §6.5's floor, on a real facility name
+ * ("Blue Beacon Truck Wash — I-40 Exit 286"). It never showed up before because the
+ * `<h1>` was EMPTY on every facility: an empty heading pushes against nothing, so the
+ * blank title was hiding a touch-target defect behind it. Fixing the name is what made
+ * this measurable, and the back control on this screen is the one a driver uses with a
+ * glove on to get out. Same family as the `min-width: auto` on an `<input>` that HANDOFF
+ * 121 §8 caught for the third session running. */
 .back {
+  flex: 0 0 auto;
   width: 48px;
   height: 48px;
   display: flex;
@@ -433,11 +577,16 @@ const pendingReviews = computed(() =>
   justify-content: center;
   color: var(--text-1);
 }
+/* the name is what may wrap, and `min-width: 0` is what lets it wrap instead of forcing
+   the row wider than 360 dp */
 .profile__name {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   font-size: var(--type-title-size);
   line-height: var(--type-title-line);
   font-weight: var(--type-title-weight);
+  overflow-wrap: anywhere;
 }
 .card {
   background: var(--ink-1);
@@ -571,6 +720,20 @@ const pendingReviews = computed(() =>
   color: var(--text-3);
   font-size: var(--type-caption-size);
   line-height: var(--type-body-line);
+}
+/* §15.3's one sentence. `--text-2` and body size: it is the only thing on the screen, so
+   it does not need to compete with anything, and a facility nobody has been to is a calm
+   fact rather than an error (§15.1's "offline is never red", same reasoning). */
+.profile__bare {
+  margin: 0 0 var(--s-4);
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.profile__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
 }
 .add-review {
   width: 100%;
