@@ -3,15 +3,61 @@
 This file is a **pointer**, not content. The current state, decisions, per-state
 results, exact next task, and blockers always live in the latest numbered handoff:
 
-➡️ **[HANDOFF-125.md](HANDOFF-125.md)** — read this first, every session.
+➡️ **[HANDOFF-126.md](HANDOFF-126.md)** — read this first, every session.
+
+> **126** was three owner instructions — fix the PWA install, fix viewing and rating
+> facilities, then explain and repair `/load/calc` and `/money/audit`. **§23 entries
+> 152–154**, three commits, migration **0077**. Gates: **pytest 1935 → 1942, vitest
+> 918 → 962, layout 333 → 349.**
+>
+> **Stack UP · everything PUSHED · production CURRENT at `0077`.** All three entries are
+> LIVE, verified by reading the SERVED bundle and by measuring the migration's effect on
+> production before and after.
+>
+> **THE PATTERN, and it is the fifth face of the coin 122–125 each turned — the one that
+> explains why the other four survived: A SUBSTITUTE THAT ANSWERS FOR THE SYSTEM WILL
+> AGREE WITH ANOTHER SUBSTITUTE BEFORE IT AGREES WITH THE SYSTEM.** Two fixtures supplied
+> a facility `name` the API has never returned, so **every facility page in this product's
+> life had a blank `<h1>`**. Every facility test called `askQuestion()` — the function
+> *under* the button — while that button was disabled in every state it rendered in, so
+> **nobody has ever asked a question.** And `test/pwa.test.js` read the manifest on disk
+> while the app was installable and **nothing in it ever asked to install.**
+>
+> **I WROTE THE FOURTH INSTANCE MYSELF AND IT PASSED OVER THE DEFECT IT WAS WRITTEN FOR.**
+> `Page.getInstallabilityErrors` reads like Chromium's own verdict and **returns `[]` for
+> everything headless** — including a bare page with no manifest. Sabotaged back to entry
+> 143's `"icons": []`, my new check went green. **Removed rather than annotated**, because
+> a check that does not exist is worse than no check: it makes the next person stop
+> looking. Every fix moved the assertion to the boundary the real thing crosses — HTTP for
+> the name, a real click for the button, fetched PNG bytes for the icons.
+>
+> **The second finding cost a driver money: a zero that means "we did not measure this"
+> was rendered as a measurement.** `expected_detention_cost` returns `(0, 0)` with no
+> samples and the calculator showed a confident **−$0.00 for detention, folded into the
+> headline** — on the screen used to accept or refuse a load, inside the app whose thesis
+> is that detention is what costs them. **And re-running a settlement audit multiplied the
+> money owed: 15000 → 30000 → 45000** over three presses of Run, which is the normal act
+> because the figures are typed by hand.
+>
+> **Also: 41 of 18,326 facilities have a profile**, so for 99.8% of pins the facility
+> screen was six cards each announcing that it had nothing, under that blank title.
+>
+> **The owner's next actions are unchanged and none is code: the 140 records with no
+> bytes, `--marker-500`'s contrast, and the handset sensor test — now deferred eleven
+> times and upstream of the whole condition flow. 126 §3.**
+
+➡️ **[HANDOFF-125.md](HANDOFF-125.md)** — the session before, and still the reference for
+the wallet, queued-capture and image-pipeline detail.
 
 > **125** closes the session that ran to nine owner instructions and **§23 entries
 > 144–151**. Gates across the whole run: **pytest 1842 → 1935, vitest 885 → 918, layout
 > 325 → 333**, plus a new `make ui-image` in `make ci`. Six migrations (`0071`→`0076`).
 >
-> **Stack DOWN · everything PUSHED · production CURRENT at `0076`.** **149 and 150 are
-> LIVE and verified; §23 entry 151 IS NOT DEPLOYED.** Seven deploys, a verified offsite
-> backup before each.
+> **Stack DOWN · everything PUSHED · production CURRENT at `0076`.** ~~149 and 150 are
+> LIVE and verified; §23 entry 151 IS NOT DEPLOYED.~~ **Corrected in 126: 151 WAS already
+> deployed.** `qa__item--pending` — a string that exists only in 151's commit `1594754` —
+> was in the served bundle before 126's first deploy. 125 applied its own "read the served
+> bundle" rule to 150 and not to 151. Seven deploys, a verified offsite backup before each.
 >
 > **THE PATTERN, and it is the fourth face of the coin 122, 123 and 124 each turned:
 > A THING THAT RENDERS IN EVERY CASE EXCEPT THE ONE IT EXISTS FOR.** §15.1's queued-item
@@ -47,7 +93,7 @@ results, exact next task, and blockers always live in the latest numbered handof
 > bytes** — everything uploaded 26–28 July, from the swallowed `SignatureDoesNotMatch` era.
 > Leave them, purge them, or tell the drivers. **125 §3.**
 
-➡️ **[HANDOFF-124.md](HANDOFF-124.md)** — the session before, and still the reference for
+➡️ **[HANDOFF-124.md](HANDOFF-124.md)** — two sessions before, and still the reference for
 the email, dedupe and broker-attachment detail.
 
 > **124** was six owner instructions — make images faster, move email to background jobs,
@@ -103,7 +149,7 @@ the email, dedupe and broker-attachment detail.
 > production records have no bytes** — everything uploaded 26–28 July, from the swallowed
 > `SignatureDoesNotMatch` era. Leave them, purge them, or tell the drivers. **124 §3.**
 
-➡️ **[HANDOFF-123.md](HANDOFF-123.md)** — two sessions before.
+➡️ **[HANDOFF-123.md](HANDOFF-123.md)** — three sessions before.
 
 > **123** was driven entirely by the owner looking at real screens on a real phone and
 > saying what was confusing. Nine commits, **§23 entries 135–143**. Gates went
@@ -142,7 +188,7 @@ the email, dedupe and broker-attachment detail.
 > edit on the VM (F-01, open since 121). The post-deploy worker log names the scale —
 > `dunning … skipped_no_email: 11` of 14. **123 §3.**
 
-➡️ **[HANDOFF-122.md](HANDOFF-122.md)** — three sessions before.
+➡️ **[HANDOFF-122.md](HANDOFF-122.md)** — four sessions before.
 
 > **122** was six owner-supplied work contracts run back to back, each with its own report at
 > the repo root: **M3 detention**, **wedge delivery**, **location integrity**, **evidence
@@ -175,7 +221,7 @@ the email, dedupe and broker-attachment detail.
 > to an owner-controlled inbox — two independent blockers lift at once and that is the only
 > test covering both. **122 §4.**
 
-➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — four sessions before.
+➡️ **[HANDOFF-121.md](HANDOFF-121.md)** — five sessions before.
 
 > **121** was two instructions. *"Approved, do the loading-state work"* closed **five
 > findings — U-06, U-09, U-10 (criticals), U-11 and U-12** — every finding that decision was
@@ -275,7 +321,7 @@ the email, dedupe and broker-attachment detail.
 > logged zero errors where it had failed all seven jobs — then observed on production, where
 > `migrate` exits before api and worker start. **HANDOFF-121 §11.**
 
-➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — five sessions before.
+➡️ **[HANDOFF-120.md](HANDOFF-120.md)** — six sessions before.
 
 > **120** was one instruction — *"read the latest handoff and restart the app"*, then
 > *"proceed using your best judgement"* — and it worked the audit queue to the end:
@@ -338,7 +384,7 @@ the email, dedupe and broker-attachment detail.
 > **Stack UP · thirty-five commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — six sessions before.
+➡️ **[HANDOFF-119.md](HANDOFF-119.md)** — seven sessions before.
 
 > **119** worked the 2026-08-07 audit queue: **nineteen findings closed, two partial**, and
 > answered one of the audit's three open questions. Three of
@@ -398,7 +444,7 @@ the email, dedupe and broker-attachment detail.
 > **Stack DOWN · twenty-four commits UNPUSHED · nothing deployed.** `git fetch` still cannot
 > run here — **re-fetch before pushing.**
 
-➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — seven sessions before.
+➡️ **[HANDOFF-118.md](HANDOFF-118.md)** — eight sessions before.
 
 > **118** is a short session with **no source changes**: the owner asked for the stack to be
 > restarted, then for a handoff and a shutdown.
@@ -419,7 +465,7 @@ the email, dedupe and broker-attachment detail.
 > session (no credential), so the ahead-count is arithmetic, not observation — **re-fetch
 > before pushing.** The next task is still the handset background-sensor test.
 
-➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — eight sessions before.
+➡️ **[HANDOFF-117.md](HANDOFF-117.md)** — nine sessions before.
 
 > **117** did two things the owner asked for, and both turned up something under them.
 >
@@ -447,7 +493,7 @@ the email, dedupe and broker-attachment detail.
 > **Stack DOWN · four commits UNPUSHED · nothing deployed.** The next task is still the
 > handset background-sensor test.
 
-➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — nine sessions before.
+➡️ **[HANDOFF-116.md](HANDOFF-116.md)** — ten sessions before.
 
 > **116** walked the stop auto-pilot end to end in a real browser, which is what two
 > sessions of building had never been subjected to. **It works.** A human adds a load,
@@ -476,7 +522,7 @@ the email, dedupe and broker-attachment detail.
 > HANDOFF-116.md's own header contradicted, and its "everything from `a4e282c` onward
 > UNPUSHED" was overtaken by the 2026-08-03 push. Corrected in 117.)
 
-➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — ten sessions before.
+➡️ **[HANDOFF-115.md](HANDOFF-115.md)** — eleven sessions before.
 
 > **115** was scoped as a **surfacing rework** — the A1 automation is built and correct,
 > only the way its result reaches the driver is wrong. Re-grepping the seams before
