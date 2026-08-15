@@ -120,7 +120,27 @@ def _jobs() -> list[Job]:
         # derivative job that silently never runs is indistinguishable from the defect it
         # was written to fix.
         Job("image_thumbnails", None, 300, runners.run_image_thumbnails),
+        # AI-CONTEXT: M14-FR2, and it is FLAGGED unlike the four jobs above it.
+        #
+        # The distinction those carry is "infrastructure behind surfaces that are already
+        # live has no activation decision". This is the opposite: it makes an outbound
+        # call to a third party using a fleet's own credential, so there is very much an
+        # activation decision and `m14_overlay` is it. A flag nobody registered returns
+        # False, which is exactly the behaviour wanted here — no key, no packets.
+        #
+        # 60 s gives ±60 s arrival granularity against F3's ±3 min target, which is fine
+        # and is DISCLOSED in the pack rather than implied away: an ELD-derived arrival is
+        # a provider breadcrumb, not a GPS-second observation.
+        Job("m14_poll", m14_flag_key(), 60, runners.run_m14_poll),
     ]
+
+
+def m14_flag_key() -> str:
+    # imported lazily: the worker module is imported by tests that never touch M14, and a
+    # module-level import here would drag the whole overlay into every one of them
+    from app.modules.m14_recovery import public as m14
+
+    return m14.FLAG_KEY
 
 
 def _run_job(job: Job, monotonic: float) -> None:

@@ -69,9 +69,12 @@ def test_every_module_router_carries_its_own_gate():
     assert missing == [], f"module routers with no flag gate: {missing}"
 
 
-def test_all_thirteen_modules_are_registered(db):
+def test_all_fourteen_modules_are_registered(db):
+    # AI-CONTEXT: M14 is the fourteenth (PRD Extension E2, owner decision D8). The count
+    # is asserted rather than derived from MODULES on purpose — deriving it would make
+    # this test agree with any list, including one a module was accidentally dropped from.
     keys = register_all(db)
-    assert len(keys) == 13
+    assert len(keys) == 14
     for module in MODULES:
         assert db.get(flags.FeatureFlag, module.FLAG_KEY) is not None
 

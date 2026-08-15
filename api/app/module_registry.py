@@ -36,10 +36,11 @@ from app.modules.m10_community import public as m10
 from app.modules.m11_voice import public as m11
 from app.modules.m12_fleet import public as m12
 from app.modules.m13_vendor import public as m13
+from app.modules.m14_recovery import public as m14
 
 # in build order (PRD §6), which is also dependency order — a listing that reads like
 # the law it implements is one a reviewer can check against it
-MODULES = (m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13)
+MODULES = (m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14)
 
 
 def _register_ai_budgets(db: Session) -> None:

@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    String,
     func,
     text,
 )
@@ -48,6 +49,18 @@ class LocationPing(Base):
         Enum(LocationMode, name="location_mode", schema=SCHEMA),
         default=LocationMode.significant_change,
     )
+    # AI-CONTEXT: WHAT PRODUCED THIS READING (M14-FR2/FR3, migration 0078).
+    #
+    # Free text, not an enum, and that is deliberate: the value is `device` or
+    # `eld:<provider>`, and a new provider must not require a migration to be ingestible.
+    # An enum here would make adding Samsara a schema change to a FOUNDATION table.
+    #
+    # It exists because the evidence pack has to declare its basis. The pack currently
+    # says "Location data as reported by the driver's device" — true for every ping
+    # before this column and false for every ELD one — and the class it prints is derived
+    # from these values rather than asserted by a caller (`m14.evidence_class_for`).
+    # Backfilled to `device`, which is what every existing row actually is.
+    source: Mapped[str] = mapped_column(String(40), default="device", server_default="device")
 
 
 class GeofenceArming(Base):

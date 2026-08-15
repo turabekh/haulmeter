@@ -50,6 +50,32 @@ dependencies = [
     # account: the keypair is self-generated, and Chrome/Edge/Firefox on Android — LAW
     # 0's target device — support it natively.
     "pywebpush>=2.0",
+    # AI-CONTEXT: DECLARED, not inherited (M14 slice 1, owner decision 2026-08-15).
+    #
+    # It was already installed at 50.0.0 — but transitively, via `pywebpush` → `py-vapid`
+    # → `http_ece`. M14 encrypts a fleet's pasted telematics key at rest with AES-GCM
+    # because the nightly A12 backup ships this database offsite, and a security control
+    # that rests on somebody else's dependency graph is one `pywebpush` bump from
+    # vanishing with no failing test to say so. A transitive dependency is a fact about
+    # today's lockfile; a declared one is a requirement.
+    #
+    # Zero image cost: the wheel is already in the image for Web Push.
+    "cryptography>=44.0",
+    # AI-CONTEXT: MOVED from `[dev]`, and it was load-bearing in production the whole
+    # time (found while building M14's poller, 2026-08-15).
+    #
+    # `httpx` was declared only as a dev extra, on the reading that outbound HTTP belongs
+    # to `make ingest-*` targets. That reading is false: the WORKER schedules
+    # `tpims_dynamic` every 180 s and `eia_regional` weekly, and both reach
+    # `facility.ingest.fetch_tpims` / `m7.fetch_eia`, which `import httpx` inside the
+    # function. Production has it purely because the Dockerfile installs `.[dev]` — so a
+    # decision to stop shipping dev extras, which is an ordinary hardening step, would
+    # have silently killed the parking feed.
+    #
+    # M14's poller is the one that made this worth fixing rather than noting: it is a
+    # scheduled outbound call on the path to an invoice. Zero image change; the wheel is
+    # already installed.
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
@@ -57,7 +83,8 @@ dev = [
     "pytest>=8.3",
     "import-linter>=2.1",
     "ruff>=0.8",
-    "httpx>=0.27",
+    # httpx moved to the runtime dependencies above — the worker's scheduled ingest jobs
+    # use it in production, not only the make targets.
 ]
 
 [build-system]

@@ -153,6 +153,27 @@ ingest-ntad:
 ingest-tpims:
 	$(COMPOSE) exec api python -m scripts.ingest_tpims
 
+# AI-CONTEXT: M14-FR2 — ONE REAL POLL, BY HAND, against the real provider.
+#
+# The F-01 lesson is the whole reason this exists: F8 recorded every detention notice as
+# sent while every one went to a container, and the suite stayed green because it asserted
+# against the gateway it faked. A connector is that shape with a different third party. So
+# a connector ships with an end-to-end proof against the REAL provider, observed, before
+# its flag is eligible — and this target is how that observation happens.
+#
+# Never in CI. Needs a real pasted key and M14_CONNECTOR_KEY on the box.
+#   make m14-poll-once FLEET=<fleet_uuid>
+m14-poll-once:
+	$(COMPOSE) exec api python -m scripts.m14_poll_once
+
+# AI-CONTEXT: STEP 4 of the M14 kickoff — prove geofence events fire from ELD pings.
+# The kickoff is explicit that a green unit test is not this: it drives the REAL F3
+# evaluator over fake-provider breadcrumbs walking into the seeded Tampa DEV shipper, on a
+# stop armed through the existing rate-con path, and prints the event rows. Leaves nothing
+# behind (rolls back). Its output belongs in the handoff.
+m14-prove:
+	$(COMPOSE) exec api python -m scripts.m14_prove_events
+
 # probe unverified TPIMS state feeds (KY/MN) — reachability + spec-shape, never CI
 probe-tpims:
 	$(COMPOSE) exec api python -m scripts.probe_tpims

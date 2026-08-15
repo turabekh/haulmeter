@@ -492,3 +492,52 @@ def run_image_thumbnails(db: Session, commit: bool = True, batch: int = 200) -> 
     # misbehaving, it is a count of stored records whose bytes are gone, and burying it
     # in a failure total is how that stops being visible to anyone.
     return {"made": made, "skipped": skipped, "failed": failed, "missing": missing}
+
+
+def run_m14_poll(db: Session, commit: bool = True, client_factory=None) -> dict:
+    """Poll every connected fleet's telematics provider once (M14-FR2, E2 slice 1).
+
+    AI-CONTEXT: the flag gate is the WORKER's, not this function's — `Job("m14_poll",
+    m14.FLAG_KEY, ...)` means an unregistered or disabled flag never reaches here. That is
+    the established pattern and it matters more than usual for this job: it makes an
+    outbound call to a third party on a fleet's credential, so "off" has to mean no
+    packets leave the box at all.
+
+    ONE CONNECTOR'S FAILURE DOES NOT STOP THE OTHERS. A revoked key at one fleet marks
+    that connector `failing` with the provider's own words and the loop continues — the
+    alternative is one fleet's expired token silently stopping every other fleet's
+    detention evidence, which is the kind of shared-fate failure that is invisible until
+    somebody asks why a claim never drafted.
+
+    `client_factory` exists for `make m14-poll-once` and for tests; production passes
+    nothing and `poll_connector` builds a real client from the decrypted key.
+    """
+    from app.modules.m14_recovery import public as m14
+
+    connectors = m14.active_connectors(db)
+    imported = duplicates = skipped = failed = 0
+    events = 0
+    for connector in connectors:
+        client = client_factory(connector) if client_factory is not None else None
+        try:
+            result = m14.poll_connector(db, connector, client=client)
+        except Exception:  # noqa: BLE001 — recorded on the row by `poll_connector`
+            failed += 1
+            continue
+        imported += result.imported
+        duplicates += result.duplicates
+        skipped += result.skipped_unmapped
+        events += len(result.events)
+    if commit:
+        db.commit()
+    # `skipped_unmapped` is reported beside the rest rather than folded into it: it is the
+    # number that explains a connected fleet drafting no claims, and burying it is how a
+    # half-mapped fleet looks like a quiet one.
+    return {
+        "connectors": len(connectors),
+        "imported": imported,
+        "duplicates": duplicates,
+        "skipped_unmapped": skipped,
+        "events": events,
+        "failed": failed,
+    }

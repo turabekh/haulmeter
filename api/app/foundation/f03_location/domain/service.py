@@ -275,6 +275,11 @@ def record_ping(
     accuracy_m: float | None = None,
     speed_mps: float | None = None,
     mode: LocationMode = LocationMode.significant_change,
+    # AI-CONTEXT: M14-FR2. `device` for everything the phone reports — which is every
+    # caller that existed before M14 — and `eld:<provider>` for a telematics breadcrumb.
+    # Defaulted rather than required so this stayed a PURE ADDITION: no existing caller
+    # changes, and the column is backfilled to the same value in migration 0078.
+    source: str = "device",
 ) -> LocationPing:
     divergent = False
     if gps_time is not None:
@@ -290,6 +295,7 @@ def record_ping(
         accuracy_m=accuracy_m,
         speed_mps=speed_mps,
         mode=mode,
+        source=source,
     )
     db.add(ping)
     db.flush()
@@ -456,6 +462,9 @@ def evaluate_ping(
     speed_mps: float | None = None,
     mode: LocationMode = LocationMode.significant_change,
     now: datetime | None = None,
+    # M14-FR2: `device`, or `eld:<provider>` for a telematics breadcrumb. Defaulted so
+    # this is a pure addition — every pre-M14 caller is unchanged and means `device`.
+    source: str = "device",
 ) -> PingResult:
     """Record the ping, then apply it to the geofence state machine — if it may be applied.
 
@@ -479,7 +488,17 @@ def evaluate_ping(
     now = _as_utc(now or datetime.now(UTC))
     occurred = _as_utc(occurred_at)
     record_ping(
-        db, account_id, lat, lon, occurred_at, client_skew_ms, gps_time, accuracy_m, speed_mps, mode
+        db,
+        account_id,
+        lat,
+        lon,
+        occurred_at,
+        client_skew_ms,
+        gps_time,
+        accuracy_m,
+        speed_mps,
+        mode,
+        source,
     )
 
     if occurred > now + FUTURE_TOLERANCE:

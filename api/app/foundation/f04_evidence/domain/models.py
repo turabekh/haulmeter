@@ -137,6 +137,25 @@ class SharedPack(Base):
         ForeignKey(f"{SCHEMA}.evidence_log.id", ondelete="CASCADE"), index=True
     )
     template: Mapped[str] = mapped_column(String(40))
+    # AI-CONTEXT: WHAT THIS PACK'S LOCATION RECORD RESTS ON (M14-FR3, migration 0078).
+    #
+    # `phone_verified` — hash-chained capture, EXIF, server timestamps. Every pack that
+    # existed before M14 is this, and the migration backfills exactly that.
+    # `eld_derived` — timestamps a telematics provider reported. NOT covered by the
+    # capture chain: the chain proves our copy is unaltered since we received it, which
+    # is strictly weaker than proving how the reading was produced.
+    # `mixed` — both, and the pack says which artifacts sit on which side.
+    #
+    # PINNED ON THE ROW rather than recomputed at render, for the same reason the bytes
+    # and the hash are pinned: in a dispute the question is what we SENT them. A pack
+    # shared as `eld_derived` and later re-rendered as `mixed`, because a photo landed
+    # afterwards, would answer a different question than the one being asked.
+    #
+    # Free text over an enum: a new provider must not need a migration on a FOUNDATION
+    # table to be shareable. The vocabulary is `m14.EvidenceClass`.
+    evidence_class: Mapped[str] = mapped_column(
+        String(20), default="phone_verified", server_default="phone_verified"
+    )
     content_hash: Mapped[str] = mapped_column(String(64), index=True)
     storage_key: Mapped[str] = mapped_column(String(500))
     # opaque and random rather than signed: we store the row anyway for the hash and
