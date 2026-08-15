@@ -13,7 +13,13 @@ inside `poll_connector` and it never leaves that call.
 from .domain.crypto import ConnectorKeyUnavailable
 from .domain.enums import ConnectorStatus, EvidenceClass, HoldState, Provider
 from .domain.models import Connector, HeldClaim, TraceImport, VehicleMap
-from .domain.provider import Breadcrumb, FakeMotiveClient, MotiveClient, parse_vehicle_locations
+from .domain.provider import (
+    Breadcrumb,
+    FakeMotiveClient,
+    MotiveClient,
+    parse_vehicle_locations,
+    parse_vehicles,
+)
 from .domain.service import (
     FLAG_KEY,
     GATES,
@@ -67,6 +73,7 @@ __all__ = [
     "is_enabled",
     "map_vehicle",
     "parse_vehicle_locations",
+    "parse_vehicles",
     "poll_connector",
     "provider_names",
     "register_module",

@@ -1,6 +1,12 @@
 # PRD Extension E2 — M14 Fleet Recovery Overlay
 
-**Status:** **APPROVED 2026-08-15 (owner, D8) — BUILD AUTHORIZED FOR SLICE 1 ONLY.** Slice 1 is `KICKOFF-m14-slice1-eld-claim.md`: evidence classes (FR3), one Motive connector with a pasted key and polling (FR2), and ELD-dwell drafting the **existing** M3 claim **held** for fleet-admin approval (FR4). **FR1, FR5 beyond hold-all, and FR6–FR9 remain PROPOSED** and are not build-authorized; further slices get their own kickoff against this entry rather than a new D-number. **D9–D13 remain OPEN, and nothing sends to a counterparty until D13 has an answer on record.** Approving this document was owner decision **D8** and is a **logged reversal of two standing rules** (see §E2.10) — per the A8 precedent, a reversal must be named as one. The full entry is in the v2.0 §6 registry.
+**Status:** **APPROVED 2026-08-15 (owner, D8) — SLICE 1 IS BUILT AND DEPLOYED, VALIDATION OPEN.**
+Slice 1 shipped to `haulmeter.online` on 2026-08-15 (§23 entries 155–156; `HANDOFF-127.md`) and is
+**INERT there by design**: `m14_overlay` is registered with **no operator decision** (NULL, not
+enabled), both gates are unsatisfied, and `can_send` refuses — verified by querying the box, not by
+reading a deploy's exit line. **None of E2's validation has happened**: the living checklist is
+`docs/validation/m14-slice1.md`, and #3 and #4 there cannot start until **D13** has an answer.
+**BUILD AUTHORIZED FOR SLICE 1 ONLY.** Slice 1 is `KICKOFF-m14-slice1-eld-claim.md`: evidence classes (FR3), one Motive connector with a pasted key and polling (FR2), and ELD-dwell drafting the **existing** M3 claim **held** for fleet-admin approval (FR4). **FR1, FR5 beyond hold-all, and FR6–FR9 remain PROPOSED** and are not build-authorized; further slices get their own kickoff against this entry rather than a new D-number. **D9–D13 remain OPEN, and nothing sends to a counterparty until D13 has an answer on record.** Approving this document was owner decision **D8** and is a **logged reversal of two standing rules** (see §E2.10) — per the A8 precedent, a reversal must be named as one. The full entry is in the v2.0 §6 registry.
 **Amends:** `docs/trucker-platform-prd.md` v1.0 (§8 module list, §16 exclusions) and `docs/trucker-platform-prd-v2-amendment.md` (§4 non-goals) · **Date:** 15 August 2026 · **Owner:** Turaboy
 **Origin:** owner strategy document "RecoveryOS" (2026-08-15) + gap analysis against the deployed platform at HANDOFF-121 / migration `0066`.
 **Naming note:** E1 was the M13 extension document (its internal §E2/§E3 were platform additions *within* it). This is the second extension document; its module is **M14**. New owner decisions continue the v2.0 D-series (D8–D13) so one registry holds them all.

@@ -174,6 +174,23 @@ m14-poll-once:
 m14-prove:
 	$(COMPOSE) exec api python -m scripts.m14_prove_events
 
+# AI-CONTEXT: the 15-minute pilot path (M14 slice 1). Guided, one step at a time, run on
+# a phone call: paste key -> encrypted connector -> list the fleet's vehicles -> map each
+# to a driver -> one real poll -> where it stands. Chosen over a portal surface because a
+# vehicle->driver mapping needs a two-column picker that does not exist, and §22.2 does
+# not let a session invent a component pattern. The key is never echoed after paste.
+#   make m14-onboard FLEET=<uuid> [KEY=<pasted>]
+m14-onboard:
+	$(COMPOSE) exec api python -m scripts.m14_onboard
+
+# AI-CONTEXT: E2-FR2's validation, one command. Ground truth per stop with a REQUIRED
+# source; a source naming the provider is refused in code, because Motive validating
+# Motive proves only that the poller copies faithfully. Output pastes into
+# docs/validation/m14-slice1.md.
+#   make m14-validate FLEET=<uuid> [FILE=ground-truth.csv]
+m14-validate:
+	$(COMPOSE) exec api python -m scripts.m14_validate
+
 # probe unverified TPIMS state feeds (KY/MN) — reachability + spec-shape, never CI
 probe-tpims:
 	$(COMPOSE) exec api python -m scripts.probe_tpims

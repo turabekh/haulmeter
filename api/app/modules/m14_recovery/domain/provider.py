@@ -61,6 +61,32 @@ class MotiveClient:
         self._key = api_key
         self._timeout = timeout_s
 
+    def vehicles(self) -> list[dict]:
+        """The fleet's vehicles, for the onboarding mapping step.
+
+        AI-CONTEXT: SHAPE UNVERIFIED UNTIL A REAL KEY RUNS IT. `/v1/vehicles` is Motive's
+        documented listing endpoint, but this codebase's own history says a documented
+        shape and a served shape are different claims — HANDOFF-121 §13.7 lost a round to
+        a stub returning `{}` where the endpoint returns `null`. So the parser below is
+        deliberately tolerant, `make m14-onboard` is where a human proves it, and the
+        handoff records that this is the one call in the module never exercised against
+        the real provider.
+
+        `vehicle_locations` is the fallback the CLI uses when this returns nothing: a
+        vehicle that has reported a position is a vehicle, and it is the only listing
+        that the POLLER itself is known to work against.
+        """
+        import httpx
+
+        resp = httpx.get(
+            f"{self.BASE}/v1/vehicles",
+            headers={"X-Api-Key": self._key, "Accept": "application/json"},
+            params={"per_page": 100},
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()
+        return parse_vehicles(resp.json())
+
     def vehicle_locations(self, since: datetime | None = None) -> list[Breadcrumb]:
         import httpx
 
@@ -75,6 +101,31 @@ class MotiveClient:
         )
         resp.raise_for_status()
         return parse_vehicle_locations(resp.json())
+
+
+def parse_vehicles(payload: dict | list | None) -> list[dict]:
+    """Tolerant, for the same reason `parse_vehicle_locations` is: a provider response is
+    not ours to assume the shape of. Anything without an id is dropped — a vehicle we
+    cannot name cannot be mapped to a driver."""
+    if not payload:
+        return []
+    rows = payload.get("vehicles", []) if isinstance(payload, dict) else payload
+    out: list[dict] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        v = row.get("vehicle") if isinstance(row.get("vehicle"), dict) else row
+        ref = v.get("id")
+        if ref is None:
+            continue
+        out.append(
+            {
+                "ref": str(ref),
+                "number": v.get("number") or v.get("name") or "",
+                "vin": v.get("vin") or "",
+            }
+        )
+    return out
 
 
 def parse_vehicle_locations(payload: dict | list | None) -> list[Breadcrumb]:
@@ -134,9 +185,18 @@ class FakeMotiveClient:
     against a real fleet.
     """
 
-    def __init__(self, pages: list[list[dict]] | None = None) -> None:
+    def __init__(self, pages: list[list[dict]] | None = None, vehicles=None) -> None:
         self._pages = list(pages or [])
+        # the same shapes the real endpoint emits: a row with no id, a bare row, a null
+        self._vehicles = vehicles if vehicles is not None else [
+            {"id": "veh-1", "number": "101", "vin": "1FUJA6CV..."},
+            {"id": None, "number": "no id — dropped"},
+            None,
+        ]
         self.calls: list[datetime | None] = []
+
+    def vehicles(self) -> list[dict]:
+        return parse_vehicles({"vehicles": self._vehicles})
 
     def vehicle_locations(self, since: datetime | None = None) -> list[Breadcrumb]:
         self.calls.append(since)
