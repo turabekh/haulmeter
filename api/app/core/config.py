@@ -79,7 +79,15 @@ class Settings(BaseSettings):
     smtp_port: int = Field(default=1038)
     # who a broker sees the paperwork came from. §12.3: counterparty-facing text is always
     # English, and this is the first thing they read.
-    smtp_from: str = Field(default="paperwork@haulmeter.online")
+    #
+    # AI-CONTEXT: this ALSO sets the Message-ID domain (`gateway.py` builds it with
+    # `make_msgid(domain=smtp_from.split("@")[-1])`), so it is half of DMARC alignment
+    # rather than cosmetic. The default tracks the real sending mailbox — owner cutover
+    # 2026-08-16 moved it to the Workspace account on haulmeter.online — because a
+    # default naming an address the authenticated account cannot send as would be
+    # REWRITTEN by Google rather than refused, shipping a From line nobody chose while
+    # F8 records a success.
+    smtp_from: str = Field(default="claims@haulmeter.online")
     # a provider that needs credentials gets them here; Mailpit needs none, which is why
     # `configured` turns on HOST rather than on a key (unlike VAPID or the AI gateway).
     smtp_username: str = Field(default="")

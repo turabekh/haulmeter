@@ -41,7 +41,9 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
    /fleet /owner /admin /scorecard /login`.
 6. DevTools: device mode 360×800 · **Sensors → Location → Other** · grant location permission.
 7. **Outbound email goes to real Gmail, not Mailpit** — owner decision 2026-08-04, dev *and*
-   production on one account. So the inbox to watch is the account in `SMTP_USERNAME` (`infra/.env`), and
+   production on one account. **As of 2026-08-16 that account is the Google Workspace mailbox
+   `claims@haulmeter.online`** (owner cutover; transport unchanged — still `smtp.gmail.com:587`
+   with STARTTLS). So the inbox to watch is the account in `SMTP_USERNAME` (`infra/.env`), and
    `http://localhost:8038` stays empty by design; Mailpit is still in compose and still bound,
    simply not addressed. To put dev back on it, set `SMTP_HOST=mailpit` / `SMTP_PORT=1038` /
    `SMTP_STARTTLS=false` in `infra/.env` and recreate the api container.
@@ -236,8 +238,10 @@ ENTERed, at least one BOL captured via the checklist.
 5. **Recipients are pre-filled** from the load's counterparty and are **editable** — change the
    address and it goes where you typed (A1 req 6).
 6. **Nothing sent silently before this** — you are seeing the packet *before* it goes (A1 req 5).
-7. **Send.** The **Gmail inbox** now receives it: `From:` the account in `SMTP_FROM` (Gmail rewrites
-   any From it has not verified, so `SMTP_FROM` matches the account), the counterparty on
+7. **Send.** The **Gmail inbox** now receives it: `From:` the account in `SMTP_FROM` — since the
+   2026-08-16 cutover that is `claims@haulmeter.online`, and **Show original** should read
+   `SPF: PASS`, `DKIM: PASS` with `d=haulmeter.online`, `DMARC: PASS`. (Gmail rewrites
+   any From it has not verified, so `SMTP_FROM` matches the account.) The counterparty on
    `To:`, subject **"Stop paperwork · <load ref>"** (just "Stop paperwork" when the load has no
    reference — the manual fallback form does not collect one), body one plain line with one link.
    Neutral tone: a handoff, not a claim.
