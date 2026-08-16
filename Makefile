@@ -2,7 +2,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci vapid-keys \
-        seed seed-where seed-wallet purge-demo m15-tg-draft m15-key-smoke ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
+        seed seed-where seed-wallet purge-demo m15-tg-draft m15-key-smoke m15-session-probe ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
         repair-fuel repair-contact repair-duplicates osm-publish ingest-remote ui-layout ui-layout-only \
         ratecon-eval
 
@@ -135,6 +135,9 @@ seed:
 # to the recovery overlay and is on production.
 # AI-CONTEXT: live key smoke — reaches three paid APIs over the internet, so it is NEVER
 # in `make ci`. A suite that fails when the wifi does is a suite people learn to ignore.
+m15-session-probe:
+	$(COMPOSE) run --rm -v $(PWD):/repo -e PROBE_OUT=/repo/docs/voice-samples/session api python -m scripts.m15_session_probe
+
 m15-key-smoke:
 	$(COMPOSE) run --rm -v $(PWD):/repo -e SMOKE_OUT=/repo/docs/voice-samples api python -m scripts.m15_key_smoke
 
