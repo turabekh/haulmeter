@@ -15,11 +15,11 @@ import { useSkeletonGate } from "../skeleton.js";
 defineProps({
   count: { type: Number, default: 3 },
 });
-const visible = useSkeletonGate();
+const { reserve, visible } = useSkeletonGate();
 </script>
 
 <template>
-  <ul v-if="visible" class="skel" aria-hidden="true">
+  <ul v-if="reserve" class="skel" :class="{ 'skel--shown': visible }" aria-hidden="true">
     <li v-for="n in count" :key="n" class="skel__row">
       <span class="skel__lead"></span>
       <span class="skel__stack">
@@ -31,6 +31,18 @@ const visible = useSkeletonGate();
 </template>
 
 <style scoped>
+/* AI-CONTEXT: the box exists from the first frame; only the FILL waits (§23 entry 160).
+   `visibility` rather than `display`, because the point is to keep the layout box — a
+   `v-if` here is what made every fast response a page-shoving jump. Not `opacity`: an
+   invisible-but-painted skeleton still counts as a target to the §22.3 harness, and
+   HANDOFF-121 §4 already caught six skeleton pucks that were in the DOM, "visible", and
+   invisible to a human. `visibility: hidden` is honestly absent to both. */
+.skel {
+  visibility: hidden;
+}
+.skel--shown {
+  visibility: visible;
+}
 .skel {
   list-style: none;
   margin: 0;

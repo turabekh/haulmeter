@@ -21,7 +21,12 @@ import { useSkeletonGate } from "../skeleton.js";
 defineProps({
   count: { type: Number, default: 6 },
 });
-const visible = useSkeletonGate();
+// AI-CONTEXT: pins take `visible` only, and skip `reserve` DELIBERATELY (§23 entry 160).
+// The card and row skeletons reserve a layout box so content cannot shove the page; a
+// map pin is absolutely positioned over the canvas and occupies no flow, so there is
+// nothing to reserve and an always-present invisible puck would only add DOM the §22.3
+// harness has to reason about.
+const { visible } = useSkeletonGate();
 </script>
 
 <template>

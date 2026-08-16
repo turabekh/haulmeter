@@ -76,10 +76,16 @@ describe("§23 entry 131 — the fixtures are gone", () => {
   });
 });
 
+/* AI-CONTEXT: the third column is whether the shape RESERVES ITS BOX (§23 entry 160).
+ *
+ * Card and row sit in the layout flow, so their box exists from the first frame and only
+ * the fill waits — otherwise every response faster than 200 ms is a zero-height hole that
+ * pops to full height, which is the flicker the owner reported. A map pin is absolutely
+ * positioned over the canvas and occupies no flow, so there is nothing to reserve. */
 const SHAPES = [
-  ["SkeletonCard", SkeletonCard, ".skel__card"],
-  ["SkeletonRow", SkeletonRow, ".skel__row"],
-  ["SkeletonPin", SkeletonPin, ".skel__pin"],
+  ["SkeletonCard", SkeletonCard, ".skel__card", true],
+  ["SkeletonRow", SkeletonRow, ".skel__row", true],
+  ["SkeletonPin", SkeletonPin, ".skel__pin", false],
 ];
 
 describe("the skeleton primitive — three shapes, one gate", () => {
@@ -88,15 +94,35 @@ describe("the skeleton primitive — three shapes, one gate", () => {
     vi.useFakeTimers();
   });
 
-  for (const [name, Shape, unit] of SHAPES) {
-    it(`${name} renders nothing until the delay has passed`, async () => {
-      // a skeleton that flashes is worse than a brief blank: a fast local response
-      // must never show one. The blank is the CORRECT render before 200 ms, not a bug.
+  for (const [name, Shape, unit, reserves] of SHAPES) {
+    it(`${name} shows nothing until the delay has passed`, async () => {
+      /* THE ANTI-FLASH PROMISE, UNCHANGED: a fast local response must never show a
+         skeleton. What changed in entry 160 is HOW it is kept — by `visibility`, not by
+         absence — because absence made every fast response shove the page. */
       const w = mount(Shape);
-      expect(w.findAll(unit)).toHaveLength(0);
+      // a reserving shape keeps its box and withholds the fill; a non-reserving one is
+      // simply absent. Both satisfy "nothing is SHOWN".
+      if (reserves) expect(w.find(".skel").classes()).not.toContain("skel--shown");
+      else expect(w.find(".skel").exists()).toBe(false);
       vi.advanceTimersByTime(SKELETON_DELAY_MS);
       await w.vm.$nextTick();
       expect(w.findAll(unit).length).toBeGreaterThan(0);
+      if (reserves) expect(w.find(".skel").classes()).toContain("skel--shown");
+    });
+
+    it(`${name} ${reserves ? "RESERVES its box from the first frame" : "occupies no layout box"}`, async () => {
+      /* The anti-JUMP property, and the reason the owner saw three different screens in
+         80 ms. A section that renders nothing while loading has zero height, so content
+         arriving at 44 ms pushes everything below it down. Reserving the box means the
+         content lands in place. */
+      const w = mount(Shape);
+      if (reserves) {
+        expect(w.find(".skel").exists(), "the box must exist before the delay").toBe(true);
+        expect(w.findAll(unit).length, "and it must be the real shape, not an empty div")
+          .toBeGreaterThan(0);
+      } else {
+        expect(w.find(".skel").exists()).toBe(false);
+      }
     });
 
     it(`${name} renders nothing at all while DRIVING`, async () => {
@@ -107,6 +133,10 @@ describe("the skeleton primitive — three shapes, one gate", () => {
       vi.advanceTimersByTime(SKELETON_DELAY_MS * 5);
       await w.vm.$nextTick();
       expect(w.findAll(unit)).toHaveLength(0);
+      // BOX INCLUDED. §15.2's withdrawal is not "an invisible skeleton" — reserving
+      // space for one would leave a hole on a screen that has stopped asking for
+      // attention (§23 entry 160).
+      expect(w.find(".skel").exists()).toBe(false);
     });
 
     it(`${name} renders the count it is asked for, not a fixed three`, async () => {
