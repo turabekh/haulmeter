@@ -25,6 +25,8 @@ from sqlalchemy.orm import Session
 
 from app.foundation.f13_flags import public as flags
 
+from . import prompts
+
 # AI-CONTEXT: `m15_roadside` is the master flag. Turning it ON opens the free Roadside
 # Check platform-wide; the sponsored surfaces additionally require entitlements, which is
 # what scopes the gate window to pilot orgs without inventing a per-org flag (§E3.1.8).
@@ -52,6 +54,10 @@ def register_module(db: Session) -> None:
     Session-A handoff instead.
     """
     flags.register_flag(db, FLAG_KEY, description="M15 Roadside Readiness (ELP training)")
+    # AI-CONTEXT: registered at BOOT rather than lazily inside a request. `module_registry`
+    # records that m11 did it lazily and the knob was absent from /admin until someone
+    # happened to call an unrelated endpoint — a prompt nobody can find is not a registry.
+    prompts.register_prompts(db)
 
 
 def is_enabled(db: Session) -> bool:
