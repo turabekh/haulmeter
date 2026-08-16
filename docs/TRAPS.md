@@ -123,6 +123,24 @@ session*; this file records what is permanently true.
     exist.** And **verify the sabotage applied** — a shell variable once made six reverts
     silently not happen. *(121, 122)*
 
+17a. **"Flaky" is usually a wrong diagnosis. A test green ONLY in the full suite is
+    order-dependent, and that is worse.** `food-decide`'s origin check was carried for three
+    handoffs as timing-flaky; it was deterministic all along — red **5 runs out of 5** in
+    isolation, green only among its 62 neighbours. **Run a suspect file alone, five times,
+    before believing the word flaky**: a clean 5/5 red tells you it is order-dependence, and
+    a check that passes on another file's timing asserts nothing about the thing it names.
+    *(132)*
+
+17b. **A test that sleeps against a debounce races everything else that RESTARTS that
+    debounce.** The same check slept 350 ms for a 300 ms `onBounds` debounce and read
+    `.at(-1)`. The 50 ms was never the margin: `located` makes MapCanvas recenter and emit
+    its **own** `bounds` a beat later, which `clearTimeout`s the debounce and restarts it, so
+    the request lands past 600 ms and against a bbox the test never emitted. **Wait for the
+    request, not for a duration**, and assert that *a* request carries the thing — never that
+    the LAST one does, when which is last is another component's business. The cheapest way
+    to see it: stub `fetch` to push `Date.now()-t0` plus the URL into an array, wait
+    generously, and print every call in order. It took one run. *(132)*
+
 ---
 
 ## 3 · Deploy, the box, and the edge
