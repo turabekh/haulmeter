@@ -15,6 +15,14 @@ M15 shares nothing with M14 beyond the platform. They are neighbours in the modu
 and strangers in the import graph, deliberately.
 """
 
+from .domain.content import (
+    ContentNotReviewed,
+    HoldoutLeak,
+    mark_reviewed,
+    reassessment_variants,
+    release,
+    teachable_variants,
+)
 from .domain.enums import (
     ContentStatus,
     Difficulty,
@@ -47,6 +55,12 @@ from .domain.service import (
 )
 
 __all__ = [
+    "ContentNotReviewed",
+    "HoldoutLeak",
+    "mark_reviewed",
+    "reassessment_variants",
+    "release",
+    "teachable_variants",
     "FLAG_KEY",
     "MODULE",
     "CoachingContent",
