@@ -120,12 +120,39 @@ class DeepgramSttAdapter:
             )
         self._key = key
 
+    # AI-CONTEXT: nova-2 with punctuation off. Punctuation is a rendering choice made by
+    # the recogniser, and the scorer matches FACTS — a trailing full stop that changes
+    # whether "Chicago." matches "Chicago" would be the recogniser deciding a driver's
+    # score. `_normalize` in m15's scorer strips it anyway; not asking for it is cheaper
+    # and keeps the transcript closer to what was actually said.
+    ENDPOINT = "https://api.deepgram.com/v1/listen"
+
     def transcribe(self, audio: bytes, *, locale: str) -> tuple[str, float]:
-        raise NotImplementedError(
-            "the Deepgram network call is a NAMED REMAINDER of Session A: the adapter seam, "
-            "its refusal and its metering are built and tested on fixtures; live smoke "
-            "waits on the account (E3 §E3.8 key-tolerant start)."
+        import httpx
+
+        resp = httpx.post(
+            self.ENDPOINT,
+            params={"model": "nova-2", "language": locale, "punctuate": "false"},
+            headers={
+                "Authorization": f"Token {self._key}",
+                "Content-Type": "audio/wav",
+            },
+            content=audio,
+            timeout=60.0,
         )
+        resp.raise_for_status()
+        payload = resp.json()
+        try:
+            best = payload["results"]["channels"][0]["alternatives"][0]
+        except (KeyError, IndexError) as exc:
+            raise SpeechUnavailable(
+                f"Deepgram returned no alternative to read: {payload!r}"
+            ) from exc
+        # AI-CONTEXT: confidence travels with the transcript because Q-2 is built on it.
+        # A transcript without its confidence cannot be floored, and an unfloored
+        # transcript is scored — which is how a driver the recogniser could not hear ends
+        # up marked wrong.
+        return best.get("transcript", ""), float(best.get("confidence", 0.0))
 
 
 class AzureTtsAdapter:
@@ -143,11 +170,39 @@ class AzureTtsAdapter:
         self._key = settings.azure_speech_key
         self._region = settings.azure_speech_region
 
+    # 24 kHz mono MP3: small enough for a driver's data plan, good enough that an
+    # officer line does not sound like a telephone.
+    OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3"
+
     def synthesize(self, text: str, *, locale: str, voice: str | None = None) -> bytes:
-        raise NotImplementedError(
-            "the Azure network call is a NAMED REMAINDER of Session A; the Uzbek voices "
-            "additionally need a native spot-check before any driver hears them."
+        import html
+
+        import httpx
+
+        voice_name = voice or "en-US-GuyNeural"
+        # AI-CONTEXT: the text is ESCAPED into the SSML. Officer lines and coach
+        # explanations are authored content today, but they will one day carry a slot
+        # fragment built from a driver's own words — and an unescaped apostrophe or
+        # ampersand in that position is a malformed request at best.
+        ssml = (
+            f'<speak version="1.0" xml:lang="{locale}">'
+            f'<voice name="{voice_name}">{html.escape(text)}</voice></speak>'
         )
+        resp = httpx.post(
+            f"https://{self._region}.tts.speech.microsoft.com/cognitiveservices/v1",
+            headers={
+                "Ocp-Apim-Subscription-Key": self._key,
+                "Content-Type": "application/ssml+xml",
+                "X-Microsoft-OutputFormat": self.OUTPUT_FORMAT,
+                "User-Agent": "haulmeter-m15",
+            },
+            content=ssml.encode("utf-8"),
+            timeout=60.0,
+        )
+        resp.raise_for_status()
+        if not resp.content:
+            raise SpeechUnavailable("Azure returned an empty audio body")
+        return resp.content
 
 
 def stt_configured() -> bool:

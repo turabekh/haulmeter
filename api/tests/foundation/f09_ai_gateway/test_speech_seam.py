@@ -64,12 +64,21 @@ def test_resolve_never_returns_a_fake(monkeypatch):
     assert adapter.name == "deepgram"
 
 
-def test_a_configured_adapter_names_its_remainder(monkeypatch):
-    """The network call is a named remainder, and it says so rather than returning ''."""
+def test_a_configured_adapter_is_wired_to_its_provider(monkeypatch):
+    """The remainder Session A named is CLOSED — the call is implemented.
+
+    AI-CONTEXT: this asserts the wiring WITHOUT making a request. An earlier version of
+    this test expected `NotImplementedError`, and when the call landed it started making a
+    real HTTP request from the unit suite and failing on a 401 — a unit test that reaches
+    the internet is a unit test that fails when someone's wifi does. The live proof lives
+    in `make m15-key-smoke`, which is run deliberately and reported in the handoff.
+    """
     monkeypatch.setenv("DEEPGRAM_API_KEY", "dg-present")
     get_settings.cache_clear()
-    with pytest.raises(NotImplementedError, match="NAMED REMAINDER"):
-        speech.resolve_stt().transcribe(b"audio", locale="en")
+    adapter = speech.resolve_stt()
+    assert adapter.name == "deepgram"
+    assert adapter.ENDPOINT.startswith("https://api.deepgram.com/")
+    assert callable(adapter.transcribe)
 
 
 # --- the fakes are for tests, by name only ------------------------------------------
