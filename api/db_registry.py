@@ -42,6 +42,12 @@ MODEL_MODULES = [
     # It hid for a while because pytest COLLECTING m14's own test file imports the models
     # as a side effect — so the full suite passed and a subset failed.
     "app.modules.m14_recovery.domain.models",
+    # AI-CONTEXT: M15 (PRD Extension E3, D14 scope (b)). The comment above says why this
+    # line is not cosmetic, and it applies here unchanged — the failure is remote from the
+    # cause and hides from the module's own suite, because pytest COLLECTING m15's tests
+    # imports these models as a side effect. So m15's tests pass while unrelated suites
+    # error at fixture setup. Added in the same commit as the schema, per TRAPS §1.4.
+    "app.modules.m15_roadside.domain.models",
 ]
 
 

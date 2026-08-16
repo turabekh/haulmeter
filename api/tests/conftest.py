@@ -47,6 +47,11 @@ SCHEMAS = [
     "m12",
     "m13",
     "m14",
+    # AI-CONTEXT: m15 (E3, D14). This list is the sibling of `MODEL_MODULES` and is just
+    # as load-bearing: `create_all` will not invent a schema, so omitting a module here
+    # fails at `CREATE TYPE m15.difficulty` — before any table — and every test in the
+    # module errors at fixture setup rather than failing on an assertion.
+    "m15",
 ]
 TEST_DB = "longhaul_test"
 

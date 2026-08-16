@@ -69,12 +69,14 @@ def test_every_module_router_carries_its_own_gate():
     assert missing == [], f"module routers with no flag gate: {missing}"
 
 
-def test_all_fourteen_modules_are_registered(db):
-    # AI-CONTEXT: M14 is the fourteenth (PRD Extension E2, owner decision D8). The count
-    # is asserted rather than derived from MODULES on purpose — deriving it would make
-    # this test agree with any list, including one a module was accidentally dropped from.
+def test_all_fifteen_modules_are_registered(db):
+    # AI-CONTEXT: M15 is the fifteenth (PRD Extension E3, owner decision D14 scope (b));
+    # M14 was the fourteenth (E2, D8). The count is asserted rather than derived from
+    # MODULES on purpose — deriving it would make this test agree with any list, including
+    # one a module was accidentally dropped from. So adding a module is MEANT to fail this
+    # test once, and the fix is to change the number here rather than to compute it.
     keys = register_all(db)
-    assert len(keys) == 14
+    assert len(keys) == 15
     for module in MODULES:
         assert db.get(flags.FeatureFlag, module.FLAG_KEY) is not None
 

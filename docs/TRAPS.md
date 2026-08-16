@@ -51,6 +51,19 @@ session*; this file records what is permanently true.
    module's own test file imports the models as a side effect — so the full suite passes
    and a subset fails. *(127)*
 
+4a. **A unique index over a NULLABLE column is not unique for the rows where that column
+   is null — and those are usually the ordinary rows.** m15's "one entitlement per subject
+   × kind × window" was written as one `UniqueConstraint` over both subject columns; a
+   subject is an account OR an org, so one is always NULL, Postgres treats NULLs as
+   distinct, and two identical grants both inserted. Splitting it by subject then left
+   `ends_at` doing the same thing one column over — an open-ended grant has no end date —
+   and **the suite was green while a live database still accepted the duplicate**, because
+   the test happened to set an end date. **Use `NULLS NOT DISTINCT` (PG15+) or COALESCE to
+   a sentinel, and prove it by inserting a duplicate rather than by reading the index
+   definition.** The general form: every nullable column in a unique index is a hole, and
+   the test that would find it is the one using the DEFAULTS a caller actually passes.
+   *(132)*
+
 5. **Rebuilding an enum needs the column DEFAULT dropped first.** Postgres refuses to
    re-type a column whose default is expressed in the type being replaced. *(124, 125)*
 
