@@ -66,6 +66,16 @@ session*; this file records what is permanently true.
    `profile.name` for the life of the product, and every facility page shipped with a blank
    `<h1>`. **When a surface reads a field, assert the ENDPOINT returns it.** *(126)*
 
+7a. **A harness fixture that omits a key measures a screen your change never reached.** Two
+   states passed green this way in one session: `sheet-confirm` stops before a dock is
+   chosen, so the pre-acceptance lines it was meant to measure did not exist; and
+   `load-calc-result`'s mock carried no `mpg_basis`, so the MPG disclosure never rendered
+   and the state went green over a screen without it. Neither was caught by the harness —
+   both by asking *"would this have gone red?"*. The identical failure is recorded two
+   fixtures away in the same file about `rate_cents`, which tells you how easy it is to
+   repeat. **After adding an element, check the fixture actually produces it, and make
+   `ready:` point AT the new element.** *(128)*
+
 8. **A test that calls the function *under* a control proves nothing about the control.**
    Every facility test called `askQuestion()` while the button that calls it was disabled in
    every state it rendered in — nobody could ask a question, and the suite was green.
@@ -342,10 +352,25 @@ session*; this file records what is permanently true.
     — no amount of rewriting saves it. The fix is shorter placeholder names, or a figure
     shape like `0/2`. *(122, 123)*
 
+64a. **The placeholder budget is about 7 characters, and it bites more than once.** The
+    pseudo-locale generator inflates only the VISIBLE text while the test measures the
+    whole string, so the two disagree by 0.4 × placeholder length. Two placeholders of
+    normal length already break it; three are unreachable. **A summary line with several
+    slots is label-plus-figures in separate elements** — which is right anyway, since a
+    figure is data and not part of a translated sentence. *(128, and 138 before it)*
+
 65. **A driver-facing string belongs in a `messages.py` beside its module**, registered with
     `f15.register_catalogue(db, prefix, mapping)` and read with
     `notify.localized_text(db, account_id, key, fallback, **values)` — not in a literal at
     the dispatch site. Seven modules use this. *(120)*
+
+65a. **A throwaway check written to audit other checks is not exempt from being wrong.** A
+    one-off script reported an i18n key missing from all six catalogues; it was a false
+    positive from a regex matching the `t(` inside `emi`**`t(`**`"created")`. The standing
+    test in `locale-completeness.test.js` requires a dotted key and never had the bug.
+    **If a quick script disagrees with a long-standing test, suspect the script first** —
+    and check whether the standing test already covers what you were about to write by
+    hand. In that session it did, and more thoroughly. *(128)*
 
 66. **Six identical holes are perfect parity.** A JS-side parity test cannot see a key
     missing from all six locales; the check that catches it enumerates the vocabulary from

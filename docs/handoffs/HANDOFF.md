@@ -3,7 +3,7 @@
 This file is a **pointer, not content**, and as of 2026-08-16 it is one again: it had grown
 to 45 KB of inline summary, which every session read to find one filename.
 
-➡️ **[HANDOFF-127.md](HANDOFF-127.md)** — read this first, every session. It holds the current state,
+➡️ **[HANDOFF-128.md](HANDOFF-128.md)** — read this first, every session. It holds the current state,
 the decisions, the exact next task and the blockers.
 
 - **[SUMMARIES.md](SUMMARIES.md)** — the narrative arc across recent sessions, moved here
@@ -19,6 +19,7 @@ The full history below is never deleted; a handoff is a dated record.
 
 | # | Session |
 |---|---|
+| [128](HANDOFF-128.md) | the premise that was true when it was written |
 | [127](HANDOFF-127.md) | built became ready to be used by a stranger |
 | [126](HANDOFF-126.md) | the stand-in that agreed with the other stand-in |
 | [125](HANDOFF-125.md) | the queue learned to say what is in it |
