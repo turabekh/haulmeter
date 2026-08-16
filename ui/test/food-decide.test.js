@@ -211,6 +211,28 @@ describe("the map only sends a position it actually has", () => {
   const foodCalls = (stub) =>
     stub.mock.calls.filter((c) => String(c[0]).includes("/vendors/appearances"));
 
+  // AI-CONTEXT: why this waits for a REQUEST and not for a DURATION.
+  //
+  // The origin assertion below used to sleep a flat 350 ms against `onBounds`'s
+  // 300 ms debounce and read `.at(-1)`. It was red 5 runs out of 5 in isolation and
+  // green only inside the full suite — a check that passed on another file's timing.
+  // The 50 ms was never the margin: `located` makes MapCanvas recenter and emit its
+  // OWN `bounds` a beat later, which clearTimeouts the debounce and restarts it, so
+  // the origin-bearing request lands past 600 ms and against a bbox this test never
+  // emitted. Waiting for the request is what makes it deterministic; and the claim is
+  // "a request made after the fix carries the origin", never "the last one does" —
+  // which request is last is the canvas's business, not this test's.
+  const originCall = async (stub, timeoutMs = 3000) => {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const hit = foodCalls(stub).find((c) => /[?&]lat=/.test(String(c[0])));
+      if (hit) return String(hit[0]);
+      await new Promise((r) => setTimeout(r, 10));
+      await flushPromises();
+    }
+    return null;
+  };
+
   it("asks for appearances WITHOUT an origin before any location fix", async () => {
     setToken("tok-food");
     const stub = vi.fn(() =>
@@ -241,12 +263,13 @@ describe("the map only sends a position it actually has", () => {
     w.findComponent(MapCanvas).vm.$emit("bounds", {
       min_lat: 42.9, min_lon: -89.6, max_lat: 43.2, max_lon: -89.2,
     });
-    await new Promise((r) => setTimeout(r, 350)); // the bounds debounce
-    await flushPromises();
-
-    const last = String(foodCalls(stub).at(-1)[0]);
-    expect(last).toMatch(/[?&]lat=43\.07/);
-    expect(last).toMatch(/[?&]lon=-89\.4/);
+    const withOrigin = await originCall(stub);
+    expect(withOrigin).not.toBeNull();
+    expect(withOrigin).toMatch(/[?&]lat=43\.07/);
+    expect(withOrigin).toMatch(/[?&]lon=-89\.4/);
+    // the ordering is half the claim: the request made before the fix carried no
+    // origin, so this cannot pass by the surface simply always sending one
+    expect(String(foodCalls(stub)[0][0])).not.toMatch(/[?&]lat=/);
   });
 });
 
