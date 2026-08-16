@@ -89,6 +89,11 @@ def _jobs() -> list[Job]:
         # send — there is no activation decision, and a flag nobody registered would mean
         # no counterparty mail leaves this box at all.
         Job("outbound_mail", None, 60, runners.run_outbound_mail),
+        # J1-D1's arrival reminder. Sixty seconds because the lead time is minutes, not
+        # hours, and a tick coarser than the window would miss appointments entirely.
+        # Unflagged HERE and gated inside the dispatcher instead: a job that does not run
+        # cannot be observed running, and silence is this class's most likely failure.
+        Job("arrival_reminders", None, 60, runners.run_arrival_reminders),
         # AI-CONTEXT: driver push, and the same argument as `outbound_mail` one line up.
         # `dispatch` opened an HTTP connection per subscription inside the request that
         # decided to notify — every §13.1 law is still applied there, at the moment the

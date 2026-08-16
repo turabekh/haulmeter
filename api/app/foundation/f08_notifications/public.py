@@ -38,6 +38,7 @@ from .domain.models import (
     PushSubscription,
 )
 from .domain.service import (
+    ARRIVAL_REMINDER_CLASS,
     BUDGET_EXEMPT_CLASSES,
     LOT_STATUS_PROMPT_CLASS,
     MAX_SEND_ATTEMPTS,
@@ -98,6 +99,7 @@ __all__ = [
     "NOTIFICATION_CLASSES",
     "LOT_STATUS_PROMPT_CLASS",
     "PROTECTION_GAP_CLASS",
+    "ARRIVAL_REMINDER_CLASS",
     "VENDOR_ALERT_CLASS",
     "NotificationClassSpec",
     "NotRouteRelevant",

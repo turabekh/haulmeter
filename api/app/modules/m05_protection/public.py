@@ -14,7 +14,9 @@ from .domain.enums import (
 )
 from .domain.models import ConditionCapture, Incident, OnTimeConsent, OnTimeProof
 from .domain.service import (
+    ARRIVAL_NUDGE_FLAG,
     CAPTURE_CHECKLIST_CONFIG,
+    CONFIG_ARRIVAL_LEAD_MINUTES,
     DEFAULT_CAPTURE_CHECKLIST,
     DRIVER_DOC_TYPES,
     EXPIRING_DOC_TYPES,
@@ -28,6 +30,8 @@ from .domain.service import (
     archive_own_document,
     archived_count,
     archived_documents,
+    arrival_lead_minutes,
+    arrival_reminders_due,
     auto_file_on_arrival,
     capture_checklist,
     capture_document,
@@ -38,6 +42,7 @@ from .domain.service import (
     condition_photo_count,
     condition_sequence,
     discard_drafted_packet,
+    dispatch_arrival_reminders,
     dispatch_expiry_reminders,
     draft_stop_packet_on_exit,
     drafted_packets,
@@ -99,6 +104,11 @@ __all__ = [
     "condition_pack",
     "load_pack",
     "stop_pack",
+    "ARRIVAL_NUDGE_FLAG",
+    "CONFIG_ARRIVAL_LEAD_MINUTES",
+    "arrival_lead_minutes",
+    "arrival_reminders_due",
+    "dispatch_arrival_reminders",
     "dispatch_expiry_reminders",
     "expiry_reminders_due",
     "superseded_by_capturing",

@@ -57,6 +57,7 @@ class NotificationClassSpec:
     budget_exempt: bool = False
 
 
+ARRIVAL_REMINDER_CLASS = "arrival_reminder"
 VENDOR_ALERT_CLASS = "vendor_alert"
 PROTECTION_GAP_CLASS = "protection_gap"
 LOT_STATUS_PROMPT_CLASS = "lot_status_prompt"
@@ -102,6 +103,28 @@ NOTIFICATION_CLASSES: dict[str, NotificationClassSpec] = {
         tier=NotificationTier.P1,
         max_per_day=1,
         opt_in_default=False,
+        route_relevant_only=False,
+        budget_exempt=False,
+    ),
+    # J1-D1 (§23 entry 169, owner-signed — a notification class is a §22.2
+    # never-improvise category and entry 118's delegation does not cover one).
+    #
+    # OPT-IN DEFAULT **ON**, which is the opposite of `lot_status_prompt` above and for a
+    # stated reason: that class asks the driver for LABOUR (§21.8 forbids helping
+    # ourselves to it), while this one fires only for an appointment the driver RECORDED,
+    # on a stop the driver ARMED. They have already asked.
+    # TWO a day, not one: a two-stop day is an ordinary day.
+    # NOT BUDGET-EXEMPT: `protection_gap` earned its exemption by being a DEADLINE — that
+    #   trailer cannot be photographed at that dock ever again — and a reminder about
+    #   something still ahead of you must LOSE to real news rather than crowd it out.
+    # ROUTE-RELEVANCE OFF: relevance is the driver's own armed stop, not a route. The
+    #   geofence-free design is the point — this has to work on a handset that never
+    #   granted background location (§15.5, Phase DoD #8).
+    ARRIVAL_REMINDER_CLASS: NotificationClassSpec(
+        key=ARRIVAL_REMINDER_CLASS,
+        tier=NotificationTier.P1,
+        max_per_day=2,
+        opt_in_default=True,
         route_relevant_only=False,
         budget_exempt=False,
     ),

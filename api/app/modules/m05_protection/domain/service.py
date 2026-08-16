@@ -9,12 +9,13 @@ benefit.
 """
 
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.foundation.f02_facility import public as facility
+from app.foundation.f03_location import public as location
 from app.foundation.f04_evidence import public as evidence
 from app.foundation.f05_load import public as loads
 from app.foundation.f06_documents import public as documents
@@ -66,6 +67,24 @@ def register_module(db: Session) -> None:
         CAPTURE_CHECKLIST_CONFIG,
         DEFAULT_CAPTURE_CHECKLIST,
         "Capture checklist per stop type (A1 req 1)",
+    )
+    # J1-D1 (§23 entry 169). OFF until the handset validation: a push class nobody has
+    # watched arrive is a class nobody has validated, whatever the suite says.
+    flags.register_flag(
+        db,
+        ARRIVAL_NUDGE_FLAG,
+        description=(
+            "J1-B1: remind the driver their appointment is near, on their own armed "
+            "stop. Clock-triggered; suppressed when they are already at the dock."
+        ),
+        default_on=False,
+    )
+    # a tunable on a live box rather than a deploy — the HANDOFF-041 pattern
+    flags.register_config(
+        db,
+        CONFIG_ARRIVAL_LEAD_MINUTES,
+        DEFAULT_ARRIVAL_LEAD_MINUTES,
+        "Minutes before an appointment the arrival reminder fires (J1-D1)",
     )
     admin.register_admin_view(db, "m05.protection", MODULE, "Protection", "/admin/m05/protection")
 
@@ -1418,6 +1437,92 @@ def expiry_reminders_due(db: Session, as_of: date | None = None) -> list:
     as_of = as_of or datetime.now(UTC).date()
     due = documents.due_reminders(db, as_of)
     return sorted(due, key=lambda pair: ((pair[0].expires_on - as_of).days, pair[1]))
+
+
+ARRIVAL_NUDGE_FLAG = "j1_arrival_nudge"
+CONFIG_ARRIVAL_LEAD_MINUTES = "m05.arrival_lead_minutes"
+DEFAULT_ARRIVAL_LEAD_MINUTES = 15
+
+
+def arrival_lead_minutes(db: Session) -> int:
+    from app.foundation.f13_flags import public as flags
+
+    return int(flags.get_config(db, CONFIG_ARRIVAL_LEAD_MINUTES, DEFAULT_ARRIVAL_LEAD_MINUTES))
+
+
+def arrival_reminders_due(db: Session, now: datetime, lead: int) -> list:
+    """Armed stops whose appointment is `lead` minutes away and whose driver is not
+    already there.
+
+    AI-CONTEXT: J1-D1's trigger is THE CLOCK AND THE ARMED STOP — no background location
+    anywhere in it. That is not a simplification: the background sensor is the one
+    mechanism v2.0 DoD #8 records as UNPROVEN, and §15.5's rule is build for auto, degrade
+    to one-tap, never to nothing. This is the path that has to work on a handset that
+    never granted the permission.
+
+    PRESENCE SUPPRESSES IT. A driver already inside the geofence needs no reminder to
+    arrive, so the sensor — where it does work — makes the nudge unnecessary rather than
+    redundant. That is the correct relationship between the two: they are not competing
+    answers to the same question, one removes the need for the other.
+
+    The window is [now, now + lead] rather than an instant, because the worker ticks on an
+    interval and an exact-moment match would fire for nobody. Dedupe is F8's
+    `class_sends_today` plus the `subject_ref`, not a column here — a second reminder for
+    the same stop is the thing being prevented, and F8 already owns that question.
+    """
+    due = []
+    for stop in loads.armed_stops_with_appointment_between(
+        db, now, now + timedelta(minutes=lead)
+    ):
+        load = loads.get_load(db, stop.load_id)
+        if load is None:
+            continue
+        # already at the dock: the geofence answered the question the nudge would ask
+        if location.is_present(db, load.account_id, stop.facility_id):
+            continue
+        due.append((stop, load))
+    return due
+
+
+def dispatch_arrival_reminders(db: Session, gateway, now=None) -> list:
+    """J1-D1's push half, behind `j1_arrival_nudge`.
+
+    A reminder is marked by DISPATCHING it. F8 may suppress it for quiet hours, RESTING or
+    the §13.1 budget, and a suppressed one is FILED rather than retried (§13.3, entry 116)
+    — re-offering the same reminder every tick until one got through would be the nagging
+    §13 exists to prevent. The in-app half is what catches a 04:00 appointment that quiet
+    hours filed, which is why that half is not optional.
+    """
+    from app.foundation.f13_flags import public as flags
+
+    if not flags.is_enabled(db, ARRIVAL_NUDGE_FLAG):
+        return []
+    now = now or datetime.now(UTC)
+    if gateway is None:
+        return []
+    sent = []
+    for stop, load in arrival_reminders_due(db, now, arrival_lead_minutes(db)):
+        fac = facility.get_facility(db, stop.facility_id)
+        facility_name = fac.name if fac is not None else ""
+        # the per-ACCOUNT factory, not one shared recorder — this scan crosses accounts
+        # and Web Push is addressed to one driver's own browsers (entry 111)
+        gw = gateway(db, load.account_id) if callable(gateway) else gateway
+        sent.append(
+            notify.dispatch(
+                db,
+                load.account_id,
+                notify.NotificationTier.P1,
+                notify.ARRIVAL_REMINDER_CLASS,
+                _alert(db, load.account_id, "arrival_reminder.title", facility=facility_name),
+                _alert(db, load.account_id, "arrival_reminder.body"),
+                # §13.5: the exact screen and state, never a tab root
+                "/load",
+                gw,
+                now=now,
+                subject_ref=str(stop.id),
+            )
+        )
+    return sent
 
 
 def dispatch_expiry_reminders(db: Session, gateway, as_of: date | None = None, now=None) -> list:

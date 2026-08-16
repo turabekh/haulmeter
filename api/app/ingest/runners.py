@@ -256,6 +256,28 @@ def _did_work(summary: dict) -> bool:
     )
 
 
+def run_arrival_reminders(db: Session, commit: bool = True) -> dict:
+    """J1-D1's clock. The reminder fires at `appointment - lead` for an armed stop the
+    driver is not already standing at.
+
+    AI-CONTEXT: gated on `j1_arrival_nudge` inside `dispatch_arrival_reminders` rather
+    than by the worker's own `flag_key`, so the job keeps ticking and reports zero while
+    the flag is off. A job that does not run cannot be observed running, and the failure
+    this class is most likely to have is silence — which looks identical to "the flag is
+    off" from outside.
+
+    Per-ACCOUNT gateway factory (entry 111): the scan crosses accounts and Web Push is
+    addressed to one driver's own browsers.
+    """
+    from app.foundation.f08_notifications import public as notify
+    from app.modules.m05_protection import public as m5
+
+    sent = m5.dispatch_arrival_reminders(db, notify.gateway_for)
+    if commit:
+        db.commit()
+    return {"reminders": len(sent)}
+
+
 def run_detention_clock(db: Session, commit: bool = True) -> dict:
     """M3's P0, which nothing had ever fired (§23 entries 106, 107).
 

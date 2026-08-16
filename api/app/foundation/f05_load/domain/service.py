@@ -346,6 +346,36 @@ def disarm_stop(db: Session, stop: Stop, occurred_at: datetime | None = None) ->
     return stop
 
 
+def armed_stops_with_appointment_between(db: Session, start: datetime, end: datetime) -> list[Stop]:
+    """Every ARMED stop across all accounts whose appointment falls in a window.
+
+    AI-CONTEXT: the read J1-D1's arrival reminder is built on, and it is deliberately
+    narrow. It answers one question — which stops are approaching their appointment right
+    now — rather than exposing a stop scanner a later caller could point anywhere.
+
+    ARMED, not merely pending: arming is the driver's own statement that this is the stop
+    they are running, and the reminder fires only for a stop they armed and an appointment
+    they recorded. A pending stop on a multi-stop load has not been chosen yet and its
+    driver has not asked for anything.
+
+    DEPARTED stops are excluded by the same filter: `depart_stop` moves the status off
+    `armed`, so a stop the driver has already finished cannot produce a reminder about
+    reaching it.
+    """
+    return list(
+        db.scalars(
+            select(Stop)
+            .where(
+                Stop.status == StopStatus.armed,
+                Stop.appointment_start.isnot(None),
+                Stop.appointment_start >= start,
+                Stop.appointment_start <= end,
+            )
+            .order_by(Stop.appointment_start)
+        )
+    )
+
+
 def set_stop_appointment(
     db: Session,
     stop: Stop,

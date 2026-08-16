@@ -24,6 +24,27 @@ KEY_PREFIX = "m05.alert."
 DEFAULT_LOCALE_KEY = "en"
 
 ALERT_MESSAGES: dict[str, dict[str, str]] = {
+    # J1-D1. `{facility}` is a dock's own name and is NOT translated — it is a proper
+    # noun on a rate con, and a clerk or a driver reading a translated dock name would be
+    # looking for a place that does not exist under that name (the same rule the pack's
+    # verbatim clause text follows).
+    "arrival_reminder.title": {
+        "en": "Appointment soon · {facility}",
+        "es": "Cita pronto · {facility}",
+        "ru": "Скоро приём · {facility}",
+        "uz": "Uchrashuv yaqin · {facility}",
+        "so": "Ballanta way soo dhow tahay · {facility}",
+        "pa": "ਮੁਲਾਕਾਤ ਨੇੜੇ · {facility}",
+    },
+    "arrival_reminder.body": {
+        "en": "Open the load to check in when you get there.",
+        "es": "Abre la carga para registrarte cuando llegues.",
+        "ru": "Откройте груз, чтобы отметиться по прибытии.",
+        "uz": "Yetib borganingizda belgilanish uchun yukni oching.",
+        "so": "Fur shixnadda si aad u diiwaangeliso markaad timaaddo.",
+        "pa": "ਪਹੁੰਚਣ 'ਤੇ ਚੈੱਕ-ਇਨ ਕਰਨ ਲਈ ਲੋਡ ਖੋਲ੍ਹੋ।",
+    },
+
     # §12.2: lead with the fact, name the consequence, one action. Never scold — the
     # driver did not forget on purpose, and most of the time they were rushed off.
     "protection_gap.title": {
