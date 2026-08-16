@@ -24,6 +24,7 @@ from app.api import (
     m12_fleet,
     m13_vendor,
     m14_recovery,
+    m15_roadside,
     media,
     notifications,
     owner,
@@ -158,6 +159,7 @@ app.include_router(m10_community.router)
 app.include_router(m11_voice.router)
 app.include_router(m12_fleet.router)
 app.include_router(m14_recovery.router)
+app.include_router(m15_roadside.router)
 app.include_router(m13_vendor.router)
 app.include_router(vendor_portal.router)
 
