@@ -207,6 +207,15 @@ def _seed_origin(db):
     print(f"DEV origin seeded around {lat},{lon}: shipper, truck stop, bookable yard")
 
 
+DEMO_HIDDEN_STATE = {
+    "hours": "6",
+    "destination": "Chicago",
+    "cargo": "furniture",
+    "carrier": "Acme Trucking",
+    "trailer": "dry van",
+}
+
+
 def _seed_m15_roadside(db):
     """A DRAFT scenario the engine can be exercised against (E3 §E3.8, D14 Session A).
 
@@ -225,7 +234,26 @@ def _seed_m15_roadside(db):
     recording backs, which is the kind of stand-in that later gets mistaken for real.
     """
     if db.query(m15.Intent).filter(m15.Intent.key == "hos_hours_driven").first():
-        print("m15 demo scenario already seeded — skipping")
+        # AI-CONTEXT: BACKFILL rather than skip outright. `hidden_state` arrived after the
+        # first boxes were seeded, and a scenario without it produces a probe that looks
+        # PERFECT and proves nothing — expected_slots resolves to {} and every answer
+        # scores 100 for having nothing to answer. That false green was reported once
+        # before it was caught; the backfill is what stops the next person hitting it.
+        stale = (
+            db.query(m15.ScenarioVersion)
+            .filter(m15.ScenarioVersion.status == m15.ContentStatus.draft)
+            .all()
+        )
+        patched = 0
+        for scenario in stale:
+            if not scenario.hidden_state and "destination" in (scenario.allowed_intents or []):
+                scenario.hidden_state = dict(DEMO_HIDDEN_STATE)
+                patched += 1
+        if patched:
+            db.commit()
+            print(f"m15: backfilled hidden_state on {patched} already-seeded scenario(s)")
+        else:
+            print("m15 demo scenario already seeded — skipping")
         return
 
     scenario = m15.ScenarioVersion(
@@ -239,13 +267,7 @@ def _seed_m15_roadside(db):
         # needs. The first version of this seed put the string "required" in the slot
         # values, so the scorer checked whether the driver had said the word "required"
         # and marked a perfect answer incomplete.
-        hidden_state={
-            "hours": "6",
-            "destination": "Chicago",
-            "cargo": "furniture",
-            "carrier": "Acme Trucking",
-            "trailer": "dry van",
-        },
+        hidden_state=dict(DEMO_HIDDEN_STATE),
     )
     db.add(scenario)
 
