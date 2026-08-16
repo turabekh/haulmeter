@@ -372,6 +372,14 @@ session*; this file records what is permanently true.
     and check whether the standing test already covers what you were about to write by
     hand. In that session it did, and more thoroughly. *(128)*
 
+65b. **A reader that reconstructs state from EDGES is wrong wherever the state is a
+    row.** `dwell_samples` replayed ENTER/EXIT events while `GeofencePresence` held the
+    visit directly, so visits closed by `disarm_geofence` — which writes no EXIT event —
+    vanished: 35 of 58 on production. The identical defect had already been found and
+    fixed for M3's clock (`visit_window`, entry 73) and never carried across. **When you
+    fix a reader, grep for the other readers of the same idea** — one fixed reader is not
+    a fixed defect. *(129)*
+
 66. **Six identical holes are perfect parity.** A JS-side parity test cannot see a key
     missing from all six locales; the check that catches it enumerates the vocabulary from
     Python. `resolve()` returns the RAW KEY when a string is missing everywhere, and 13

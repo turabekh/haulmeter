@@ -662,33 +662,59 @@ def is_present_anywhere(db: Session, account_id) -> bool:
 
 
 def dwell_samples(db: Session, facility_id) -> list[dict]:
-    # AI-CONTEXT: pair ENTER->EXIT per account at a facility into dwell samples
-    # (seconds + arrival hour). The objective, evidence-grade dwell data M2/M8
-    # build stats on. Ordered per account by time; an ENTER without a following
-    # EXIT is an open stop and is skipped.
-    events = db.scalars(
-        select(GeofenceEvent)
-        .where(GeofenceEvent.facility_id == facility_id)
-        .order_by(GeofenceEvent.account_id, GeofenceEvent.occurred_at)
+    """Every completed visit to this facility: how long, and what hour it began.
+
+    The objective, evidence-grade dwell data M2's stats and M8's risk pair are built on.
+    One CLOSED `GeofencePresence` row is one sample; a visit still open has no duration
+    yet and is skipped, because counting it would invent a departure.
+
+    AI-CONTEXT: a visit is a ROW, not a pair of edges — §23 entry 73, applied here at
+    last.
+
+    This replayed ENTER/EXIT EVENTS and paired them per account. `disarm_geofence` closes
+    a visit without emitting an EXIT event, so every driver who ended a stop through the
+    app's own flow ("Leave this stop" -> `depart_stop` -> `disarm_stop`) had their stop
+    silently DISCARDED from the dwell history. Measured on production before the fix: 58
+    closed visits, **35 of them with no EXIT event**, and 22 usable samples where there
+    should have been 58. One facility cleared M8's n>=5 floor where four should have.
+
+    The same defect was found once already and fixed only for M3's clock: `visit_window`
+    reads these rows and its docstring records why M3's event-replay was wrong. Nothing
+    carried that reasoning across to the function M2 and M8 sit on. Reading presence
+    directly also removes the failure mode that argument was about — a returning driver's
+    second visit can no longer be smeared into their first, because each is its own row.
+
+    NO EXIT EVENT IS SYNTHESISED to make this work, and that is deliberate. The event
+    stream is what a claim's evidence log is built from (`list_events`, M3), so filling
+    the gap from that end would write history that never happened. The visit was always
+    recorded correctly; only the reader was looking in the wrong place.
+    """
+    visits = db.scalars(
+        select(GeofencePresence)
+        .where(
+            GeofencePresence.facility_id == facility_id,
+            GeofencePresence.exited_at.isnot(None),
+        )
+        .order_by(GeofencePresence.entered_at)
     )
     samples: list[dict] = []
-    open_enter: dict = {}
-    for event in events:
-        if event.event_type == GeofenceEventType.ENTER:
-            open_enter[event.account_id] = event.occurred_at
-        elif event.event_type == GeofenceEventType.EXIT:
-            entered = open_enter.pop(event.account_id, None)
-            if entered is not None:
-                seconds = (_as_utc(event.occurred_at) - _as_utc(entered)).total_seconds()
-                if seconds >= 0:
-                    samples.append(
-                        {
-                            "enter_at": entered,
-                            "exit_at": event.occurred_at,
-                            "seconds": seconds,
-                            "arrival_hour": _as_utc(entered).hour,
-                        }
-                    )
+    for visit in visits:
+        entered, exited = _as_utc(visit.entered_at), _as_utc(visit.exited_at)
+        seconds = (exited - entered).total_seconds()
+        # a negative duration is a clock that disagrees with itself, not a stop
+        if seconds < 0:
+            continue
+        samples.append(
+            {
+                "enter_at": visit.entered_at,
+                "exit_at": visit.exited_at,
+                "seconds": seconds,
+                # the hour the truck ARRIVED — M2 buckets on it, and taking it off the
+                # departure would file a night arrival as a morning one on any stop that
+                # runs past midnight
+                "arrival_hour": entered.hour,
+            }
+        )
     return samples
 
 
