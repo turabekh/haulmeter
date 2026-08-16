@@ -44,3 +44,10 @@ api/data/osm/
 # pushed to a public repo (HANDOFF-118 §4). A rule a `git add -A` can break is not a rule.
 longhaul.txt
 split_dump.py
+
+# AI-CONTEXT: a 3.4 MB code dump that lives in the working tree and is NOT the repo's.
+# It was untracked and unignored, so any session running `git add -A` stages it — which
+# happened during the 2026-08-16 docs cleanup and was caught before the commit. The repo
+# is public (rule 3), and nobody has read 3.4 MB of dump for secrets. Ignored so the
+# accident cannot recur; the file itself is left exactly where the owner put it.
+_backend.txt

@@ -9,10 +9,15 @@ fuel, and fleet layers. Driver pays $0, forever.
 1. **`docs/handoffs/HANDOFF.md`** — a pointer to `docs/handoffs/HANDOFF-<latest>.md`, which holds the
    current state, decisions, exact next task, blockers. (Session-0 bootstrap: `HANDOFF-000.md`.)
 2. **`docs/trucker-platform-prd.md`** — the product PRD. **Governing build law.**
-3. **`docs/design-prd.md`** — the **design constitution**. Governs EVERY UI decision.
+3. **`docs/design-prd.md`** — the **design constitution**, §0–§22. Governs EVERY UI decision.
+   **37 KB, and that is deliberate:** §23's decision log was split out on 2026-08-16 at
+   372 KB — 91% of a file every session had to read in full. The log lives in
+   **`docs/decisions/`** and is not a read-first document; go there when you need to know
+   *why* something is the way it is, or to append. §23 itself still holds the rules for
+   how to write to it.
 
 If code and these documents disagree, **the documents win.** Doc changes require an
-explicit owner decision logged in `design-prd.md §23` / PRD §17.
+explicit owner decision logged in `docs/decisions/` (design-prd §23) / PRD §17.
 
 ## The two governing laws
 
