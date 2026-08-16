@@ -53,7 +53,22 @@ const holdsBusy = ref(null);
 
 async function loadHolds(id) {
   try {
-    holds.value = await fetchFleetHolds(id);
+    const payload = await fetchFleetHolds(id);
+    // AI-CONTEXT: the SHAPE is checked here, at the boundary, and a payload that is not a
+    // holds payload is treated exactly like the 404 below (TRAPS §15).
+    //
+    // This crashed the whole surface for several sessions. `holds` was assigned whatever
+    // came back, the template did `holds.holds.length`, and a truthy body without a
+    // `holds` array threw inside render — taking the KPIs down with the panel and
+    // breaking this file's own stated rule that holds "fails SOFT and separately from the
+    // workspace". It surfaced only as a vitest unhandled rejection, so `make ci` exited 1
+    // while all 1020 assertions passed and nothing could observe it.
+    //
+    // Guarding in the TEMPLATE with `holds.holds?.length` would have silenced the crash
+    // and rendered the empty state instead — which reads as "no claims are held", a claim
+    // about a fleet's money made from a response we could not parse. Absent is the honest
+    // rendering, and it is the one the 404 path already chose.
+    holds.value = Array.isArray(payload?.holds) ? payload : null;
   } catch {
     // the overlay is off for this fleet, or the module is not enabled on this box. The
     // panel simply is not there — it does not render an error over a working workspace.

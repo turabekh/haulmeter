@@ -132,6 +132,17 @@ session*; this file records what is permanently true.
     also required or the render throws. `facility-queued-contributions.test.js` has the
     correct shape; copy from that one. *(125)*
 
+16a. **A Vue render error is INVISIBLE to `expect` unless a test installs an
+    `errorHandler`.** It becomes an unhandled rejection: vitest prints `Errors 1 error`,
+    the process exits non-zero, and every assertion still passes — so the suite reports
+    green while a driver-facing screen is broken. `FleetWorkspaceSurface` threw on
+    `holds.holds.length` this way for several sessions, and the only symptom was **`make
+    ci` exiting 1 with 1020/1020 green**, which reads as flakiness and trains everyone to
+    ignore the red. **Mount with `global: { config: { errorHandler } }` and assert the
+    collected errors are empty** — that one line is what makes this whole class assertable.
+    Entry 16's fixture is why nothing caught it: the tests passed *because none of them read
+    the value*. *(133)*
+
 17. **A sabotage that comes back green is not a safe fix; it is a check that does not
     exist.** And **verify the sabotage applied** — a shell variable once made six reverts
     silently not happen. *(121, 122)*

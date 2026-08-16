@@ -283,3 +283,94 @@ Unchanged from HANDOFF-131 §8. One addition: `m15` is in **both** `MODEL_MODULE
 are load-bearing — `create_all` will not invent a schema, so omitting the second fails at
 `CREATE TYPE` before any table, and omitting the first fails remotely in unrelated suites
 while hiding from m15's own.
+
+---
+
+## Addendum — micro-session: `make ci` is green again
+
+A single-target follow-up. The pre-existing vitest unhandled error recorded in §1 is fixed,
+and more importantly the suite can now **see** that class of failure.
+
+### What it actually was
+
+`FleetWorkspaceSurface.vue` rendered `holds.holds.length`. The holds payload came back as a
+truthy object with no `holds` array, so the render threw a TypeError. Vue delivered it to an
+absent `errorHandler`, which made it an **unhandled rejection** — vitest printed
+`Errors 1 error`, the process exited 1, and all 1020 assertions passed. The wrong-shaped
+body came from the fleet test's catch-all `return jsonOk({})`; the real endpoint
+(`api/app/api/m14_recovery.py`) always returns `{holds, can_send, send_blocked_by}`. So the
+stub was unrealistic **and** the surface was fragile — both were wrong, and the surface is
+what got fixed.
+
+### The fix, and the fix that was rejected
+
+`loadHolds` now validates shape at the boundary: `Array.isArray(payload?.holds) ? payload :
+null`, routing a malformed body through the same absent state the 404 path already used.
+
+Guarding in the template with `holds.holds?.length` was rejected deliberately. It silences
+the crash and renders the empty state — which reads as **"no claims are held"**, a claim
+about a fleet's money made from a response we could not parse. Absent is the honest
+rendering, and it is the one this surface's own fail-soft rule already chose.
+
+### The part worth keeping
+
+**A Vue render error is invisible to `expect` unless a test installs an `errorHandler`.**
+That is the whole reason this survived: every assertion was green because none of them could
+observe a render that threw. The new tests mount with
+`global: { config: { errorHandler } }` and assert the collected errors are empty — one line,
+and the class becomes assertable. Recorded as **TRAPS 16a**.
+
+Red-first, then sabotage-verified three times, each round strengthening the tests:
+
+| round | tests red under sabotage |
+|---|---|
+| first draft | 3 of 6 |
+| after fixing a test that passed for the wrong reason | 4 of 6 |
+| after covering `null` / string / number payloads | **6 of 8** |
+
+The second round mattered: "hides the panel" originally passed on the **broken** surface
+too, because a throw also prevents the panel rendering. A test that cannot tell "hidden
+deliberately" from "crashed before it got there" asserts nothing about the fix.
+
+A second defect surfaced that nobody predicted: with `holds: "none"`, `"none".length` is 4
+so nothing throws — instead `v-for` iterates the string's characters, every `hold_id` is
+undefined, and the i18n lookup for `fleet.basis.undefined` throws a missing-key error, after
+rendering four fabricated rows about a fleet's held claims. Different path, same symptom.
+
+### Left alone, on purpose
+
+`ui-components.test.js`'s catch-all `jsonOk({})` is untouched. It is now inert rather than
+dangerous — it exercises the new guard instead of crashing — but it still does not carry
+the real endpoint's shape, so a future edit that starts asserting on `.holds` there would
+get the wrong shape again. A follow-up, not a blocker.
+
+### Small oddity, noted not fixed
+
+`ui/test-results/.last-run.json` is a **tracked** playwright artifact (committed in
+`bf1bcd9`). It is rewritten by every browser run, so it shows up as a spurious modification
+in unrelated diffs and is easy to commit by accident. Probably wants `.gitignore`.
+
+### Verification, and an error I made doing it
+
+The five-run `make ci` check was **run against a moving tree and is void**. I kept editing
+the test file while the runs were in flight — run 1 saw 6 tests and run 2 saw 8 — so the two
+runs measured different code. That is my mistake, and it is the same class as the thing this
+whole micro-session was about: a check that cannot be trusted is worse than no check,
+because it looks like evidence.
+
+Run 2 also surfaced a failure in a test I never touched: `MapSurface — fetches by viewport
+bbox on mount` asserted one overlay fetch and saw five. Investigated rather than dismissed:
+
+- `MapSurface.vue` is byte-identical to HEAD — this micro-session changed only
+  `FleetWorkspaceSurface.vue`;
+- the test passes **5 of 5 in isolation** and **5 of 5 in its full file**, ten clean runs
+  with no reproduction;
+- it uses `vi.useFakeTimers()` and asserts an **exact call count** on a debounced fetch —
+  the exact shape that misbehaves when real async interleaves unpredictably, which is what
+  my concurrent vitest runs were doing to the machine.
+
+So the most likely reading is contention I caused, not a defect. **But it is not proven
+either way, and it is left recorded rather than closed**: an exact-count assertion over a
+debounced fetch under fake timers is a latent flake whatever caused this instance, and it
+is the same family as the food-decide test HANDOFF-131 §6 recorded and this session fixed.
+If it recurs, that file is where to look first.
