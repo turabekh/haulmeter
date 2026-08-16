@@ -19,6 +19,13 @@ fuel, and fleet layers. Driver pays $0, forever.
 If code and these documents disagree, **the documents win.** Doc changes require an
 explicit owner decision logged in `docs/decisions/` (design-prd §23) / PRD §17.
 
+**`docs/TRAPS.md` — read the relevant section before you touch something**, not cover to
+cover. 76 things that have already cost this project time, each with what it cost: the
+migration that reports success and applies nothing, the harness state that measures the
+wrong screen, the deploy that changes nothing, the zero that means "not measured". It
+replaces the "things a later session will trip over" section nine handoffs each rewrote —
+so **new traps go there**, and a handoff carries only what was specific to that session.
+
 ## The two governing laws
 
 - **Build law (PRD §6):** Build the **Common Ground F1–F15 first**, in full, to the

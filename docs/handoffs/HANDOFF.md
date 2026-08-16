@@ -9,6 +9,8 @@ the decisions, the exact next task and the blockers.
 - **[SUMMARIES.md](SUMMARIES.md)** — the narrative arc across recent sessions, moved here
   verbatim from this file. Read it when you want the story rather than the state.
 - **[../decisions/](../decisions/README.md)** — design-prd §23, the append-only decision log.
+- **[../TRAPS.md](../TRAPS.md)** — 76 things that have already cost this project time.
+  Read the relevant section before touching something; add new ones there, not here.
 
 Every session ends by writing the next `HANDOFF-<n>.md` here and pointing this file at it.
 The full history below is never deleted; a handoff is a dated record.
