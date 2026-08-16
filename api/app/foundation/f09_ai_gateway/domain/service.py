@@ -159,7 +159,12 @@ def _record_call(
     output_tokens: int,
     prompt_key: str | None = None,
     account_id=None,
+    cost_micros_override: int | None = None,
 ) -> AiCall:
+    # AI-CONTEXT: the override exists for AUDIO, which is metered in minutes rather than
+    # tokens (E3 §E3.4.4). Pricing a minute as some number of pretend tokens would put a
+    # fiction in the call log; stating the cost directly keeps `budget_used` summing one
+    # honest column across both units. Text callers never pass it.
     call = AiCall(
         module=module,
         account_id=account_id,
@@ -168,7 +173,11 @@ def _record_call(
         model=model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        cost_micros=_cost(input_tokens, output_tokens),
+        cost_micros=(
+            _cost(input_tokens, output_tokens)
+            if cost_micros_override is None
+            else cost_micros_override
+        ),
     )
     db.add(call)
     db.flush()
