@@ -26,7 +26,7 @@
 import { ref, reactive, computed } from "vue";
 import { Camera, TriangleAlert, Check } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
-import { importRateCon, createActiveLoad, geocodeAddress } from "../api.js";
+import { importRateCon, createActiveLoad, geocodeAddress, fetchPreAcceptance } from "../api.js";
 import {
   contactEmailError,
   contactPhoneError,
@@ -112,6 +112,9 @@ function blankStop(type = "delivery") {
     place: null,
     placing: false,
     placeMissed: false,
+    // what this dock has done to other drivers. Fetched when the driver PICKS a known
+    // facility, because there is nothing to know about a dock that is not one yet.
+    intel: null,
   };
 }
 // AI-CONTEXT: "none of these" needs a value of its OWN (§23 entry 65).
@@ -193,6 +196,27 @@ async function read() {
     stops.value = [blankStop()];
   } finally {
     busy.value = false;
+  }
+}
+
+function hourLabel(h) {
+  return `${String(h).padStart(2, "0")}:00`;
+}
+
+// AI-CONTEXT: fetched on the CHOICE, not on the read (J1-A3).
+//
+// A rate con's candidate list is offered and never pre-selected (§23 entry 65), so
+// until the driver picks one there is no facility to ask about — and asking about all
+// three would put two docks' histories on screen beside the one they chose. Failure is
+// silence: this is an extra fact about the dock, and a driver who cannot see it must
+// still be able to file the load.
+async function loadIntel(stop) {
+  stop.intel = null;
+  if (!stop.chosen || stop.chosen === NO_MATCH) return;
+  try {
+    stop.intel = await fetchPreAcceptance(stop.chosen, Number(form.freeMin) || 0);
+  } catch {
+    stop.intel = null;
   }
 }
 
@@ -330,7 +354,12 @@ async function create() {
         <div v-if="stop.candidates.length" class="rc__match">
           <span class="rc__label">{{ t("load.rc_matched") }}</span>
           <label v-for="c in stop.candidates" :key="c.facility_id" class="rc__opt">
-            <input v-model="stop.chosen" type="radio" :value="c.facility_id" />
+            <input
+              v-model="stop.chosen"
+              type="radio"
+              :value="c.facility_id"
+              @change="loadIntel(stop)"
+            />
             <span class="rc__optname">
               {{ c.name }}
               <!-- two facilities may legitimately carry the same name, and this list
@@ -339,9 +368,39 @@ async function create() {
             </span>
           </label>
           <label class="rc__opt">
-            <input v-model="stop.chosen" type="radio" :value="NO_MATCH" />
+            <input
+              v-model="stop.chosen"
+              type="radio"
+              :value="NO_MATCH"
+              @change="loadIntel(stop)"
+            />
             <span>{{ t("load.rc_no_match") }}</span>
           </label>
+          <!-- AI-CONTEXT: what this dock has done to other drivers, at the moment this
+               driver decides (J1-A3, M8-FR6 + M8-FR2).
+               Both reads existed and lived only on a facility page nobody visits before
+               accepting a load. Neither renders below the sample floor — the server
+               withholds them rather than hedging them, so there is nothing here to grey
+               out. A raw pair, never a percentage (§23 entry 153). -->
+          <!-- AI-CONTEXT: label, figure, basis as SEPARATE elements (entry 138).
+               The pseudo-locale generator cannot inflate `{placeholders}`, so a string
+               carrying three of them clears +40% on paper and not on screen — the
+               `paperwork_count` lesson. The figures are data and belong outside the
+               translated sentence anyway; each string stays a whole phrase (§12.5). -->
+          <p v-if="stop.intel?.risk" class="rc__intel">
+            <span>{{ t("load.rc_risk", { free: stop.intel.risk.free_time_minutes }) }}</span>
+            <span class="rc__intel-figure mono">
+              {{ stop.intel.risk.exceeded }} / {{ stop.intel.risk.sample_size }}
+            </span>
+            <span class="rc__intel-meta">{{ t("profile.stops_basis") }}</span>
+          </p>
+          <p v-if="stop.intel?.best_hour" class="rc__intel">
+            <span>{{ t("load.rc_best_hour") }}</span>
+            <span class="rc__intel-figure mono">{{ hourLabel(stop.intel.best_hour.hour) }}</span>
+            <span class="rc__intel-meta">
+              {{ stop.intel.best_hour.sample_size }} {{ t("profile.stops_basis") }}
+            </span>
+          </p>
         </div>
 
         <label class="rc__field">
@@ -573,6 +632,22 @@ async function create() {
   color: var(--text-1);
   font-size: var(--type-body-size);
   line-height: var(--type-body-line);
+}
+.rc__intel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-2);
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+}
+.rc__intel-figure {
+  color: var(--text-1);
+}
+.rc__intel-meta {
+  color: var(--text-3);
 }
 .rc__match {
   display: flex;

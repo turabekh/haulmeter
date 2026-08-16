@@ -1474,6 +1474,20 @@ export async function fetchAppointmentHours(facilityId) {
   return resp.json();
 }
 
+// AI-CONTEXT: J1-A3 — the risk pair and the best hour in ONE call, because this renders
+// inside a confirm step the driver is already waiting on. The sample floor is applied on
+// the server, so an absent half here means "we have nothing to say", never "we have
+// something weak to say" — there is deliberately nothing to hedge on this side.
+export async function fetchPreAcceptance(facilityId, freeTimeMinutes = 120) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const q = new URLSearchParams({ free_time_minutes: freeTimeMinutes });
+  const resp = await fetch(`${API_BASE}/intel/pre-acceptance/${facilityId}?${q}`, {
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`pre-acceptance failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchPoints() {
   return apiGet(`/community/points`, `points`);
 }
@@ -1952,7 +1966,7 @@ export async function suggestACook(lat, lon) {
   return queuedPost("/vendors/suggest", { lat, lon });
 }
 
-export async function saveEquipment({ plateState, plateNumber, unitNumber, vin } = {}) {
+export async function saveEquipment({ plateState, plateNumber, unitNumber, vin, mpg } = {}) {
   if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
   const resp = await fetch(`${API_BASE}/auth/equipment`, {
     method: "PATCH",
@@ -1962,6 +1976,7 @@ export async function saveEquipment({ plateState, plateNumber, unitNumber, vin }
       plate_number: plateNumber,
       unit_number: unitNumber,
       vin,
+      mpg,
     }),
   });
   if (resp.status === 422) throw new Error("invalid_vin");

@@ -173,6 +173,7 @@ def test_full_platform_synthetic_end_to_end(db):
         revenue_cents=200000,
         loaded_miles=500,
         mpg=6.0,
+        mpg_basis="request",
         tolls_cents=3000,
         receiver_facility_id=receiver.id,
         free_time_minutes=120,

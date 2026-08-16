@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import canonical_facility_id, current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
+from app.foundation.f13_flags import public as flags
 from app.modules.m08_intelligence import public as m8
 
 router = APIRouter(prefix="/intel", tags=["intelligence"],
@@ -23,7 +24,11 @@ router = APIRouter(prefix="/intel", tags=["intelligence"],
 class TrueProfitIn(BaseModel):
     revenue_cents: int
     loaded_miles: float
-    mpg: float = 6.0
+    # AI-CONTEXT: NULL means "use whatever this driver reported", and the default that
+    # used to sit here (6.0) is gone from the wire (§23 entry 154). A default on the
+    # request model made the hardcode invisible: every client that omitted the field got
+    # a fuel economy nobody had chosen, and no part of the response admitted it.
+    mpg: float | None = None
     tolls_cents: int = 0
     receiver_facility_id: uuid.UUID
     free_time_minutes: int
@@ -40,12 +45,25 @@ def true_profit(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
+    # AI-CONTEXT: the driver's own fuel economy, and the request may still name one —
+    # a driver checking "what if I ran this in the day cab" is asking a real question.
+    # What it may no longer do is arrive silently: whichever of the three this is, the
+    # response says so (§23 entry 154).
+    profile = db.get(identity.DriverProfile, account.id)
+    reported = profile.mpg if profile is not None else None
+    if body.mpg is not None:
+        mpg_value, mpg_basis = float(body.mpg), "request"
+    elif reported is not None:
+        mpg_value, mpg_basis = float(reported), "driver"
+    else:
+        mpg_value, mpg_basis = float(identity.DEFAULT_MPG), "default"
     r = m8.true_profit(
         db,
         account.id,
         revenue_cents=body.revenue_cents,
         loaded_miles=body.loaded_miles,
-        mpg=body.mpg,
+        mpg=mpg_value,
+        mpg_basis=mpg_basis,
         tolls_cents=body.tolls_cents,
         receiver_facility_id=canonical_facility_id(body.receiver_facility_id, db),
         free_time_minutes=body.free_time_minutes,
@@ -94,10 +112,36 @@ def detention_risk(
     f = m8.detention_risk_flag(db, facility_id, free_time_minutes)
     return {
         "exceed_rate": f.exceed_rate,
+        "exceeded": f.exceeded,
         "sample_size": f.sample_size,
         "confidence": f.confidence,
         "basis": f.basis,
     }
+
+
+@router.get("/pre-acceptance/{facility_id}")
+def pre_acceptance(
+    facility_id: uuid.UUID = Depends(canonical_facility_id),
+    free_time_minutes: int = 120,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """AI-CONTEXT: the two reads a driver needs at the moment they DECIDE (J1-A3).
+
+    One round trip, because this renders inside a confirm step the driver is already
+    waiting on, and the sample floor is applied HERE rather than in each client — there
+    are two clients now, and a floor enforced twice is a floor that will one day be
+    enforced once.
+
+    Behind `j1_preaccept_intel`, and OFF returns the same shape with both halves absent.
+    The screen cannot tell a switched-off capability from a dock with no history, and
+    that is correct: in both cases we have nothing to tell the driver, and inventing a
+    distinction would put a "this feature is off" message where a driver expects facts
+    about a dock.
+    """
+    if not flags.is_enabled(db, m8.PREACCEPT_FLAG):
+        return {"risk": None, "best_hour": None, "min_sample": m8.MIN_SAMPLE}
+    return m8.pre_acceptance(db, facility_id, free_time_minutes)
 
 
 @router.get("/sleep")

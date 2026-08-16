@@ -2834,6 +2834,136 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     expect(created.body.counterparty_phone).toBe(null);
   });
 
+  // --- J1-A3: what this dock has done to other drivers, at the moment of the decision ---
+
+  function stubWithIntel(intel) {
+    const posts = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url, opts) => {
+        const u = String(url);
+        posts.push({ url: u, body: postedBody(opts?.body) });
+        if (u.endsWith("/load/import")) return jsonOk(DRAFT);
+        if (u.includes("/intel/pre-acceptance/")) return jsonOk(intel);
+        return jsonOk({ load_id: "l-1", stop_id: "s-1" });
+      }),
+    );
+    return posts;
+  }
+
+  const INTEL = {
+    risk: { exceeded: 9, sample_size: 21, free_time_minutes: 120 },
+    best_hour: { hour: 6, median_seconds: 4200, sample_size: 8 },
+    min_sample: 5,
+  };
+
+  it("says nothing about a dock until the driver picks one", async () => {
+    // the candidate list is offered and never pre-selected (entry 65), so before the
+    // choice there is no facility to ask about -- and three candidates' histories on
+    // screen at once would be three answers to a question nobody asked yet
+    const posts = stubWithIntel(INTEL);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(posts.some((p) => p.url.includes("/intel/pre-acceptance/"))).toBe(false);
+    expect(w.find(".rc__intel").exists()).toBe(false);
+  });
+
+  it("renders the raw pair once a known dock is chosen", async () => {
+    stubWithIntel(INTEL);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    await w.findAll(".rc__opt input")[0].setValue(true);
+    await settle(w);
+
+    const text = w.findAll(".rc__intel")[0].text();
+    // "9 / 21", never "43%" -- a fraction carries its own sample size (entry 153)
+    expect(text).toContain("9 / 21");
+    expect(text).not.toContain("%");
+    // and it names the free time it was counted against
+    expect(text).toContain("120");
+  });
+
+  it("asks against THIS load's free time, not a default", async () => {
+    const posts = stubWithIntel(INTEL);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    await w.findAll(".rc__opt input")[0].setValue(true);
+    await settle(w);
+
+    const asked = posts.find((p) => p.url.includes("/intel/pre-acceptance/"));
+    // DRAFT parses free_time_minutes: 120
+    expect(asked.url).toContain("free_time_minutes=120");
+  });
+
+  it("renders neither line when the dock has too little history", async () => {
+    // the server withholds below the floor, so there is deliberately nothing to hedge
+    // here -- not a greyed number, not a hedged one: no claim at all
+    stubWithIntel({ risk: null, best_hour: null, min_sample: 5 });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    await w.findAll(".rc__opt input")[0].setValue(true);
+    await settle(w);
+
+    expect(w.find(".rc__intel").exists()).toBe(false);
+  });
+
+  it("drops the intel again when the driver switches to none-of-these", async () => {
+    // a stale figure attached to the wrong dock is worse than no figure
+    stubWithIntel(INTEL);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    const radios = w.findAll(".rc__opt input");
+    await radios[0].setValue(true);
+    await settle(w);
+    expect(w.find(".rc__intel").exists()).toBe(true);
+
+    await radios[radios.length - 1].setValue(true); // none of these
+    await settle(w);
+    expect(w.find(".rc__intel").exists()).toBe(false);
+  });
+
+  it("still files the load when the intel fetch fails", async () => {
+    // an extra fact about the dock must never stand between a driver and their load
+    const posts = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url, opts) => {
+        const u = String(url);
+        posts.push({ url: u, body: postedBody(opts?.body) });
+        if (u.endsWith("/load/import")) return jsonOk(DRAFT);
+        if (u.includes("/intel/pre-acceptance/")) return Promise.reject(new Error("down"));
+        return jsonOk({ load_id: "l-1", stop_id: "s-1" });
+      }),
+    );
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    await w.findAll(".rc__opt input")[0].setValue(true);
+    await settle(w);
+    expect(w.find(".rc__intel").exists()).toBe(false);
+
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+    expect(posts.some((p) => p.url.endsWith("/load") && p.body)).toBe(true);
+  });
+
 });
 
 describe("LoadSurface — §10.2 anatomy and DRIVING", () => {

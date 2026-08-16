@@ -71,12 +71,22 @@ def _equipment_out(profile: identity.DriverProfile | None) -> dict:
     # E2: self-reported equipment. Always present in the payload (nulls when unset)
     # so the client renders one stable section rather than a shifting shape.
     if profile is None:
-        return {"plate_state": None, "plate_number": None, "unit_number": None, "vin": None}
+        return {
+            "plate_state": None,
+            "plate_number": None,
+            "unit_number": None,
+            "vin": None,
+            "mpg": None,
+        }
     return {
         "plate_state": profile.plate_state,
         "plate_number": profile.plate_number,
         "unit_number": profile.unit_number,
         "vin": profile.vin,
+        # AI-CONTEXT: a float on the wire and NULL when unset (§23 entry 154). The null
+        # is the load-bearing half: it means "this driver has not told us", which the
+        # calculator's basis line renders differently from any number, including 6.0.
+        "mpg": float(profile.mpg) if profile.mpg is not None else None,
     }
 
 
@@ -331,6 +341,9 @@ class EquipmentIn(BaseModel):
     plate_number: str | None = None
     unit_number: str | None = None
     vin: str | None = None
+    # sent as a string so an empty one can mean CLEAR; a float field would make "unset"
+    # and "0" the same wire value on a form that submits everything it holds
+    mpg: str | float | None = None
 
 
 @router.patch("/equipment")
@@ -344,7 +357,8 @@ def update_equipment(
     # verification is made anywhere in the payload or the UI (§11.7).
     try:
         vin = identity.validate_vin(body.vin)
-    except identity.InvalidVin as exc:
+        mpg = identity.validate_mpg(body.mpg)
+    except (identity.InvalidVin, identity.InvalidMpg) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     profile = identity.upsert_driver_profile(
         db,
@@ -353,6 +367,7 @@ def update_equipment(
         plate_number=(body.plate_number or "").strip().upper() or None,
         unit_number=(body.unit_number or "").strip() or None,
         vin=vin,
+        mpg=mpg,
     )
     return _equipment_out(profile)
 

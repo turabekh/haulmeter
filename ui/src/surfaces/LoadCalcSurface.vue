@@ -130,7 +130,10 @@ async function calculate() {
   const payload = {
     revenue_cents: toCents(form.revenue),
     loaded_miles: Number(form.miles) || 0,
-    mpg: 6.0,
+    // AI-CONTEXT: the 6.0 that used to sit here is GONE (§23 entry 154). Omitting the
+    // field asks the server for the driver's own reported figure, and the response's
+    // `basis.mpg_basis` says which of the two it used — a fuel cost is the second-largest
+    // number on this screen and it was computed from a constant nobody was ever shown.
     tolls_cents: toCents(form.tolls),
     // the dock this load is actually going to: the active stop's if there is one, the
     // one the driver picked if there is not. The nil UUID stays as the last resort —
@@ -170,6 +173,10 @@ async function calculate() {
   }
   submitting.value = false;
 }
+
+// `default` is the only one worth a line. `driver` means they told us and we used it,
+// which needs no announcement; `request` means they typed it into this very screen.
+const mpgIsOurs = computed(() => result.value?.basis?.mpg_basis === "default");
 
 const clears = computed(() => (result.value?.net_cents ?? 0) >= 0);
 
@@ -319,6 +326,12 @@ const excluded = computed(() => {
         <li v-else class="basis__row">{{ t("calc.basis_no_stops") }}</li>
         <li v-if="!fuelKnown" class="basis__row">{{ t("calc.basis_no_fuel") }}</li>
         <li v-if="detentionKnown" class="basis__row">{{ t("calc.basis_recovery") }}</li>
+        <!-- WHICH fuel economy this cost came from. `driver` is silent on purpose: a
+             driver who reported 5.2 does not need telling that we used 5.2. What needs
+             saying is when the number is OURS. -->
+        <li v-if="mpgIsOurs" class="basis__row">
+          {{ t("calc.basis_mpg_default", { mpg: result.basis.mpg }) }}
+        </li>
       </ul>
     </section>
   </div>

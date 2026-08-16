@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -7,6 +8,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Numeric,
     String,
     UniqueConstraint,
     func,
@@ -249,6 +251,10 @@ class DriverProfile(Base):
     gross_weight_lbs: Mapped[int | None] = mapped_column(nullable=True)
     trailer_type: Mapped[str | None] = mapped_column(String(60), nullable=True)
     equipment_type: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # AI-CONTEXT: the truck's own fuel economy (§23 entry 154). NULL means the driver has
+    # not told us, which is a different statement from any number we could default to —
+    # and the calculator's basis line has to be able to make that distinction out loud.
+    mpg: Mapped[Decimal | None] = mapped_column(Numeric(3, 1), nullable=True)
     # AI-CONTEXT: E2 equipment registration — SELF-REPORTED, never verified (§11.7).
     # Plate + unit ride on M6 bookings and M13-FR7 service callouts; VIN is
     # format-validated only (no decode service, PRD extension §E2).

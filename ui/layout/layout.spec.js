@@ -762,6 +762,13 @@ const SURFACES = [
           detention_confidence: "heuristic",
           detention_recovery: "assumed_none",
           rpm: "computed",
+          // AI-CONTEXT: without these two the mpg disclosure does not render and this
+          // state measures a screen the change never reached (J1-A3). Same failure the
+          // `rate_cents` note on RATE_CON_DRAFT records: a fixture whose shape does not
+          // match its endpoint hides the endpoint. `default` on purpose — that is the
+          // branch that puts a LINE on screen, so it is the branch with a layout.
+          mpg: 6,
+          mpg_basis: "default",
         },
       },
     },
@@ -1176,6 +1183,31 @@ const SURFACES = [
   // the OTHER half of the import: a rate con the parse could not read. It is a
   // different screen — no match list, no "read from your rate con", the manual form
   // carrying the whole load — and §12.4 gives it copy to get right at 360 dp.
+  // AI-CONTEXT: the SAME sheet with a dock chosen, so the pre-acceptance lines are
+  // measured (J1-A3). The confirm state above stops at the candidate list, and these
+  // two lines only exist after a driver picks one — measuring the sheet without them
+  // would report a screen this session just changed as unchanged.
+  //
+  // The figures are the widest realistic ones: three digits either side of the pair and
+  // a two-digit sample, which is what a busy dock looks like after a year.
+  ["sheet-confirm-intel", "/load", {
+    mocks: {
+      ...NO_LOAD_MOCKS,
+      "/load/import": RATE_CON_DRAFT,
+      "/intel/pre-acceptance/00000000-0000-0000-0000-0000000000b3": {
+        risk: { exceeded: 118, sample_size: 214, free_time_minutes: 120 },
+        best_hour: { hour: 6, median_seconds: 4200, sample_size: 31 },
+        min_sample: 5,
+      },
+    },
+    open: [
+      ".cta:not(.cta--text)",
+      { upload: ".rc__input" },
+      ".rc__cta",
+      ".rc__opt input",
+    ],
+    ready: ".rc__intel",
+  }],
   ["sheet-unreadable", "/load", {
     mocks: {
       ...NO_LOAD_MOCKS,

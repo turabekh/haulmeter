@@ -33,11 +33,39 @@ MILE_M = 1609.34
 _STATUS_RANK = {"empty": 0, "some": 1, None: 2, "full": 3}
 
 
+PREACCEPT_FLAG = "j1_preaccept_intel"
+
+# AI-CONTEXT: the floor a figure needs before it is a figure (§23 entry 153).
+#
+# Measured on a real facility: `exceed_rate 0.67` over `sample_size 3` rendered as a
+# display-size 67% in the alarm token. Two stops out of three is not a two-in-three
+# chance of detention. Below the floor NOTHING renders — not a greyed number, not a
+# hedged one: the screen simply does not make the claim.
+#
+# Server-side rather than in each client, because there are two clients now (the
+# facility page and the confirm step) and a floor enforced twice is a floor that will
+# one day be enforced once.
+MIN_SAMPLE = 5
+
+
 def register_module(db: Session) -> None:
     from app.foundation.f13_flags import public as flags
     from app.foundation.f14_admin import public as admin
 
     flags.register_flag(db, FLAG_KEY, description="M8 Decision Intelligence", default_on=True)
+    # AI-CONTEXT: J1-A3 — M8-FR6's risk flag and FR2's hour read, rendered at the moment
+    # the driver DECIDES rather than only on a facility page they would have to go
+    # looking for. Its own flag because it puts numbers in front of an acceptance, and
+    # OFF by default: the reads are old, the moment is new.
+    flags.register_flag(
+        db,
+        PREACCEPT_FLAG,
+        description=(
+            "J1-A3: show this dock's detention-risk pair and best appointment hour on "
+            "the load confirm step, before the driver accepts."
+        ),
+        default_on=False,
+    )
     admin.register_admin_view(db, "m08.intel", MODULE, "Decision Intelligence", "/admin/m08/intel")
 
 
@@ -106,6 +134,12 @@ def true_profit(
     revenue_cents: int,
     loaded_miles: float,
     mpg: float,
+    # AI-CONTEXT: which mpg this is (§23 entry 154). "driver" = they told us; "default"
+    # = ours, because they have not. A fuel cost is the second-largest number on this
+    # screen and it was computed from a constant nobody was ever shown — §11.7's rule is
+    # that a figure does not travel without what produced it, and this one travelled
+    # alone.
+    mpg_basis: str,
     tolls_cents: int,
     receiver_facility_id,
     free_time_minutes: int,
@@ -149,6 +183,8 @@ def true_profit(
         fuel_net_cents_per_gal=fuel_net,
         basis={
             "fuel": fuel_basis,
+            "mpg": mpg,
+            "mpg_basis": mpg_basis,
             "detention_sample_size": det_n,
             "detention_confidence": confidence_for(det_n).value,
             # the MODELLING assumption, beside the confidence in the estimate — they are
@@ -202,6 +238,14 @@ def predict_parking(db: Session, facility_id, hour_of_day: int) -> ParkingForeca
 @dataclass
 class RiskFlag:
     exceed_rate: float | None  # fraction of tracked stops that ran past free time
+    # AI-CONTEXT: the RAW COUNT, carried rather than reconstructed (§23 entry 153).
+    #
+    # That entry settled the shape — a raw pair ("ran past on 9 of 21"), never a
+    # percentage, because a fraction carries its own sample size and "67%" over three
+    # stops overstates what we know. A client can multiply `exceed_rate` back out, but a
+    # figure recovered from a float is a figure that can disagree with itself; the count
+    # is what was measured, so the count is what travels.
+    exceeded: int
     sample_size: int
     confidence: str
     basis: str
@@ -211,15 +255,62 @@ def detention_risk_flag(db: Session, facility_id, free_time_minutes: int) -> Ris
     samples = location.dwell_samples(db, facility_id)
     n = len(samples)
     if n == 0:
-        return RiskFlag(None, 0, Confidence.heuristic.value, "no_data")
+        return RiskFlag(None, 0, 0, Confidence.heuristic.value, "no_data")
     free_seconds = (free_time_minutes or 0) * 60
     exceeded = sum(1 for s in samples if s["seconds"] > free_seconds)
     return RiskFlag(
         exceed_rate=exceeded / n,
+        exceeded=exceeded,
         sample_size=n,
         confidence=confidence_for(n).value,
         basis="tracked_stops",
     )
+
+
+# --- J1-A3: the two reads a driver needs BEFORE accepting, under the sample floor ---
+def pre_acceptance(db: Session, facility_id, free_time_minutes: int) -> dict:
+    """M8-FR6's risk and M8-FR2's best hour for one dock, or nothing.
+
+    AI-CONTEXT: NO NEW COMPUTATION. Both halves are the existing public reads; what is
+    new is only the moment they are asked at. A pre-acceptance screen that invented its
+    own number would be a second answer to a question this product already answers, and
+    the two would drift.
+
+    Each half is independently absent. A dock with 30 tracked stops spread thinly across
+    24 hours has a solid risk pair and no hour that clears the floor, and saying so is
+    more useful than withholding both.
+
+    The risk is measured against THIS LOAD's free time, not a default. "Ran past the 120
+    free minutes your contract gives you" and "ran past the two hours we assumed" are
+    different sentences, and only the first is about the load being accepted.
+    """
+    risk = detention_risk_flag(db, facility_id, free_time_minutes)
+    hours = appointment_hours(db, facility_id)
+    best = next((h for h in hours if h.sample_size >= MIN_SAMPLE), None)
+    return {
+        # the RAW PAIR or nothing — never a rate, and never a hedged figure below the
+        # floor. `free_time_minutes` rides along because the pair means nothing without
+        # the threshold it was counted against (§11.7).
+        "risk": (
+            {
+                "exceeded": risk.exceeded,
+                "sample_size": risk.sample_size,
+                "free_time_minutes": free_time_minutes,
+            }
+            if risk.sample_size >= MIN_SAMPLE
+            else None
+        ),
+        "best_hour": (
+            {
+                "hour": best.hour,
+                "median_seconds": best.median_seconds,
+                "sample_size": best.sample_size,
+            }
+            if best is not None
+            else None
+        ),
+        "min_sample": MIN_SAMPLE,
+    }
 
 
 # --- M8-FR3: "where do I sleep tonight" solver ---

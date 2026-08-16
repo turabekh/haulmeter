@@ -3,7 +3,7 @@
      (balance in Mono + contributor level). Calm and minimal (§15.3). Log out
      clears the session (api.js) and returns to the auth surface. -->
 <script setup>
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { Check } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
@@ -15,6 +15,7 @@ import BottomSheet from "../core/components/BottomSheet.vue";
 import InstallSheet from "../core/components/InstallSheet.vue";
 import { installable, manualInstall, promptInstall } from "../core/install.js";
 import LocalePicker from "../core/components/LocalePicker.vue";
+import { mpgError, normalizeMpg, MIN_MPG, MAX_MPG } from "../core/truck.js";
 import NotificationsSheet from "../core/components/NotificationsSheet.vue";
 import { fetchNotifications, markNotificationRead } from "../core/api.js";
 import Spinner from "../core/components/Spinner.vue";
@@ -87,6 +88,9 @@ async function loadMe() {
     equip.plate_number = me.value.plate_number || "";
     equip.unit_number = me.value.unit_number || "";
     equip.vin = me.value.vin || "";
+    // "" when the driver has never reported one, which is what the field must show —
+    // prefilling 6.0 would put the app's own assumption in a box labelled as theirs
+    equip.mpg = me.value.mpg == null ? "" : String(me.value.mpg);
   } catch {
     me.value = null; // unauthenticated / offline — hide the section
   }
@@ -115,10 +119,14 @@ const equip = reactive({
   plate_number: "",
   unit_number: "",
   vin: "",
+  mpg: "",
   busy: false,
   error: "",
   saved: false,
 });
+// the same rule the server applies, so the driver reads "between 3 and 12" in their own
+// language rather than a 422 carrying a sentence of English out of a Python exception
+const mpgFieldError = computed(() => mpgError(equip.mpg));
 
 async function submitEquipment() {
   equip.error = "";
@@ -130,11 +138,13 @@ async function submitEquipment() {
       plateNumber: equip.plate_number,
       unitNumber: equip.unit_number,
       vin: equip.vin,
+      mpg: normalizeMpg(equip.mpg),
     });
     equip.plate_state = saved.plate_state || "";
     equip.plate_number = saved.plate_number || "";
     equip.unit_number = saved.unit_number || "";
     equip.vin = saved.vin || "";
+    equip.mpg = saved.mpg == null ? "" : String(saved.mpg);
     equip.saved = true;
   } catch (e) {
     equip.error = e.message === "invalid_vin" ? t("equipment.vin_error") : t("equipment.vin_error");
@@ -329,8 +339,29 @@ function signOut() {
             autocapitalize="characters"
           />
         </label>
+        <!-- AI-CONTEXT: the truck's fuel economy (§23 entry 154). It sits in the
+             equipment card because that is where truck FACTS live, and the calculator
+             reads it from here rather than owning a second copy. Blank is a real answer
+             and the hint says what blank means, so an empty box is not read as an
+             unfinished form. -->
+        <label class="field">
+          <span class="field__label">{{ t("equipment.mpg") }}</span>
+          <input
+            v-model="equip.mpg"
+            class="field__input"
+            type="number"
+            inputmode="decimal"
+            step="0.1"
+            :min="MIN_MPG"
+            :max="MAX_MPG"
+          />
+          <span class="equip__hint">{{ t("equipment.mpg_hint") }}</span>
+          <span v-if="mpgFieldError" class="equip__error" role="alert">
+            {{ t(mpgFieldError) }}
+          </span>
+        </label>
         <p v-if="equip.error" class="equip__error" role="alert">{{ equip.error }}</p>
-        <button class="cta cta--accent" type="submit" :disabled="equip.busy">
+        <button class="cta cta--accent" type="submit" :disabled="equip.busy || !!mpgFieldError">
           <Spinner v-if="equip.busy" />
           {{ equip.busy
             ? t("busy.saving")
@@ -400,6 +431,13 @@ function signOut() {
   margin: 0;
   color: var(--flare-500);
   font-size: var(--type-caption-size);
+}
+/* what a BLANK field means, said where the blank is — an empty box on a form otherwise
+   reads as one the driver has not finished */
+.equip__hint {
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
 }
 .alerts {
   display: flex;

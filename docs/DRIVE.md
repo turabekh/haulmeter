@@ -120,6 +120,20 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
    How often the parse is right on real paper is a **measurement, not a test** — `make ratecon-eval
    DIR=…` against a corpus held outside this (public) repo. Below 10 documents across 3 broker
    formats it reports itself as a sample.
+6. **What this dock has done to other drivers `[J1-A3]`** — flag `j1_preaccept_intel`, ships
+   **OFF**. With it on, **picking a matched facility** in the candidate list adds up to two
+   lines under it: the detention **raw pair** ("Ran past 120 free minutes · 9 / 21 tracked
+   stops") and the quickest appointment hour with its own sample. Three things to check:
+   - it appears **on the choice**, not on the read — before a driver picks, there is no dock
+     to ask about, and three candidates' histories at once is three answers to a question
+     nobody asked;
+   - it is a **pair, never a percentage** (§23 entry 153), and it names the free time it was
+     counted against — the risk is measured against *this contract's* free minutes, so
+     editing **Free minutes** and re-picking the dock changes the count;
+   - below **5 tracked stops nothing renders at all** — not a greyed figure, not a hedged one.
+     Seed a thin dock and confirm the lines are simply absent.
+   Switching to **"None of these"** clears both lines: a stale figure attached to the wrong
+   dock is worse than no figure.
 
 ## J4 — Arm, arrive, The Meter `[M3-FR1..2, F3, §9]`
 1. On the load: **Arm stop** for the **DEV — shipper**. Sensors = your seed ORIGIN (`make
@@ -348,6 +362,17 @@ OCR draft → each rides the same pipeline into Money with its own type.
 ## J19 — Decision tools `[M8]`
 `/load/calc` states its **basis** (sample sizes / heuristic), never fakes precision; Map →
 sleep-solver ranks tonight's options.
+
+**Fuel economy `[J1-A3]`** — no flag; the disclosure is honesty, not a feature.
+1. Fresh account → `/load/calc` → Calculate. The basis list ends with **"Fuel figured at 6 mpg
+   — ours, not yours."** That line is the whole point: the calculator burned a hardcoded 6.0
+   for the life of the project and nothing on screen ever said so.
+2. **More → Equipment → Miles per gallon**, enter `5.2`, Save. Back to `/load/calc` →
+   Calculate: the fuel cost **changes** and the "ours, not yours" line is **gone** — a driver
+   who told us 5.2 does not need telling we used 5.2.
+3. Type `60` (the pickup's figure) → the range message appears **in your locale** and Save is
+   disabled. Clear the field → saves as blank, and the calculator goes back to saying the
+   number is ours. Blank and 6.0 are different answers and the screen must keep them apart.
 
 ## J20 — Settlement auditor `[M9]`
 `/money/audit` → upload a settlement PDF → parse → discrepancy report against your own stop history

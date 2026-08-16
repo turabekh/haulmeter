@@ -10,7 +10,9 @@ carries its basis. Runs behind the F13 flag m08_intelligence.
 from .domain.enums import Confidence, confidence_for
 from .domain.service import (
     FLAG_KEY,
+    MIN_SAMPLE,
     MODULE,
+    PREACCEPT_FLAG,
     HourRec,
     ParkingForecast,
     ProfitResult,
@@ -20,6 +22,7 @@ from .domain.service import (
     appointment_hours,
     detention_risk_flag,
     expected_detention_cost,
+    pre_acceptance,
     predict_parking,
     register_module,
     route_fuel_cost,
@@ -40,6 +43,9 @@ __all__ = [
     "StopRec",
     "appointment_hours",
     "detention_risk_flag",
+    "pre_acceptance",
+    "PREACCEPT_FLAG",
+    "MIN_SAMPLE",
     "expected_detention_cost",
     "predict_parking",
     "register_module",

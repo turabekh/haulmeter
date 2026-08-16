@@ -1,5 +1,6 @@
 import secrets
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -181,6 +182,42 @@ def validate_vin(vin: str | None) -> str | None:
     if cleaned[8] != expected:
         raise InvalidVin("check digit does not match")
     return cleaned
+
+
+# AI-CONTEXT: the fuel economy a driver reports (§23 entry 154).
+#
+# The bounds are wide on purpose and they are a TYPO CHECK, not a claim about trucking.
+# A loaded Class 8 runs roughly 5.5–7; a light or empty run beats that, a reefer pulling
+# grades does worse, and none of that is this function's business. What it catches is the
+# driver who types 60 for their pickup or 0.6 for a decimal slip — a fuel cost off by an
+# order of magnitude in the one screen whose entire job is telling them whether a load
+# pays.
+MIN_MPG = Decimal("3")
+MAX_MPG = Decimal("12")
+
+# the value the calculator has always used, kept as a NAMED default so the basis line can
+# say it is ours. It is not written to any profile: a stored 6.0 would be indistinguishable
+# from a driver who happens to run 6.0, and the difference is what the driver needs told.
+DEFAULT_MPG = Decimal("6.0")
+
+
+class InvalidMpg(Exception):
+    pass
+
+
+def validate_mpg(raw) -> Decimal | None:
+    """Returns the value to store, or None when unset. None means CLEAR, not an error —
+    a driver who is unsure of their real figure must be able to take their guess back
+    out, and the calculator then says the number is ours again."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    try:
+        value = Decimal(str(raw).strip()).quantize(Decimal("0.1"))
+    except (ArithmeticError, ValueError):
+        raise InvalidMpg("mpg must be a number") from None
+    if not (MIN_MPG <= value <= MAX_MPG):
+        raise InvalidMpg(f"mpg must be between {MIN_MPG:g} and {MAX_MPG:g}")
+    return value
 
 
 def _normalize_email(email: str) -> str:

@@ -72,6 +72,7 @@ def test_true_profit_nets_fuel_and_expected_detention(db):
         revenue_cents=200000,
         loaded_miles=500,
         mpg=6.0,
+        mpg_basis="request",
         tolls_cents=3000,
         receiver_facility_id=fac.id,
         free_time_minutes=120,
@@ -108,6 +109,7 @@ def test_the_profit_figure_states_that_it_assumes_no_recovery(db):
         revenue_cents=200000,
         loaded_miles=500,
         mpg=6.0,
+        mpg_basis="request",
         tolls_cents=3000,
         receiver_facility_id=fac.id,
         free_time_minutes=120,
@@ -181,6 +183,7 @@ def test_no_loaded_miles_is_not_a_rate_of_zero(db):
         revenue_cents=100000,
         loaded_miles=0,
         mpg=6.5,
+        mpg_basis="request",
         tolls_cents=0,
         receiver_facility_id=_receiver(db).id,
         free_time_minutes=120,
@@ -196,3 +199,76 @@ def test_no_loaded_miles_is_not_a_rate_of_zero(db):
     assert result.net_cents == result.revenue_cents - result.fuel_cost_cents - (
         result.tolls_cents + result.expected_detention_cents
     )
+
+
+# --- J1-A3: the pre-acceptance read, and the floor under it (§23 entry 153) ---
+
+
+def _dwells(db, fac, n, hours, start_email="pa"):
+    """n stops of `hours` each, one account per stop — `dwell_samples` is per visit."""
+    for i in range(n):
+        acct = _account(db, f"{start_email}-{i}-{hours}@x.com")
+        _dwell(db, acct, fac, T6, T6 + timedelta(hours=hours))
+
+
+def test_the_risk_pair_renders_once_the_sample_clears_the_floor(db):
+    """"Ran past free time on 6 of 6 tracked stops" — the raw pair entry 153 settled on,
+    counted against THIS load's free time rather than a default."""
+    fac = _receiver(db)
+    _dwells(db, fac, m8.MIN_SAMPLE + 1, hours=3)  # every one an hour past 120 min free
+
+    out = m8.pre_acceptance(db, fac.id, free_time_minutes=120)
+
+    assert out["risk"] == {
+        "exceeded": m8.MIN_SAMPLE + 1,
+        "sample_size": m8.MIN_SAMPLE + 1,
+        "free_time_minutes": 120,
+    }
+
+
+def test_below_the_floor_the_screen_makes_no_claim_at_all(db):
+    """The other direction, and the one that matters. Not a greyed number, not a hedged
+    one: `risk` is absent, because two stops out of three is not a two-in-three chance
+    of detention and there is no honest way to say it smaller."""
+    fac = _receiver(db)
+    _dwells(db, fac, m8.MIN_SAMPLE - 1, hours=3, start_email="thin")
+
+    assert m8.pre_acceptance(db, fac.id, free_time_minutes=120)["risk"] is None
+
+
+def test_the_pair_is_counted_against_the_free_time_the_contract_gives(db):
+    """"Ran past the 120 minutes your contract gives you" and "ran past the two hours we
+    assumed" are different sentences, and only the first is about this load."""
+    fac = _receiver(db)
+    _dwells(db, fac, m8.MIN_SAMPLE, hours=3, start_email="ft")  # 3h stops
+
+    generous = m8.pre_acceptance(db, fac.id, free_time_minutes=240)
+    tight = m8.pre_acceptance(db, fac.id, free_time_minutes=60)
+
+    assert generous["risk"]["exceeded"] == 0
+    assert tight["risk"]["exceeded"] == m8.MIN_SAMPLE
+
+
+def test_a_dock_nobody_has_tracked_says_nothing_rather_than_zero(db):
+    """A zero pair over a zero sample would read as "this dock never detains anyone",
+    which is the falsest precision available (entry 154)."""
+    fac = _receiver(db)
+
+    out = m8.pre_acceptance(db, fac.id, free_time_minutes=120)
+
+    assert out["risk"] is None
+    assert out["best_hour"] is None
+
+
+def test_the_two_halves_are_absent_independently(db):
+    """A dock with a solid risk pair and no hour that clears the floor is a real dock.
+    Withholding both because one is thin would throw away what we do know."""
+    fac = _receiver(db)
+    # every stop on hour 6, so the risk clears the floor AND so does the hour bucket
+    _dwells(db, fac, m8.MIN_SAMPLE, hours=3, start_email="both")
+
+    out = m8.pre_acceptance(db, fac.id, free_time_minutes=120)
+
+    assert out["risk"] is not None
+    assert out["best_hour"]["hour"] == 6
+    assert out["best_hour"]["sample_size"] == m8.MIN_SAMPLE
