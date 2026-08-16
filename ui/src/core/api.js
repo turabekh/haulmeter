@@ -1488,6 +1488,28 @@ export async function fetchPreAcceptance(facilityId, freeTimeMinutes = 120) {
   return resp.json();
 }
 
+// AI-CONTEXT: M5-FR1's on-time check-in consent (J1-B1). The endpoints have existed
+// since M5 shipped and NOTHING in the app called them — the entry-122 shape, built and
+// unreachable. This is the caller, not new machinery.
+//
+// The choice is stored per LOAD because it has to survive the drive, and it gates the
+// NOTICE only: the proof artifact is filed on every arrival either way, because a driver
+// who declined to tell the broker still wants to be able to prove when they got there.
+export async function setOnTimeConsent({ loadId, enabled, counterpartyEmail = null }) {
+  if (typeof fetch === "undefined" || !token.value) throw new Error("no session");
+  const resp = await fetch(`${API_BASE}/protection/on-time/consent`, {
+    method: "PUT",
+    headers: headers(),
+    body: JSON.stringify({
+      load_id: loadId,
+      enabled,
+      counterparty_email: counterpartyEmail,
+    }),
+  });
+  if (!resp.ok) throw new Error(`on-time consent failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchPoints() {
   return apiGet(`/community/points`, `points`);
 }

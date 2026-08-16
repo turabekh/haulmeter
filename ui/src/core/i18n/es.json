@@ -569,6 +569,7 @@
   "load.notice_early": "La detención aún no empieza — nada que notificar.",
   "load.notice_ok": "Bróker notificado — detención registrada.",
   "load.on_time": "A tiempo",
+  "load.on_time_offer": "Avisar a {broker} cuando llegue",
   "load.paperwork_for_stop": "Papeleo de esta parada",
   "load.photos": "Fotos",
   "load.rc_add": "Agregar carga",

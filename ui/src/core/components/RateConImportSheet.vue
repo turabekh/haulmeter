@@ -26,7 +26,13 @@
 import { ref, reactive, computed } from "vue";
 import { Camera, TriangleAlert, Check } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
-import { importRateCon, createActiveLoad, geocodeAddress, fetchPreAcceptance } from "../api.js";
+import {
+  importRateCon,
+  createActiveLoad,
+  geocodeAddress,
+  fetchPreAcceptance,
+  setOnTimeConsent,
+} from "../api.js";
 import {
   contactEmailError,
   contactPhoneError,
@@ -64,6 +70,18 @@ const form = reactive({
   // and until now they read it off the photograph every time.
   brokerPhone: "",
   reference: "",
+  // AI-CONTEXT: M5-FR1's on-time check-in, OFF by default (J1-B1).
+  //
+  // The capability shipped with M5 and no screen ever offered it — endpoints reachable by
+  // nothing, the entry-122 shape. This is the offer, at the one moment the driver is
+  // already looking at the broker's address.
+  //
+  // OFF by default and never a gate: telling a broker "we arrived on time" is a
+  // professionalism play some drivers want and others will not, and defaulting it on
+  // would send a counterparty a message on the driver's behalf that they never chose.
+  // It is also the documented answer to the blacklisting fear — it is the same geofence
+  // as the detention clock, pointed at the driver's own reputation instead.
+  onTimeCheckIn: false,
   freeMin: "",
   rateHr: "",
   // AI-CONTEXT: what the load PAYS (§23 entry 84). `rate_cents` has been in the parse
@@ -286,6 +304,10 @@ const routeReady = computed(() => stops.value.length > 0 && stops.value.every((s
 // at the paper rather than as a 422 three taps later
 const brokerEmailError = computed(() => contactEmailError(form.brokerEmail));
 const brokerPhoneError = computed(() => contactPhoneError(form.brokerPhone));
+// no recipient, no offer — a question whose answer cannot be acted on is not a question
+const canOfferCheckIn = computed(
+  () => !!normalizeContactEmail(form.brokerEmail) && !brokerEmailError.value,
+);
 
 function stopSource(stop) {
   return stop.parsedStart && stop.apptStart === String(stop.parsedStart).slice(0, 16)
@@ -296,7 +318,7 @@ function stopSource(stop) {
 async function create() {
   busy.value = true;
   try {
-    await createActiveLoad({
+    const created = await createActiveLoad({
       facility_name: stops.value[0].name || "Receiver",
       lat: stops.value[0].place.lat,
       lon: stops.value[0].place.lon,
@@ -326,6 +348,18 @@ async function create() {
         create_new_facility: stop.chosen === NO_MATCH,
       })),
     });
+    // AI-CONTEXT: recorded AFTER the load exists, because consent is stored per load —
+    // and it must never be able to cost the driver the load. A failed consent write
+    // leaves a filed load with the check-in off, which is the honest degradation: the
+    // proof artifact is filed on arrival either way, so what is lost is the notice to
+    // the broker, not the evidence.
+    if (form.onTimeCheckIn && created?.load_id) {
+      await setOnTimeConsent({
+        loadId: created.load_id,
+        enabled: true,
+        counterpartyEmail: normalizeContactEmail(form.brokerEmail),
+      }).catch(() => {});
+    }
     emit("created");
   } catch {
     /* leave the form as typed — losing a confirmed rate con to a failed request
@@ -507,6 +541,17 @@ async function create() {
           {{ t(brokerPhoneError) }}
         </span>
       </label>
+      <!-- AI-CONTEXT: M5-FR1's on-time check-in (J1-B1), offered where the driver is
+           already looking at the broker's address.
+           Rendered ONLY when there is an address to send to: "Send arrival check-in to
+           {broker}?" over an empty recipient is a question with no answer, and a toggle
+           that silently does nothing is worse than no toggle. Off by default — this
+           sends a counterparty a message on the driver's behalf, and §21.8's rule about
+           not helping ourselves to a driver's labour applies to their reputation too. -->
+      <label v-if="canOfferCheckIn" class="rc__check">
+        <input v-model="form.onTimeCheckIn" type="checkbox" />
+        <span>{{ t("load.on_time_offer", { broker: form.broker || t("load.broker") }) }}</span>
+      </label>
       <!-- the money the load pays. Editable like every other parsed value, because a
            parse is a proposal and the driver is the one holding the paper. -->
       <label class="rc__field">
@@ -583,6 +628,15 @@ async function create() {
   margin-bottom: var(--s-2);
   color: var(--text-2);
   font-size: var(--type-label-size);
+}
+.rc__check {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 48px;
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
 }
 .rc__field {
   display: block;

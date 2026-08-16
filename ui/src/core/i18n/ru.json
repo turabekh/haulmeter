@@ -569,6 +569,7 @@
   "load.notice_early": "Простой ещё не начался — уведомлять нечего.",
   "load.notice_ok": "Брокер уведомлён — простой зафиксирован.",
   "load.on_time": "Вовремя",
+  "load.on_time_offer": "Сообщить {broker}, когда приеду",
   "load.paperwork_for_stop": "Документы для этой остановки",
   "load.photos": "Фото",
   "load.rc_add": "Добавить груз",

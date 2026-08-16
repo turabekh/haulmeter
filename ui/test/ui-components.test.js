@@ -2972,6 +2972,87 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     expect(posts.some((p) => p.url.endsWith("/load") && p.body)).toBe(true);
   });
 
+  // --- J1-B1: the on-time check-in, offered where the address is confirmed ---
+
+  it("offers the check-in only when there is somebody to send it to", async () => {
+    // "Tell {broker} when I arrive" over an empty recipient is a question with no
+    // answer, and a toggle that silently does nothing is worse than no toggle
+    stub({ ...DRAFT, contact: { email: null, phone: null } });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(w.find(".rc__check").exists()).toBe(false);
+
+    await w.findAll("input[type=email]")[0].setValue("ap@cardinal.example");
+    await w.vm.$nextTick();
+    expect(w.find(".rc__check").exists()).toBe(true);
+  });
+
+  it("is OFF by default and sends no consent when untouched", async () => {
+    // this sends a counterparty a message on the driver's behalf. Defaulting it on
+    // would help ourselves to their reputation the way §21.8 forbids for their labour.
+    const posts = stub({ ...DRAFT, contact: { email: "ap@cardinal.example", phone: null } });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(w.find(".rc__check input").element.checked).toBe(false);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(posts.some((p) => p.url.includes("/on-time/consent"))).toBe(false);
+  });
+
+  it("records the consent against the load once the driver asks for it", async () => {
+    const posts = stub({ ...DRAFT, contact: { email: "ap@cardinal.example", phone: null } });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    await w.find(".rc__check input").setValue(true);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    const consent = posts.find((p) => p.url.includes("/on-time/consent"));
+    expect(consent).toBeTruthy();
+    // per LOAD, because the choice has to survive the drive
+    expect(consent.body.load_id).toBe("l-1");
+    expect(consent.body.enabled).toBe(true);
+    expect(consent.body.counterparty_email).toBe("ap@cardinal.example");
+  });
+
+  it("still files the load when the consent write fails", async () => {
+    // the proof artifact is filed on arrival either way, so a failed consent costs the
+    // NOTICE, not the evidence — and it must never cost the driver the load
+    const posts = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url, opts) => {
+        const u = String(url);
+        posts.push({ url: u, body: postedBody(opts?.body) });
+        if (u.endsWith("/load/import")) {
+          return jsonOk({ ...DRAFT, contact: { email: "ap@cardinal.example", phone: null } });
+        }
+        if (u.includes("/on-time/consent")) return Promise.reject(new Error("down"));
+        return jsonOk({ load_id: "l-1", stop_id: "s-1" });
+      }),
+    );
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+    await w.find(".rc__check input").setValue(true);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(posts.some((p) => p.url.endsWith("/load") && p.body)).toBe(true);
+    expect(w.emitted("created")).toBeTruthy();
+  });
+
 });
 
 describe("LoadSurface — §10.2 anatomy and DRIVING", () => {

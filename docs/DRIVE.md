@@ -111,6 +111,13 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
 4a. **What we read, in your language `[J1-A2]`** — the money terms appear as a stated
    reading above the editable fields, so the confirm step is a comparison a non-English
    reader can actually make. Full walk-through in **J17 step 3a**.
+4b. **On-time check-in `[J1-B1, M5-FR1]`** — on the confirm sheet, under the broker phone,
+   a single unticked line: **"Tell {broker} when I arrive"**. It appears **only** when a
+   broker address is present (no recipient, no offer) and is **off by default** — it sends
+   a counterparty a message on the driver's behalf, so it is theirs to ask for. Tick it,
+   file the load, and the consent is recorded against that load. ⚠️ live-fire: use a
+   fixture address. The proof artifact is filed on arrival **either way**; consent gates
+   only the notice to the broker.
 5. **Broker contact, prefilled from the paper `[J1-A1]`** — flag `j1_contact_parse`, ships **OFF**;
    switch it on in `/admin/flags` first or the fields arrive blank and the step proves nothing.
    With it on, a rate con that prints an AP address lands it in **Broker email** and the number in
@@ -141,6 +148,19 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
    dock is worse than no figure.
 
 ## J4 — Arm, arrive, The Meter `[M3-FR1..2, F3, §9]`
+0. **The arrival nudge `[J1-B1]`** — flag `j1_arrival_nudge`, ships **OFF**; switch it on in
+   `/admin/flags` first. With an armed stop whose appointment is ~15 min out (the lead is
+   `m05.arrival_lead_minutes`, tunable in `/admin/config`), the worker sends one P1 push
+   that deep-links to `/load` with the arrival CTA in view. Three things to watch:
+   - it needs **no background location** — the trigger is the clock and the armed stop, so
+     it works on a handset that never granted the permission (that permission is DoD #8's
+     open question, which is exactly why this path must not depend on it);
+   - **already at the dock → silence.** Arrive first, then wait for the lead window: no
+     push. The geofence answered the question the nudge would have asked;
+   - **the in-app half needs no push at all.** Open `/load` with the appointment passed and
+     the Meter already says so, in the warning colour, with **I've arrived** primary. That
+     is what catches a 04:00 appointment quiet hours filed.
+
 1. On the load: **Arm stop** for the **DEV — shipper**. Sensors = your seed ORIGIN (`make
    seed-where`). Creating the load at that facility arms its first stop for you.
 2. Pre-arrival shows **"I've arrived"** CTA (§15.5). Preferred: nudge Sensors onto the shipper pin

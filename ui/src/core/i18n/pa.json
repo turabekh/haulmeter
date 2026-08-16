@@ -569,6 +569,7 @@
   "load.notice_early": "ਰੁਕਾਵਟ ਹਾਲੇ ਸ਼ੁਰੂ ਨਹੀਂ ਹੋਈ — ਸੂਚਿਤ ਕਰਨ ਲਈ ਕੁਝ ਨਹੀਂ।",
   "load.notice_ok": "ਬ੍ਰੋਕਰ ਨੂੰ ਸੂਚਿਤ ਕੀਤਾ — ਰੁਕਾਵਟ ਦਰਜ।",
   "load.on_time": "ਸਮੇਂ ਸਿਰ",
+  "load.on_time_offer": "ਜਦੋਂ ਮੈਂ ਪਹੁੰਚਾਂ {broker} ਨੂੰ ਦੱਸੋ",
   "load.paperwork_for_stop": "ਇਸ ਸਟਾਪ ਦੇ ਕਾਗਜ਼ਾਤ",
   "load.photos": "ਫੋਟੋਆਂ",
   "load.rc_add": "ਲੋਡ ਸ਼ਾਮਲ ਕਰੋ",

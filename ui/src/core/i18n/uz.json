@@ -569,6 +569,7 @@
   "load.notice_early": "Kutish hali boshlanmadi — xabar berishga hojat yo'q.",
   "load.notice_ok": "Broker ogohlantirildi — kutish qayd etildi.",
   "load.on_time": "O'z vaqtida",
+  "load.on_time_offer": "Yetib borganimda {broker}ga xabar berilsin",
   "load.paperwork_for_stop": "Bu to'xtash uchun hujjatlar",
   "load.photos": "Rasmlar",
   "load.rc_add": "Yuk qo'shish",

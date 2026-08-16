@@ -569,6 +569,7 @@
   "load.notice_early": "Detention hasn't started yet — nothing to notify.",
   "load.notice_ok": "Broker notified — detention on record.",
   "load.on_time": "On time",
+  "load.on_time_offer": "Tell {broker} when I arrive",
   "load.paperwork_for_stop": "Paperwork for this stop",
   "load.photos": "Photos",
   "load.rc_add": "Add a load",
