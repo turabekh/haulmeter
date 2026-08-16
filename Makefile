@@ -2,7 +2,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci vapid-keys \
-        seed seed-where seed-wallet purge-demo m15-tg-draft ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
+        seed seed-where seed-wallet purge-demo m15-tg-draft m15-key-smoke ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
         repair-fuel repair-contact repair-duplicates osm-publish ingest-remote ui-layout ui-layout-only \
         ratecon-eval
 
@@ -133,6 +133,11 @@ seed:
 # AI-CONTEXT: the Tajik reviewer's working file (E3 §E3.3). It TRANSLATES NOTHING —
 # see the script's own header. `m15-*` per E3 §E3.8's namespace note; `m14-*` belongs
 # to the recovery overlay and is on production.
+# AI-CONTEXT: live key smoke — reaches three paid APIs over the internet, so it is NEVER
+# in `make ci`. A suite that fails when the wifi does is a suite people learn to ignore.
+m15-key-smoke:
+	$(COMPOSE) run --rm -v $(PWD):/repo -e SMOKE_OUT=/repo/docs/voice-samples api python -m scripts.m15_key_smoke
+
 m15-tg-draft:
 	$(COMPOSE) run --rm --no-deps -v $(PWD):/repo -e REPO_ROOT=/repo api python -m scripts.i18n_draft_tg
 
