@@ -10,7 +10,7 @@ so the shape is fixed and callers fail cleanly rather than silently.
 
 from typing import Protocol
 
-from . import security
+from . import security, telegram
 from .enums import MethodType
 
 
@@ -45,6 +45,33 @@ class PasswordHandler:
             return security.verify_password(secret_ref, credential)
 
 
+class TelegramHandler:
+    """AI-CONTEXT: E3 §E3.2 — the first method to take up this registry's own promise.
+
+    It does not fit the password shape and does not pretend to. There is NO per-account
+    secret: identity is proven by a payload Telegram signed with the bot token, so
+    `build_secret_ref` returns None and the AuthMethod row's `identifier` (the Telegram
+    user id) is the whole record.
+
+    `verify` RAISES rather than returning False when the bot token is unset, which departs
+    from a bool-returning protocol on purpose — `_NotImplementedHandler` below establishes
+    that raising from here is how this registry says "not possible" as opposed to "not
+    correct". False means "that is not the right credential", and an operator reading it
+    would go looking for a driver's mistake instead of a missing environment variable.
+    """
+
+    def build_secret_ref(self, credential: str) -> str | None:
+        return None
+
+    def verify(self, secret_ref: str | None, credential: str) -> bool:
+        # `credential` is a Mini App initData query string. The Login Widget path carries
+        # a field dict and is verified through `telegram.check_login_widget` directly by
+        # the route, because the two payloads are not the same shape and flattening them
+        # into one string here is how the two secret derivations get confused.
+        telegram.check_mini_app_init_data(credential)
+        return True
+
+
 class _NotImplementedHandler:
     def __init__(self, method_type: MethodType) -> None:
         self._method_type = method_type
@@ -65,6 +92,7 @@ _REGISTRY: dict[MethodType, AuthHandler] = {
     MethodType.oauth: _NotImplementedHandler(MethodType.oauth),
     MethodType.otp_email: _NotImplementedHandler(MethodType.otp_email),
     MethodType.otp_sms: _NotImplementedHandler(MethodType.otp_sms),
+    MethodType.telegram: TelegramHandler(),
 }
 
 

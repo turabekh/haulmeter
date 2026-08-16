@@ -20,6 +20,7 @@ absence is the design and an absence leaves no other trace:
   strings in anything this module renders.
 """
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.foundation.f13_flags import public as flags
@@ -55,3 +56,33 @@ def register_module(db: Session) -> None:
 
 def is_enabled(db: Session) -> bool:
     return flags.is_enabled(db, FLAG_KEY)
+
+
+# --- the module's half of the guest claim (E3 §E3.2 item 2) --------------------------
+
+
+def claim_guest_sessions(db: Session, guest_token, account_id) -> int:
+    """Re-point this guest's sessions at a real account. Returns how many moved.
+
+    AI-CONTEXT: THE OTHER HALF OF THE CLAIM LIVES IN F1, and the split is the boundary
+    rather than a preference. `core < foundation < modules`: F1 owns the principal's
+    lifecycle and cannot know what a session is; m15 owns these rows and cannot mark a
+    principal claimed. Both halves must run in ONE transaction — the caller's obligation,
+    asserted by a test that rolls the pair back together.
+
+    `guest_token` is deliberately NOT cleared. Quality law Q-10 says guest work is never
+    lost silently, and keeping the token is what lets a support question — "where did my
+    practice go?" — be answered from the rows instead of guessed at. The claim is recorded
+    on the F1 principal; this column is the trail back to it.
+    """
+    from .models import Session as RoadsideSession
+
+    sessions = list(
+        db.scalars(
+            select(RoadsideSession).where(RoadsideSession.guest_token == guest_token)
+        )
+    )
+    for session in sessions:
+        session.account_id = account_id
+    db.flush()
+    return len(sessions)

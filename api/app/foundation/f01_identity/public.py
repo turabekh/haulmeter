@@ -7,11 +7,22 @@ method registry is the seam for future OAuth/OTP. Consumed by every module.
 
 from .domain.auth_methods import get_handler, is_implemented
 from .domain.enums import AuthorityType, MethodType, OrgType, Role, VerifyStatus
+from .domain.guests import (
+    GUEST_ENABLED_MODULES,
+    GUEST_TTL,
+    GuestModuleNotEnabled,
+    GuestPrincipalUnusable,
+    claim_guest,
+    is_expired,
+    issue_guest,
+    resolve_guest,
+)
 from .domain.models import (
     Account,
     AuthMethod,
     AuthSession,
     DriverProfile,
+    GuestPrincipal,
     LoginAttempt,
     Organization,
     OrgMembership,
@@ -79,6 +90,13 @@ from .domain.service import (
     verify_authority,
     verify_current_password,
 )
+from .domain.telegram import (
+    TelegramAuthInvalid,
+    TelegramAuthUnavailable,
+    check_login_widget,
+    check_mini_app_init_data,
+    telegram_user_id,
+)
 from .domain.verifier import (
     AuthorityVerifier,
     FakeAuthorityVerifier,
@@ -87,6 +105,20 @@ from .domain.verifier import (
 )
 
 __all__ = [
+    "GUEST_ENABLED_MODULES",
+    "GUEST_TTL",
+    "GuestModuleNotEnabled",
+    "GuestPrincipal",
+    "GuestPrincipalUnusable",
+    "TelegramAuthInvalid",
+    "TelegramAuthUnavailable",
+    "check_login_widget",
+    "check_mini_app_init_data",
+    "claim_guest",
+    "is_expired",
+    "issue_guest",
+    "resolve_guest",
+    "telegram_user_id",
     "start_impersonation",
     "resolve_impersonation",
     "end_impersonation",

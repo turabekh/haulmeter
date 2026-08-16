@@ -112,6 +112,21 @@ class Settings(BaseSettings):
     # is present; empty -> the deterministic FakeAuthorityVerifier. Key in .env only.
     fmcsa_webkey: str = Field(default="")
 
+    # AI-CONTEXT: E3 §E3.2 / §E3.4.5 — THESE THREE REFUSE WHEN UNSET rather than
+    # degrading, which is the opposite of every key above and is deliberate.
+    #
+    # `anthropic_api_key` and `fmcsa_webkey` fall back to deterministic Fakes because a
+    # fake parse is visibly a fake parse. These three cannot: with no bot token there is
+    # no way to distinguish a real Telegram user from a forged payload, and with no
+    # speech key the alternative is on-device recognition, which E3 rules out for scoring
+    # (accented-English quality, logged transcripts, human review and consistent
+    # evaluation all require the server path). A silent fallback is how a scoring control
+    # becomes decorative — audit F-02's shape.
+    telegram_bot_token: str = Field(default="")
+    deepgram_api_key: str = Field(default="")
+    azure_speech_key: str = Field(default="")
+    azure_speech_region: str = Field(default="")
+
     # F9 embeddings — Voyage AI (Anthropic's recommended embeddings partner; Anthropic
     # has no embeddings API). Real vectors activate when a key is present; empty -> the
     # deterministic FakeModelProvider embedding. Key in .env only. Model dim = EMBED_DIM.

@@ -15,9 +15,33 @@ M15 shares nothing with M14 beyond the platform. They are neighbours in the modu
 and strangers in the import graph, deliberately.
 """
 
+from .domain.enums import (
+    ContentStatus,
+    Difficulty,
+    EntitlementKind,
+    EntitlementSource,
+    SessionMode,
+    Speaker,
+    TurnReviewStatus,
+)
+from .domain.models import (
+    CoachingContent,
+    DrillPlan,
+    Entitlement,
+    Intent,
+    PhraseVariant,
+    ReviewSample,
+    ScenarioVersion,
+    Session,
+    SignItem,
+    SkillState,
+    TrainingRecord,
+    Turn,
+)
 from .domain.service import (
     FLAG_KEY,
     MODULE,
+    claim_guest_sessions,
     is_enabled,
     register_module,
 )
@@ -25,6 +49,26 @@ from .domain.service import (
 __all__ = [
     "FLAG_KEY",
     "MODULE",
+    "CoachingContent",
+    "ContentStatus",
+    "Difficulty",
+    "DrillPlan",
+    "Entitlement",
+    "EntitlementKind",
+    "EntitlementSource",
+    "Intent",
+    "PhraseVariant",
+    "ReviewSample",
+    "ScenarioVersion",
+    "Session",
+    "SessionMode",
+    "SignItem",
+    "SkillState",
+    "Speaker",
+    "TrainingRecord",
+    "Turn",
+    "TurnReviewStatus",
+    "claim_guest_sessions",
     "is_enabled",
     "register_module",
 ]

@@ -6,6 +6,12 @@ class MethodType(enum.Enum):
     oauth = "oauth"
     otp_email = "otp_email"
     otp_sms = "otp_sms"
+    # AI-CONTEXT: E3 §E3.2 (D14). The registry's own header predicted this — "social OAuth
+    # and email/SMS OTP slot in later with ZERO account/session-model rework" — and
+    # Telegram is the first method to take it up. One account has many AuthMethod rows, so
+    # a driver who starts in Telegram and adds a password later merges nothing, because
+    # nothing was ever separate.
+    telegram = "telegram"
 
 
 class Role(enum.Enum):

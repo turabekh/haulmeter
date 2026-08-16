@@ -270,3 +270,46 @@ class DriverProfile(Base):
     )
 
     account: Mapped[Account] = relationship(back_populates="profile")
+
+
+class GuestPrincipal(Base):
+    """An unauthenticated principal a module may hand work to before anyone signs up.
+
+    AI-CONTEXT: F1's law said a new method must "slot in without reworking the account
+    schema or session model", and this is the other half of E3 §E3.2 — a principal that is
+    NOT an account. It exists so a driver can take the free Roadside Check before deciding
+    whether to trust us with an email address, which is M15-FR1's whole shape.
+
+    Three properties do the work, and each is a refusal of an easier design:
+
+    · **`module` is an opt-in, not a label.** A guest principal is usable only by modules
+      that have declared they can take one (m15 first). The alternative — a general
+      anonymous session every module quietly accepts — would spread unauthenticated
+      writes across the platform one convenience at a time.
+    · **It expires.** Seven days, and expiry is checked on resolve rather than swept, so a
+      principal is dead the moment it is due whether or not a job has run. A guest
+      credential that outlives its purpose is just a weak account.
+    · **It is claimed exactly once.** `claimed_at` and `claimed_account_id` are written
+      together, and the partial unique index below is what stops a token being claimed
+      into two accounts by two concurrent requests — the second is a race, not a retry,
+      and quality law Q-10 says guest work is never lost silently.
+
+    There is no password, no secret and nothing to verify: holding the token IS the
+    principal. That is why it is short-lived and single-module.
+    """
+
+    __tablename__ = "guest_principal"
+    __table_args__ = (
+        UniqueConstraint("token", name="uq_guest_principal_token"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    token: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid4, index=True)
+    module: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claimed_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(f"{SCHEMA}.account.id"), nullable=True, index=True
+    )
