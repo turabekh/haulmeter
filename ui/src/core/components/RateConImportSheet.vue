@@ -36,6 +36,7 @@ import {
 import { lastFix } from "../location.js";
 import { formatMoney } from "../meter.js";
 import Spinner from "./Spinner.vue";
+import DwellIntel from "./DwellIntel.vue";
 
 const emit = defineEmits(["created"]);
 const { t } = useI18n();
@@ -238,10 +239,6 @@ async function read() {
   }
 }
 
-function hourLabel(h) {
-  return `${String(h).padStart(2, "0")}:00`;
-}
-
 // AI-CONTEXT: fetched on the CHOICE, not on the read (J1-A3).
 //
 // A rate con's candidate list is offered and never pre-selected (§23 entry 65), so
@@ -433,30 +430,10 @@ async function create() {
             <span>{{ t("load.rc_no_match") }}</span>
           </label>
           <!-- AI-CONTEXT: what this dock has done to other drivers, at the moment this
-               driver decides (J1-A3, M8-FR6 + M8-FR2).
-               Both reads existed and lived only on a facility page nobody visits before
-               accepting a load. Neither renders below the sample floor — the server
-               withholds them rather than hedging them, so there is nothing here to grey
-               out. A raw pair, never a percentage (§23 entry 153). -->
-          <!-- AI-CONTEXT: label, figure, basis as SEPARATE elements (entry 138).
-               The pseudo-locale generator cannot inflate `{placeholders}`, so a string
-               carrying three of them clears +40% on paper and not on screen — the
-               `paperwork_count` lesson. The figures are data and belong outside the
-               translated sentence anyway; each string stays a whole phrase (§12.5). -->
-          <p v-if="stop.intel?.risk" class="rc__intel">
-            <span>{{ t("load.rc_risk", { free: stop.intel.risk.free_time_minutes }) }}</span>
-            <span class="rc__intel-figure mono">
-              {{ stop.intel.risk.exceeded }} / {{ stop.intel.risk.sample_size }}
-            </span>
-            <span class="rc__intel-meta">{{ t("profile.stops_basis") }}</span>
-          </p>
-          <p v-if="stop.intel?.best_hour" class="rc__intel">
-            <span>{{ t("load.rc_best_hour") }}</span>
-            <span class="rc__intel-figure mono">{{ hourLabel(stop.intel.best_hour.hour) }}</span>
-            <span class="rc__intel-meta">
-              {{ stop.intel.best_hour.sample_size }} {{ t("profile.stops_basis") }}
-            </span>
-          </p>
+               driver decides (J1-A3, M8-FR6 + M8-FR2). Rendered by the SHARED component
+               so this surface and the facility page cannot answer the same question in
+               two formats (§23 R3) — that divergence is exactly what B3 removed. -->
+          <DwellIntel :intel="stop.intel" />
         </div>
 
         <label class="rc__field">
@@ -733,22 +710,6 @@ async function create() {
   color: var(--text-1);
   font-size: var(--type-body-size);
   line-height: var(--type-body-line);
-}
-.rc__intel {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s-1) var(--s-2);
-  margin: 0;
-  color: var(--text-2);
-  font-size: var(--type-caption-size);
-  line-height: var(--type-body-line);
-}
-.rc__intel-figure {
-  color: var(--text-1);
-}
-.rc__intel-meta {
-  color: var(--text-3);
 }
 .rc__match {
   display: flex;

@@ -49,15 +49,20 @@ function jsonOk(body) {
 }
 
 // `risk`/`hours` are what the two intel fetches return; `sample` drives the honesty floor
-function net(profile, { risk = null, hours = [], questions = [], muted = null } = {}) {
+// AI-CONTEXT: ONE intel endpoint now (§23 R3). This served `/intel/detention-risk` and
+// `/intel/appointment-hours` because the surface read both and applied the sample floor
+// itself. The floor lives on the server, so what a client test can honestly assert is
+// what it does with what it is GIVEN — an absent half renders nothing, a present one
+// renders the raw pair. Whether the floor is applied correctly is asserted where the
+// floor is, in pytest, in both directions.
+function net(profile, { risk = null, best_hour = null, questions = [], muted = null } = {}) {
   return vi.fn((url, opts) => {
     const u = String(url);
     if (opts?.method === "POST") return jsonOk({ ok: true });
     if (u.includes("/profile")) return jsonOk(profile);
-    if (u.includes("/intel/detention-risk")) {
-      return jsonOk(risk ?? { exceed_rate: null, sample_size: 0, basis: "tracked_stops" });
+    if (u.includes("/intel/pre-acceptance")) {
+      return jsonOk({ risk, best_hour, min_sample: 5 });
     }
-    if (u.includes("/intel/appointment-hours")) return jsonOk(hours);
     if (u.includes("/community/questions")) return jsonOk(questions);
     if (u.includes("/prompt-pref")) return jsonOk({ muted });
     if (u.includes("/vendors/service-center/")) return jsonOk(null);
@@ -214,46 +219,50 @@ describe("a facility nobody has reported on is quiet (§15.3)", () => {
   });
 });
 
-describe("a rate is not shown until it is one (§11.7)", () => {
-  it("suppresses a percentage drawn from too few stops", async () => {
-    /* MEASURED: `exceed_rate 0.67` over `sample_size 3` rendered a display-size 67% in
-       --flare-500, the alarm token. Two stops out of three is not a two-in-three chance,
-       and the decision log already settled this shape for vendor reliability: a raw pair,
-       never a percentage, because "95% over two appearances would overstate what we
-       know". */
+describe("a rate is not shown until it is one (§11.7, §23 R3)", () => {
+  it("renders the raw pair, never a percentage", async () => {
+    /* MEASURED before entry 153: `exceed_rate 0.67` over `sample_size 3` rendered a
+       display-size 67% in --flare-500, the alarm token. That entry put a floor under it
+       and left the percentage standing, so this page and the load-confirm step described
+       the same dock two different ways. R3 collapsed them onto one component: a raw pair
+       carries its own sample size, and "9 of 21" cannot overstate itself the way a
+       fraction rendered as a percentage can. */
     vi.stubGlobal(
       "fetch",
-      net(RICH, { risk: { exceed_rate: 0.67, sample_size: 3, basis: "tracked_stops" } }),
+      net(RICH, { risk: { exceeded: 8, sample_size: 12, free_time_minutes: 120 } }),
     );
     const w = await mountFacility();
 
+    expect(w.text()).toContain("8 / 12");
     expect(w.text()).not.toContain("67%");
-    expect(w.find(".risk__figure").exists()).toBe(false);
+    expect(w.text()).not.toContain("%");
+    // the pair never travels without the threshold it was counted against
+    expect(w.text()).toContain("120");
     w.unmount();
   });
 
-  it("shows it once the sample carries it", async () => {
-    vi.stubGlobal(
-      "fetch",
-      net(RICH, { risk: { exceed_rate: 0.67, sample_size: 12, basis: "tracked_stops" } }),
-    );
+  it("renders nothing when the server withholds the figure", async () => {
+    /* Below the floor the server sends null, so there is deliberately nothing here to
+       hedge: absent is absent. The floor itself is asserted in both directions in
+       pytest — a client that re-decided it would be the second enforcement that makes a
+       rule stop being one. */
+    vi.stubGlobal("fetch", net(RICH, { risk: null, best_hour: null }));
     const w = await mountFacility();
 
-    expect(w.find(".risk__figure").text()).toBe("67%");
-    // the sample is never dropped from the figure it qualifies
-    expect(w.text()).toContain("12");
+    expect(w.find(".intel").exists()).toBe(false);
     w.unmount();
   });
 
-  it("suppresses a fastest hour drawn from too few stops", async () => {
-    // "00:00" off two stops is a midnight that means nothing
+  it("renders the two halves independently", async () => {
+    // a dock with a solid pair and no hour that clears the floor is a real dock
     vi.stubGlobal(
       "fetch",
-      net(RICH, { hours: [{ hour: 0, median_seconds: 8100, sample_size: 2 }] }),
+      net(RICH, { risk: { exceeded: 8, sample_size: 12, free_time_minutes: 120 }, best_hour: null }),
     );
     const w = await mountFacility();
 
-    expect(w.find(".best-hour").exists()).toBe(false);
+    expect(w.findAll(".intel")).toHaveLength(1);
+    expect(w.text()).toContain("8 / 12");
     w.unmount();
   });
 });

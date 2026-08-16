@@ -877,8 +877,14 @@ const FAC_PROFILE = {
   detention_risk: { rate: null, sample_size: 0, basis: "m3_pending" },
   reviews: [],
 };
-const FAC_RISK = { exceed_rate: 0.43, sample_size: 14, confidence: "high", basis: "tracked_stops" };
-const FAC_HOURS = [{ hour: 6, median_seconds: 2400, sample_size: 9, confidence: "medium" }];
+// AI-CONTEXT: the `/intel/pre-acceptance` shape (§23 R3) — one endpoint, and the sample
+// floor already applied by the server. The old fixture carried `exceed_rate` for an
+// endpoint this surface no longer calls.
+const FAC_INTEL = {
+  risk: { exceeded: 6, sample_size: 14, free_time_minutes: 120 },
+  best_hour: { hour: 6, median_seconds: 2400, sample_size: 9 },
+  min_sample: 5,
+};
 const FAC_QUESTIONS = [
   {
     question_id: "q-1",
@@ -896,8 +902,7 @@ function stubFacility() {
   vi.stubGlobal("fetch", vi.fn().mockImplementation((url) => {
     const u = String(url);
     if (u.includes("/facility/f-1/profile")) return jsonOk(FAC_PROFILE);
-    if (u.includes("/intel/detention-risk")) return jsonOk(FAC_RISK);
-    if (u.includes("/intel/appointment-hours")) return jsonOk(FAC_HOURS);
+    if (u.includes("/intel/pre-acceptance")) return jsonOk(FAC_INTEL);
     if (u.includes("/community/questions")) return jsonOk(FAC_QUESTIONS);
     // AI-CONTEXT: null, not `{}`, and the difference is not cosmetic. An UNCLAIMED
     // facility returns null here (M13-FR7), and the surface's `v-if="serviceCenter"`
@@ -913,7 +918,7 @@ function stubFacility() {
 }
 
 describe("FacilityProfileSurface — M8 intel (FR6 risk + FR2 fastest hour)", () => {
-  it("shows the detention-risk % and fastest hour with basis", async () => {
+  it("shows the raw pair and fastest hour with basis — never a percentage", async () => {
     stubFacility();
     const router = testRouter();
     router.push("/facility/f-1");
@@ -922,10 +927,13 @@ describe("FacilityProfileSurface — M8 intel (FR6 risk + FR2 fastest hour)", ()
     await flushPromises();
     const text = w.text();
     expect(text).toContain("Detention risk");
-    expect(w.find(".risk__figure").text()).toBe("43%");
-    expect(w.find(".risk__figure").classes()).toContain("hot"); // >=40% -> flare
-    expect(text).toContain("Fastest hour");
-    expect(w.find(".best-hour__figure").text()).toBe("06:00");
+    // R3: the same figure, in the same format, as the load-confirm step. The old
+    // assertion pinned "43%" in the alarm token — a fraction rendered as a percentage,
+    // which drops the sample size that qualifies it (entry 153).
+    expect(text).toContain("6 / 14");
+    expect(text).not.toContain("43%");
+    expect(text).toContain("120"); // the free time the pair was counted against
+    expect(text).toContain("06:00");
     w.unmount();
   });
 });
@@ -2868,7 +2876,7 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     await settle(w);
 
     expect(posts.some((p) => p.url.includes("/intel/pre-acceptance/"))).toBe(false);
-    expect(w.find(".rc__intel").exists()).toBe(false);
+    expect(w.find(".intel").exists()).toBe(false);
   });
 
   it("renders the raw pair once a known dock is chosen", async () => {
@@ -2881,7 +2889,7 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     await w.findAll(".rc__opt input")[0].setValue(true);
     await settle(w);
 
-    const text = w.findAll(".rc__intel")[0].text();
+    const text = w.findAll(".intel")[0].text();
     // "9 / 21", never "43%" -- a fraction carries its own sample size (entry 153)
     expect(text).toContain("9 / 21");
     expect(text).not.toContain("%");
@@ -2916,7 +2924,7 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     await w.findAll(".rc__opt input")[0].setValue(true);
     await settle(w);
 
-    expect(w.find(".rc__intel").exists()).toBe(false);
+    expect(w.find(".intel").exists()).toBe(false);
   });
 
   it("drops the intel again when the driver switches to none-of-these", async () => {
@@ -2930,11 +2938,11 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     const radios = w.findAll(".rc__opt input");
     await radios[0].setValue(true);
     await settle(w);
-    expect(w.find(".rc__intel").exists()).toBe(true);
+    expect(w.find(".intel").exists()).toBe(true);
 
     await radios[radios.length - 1].setValue(true); // none of these
     await settle(w);
-    expect(w.find(".rc__intel").exists()).toBe(false);
+    expect(w.find(".intel").exists()).toBe(false);
   });
 
   it("still files the load when the intel fetch fails", async () => {
@@ -2957,7 +2965,7 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
 
     await w.findAll(".rc__opt input")[0].setValue(true);
     await settle(w);
-    expect(w.find(".rc__intel").exists()).toBe(false);
+    expect(w.find(".intel").exists()).toBe(false);
 
     await w.find(".rc__cta").trigger("click");
     await settle(w);

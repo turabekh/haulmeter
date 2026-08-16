@@ -15,8 +15,7 @@ import { formatDwell } from "../core/presentation.js";
 import {
   fetchProfile,
   submitReview,
-  fetchDetentionRisk,
-  fetchAppointmentHours,
+  fetchPreAcceptance,
   fetchQuestions,
   fetchServiceCenter,
   askQuestion,
@@ -27,6 +26,7 @@ import {
 } from "../core/api.js";
 import { verificationPresentation } from "../core/vendors.js";
 import SkeletonCard from "../core/components/SkeletonCard.vue";
+import DwellIntel from "../core/components/DwellIntel.vue";
 import { LoadState, Failure, failureOf } from "../core/load-state.js";
 import Spinner from "../core/components/Spinner.vue";
 
@@ -91,11 +91,13 @@ async function load() {
     profileState.value = LoadState.FAILED;
   }
   try {
-    const [risk, hours] = await Promise.all([
-      fetchDetentionRisk(route.params.id),
-      fetchAppointmentHours(route.params.id),
-    ]);
-    intel.value = { risk, best_hour: hours[0] ?? null };
+    // AI-CONTEXT: ONE source, ONE floor (§23 R3). This called `/intel/detention-risk`
+    // and `/intel/appointment-hours` and applied its own `MIN_RATE_SAMPLE` in JS, while
+    // the load-confirm step read `/intel/pre-acceptance` where the server applies it —
+    // two endpoints, two floors, two formats for one question about one dock. The floor
+    // now lives in exactly one place, which is the only number of places a floor can
+    // live and stay true.
+    intel.value = await fetchPreAcceptance(route.params.id);
     intelState.value = LoadState.LOADED;
     intelFailure.value = null;
   } catch (e) {
@@ -171,41 +173,20 @@ const claimTier = computed(() =>
   serviceCenter.value ? verificationPresentation(serviceCenter.value.verify_status) : null,
 );
 
-/* AI-CONTEXT: a percentage needs a sample big enough to be one (§23 entry 153).
+/* AI-CONTEXT: the floor and the format both MOVED (§23 R3, entry 153).
  *
- * Measured on a real facility: `exceed_rate 0.67` over `sample_size 3` rendered as a
- * display-size **67%** in `--flare-500`, the alarm token, because `.hot` fires at 40.
- * Two stops out of three is not a two-in-three chance of detention, and red is the
- * strongest thing this palette can say.
+ * This held `MIN_RATE_SAMPLE = 5` and rendered `Math.round(exceed_rate * 100)%`. Entry
+ * 153 put the floor here after a real facility rendered `exceed_rate 0.67` over
+ * `sample_size 3` as a display-size **67%** in the alarm token — two stops out of three
+ * is not a two-in-three chance of detention. The floor was the right fix and the
+ * percentage was left standing, so this page and the load-confirm step described the
+ * same dock in two different formats.
  *
- * The decision log already settled this shape for vendor reliability: reliability
- * "displays as a raw pair ('shows up 19 of 20'), never a percentage — a fraction
- * carries its own sample size, and '95%' over two appearances would overstate what we
- * know." Same argument, same answer. Below the floor the card says what is true —
- * "Not enough tracked stops yet", copy that already exists for exactly this state.
- *
- * The floor is a named constant rather than F13 config: it is a statement about what a
- * number means, not a tuning knob (the same reasoning as the evidence renderer's
- * five-minute clock-divergence threshold).
+ * Both now come from `/intel/pre-acceptance`: the server withholds anything under the
+ * floor, and `DwellIntel` renders the raw pair. Nothing here decides either, which is
+ * the point — a rule enforced in two places is a rule that will one day be enforced in
+ * one of them.
  */
-const MIN_RATE_SAMPLE = 5;
-
-const riskPct = computed(() => {
-  const risk = intel.value?.risk;
-  if (!risk || risk.exceed_rate == null) return null;
-  if ((risk.sample_size ?? 0) < MIN_RATE_SAMPLE) return null;
-  return Math.round(risk.exceed_rate * 100);
-});
-// the fastest hour is a median over its own sample and answers a sharper question than
-// the risk rate — "00:00", drawn from two stops, is a midnight that means nothing
-const bestHour = computed(() => {
-  const h = intel.value?.best_hour;
-  return h && (h.sample_size ?? 0) >= MIN_RATE_SAMPLE ? h : null;
-});
-function hourLabel(h) {
-  return `${String(h).padStart(2, "0")}:00`;
-}
-
 /* AI-CONTEXT: §15.1's pending glyph on the two things a driver TYPES here, and entry 150's
  * lesson applied rather than repeated.
  *
@@ -251,7 +232,7 @@ const pendingReviews = computed(() =>
  * sentence, and the two things a driver can actually do about it.
  */
 const hasDwell = computed(() => (profile.value?.dwell?.overall?.sample_size ?? 0) > 0);
-const hasIntel = computed(() => riskPct.value !== null || bestHour.value !== null);
+const hasIntel = computed(() => !!intel.value?.risk || !!intel.value?.best_hour);
 const hasRating = computed(() => (profile.value?.ratings?.review_count ?? 0) > 0);
 const hasReviews = computed(
   () => (profile.value?.reviews?.length ?? 0) > 0 || pendingReviews.value.length > 0,
@@ -371,18 +352,9 @@ async function onReview(payload) {
     </section>
     <section v-else-if="hasIntel" class="card">
       <h2 class="card__title">{{ t("profile.risk") }}</h2>
-      <p v-if="riskPct !== null" class="risk">
-        <span class="risk__figure" :class="{ hot: riskPct >= 40 }">{{ riskPct }}%</span>
-        <span class="dwell__meta">· {{ intel.risk.sample_size }} {{ t("profile.stops_basis") }}</span>
-      </p>
-      <p v-if="bestHour" class="best-hour">
-        <span class="best-hour__label">{{ t("profile.best_hour") }}</span>
-        <span class="best-hour__figure">{{ hourLabel(bestHour.hour) }}</span>
-        <span class="dwell__meta">
-          · {{ formatDwell(bestHour.median_seconds) }} · {{ bestHour.sample_size }}
-          {{ t("profile.stops_basis") }}
-        </span>
-      </p>
+      <!-- the SAME component the load-confirm step renders, so one dock cannot be
+           described two ways depending on which screen a driver is standing on -->
+      <DwellIntel :intel="intel" />
     </section>
 
     <section v-if="hasRating" class="card">
@@ -625,36 +597,6 @@ async function onReview(payload) {
 }
 .rating__figure {
   font-family: var(--font-mono);
-  font-size: var(--type-title-size);
-}
-.risk {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
-  margin: 0;
-}
-.risk__figure {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--type-display-size);
-  color: var(--text-1);
-}
-.risk__figure.hot {
-  color: var(--flare-500);
-}
-.best-hour {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
-  margin: var(--s-3) 0 0;
-}
-.best-hour__label {
-  color: var(--text-2);
-  font-size: var(--type-caption-size);
-}
-.best-hour__figure {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
   font-size: var(--type-title-size);
 }
 .reviews {

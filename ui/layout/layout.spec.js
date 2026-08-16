@@ -624,8 +624,15 @@ const FACILITY_PROFILE = {
 };
 const FACILITY_MOCKS = {
   [`/facility/${FACILITY_ID}/profile`]: FACILITY_PROFILE,
-  [`/intel/detention-risk/${FACILITY_ID}`]: { exceed_rate: 0.43, sample_size: 14, confidence: "high", basis: "tracked_stops" },
-  [`/intel/appointment-hours/${FACILITY_ID}`]: [{ hour: 6, median_seconds: 2400, sample_size: 9, confidence: "medium" }],
+  // AI-CONTEXT: ONE intel endpoint (§23 R3). The facility page called detention-risk and
+  // appointment-hours and applied its own floor; it now reads pre-acceptance like the
+  // load-confirm step, and a fixture still answering the old routes would 404 them and
+  // measure this page with its risk card missing — the entry-52 rule, one card over.
+  [`/intel/pre-acceptance/${FACILITY_ID}`]: {
+    risk: { exceeded: 6, sample_size: 14, free_time_minutes: 120 },
+    best_hour: { hour: 6, median_seconds: 2400, sample_size: 9 },
+    min_sample: 5,
+  },
   [`/community/questions/${FACILITY_ID}`]: [
     { question_id: "q-1", text: "Is the north entrance still closed?",
       answers: [{ text: "Open as of this morning.", presence_proven: true }] },
@@ -1132,8 +1139,7 @@ const SURFACES = [
         detention_risk: { exceed_rate: null, sample_size: 0, basis: "tracked_stops" },
         reviews: [],
       },
-      [`/intel/detention-risk/${FACILITY_ID}`]: { exceed_rate: null, sample_size: 0, basis: "tracked_stops" },
-      [`/intel/appointment-hours/${FACILITY_ID}`]: [],
+      [`/intel/pre-acceptance/${FACILITY_ID}`]: { risk: null, best_hour: null, min_sample: 5 },
       [`/community/questions/${FACILITY_ID}`]: [],
       [`/vendors/service-center/${FACILITY_ID}`]: null,
     },
@@ -1228,7 +1234,7 @@ const SURFACES = [
       ".rc__cta",
       ".rc__opt input",
     ],
-    ready: ".rc__intel",
+    ready: ".intel",
   }],
   ["sheet-unreadable", "/load", {
     mocks: {
