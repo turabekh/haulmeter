@@ -56,6 +56,9 @@ const emit = defineEmits(["pinTap", "located", "bounds"]);
 const now = Date.now();
 const mapEl = ref(null);
 const live = ref(false); // true once a GL map is rendering tiles
+// null = not tried yet; "no_webgl" = this device cannot draw a basemap at all;
+// "unavailable" = it could, and something else refused (network, token, style)
+const glFailure = ref(null);
 const positions = ref({}); // facility_id -> { x, y } pixel coords on the live map
 const clusterPositions = ref({}); // cluster index -> { x, y }
 // AI-CONTEXT: §23 entry 101 fix — a live marker has no position until the map has
@@ -133,11 +136,52 @@ function overlayLngLat() {
 
 // the map's live viewport as the API's bbox params (min/max lat/lon)
 function emitBounds() {
-  if (!map) return;
-  const b = map.getBounds();
-  const sw = b.getSouthWest();
-  const ne = b.getNorthEast();
-  emit("bounds", { min_lat: sw.lat, min_lon: sw.lng, max_lat: ne.lat, max_lon: ne.lng });
+  if (map) {
+    const b = map.getBounds();
+    const sw = b.getSouthWest();
+    const ne = b.getNorthEast();
+    emit("bounds", { min_lat: sw.lat, min_lon: sw.lng, max_lat: ne.lat, max_lon: ne.lng });
+    return;
+  }
+  emit("bounds", approxBounds());
+}
+
+/* AI-CONTEXT: A VIEWPORT WITHOUT A MAP, and the reason it has to exist is the whole
+ * defect (§23 entry 159).
+ *
+ * `emitBounds` returned early when there was no map, and `map.on("load")` was the only
+ * thing that called it on startup — so when Mapbox GL failed to initialise, the surface
+ * NEVER FETCHED ANYTHING. Measured against production with WebGL disabled: the note said
+ * "tiles pending" and `document.querySelectorAll(".pin").length` was **0**. No basemap, no
+ * pins, no list. A completely dead screen, in English, on an Uzbek phone.
+ *
+ * The bounds-normalised fallback layout below has existed all along — it is what the
+ * layout harness and every unit test measure — and it simply never received data.
+ *
+ * The arithmetic is Web Mercator at the remembered (or continental) view, and it is
+ * DELIBERATELY approximate: it decides what to FETCH, never what to draw. A slightly wide
+ * bbox costs one query returning a few extra places; a missing one costs the driver every
+ * place around them.
+ */
+function approxBounds() {
+  const v = readView();
+  const lat = v ? v.lat : US_CENTER[1];
+  const lon = v ? v.lon : US_CENTER[0];
+  const zoom = v ? v.zoom : US_ZOOM;
+  const el = mapEl.value;
+  const w = el?.clientWidth || 360;
+  const h = el?.clientHeight || 640;
+  // 512 px tiles: the world is 512 · 2^zoom px across
+  const worldPx = 512 * 2 ** zoom;
+  const spanLon = (w / worldPx) * 360;
+  // mercator: a degree of latitude covers more pixels the further from the equator
+  const spanLat = ((h / worldPx) * 360) * Math.cos((lat * Math.PI) / 180);
+  return {
+    min_lat: Math.max(-85, lat - spanLat / 2),
+    max_lat: Math.min(85, lat + spanLat / 2),
+    min_lon: lon - spanLon / 2,
+    max_lon: lon + spanLon / 2,
+  };
 }
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -289,7 +333,13 @@ defineExpose({ showPlace, remeasure, hasRememberedView: () => readView() !== nul
 
 onMounted(async () => {
   systemDark?.addEventListener?.("change", onSystemTheme);
-  if (!TOKEN) return; // no token -> the placeholder canvas below (activation seam)
+  if (!TOKEN) {
+    // no token -> the placeholder canvas below (the M1 activation seam). The PLACES are
+    // still fetched: this path had the same hole the GL-failure path did, so a build
+    // without a token showed a blank screen rather than a token-less list of stops.
+    emitBounds();
+    return;
+  }
   try {
     const mapboxgl = (await import("mapbox-gl")).default;
     await import("mapbox-gl/dist/mapbox-gl.css");
@@ -352,10 +402,34 @@ onMounted(async () => {
       const c = map.getCenter();
       rememberView(c.lat, c.lng, map.getZoom());
     });
-  } catch {
-    live.value = false; // WebGL unavailable / offline -> keep the placeholder
+  } catch (err) {
+    /* AI-CONTEXT: THE CAUSE IS NAMED NOW, and the bare `catch {}` it replaces is why a
+     * driver's screen could sit on "tiles pending" forever with nobody able to say why.
+     * Every cause — WebGL off, chunk 404, token rejected, style refused — produced the
+     * identical silent state. This codebase has caught that shape repeatedly (the
+     * swallowed `SignatureDoesNotMatch`, F8 writing `sent_at` over a container).
+     *
+     * WebGL is separated from everything else because the two need OPPOSITE words: a
+     * phone with hardware acceleration off will not start drawing later, so "pending"
+     * is a lie there, while an offline map genuinely is waiting. */
+    live.value = false;
+    glFailure.value = hasWebgl() ? "unavailable" : "no_webgl";
+    // logged, not swallowed: this is the only breadcrumb a support conversation has
+    console.error("[map] basemap could not start:", glFailure.value, err);
+    // AND THE PLACES ARE STILL FETCHED. Without this the surface has no basemap AND no
+    // data — the fallback layout below is ready for pins that never arrive.
+    emitBounds();
   }
 });
+
+function hasWebgl() {
+  try {
+    const c = document.createElement("canvas");
+    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
 
 onUnmounted(() => {
   if (systemDark) systemDark.removeEventListener?.("change", onSystemTheme);
@@ -418,12 +492,34 @@ function clusterStyle(cluster) {
 function stale(pin) {
   return isStale(pin.freshness, now);
 }
+
+/* What the driver is told when there is no basemap, and the three cases need three
+ * different sentences because they need three different reactions:
+ *   · no token — an activation seam, not a driver's problem. Unchanged wording.
+ *   · no WebGL — permanent for this device/session. Saying "pending" would leave a driver
+ *     waiting for something that is not coming. It names the likely cause, because
+ *     "battery saver" is a thing a driver can actually act on at a fuel island.
+ *   · anything else — genuinely transient, so "waiting" is the true word.
+ * The places list underneath keeps working in every one of them, and the copy says so —
+ * a screen that only reports a failure gives a driver nothing to do. */
+const noteText = computed(() => {
+  if (!TOKEN) return t("map.basemap_pending");
+  if (glFailure.value === "no_webgl") return t("map.basemap_no_webgl");
+  if (glFailure.value) return t("map.basemap_failed");
+  return t("map.basemap_pending");
+});
 </script>
 
 <template>
   <div class="canvas" role="application" aria-label="Map">
     <div ref="mapEl" class="canvas__gl" :class="{ 'canvas__gl--on': live }" />
-    <span v-if="!live" class="canvas__note">Map · tiles pending</span>
+    <!-- AI-CONTEXT: §11.7 and F15's six-locale law, both broken by one literal.
+         This read `Map · tiles pending` — a HARDCODED ENGLISH STRING on a driver screen,
+         seen in English by a driver whose app is in Uzbek, and a lie besides: with
+         hardware acceleration off the tiles are not pending, they are never coming.
+         Reported by the owner from a real phone at 16% battery, which is exactly when
+         Android turns hardware acceleration off. -->
+    <span v-if="!live" class="canvas__note">{{ noteText }}</span>
     <button
       v-for="pin in pins"
       :key="pin.facility_id"
@@ -535,14 +631,21 @@ function stale(pin) {
   font-size: var(--type-caption-size);
   pointer-events: none;
 }
+/* AI-CONTEXT: this was a Mono three-word label and is a SENTENCE now (§23 entry 159).
+   Mono is the figure family (§6.2) and this is prose, so it goes to the sans stack; and
+   an unwrapped absolutely-positioned line at 360 dp under +40% text in Gurmukhi would
+   run off both edges, which is precisely what the layout harness measures. Centred with
+   a max width and normal wrapping, no new token. */
 .canvas__note {
   position: absolute;
   top: var(--s-3);
   left: 50%;
   transform: translateX(-50%);
-  color: var(--text-3);
+  max-width: min(88%, 40ch);
+  text-align: center;
+  color: var(--text-2);
   font-size: var(--type-caption-size);
-  font-family: var(--font-mono);
+  line-height: var(--type-body-line);
 }
 .pin {
   position: absolute;

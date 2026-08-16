@@ -702,6 +702,18 @@ const OWNER_MOCKS = {
 
 const SURFACES = [
   ["map", "/"],
+  /* AI-CONTEXT: the map with NO BASEMAP (§23 entry 159) — the screen the owner
+   * photographed from a real phone at 16% battery, where Android's battery saver had
+   * turned hardware acceleration off and Mapbox GL could not start.
+   *
+   * The harness reaches it for free: headless Chromium here has no usable WebGL either,
+   * so `map` state IS this state — which is why the note was never measured despite
+   * being on screen in every map run. It is a separate state now because the note is a
+   * SENTENCE now, not a three-word Mono label: at 360 dp, under +40%, in Gurmukhi, an
+   * absolutely-positioned centred line is exactly the shape that runs off both edges.
+   *
+   * `ready` names the note rather than a pin, because the point of the state is the note. */
+  ["map-no-basemap", "/", { noWebgl: true, ready: ".canvas__note" }],
   ["load", "/load"],
   // AI-CONTEXT: `/load/calc` had NO harness state at all — a full-screen form with five
   // number inputs and a Meter-treatment headline, never measured at 360 dp. Two states,
@@ -1600,6 +1612,23 @@ async function prepare(page, { theme, pseudo, live }) {
   // `initInstall()` has bound its listener. Dispatched earlier the app hears nothing —
   // which is precisely the production defect this entry fixed, and would make the state
   // measure a strip with no row in it under the name "install-offer".
+  /* AI-CONTEXT: WebGL made unavailable, which is the driver's condition (§23 entry 159).
+   *
+   * Headless Chromium runs with swiftshader, so it HAS WebGL and the map initialises —
+   * which is why the no-basemap note has been on nobody's screen in this harness and was
+   * never measured despite being reachable in production. The owner's phone at 16%
+   * battery had hardware acceleration off; this reproduces exactly that by making
+   * `getContext("webgl")` return null, the same way the production probe did. */
+  if (live?.noWebgl) {
+    await page.addInitScript(() => {
+      const orig = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+        if (String(type).startsWith("webgl")) return null;
+        return orig.call(this, type, ...rest);
+      };
+    });
+  }
+
   if (live?.installOffer) {
     await page.addInitScript(() => {
       window.addEventListener("load", () => {
