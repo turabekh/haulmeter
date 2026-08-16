@@ -33,8 +33,6 @@ MILE_M = 1609.34
 _STATUS_RANK = {"empty": 0, "some": 1, None: 2, "full": 3}
 
 
-PREACCEPT_FLAG = "j1_preaccept_intel"
-
 # AI-CONTEXT: the floor a figure needs before it is a figure (§23 entry 153).
 #
 # Measured on a real facility: `exceed_rate 0.67` over `sample_size 3` rendered as a
@@ -53,19 +51,6 @@ def register_module(db: Session) -> None:
     from app.foundation.f14_admin import public as admin
 
     flags.register_flag(db, FLAG_KEY, description="M8 Decision Intelligence", default_on=True)
-    # AI-CONTEXT: J1-A3 — M8-FR6's risk flag and FR2's hour read, rendered at the moment
-    # the driver DECIDES rather than only on a facility page they would have to go
-    # looking for. Its own flag because it puts numbers in front of an acceptance, and
-    # OFF by default: the reads are old, the moment is new.
-    flags.register_flag(
-        db,
-        PREACCEPT_FLAG,
-        description=(
-            "J1-A3: show this dock's detention-risk pair and best appointment hour on "
-            "the load confirm step, before the driver accepts."
-        ),
-        default_on=False,
-    )
     admin.register_admin_view(db, "m08.intel", MODULE, "Decision Intelligence", "/admin/m08/intel")
 
 

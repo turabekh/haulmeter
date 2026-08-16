@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import canonical_facility_id, current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
-from app.foundation.f13_flags import public as flags
 from app.modules.m08_intelligence import public as m8
 
 router = APIRouter(prefix="/intel", tags=["intelligence"],
@@ -133,14 +132,18 @@ def pre_acceptance(
     are two clients now, and a floor enforced twice is a floor that will one day be
     enforced once.
 
-    Behind `j1_preaccept_intel`, and OFF returns the same shape with both halves absent.
-    The screen cannot tell a switched-off capability from a dock with no history, and
-    that is correct: in both cases we have nothing to tell the driver, and inventing a
-    distinction would put a "this feature is off" message where a driver expects facts
-    about a dock.
+    AI-CONTEXT: `j1_preaccept_intel` GATED this and is retired (§23 entry 168).
+
+    It was a staged-rollout flag for one moment — showing the pair on the load-confirm
+    step before a driver accepts — and that moment shipped and was switched on. What kept
+    it afterwards was inertia, and it had acquired a second job it was never designed for:
+    once the facility page converged on this endpoint (R3), flipping the flag off would
+    have blanked a card that PREDATES the flag.
+
+    The capability is still killable. `require_module("m08_intelligence")` gates every
+    route in this router, so PRD §6's operational switch is intact — this endpoint only
+    composes two reads that were never gated on their own.
     """
-    if not flags.is_enabled(db, m8.PREACCEPT_FLAG):
-        return {"risk": None, "best_hour": None, "min_sample": m8.MIN_SAMPLE}
     return m8.pre_acceptance(db, facility_id, free_time_minutes)
 
 

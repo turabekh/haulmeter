@@ -190,3 +190,38 @@ def test_no_history_is_a_zero_pair_and_a_null_rate(client, db):
 
     assert body["exceed_rate"] is None
     assert (body["exceeded"], body["sample_size"]) == (0, 0)
+
+
+# --- the pre-acceptance gate, retired (§23 entry 168) ---
+
+
+def test_the_pair_answers_without_any_feature_flag(client, db):
+    """`j1_preaccept_intel` was a staged-rollout flag for one moment; that moment
+    shipped. Keeping it meant the facility page's risk card — which PREDATES the flag —
+    could be blanked by flipping it off, which is not a rollback anyone signed up for."""
+    headers = _headers(client, "gate-retired@example.com")
+
+    body = client.get(f"/intel/pre-acceptance/{uuid.UUID(int=0)}", headers=headers).json()
+
+    assert body["min_sample"] == 5
+    assert "risk" in body and "best_hour" in body
+
+
+def test_the_module_flag_is_still_the_kill_switch(client, db):
+    """Retiring the staged flag must not leave the capability ungovernable. PRD §6's
+    switch is the MODULE flag, which gates every route in this router."""
+    from app.foundation.f13_flags import public as flags
+    from app.modules.m08_intelligence import public as m8
+
+    # the switch has to EXIST before it can be thrown; `is_switched_off` tolerates an
+    # absent flag (entry 105) so the route answers either way until one is registered
+    m8.register_module(db)
+    db.flush()
+    headers = _headers(client, "gate-killswitch@example.com")
+    url = f"/intel/pre-acceptance/{uuid.UUID(int=0)}"
+    assert client.get(url, headers=headers).status_code == 200
+
+    flags.disable(db, m8.FLAG_KEY)
+    db.flush()
+
+    assert client.get(url, headers=headers).status_code == 404
