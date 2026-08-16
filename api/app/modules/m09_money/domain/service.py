@@ -31,6 +31,7 @@ from app.foundation.f06_documents import public as documents
 from app.foundation.f07_ledger import public as ledger
 from app.foundation.f08_notifications import public as notify
 from app.foundation.f09_ai_gateway import public as ai
+from app.foundation.f13_flags import public as flags
 from app.modules.m03_detention import public as m3
 from app.modules.m04_accessorial import public as m4
 from app.modules.m07_fuel import public as m7
@@ -122,6 +123,24 @@ def register_module(db: Session) -> None:
 
     localization.register_catalogue(db, messages.KEY_PREFIX, messages.ALERT_MESSAGES)
     admin.register_admin_view(db, "m09.audits", MODULE, "Settlement Audits", "/admin/m09/audits")
+    # J1-R1 (§23 entry 172). OFF until the owner puts a price in front of a driver.
+    flags.register_flag(
+        db,
+        FEE_FLAG,
+        description=(
+            "J1-R1: post the contingency fee as a receivable on recovery, and disclose "
+            "gross/fee/net at the paid moment."
+        ),
+        default_on=False,
+    )
+    # PRD §159 lists fee percentages as runtime config; §242/§414 set the automated-stage
+    # rate at ~15%. A price must be changeable on a live box without a deploy.
+    flags.register_config(
+        db,
+        CONFIG_FEE_BASIS_POINTS,
+        DEFAULT_FEE_BASIS_POINTS,
+        "Contingency fee on recovered claims, in basis points (1500 = 15.00%)",
+    )
     if ai.get_active_prompt(db, SETTLEMENT_PROMPT) is None:
         ai.register_prompt(
             db, SETTLEMENT_PROMPT, ai.AiTask.document_parse, "extract pay lines from {doc}"
@@ -433,7 +452,12 @@ def per_diem_days(db: Session, account_id, year: int, home_base_facility_id=None
 # branch yet. It is written this way so the P0 is right by construction the moment a
 # second actor exists, rather than remembered later.
 #
-# WHY NO LEDGER ENTRY IS POSTED, which looks like an omission and is not. F7's
+# WHY NO LEDGER ENTRY IS POSTED, which looks like an omission and is not.
+#
+# **Affirmed unamended by J1-R1 (§23 entry 172), which added the other half**: the
+# contingency fee becomes a `fee` RECEIVABLE rather than a ledger entry, for exactly the
+# reasoning below. A receivable records that something is OWED; a journal entry records
+# that something MOVED. Only the first is true until collection rails exist. F7's
 # `record_recovery` posts cash_clearing -> driver_payable with a contingency split, and
 # it is the right call for the M3-FR7 collection partner, where the money passes
 # through us and we take a fee. A driver who invoices a broker in their own name is
@@ -441,6 +465,81 @@ def per_diem_days(db: Session, account_id, year: int, home_base_facility_id=None
 # it did would be inventing a movement we never handled. The receivable's state is the
 # honest record of it, which is exactly what F7's transition table is for.
 CLAIM_PAID_CATEGORY = "claim_paid"
+
+# AI-CONTEXT: the contingency share, as CONFIG rather than a constant (J1-R1).
+#
+# PRD §242 and §414 set it at ~15% for the automated stage (25-30% is the
+# partner-escalated rate, and that rung does not exist — see entry 171). PRD §159 lists
+# "fee percentages" among the things that must be runtime config, so this is an F13 key
+# with the PRD's number as its default: a price is an owner's decision and must be
+# changeable on a live box without a deploy.
+FEE_FLAG = "j1_fee_disclosure"
+CONFIG_FEE_BASIS_POINTS = "m09.contingency_fee_basis_points"
+DEFAULT_FEE_BASIS_POINTS = 1500  # 15.00%
+
+
+def fee_basis_points(db: Session) -> int:
+    return int(flags.get_config(db, CONFIG_FEE_BASIS_POINTS, DEFAULT_FEE_BASIS_POINTS))
+
+
+def fee_cents_for(db: Session, recovered_cents: int) -> int:
+    """BASIS POINTS, not a float percentage — money is integer arithmetic here and
+    everywhere else in this ledger. Rounded half-up on the cent, so the fee never exceeds
+    the recovery it is taken from."""
+    return min(recovered_cents, (recovered_cents * fee_basis_points(db) + 5000) // 10000)
+
+
+def fee_receivable_for(db: Session, receivable) -> object | None:
+    """The fee owed on ONE recovery, or None if it was never posted."""
+    return db.scalar(
+        select(ledger.Receivable).where(ledger.Receivable.external_ref == _fee_ref(receivable))
+    )
+
+
+def _fee_ref(receivable) -> str:
+    # the RECOVERY is the real-world thing being billed, so it is the external ref — and
+    # `uq_receivable_external_ref` makes a second post impossible rather than unlikely
+    return f"fee:{receivable.id}"
+
+
+def _post_fee_receivable(db: Session, receivable):
+    """The platform's share of a recovery, as a RECEIVABLE (J1-R1, §23 entry 172).
+
+    AI-CONTEXT: **no ledger entry, and no dunning, ever.** Both halves are the ruling.
+
+    No ledger entry, because no cash crossed this platform: the driver invoiced the broker
+    in their own name and was paid into their own bank. The rationale above this function
+    has said so since the recovery path was built and R1 affirmed it unamended.
+
+    No dunning, because the machinery that chases an unpaid receivable is pointed at
+    BROKERS. It selects through `DetentionClaim.receivable_ref`, and a fee receivable has
+    no claim — so it is unreachable by construction rather than by a filter someone has to
+    remember. `test_no_dunning_path_can_select_a_fee` asserts that structurally. This
+    product does not chase its own drivers, and the day it collects a fee that will be a
+    designed moment with rails, not a side effect of a cadence written for counterparties.
+
+    Idempotent on `external_ref`: a second call returns the row the first one wrote.
+    """
+    existing = fee_receivable_for(db, receivable)
+    if existing is not None:
+        return existing
+    amount = fee_cents_for(db, receivable.amount_cents)
+    if amount <= 0:
+        return None
+    # F7's own factory rather than the model — the receivable table is the ledger's, and
+    # reaching past its public surface to insert a row is how two writers end up
+    # disagreeing about what a receivable needs
+    return ledger.create_receivable(
+        db,
+        # the SUBJECT is the driver: this is what they owe out of what they were paid
+        receivable.account_id,
+        ledger.ReceivableKind.fee,
+        amount,
+        # no counterparty — the platform is not a broker, and pointing this at one would
+        # put our fee in a broker's payment history
+        counterparty_ref=None,
+        external_ref=_fee_ref(receivable),
+    )
 
 
 def _receivable_deep_link(db: Session, receivable) -> str | None:
@@ -471,6 +570,11 @@ def mark_receivable_paid(
     and is not restated here.
     """
     ledger.transition_receivable(db, receivable, ledger.ReceivableState.recovered)
+    # J1-R1: the platform's share becomes a receivable at the moment the money lands.
+    # Behind `j1_fee_disclosure` because a fee is a PRICE, and a price appears in front of
+    # a driver when the owner says so.
+    if flags.is_enabled(db, FEE_FLAG):
+        _post_fee_receivable(db, receivable)
     if gateway is None or actor_account_id == receivable.account_id:
         return receivable, None
     deep_link = _receivable_deep_link(db, receivable)

@@ -663,6 +663,7 @@
   "money.ev.nudged": "Напоминание отправлено",
   "money.flagged": "Отмечено на проверку",
   "money.kind.detention": "Detention",
+  "money.kind.fee": "Комиссия Haulmeter",
   "money.kind.layover": "Layover",
   "money.kind.lumper": "Lumper",
   "money.kind.tonu": "TONU",

@@ -40,6 +40,12 @@ class ReceivableKind(enum.Enum):
     tonu = "tonu"
     layover = "layover"
     lumper = "lumper"
+    # AI-CONTEXT: the platform's contingency share (J1-R1, §23 entry 172). The first kind
+    # that points the OTHER WAY — the four above are money a broker owes a driver, this is
+    # money the driver owes the platform out of a recovery already in their own bank. The
+    # direction lives in the kind rather than in a sign on the amount: a negative
+    # receivable would make every existing sum quietly wrong.
+    fee = "fee"
 
 
 class ReceivableState(enum.Enum):
