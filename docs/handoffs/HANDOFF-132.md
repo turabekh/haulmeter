@@ -1,6 +1,10 @@
 # HANDOFF-132 — M15 Session A: the foundations, and a constraint that was wrong twice
 
-**Autonomous run.** Plan approval was delegated to counsel for this session per the
+**Autonomous run, continued past its first close.** Commits 1–6 and the first version of
+this handoff closed the session; it was then resumed and worked the remaining authorized
+Session-A items (§5a). Everything below reflects the finished state.
+
+Plan approval was delegated to counsel for this session per the
 kickoff; counsel returned **APPROVED AS WRITTEN**, no cuts, with four binding execution
 notes, all four honoured. Nothing was pushed and nothing was deployed — rule 3 stands
 even in autonomy.
@@ -33,28 +37,42 @@ surfaces they describe.
 | `596e8cc` | F1: telegram sign-in and a guest who can be claimed (migration 0085) |
 | `cb2f250` | F9: the speech seam refuses when unset; audio spends the same budget |
 | `b2ef2cc` | M15: Q-5 holdout integrity and Q-6 the publish path |
+| `35d2abd` | this handoff (first close) |
+| `73fb230` | F6: audio ranges, and a retention class that actually deletes (migration 0086) |
+| `3386ded` | M15: the classify prompt, its fixtures, and Q-1 in the rubric |
+| `79d27de` | M15: a draft scenario the engine can run against |
+| `3665b32` | i18n: the Tajik reviewer's working file, which translates nothing |
 
 ### Gates
 
 | gate | at session start | now |
 |---|---|---|
-| pytest | 2130 | **2195 passed, 0 failed, 0 errors** (+65) |
-| vitest | 1020 / 63 files | **1020 / 63 files** (no UI work this session) |
+| pytest | 2130 | **2230 passed, 0 failed, 0 errors** (+100) |
+| vitest | 1020 / 63 files | **1020 / 63 files** — unchanged; no UI source was touched, and the tg draft lives outside `ui/src/core/i18n/` |
 | import-linter | 31 kept, 0 broken | **32 kept, 0 broken** |
 | ruff | clean | clean |
-| alembic head (dev) | 0083_receivable_kind_fee | **0085_f01_tg_guest** |
+| alembic head (dev) | 0083_receivable_kind_fee | **0086_f06_retention** |
 
 All numbers from test-runner's raw report, not from memory.
 
 Layout harness was **not run** — it needs the UI dev server and no UI file was touched.
 
-**The vitest run reports one unhandled error, and it is NOT from this session.** It is
-`FleetWorkspaceSurface.vue:266` — `Cannot read properties of undefined (reading 'length')`
-on `holds.holds` — and it was present in the baseline measured at the start of this session,
-before any M15 file existed. It is TRAPS §2 entry 16's fixture in a different costume: the
-tests pass because none of them read the value. Left untouched deliberately, since editing a
-surface outside the slice that exposed it makes a diff unreviewable — the same reasoning
-HANDOFF-131 §6 applied to the food-decide test.
+**The vitest run reports one unhandled error, it is NOT from this session, and it makes
+`make test` EXIT 1.** That last part matters more than the error itself: it means **`make ci`
+is red**, for a reason that predates every commit here. Measured in this session's own
+baseline before any M15 file existed, and neither file involved was touched.
+
+It is `FleetWorkspaceSurface.vue:266` — `Cannot read properties of undefined (reading
+'length')` on `holds.holds`, raised while `ui-components.test.js` renders the fleet
+workspace. All 1020 assertions still pass, which is the tell: it is TRAPS §2 entry 16's
+wrong-shaped fixture in a different costume, and the tests pass **because none of them read
+the value**. So the component is broken in a way the suite structurally cannot see, and the
+only thing that surfaces it at all is a non-zero exit code nobody reads as a component bug.
+
+Left untouched deliberately — editing a surface outside the slice that exposed it makes a
+diff unreviewable, the same reasoning HANDOFF-131 §6 applied to the food-decide test. **But
+it is a real defect on a real driver-facing surface and it should be the first small thing a
+later session picks up**, because a permanently-red `make ci` trains everyone to ignore it.
 
 ---
 
@@ -87,7 +105,7 @@ needed correcting.**
 
 ---
 
-## 3. Decisions logged (174–177)
+## 3. Decisions logged (174–178)
 
 - **174** — D14 SIGNED scope (b), with its one named reversal recorded as a reversal: v2.0
   §4 superseded **FOR M15 ONLY**, on arguments stated on their own terms rather than
@@ -101,6 +119,14 @@ needed correcting.**
   notification class is a §22.2 never-improvise category; entry 118's delegation does not
   cover it and neither does counsel's. Entry 169 is the precedent — the owner signed that
   class before any code existed. P-3/P-4 deferred to their surfaces in Sessions B/C.
+
+- **178** — the audio retention composition, and the correction that made it possible:
+  **PRD §17 Q16 does not forbid hard delete.** It reads *"Hard delete / data retention —
+  OPEN, deliberately not built… 'delete this user' is not a button but a workflow… Needs
+  counsel before code"* and scopes itself to account erasure. F6's code comment said
+  otherwise and has been fixed. Records that bytes are deleted while the row survives, that
+  the sweep may select on the `retention_class` column and nothing else, and the one
+  documented deviation from counsel's advice (§5b).
 
 **PRD §9 is NOT amended.** The three-tier law drafted in E3 §E3.5 is D15, and D15 is open.
 
@@ -129,22 +155,49 @@ action that could not be taken without a credential or a person.
 
 ## 5. What Session A did NOT reach
 
-Stated plainly rather than folded into the remainders above, because these are build items
-that a Session-B kickoff must either carry or explicitly drop:
+The session continued past its first close and picked up most of this list. What remains
+unreached is now short, and a Session-B kickoff must either carry it or drop it on purpose:
 
-- **F6 audio support** — audio MIME types, HTTP Range serving, and the 30-day
-  driver-deletable TTL class (E3 §E3.4.3). The census confirmed all three are net-new:
-  `serve_media` returns full content unconditionally with no `Accept-Ranges`, and document
-  expiry is credential-shaped with no general object TTL. The schema is ready for it —
-  `turn.audio_ref` is the single column raw driver audio is reachable from, deliberately, so
-  a deletion sweep has one place to look.
-- **F9 classify prompt + eval fixtures** for M15.
-- **The `tg` catalogue draft** (E3 §E3.3) — see the owner question below.
-- **DEV_SEED scenario** as a committed fixture. The end-to-end path *was* observed (§6), but
-  against rows a probe created rather than a seeded scenario.
-- **Scenario engine beyond the holdout generators** — `scenario_version` hidden state and
-  the holdout/teachable generators exist; deterministic slot validation and the rubric seam
-  do not.
+- **Scenario engine beyond the generators** — `scenario_version` hidden state and the
+  holdout/teachable generators exist; **deterministic slot validation and the rubric seam do
+  not.** This is the one substantial Session-A item still open.
+- **The `tg` catalogue itself.** The reviewer's working file exists (§5a); the translation
+  does not, and cannot be done here — see the owner question.
+- **Live smoke on every credentialed path** — the four named remainders in §4, unchanged.
+
+### 5a. What the continuation added (commits 7–12)
+
+- **`73fb230` F6 audio.** Range serving with `Accept-Ranges` advertised only for audio,
+  because claiming range support and ignoring the header is worse than not claiming it — a
+  player believes the claim. The Range header is deliberately outside the URL signature: the
+  signature authorises the object, and folding in the slice would mint a URL that works once
+  and fails on the first seek. Swept bytes answer **410 Gone**, not 404 or a 500.
+- **The 30-day retention class, WITH its sweep.** Counsel was consulted because F6's own
+  comment claimed *"§17 Q16 forbids hard delete"* — and **that comment was wrong.** Q16
+  actually reads *"Hard delete / data retention — OPEN, deliberately not built… 'delete this
+  user' is not a button but a workflow… Needs counsel before code"*: it scopes itself to
+  **account erasure** and marks that question open. It prohibits nothing here. The comment is
+  corrected in the same commit, because a session reading the old wording beside a
+  byte-deleting sweep would remove the sweep — and that means holding a driver's voice past
+  the promise. Decision entry **178** records the whole thing.
+- **`3386ded` the classify prompt**, with Q-1 written into the rubric text rather than only
+  into tests, and fixtures encoding E3's own example: "I go Chicago" must beat "Yes." on a
+  destination question. Proven active **by querying the registry** after a restart, never by
+  the register call's return.
+- **`79d27de` the DEV_SEED scenario** — 3 intents, 8 variants, 3 holdouts, **0 released**.
+- **`3665b32` the Tajik reviewer's working file** — 1187 keys, 62 flagged `glossary_hold`,
+  23 carrying ICU placeholders.
+
+### 5b. One documented deviation from counsel
+
+Counsel advised gating the retention sweep on the module flag "per the established worker
+pattern". **It is UNFLAGGED**, and the pattern is what argues against flagging it:
+`Job.flag_key`'s own note says giving a foundation safety net a flag "is how it becomes
+another engine that is built, wired and permanently idle", and `outbound_mail` is unflagged
+for exactly this reason. Flagged, it fails two ways and both end with a driver's voice kept
+— never enabled so never runs, or switched off after audio exists so retention silently
+stops. **A promise a feature flag can revoke was never a promise.** Recorded here and in
+entry 178 rather than taken quietly.
 
 ---
 
@@ -183,9 +236,17 @@ red across Q-5 and Q-6 alone.
    assessment exposure together.
 3. **Tajik native review — commissioning and budget, and it carries a schedule risk.** In
    E3 §E3.8's own words: *"a named schedule risk: the seven-locale gate blocks flag-ON if
-   review lags."* The catalogue draft was not generated this session; when it is, it lands
-   **outside** the CI-enforced locale path, because merging unreviewed machine translation
-   is the audit's named anti-pattern.
+   review lags."* `docs/i18n-drafts/tg.draft.json` now exists — 1187 keys, English source,
+   **empty `tg` slots**, 62 keys flagged `glossary_hold`, 23 with ICU placeholders listed.
+   **Nothing was machine-translated, deliberately.** E3 asks for an LLM draft and warns in
+   the same breath that unreviewed machine translation is worse than the gap it hides; at
+   1187 keys, produced without a Tajik speaker, that artifact would be fluent-looking and
+   confidently wrong where nobody can see, and a reviewer would check every line against the
+   English regardless. So the file is the reviewer's working document, not a translation.
+   **`tg` is NOT in `LAUNCH_LOCALES`** and the file sits outside `ui/src/core/i18n/` — adding
+   the locale early fails CI on 1187 empty keys, and a red suite is exactly the pressure that
+   gets unreviewed translation merged to silence it. **This needs a paid Tajik reviewer, and
+   that is the whole blocker.**
 4. **The band vocabulary.** `session.band` and `review_sample.ai_band/human_band` are
    **String, not an enum**, because E3 never enumerates the bands and what we tell a driver
    they *are* is a product judgment. Freezing an invented vocabulary into a Postgres type is
