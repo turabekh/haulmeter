@@ -1019,6 +1019,42 @@ def render_pack_bytes(db: Session, pack, claim: DetentionClaim | None = None) ->
     return evidence.render_pack_pdf(pack, pack_context_for(db, claim))
 
 
+def _visit_for(db: Session, claim: DetentionClaim) -> dict | None:
+    """THIS visit, as the pack will state it — and where the departure came from.
+
+    AI-CONTEXT: the window itself is `visit_window`'s answer, which reads the presence
+    record. That has been the right source since entry 73 fixed the clock, and the dwell
+    reader joined it later; this is the third and last consumer to stop making a clerk
+    infer the visit from a timeline.
+
+    THE PROVENANCE IS A READ, NOT A GUESS. A stop ended through the app produces no
+    geofence EXIT — `disarm_geofence` closes the presence and emits nothing — so the
+    absence of an EXIT event inside the window is exactly what distinguishes a departure
+    the geofence observed from one the driver stated. Asking that question is honest;
+    manufacturing the missing event so the answer comes out stronger is not, and it would
+    put a fabricated row in the chain the claim is argued from.
+    """
+    arrival, departure = _arrival_departure(db, claim)
+    if arrival is None:
+        return None
+    source = None
+    seconds = None
+    if departure is not None:
+        seconds = (departure - arrival).total_seconds()
+        observed = any(
+            event.event_type is location.GeofenceEventType.EXIT
+            and arrival <= event.occurred_at <= departure
+            for event in location.list_events(db, claim.account_id, claim.facility_ref)
+        )
+        source = "geofence" if observed else "driver"
+    return {
+        "arrived_at": arrival,
+        "departed_at": departure,
+        "seconds": seconds,
+        "departure_source": source,
+    }
+
+
 def pack_context_for(db: Session, claim: DetentionClaim | None) -> "evidence.PackContext":
     """The context a pack is rendered with — NAMED so the wiring can be asserted.
 
@@ -1035,6 +1071,7 @@ def pack_context_for(db: Session, claim: DetentionClaim | None) -> "evidence.Pac
     """
     sources = _ping_sources_for(db, claim) if claim is not None else set()
     return evidence.PackContext(
+        visit=_visit_for(db, claim) if claim is not None else None,
         location_basis=_location_basis_for(db, claim) if claim is not None else None,
         evidence_class=_evidence_class_for_sources(sources),
         evidence_providers=sorted(

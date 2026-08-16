@@ -56,6 +56,7 @@ from .domain.service import (
     notice_delivery,
     open_claim_for_stop,
     open_receivable,
+    pack_context_for,
     reconcile_delivered_notices,
     register_module,
     run_dunning,
@@ -122,5 +123,6 @@ __all__ = [
     "run_dunning",
     "send_detention_start_notice",
     "send_pre_detention_notice",
+    "pack_context_for",
     "start_claim",
 ]

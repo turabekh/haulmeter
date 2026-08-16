@@ -155,6 +155,17 @@ class PackContext:
     # `phone_verified` is a statement of fact about every pack that existed before M14.
     evidence_class: str = "phone_verified"
     evidence_providers: list[str] = field(default_factory=list)
+    # AI-CONTEXT: THIS VISIT — arrived, departed, how long, and where the departure came
+    # from. Supplied by the caller for the same reason `location_basis` is: F4 owns the
+    # chain and will not infer a visit from data it did not produce. None omits the
+    # section entirely, per this class's own rule — "Arrived: —" tells a clerk we do not
+    # know, which is worse than not asking.
+    #
+    # `departure_source` is the honest half. A stop the driver ended in the app produces
+    # no geofence EXIT, so the pack says the DRIVER stated it. That reads weaker to an AP
+    # clerk than "observed", and it is what happened; a pack that overstates its own basis
+    # is the one thing §11.7 forbids outright.
+    visit: dict | None = None
     # §9 The Meter: (label, figure) pairs. §17 puts "total detention · total $" here,
     # and §9 requires the same numbers, order and wording as every other surface.
     meter: list[tuple[str, str]] = field(default_factory=list)
@@ -230,6 +241,37 @@ class _Cursor:
         self.c.setFont(font, size)
         self.c.setFillColor(color)
         self.c.drawRightString(self.right, self.y, value)
+
+    def paragraph(self, value, font=SANS, size=CAPTION, color=TEXT_3, leading=None):
+        """Prose that WRAPS at the right margin, and breaks pages while doing it.
+
+        AI-CONTEXT: `text()` is a bare `drawString`, so a caption longer than the column
+        ran off the page and was clipped by it. Found by rendering a pack and LOOKING at
+        it — no test could see it, because every assertion the suite makes about these
+        sentences is made against the string, and the string was always correct. What the
+        clerk read was "...it does not attest h".
+
+        The sentences it truncated are the pack's HONESTY text: the location-basis
+        paragraph explaining that the hash chain attests storage rather than capture, and
+        the visit paragraph naming who says the truck left. A document that clips exactly
+        the sentences qualifying its own evidence overstates itself by omission, which is
+        §11.7's failure arriving through the typesetter.
+        """
+        step = leading if leading is not None else size + 4
+        words, line = str(value).split(), ""
+        for word in words:
+            candidate = f"{line} {word}".strip()
+            if pdfmetrics.stringWidth(candidate, font, size) <= (self.right - self.left):
+                line = candidate
+                continue
+            self.need(step)
+            self.text(line, font, size, color)
+            self.space(step)
+            line = word
+        if line:
+            self.need(step)
+            self.text(line, font, size, color)
+            self.space(step)
 
 
 def _header(cur, pack, context):
@@ -645,6 +687,85 @@ def location_basis_text(context) -> str:
     return text
 
 
+def _fmt_duration(seconds) -> str:
+    """"3h 20m" — the shape §9's Meter uses, so the pack and the driver's screen say
+    the same thing about the same stop."""
+    total = int(seconds)
+    hours, minutes = divmod(total // 60, 60)
+    return f"{hours}h {minutes:02d}m" if hours else f"{minutes}m"
+
+
+# WHO SAYS the truck left, in the clerk's own terms. Two provenances, two sentences —
+# rendering them identically would make the distinction invisible, which is the same as
+# not drawing it.
+_DEPARTURE_SOURCE = {
+    "geofence": (
+        "Arrival and departure are taken from this device's geofence record for the visit; "
+        "both crossings were observed."
+    ),
+    "driver": (
+        "Arrival is taken from this device's geofence record for the visit. The departure "
+        "is the driver's own statement that they left, recorded at the time — the geofence "
+        "did not observe the exit."
+    ),
+}
+_DEPARTURE_OPEN = (
+    "Arrival is taken from this device's geofence record for the visit. No departure has "
+    "been recorded: at the time this document was produced the visit was still open."
+)
+
+
+def visit_window_text(context) -> str:
+    """AI-CONTEXT: the sentence under the window, naming who is speaking (§11.7).
+
+    Exported because it is asserted directly by tests: the difference between an observed
+    departure and a driver-stated one is the whole honesty of the section, and a test that
+    only checked the section existed would pass with both rendered the same.
+    """
+    visit = (context.visit if context else None) or {}
+    if visit.get("departed_at") is None:
+        return _DEPARTURE_OPEN
+    return _DEPARTURE_SOURCE.get(visit.get("departure_source"), _DEPARTURE_OPEN)
+
+
+def _visit_window(cur, context):
+    """§17: what this visit WAS — stated as a figure, not left to be inferred.
+
+    AI-CONTEXT: the pack showed a timeline and expected an AP clerk to reconstruct the
+    visit from it. For a stop ended through the app that meant reading a `Geofence ENTER`
+    row and, further down, a `User Action departed` row of a different type, and doing the
+    subtraction. The visit was never in doubt — `visit_window` has read it from the
+    presence record since entry 73 — it simply was never SAID.
+
+    No EXIT event is synthesised to make this section possible; the section exists so that
+    none has to be.
+    """
+    visit = (context.visit if context else None) or None
+    if visit is None:
+        return
+    cur.need(S6)
+    cur.text("This visit", SANS_SEMI, TITLE)
+    cur.space(S4 + S2)
+    rows = [("Arrived", _fmt_ts(visit.get("arrived_at")))]
+    if visit.get("departed_at") is not None:
+        rows.append(("Departed", _fmt_ts(visit.get("departed_at"))))
+        if visit.get("seconds") is not None:
+            rows.append(("On site", _fmt_duration(visit["seconds"])))
+    else:
+        # honest absence, the same branch `_location_basis` takes: state that it is open
+        # rather than printing a dash a clerk would read as a missing value
+        rows.append(("Departed", "still on site when this document was produced"))
+    for label, value in rows:
+        cur.need(BODY_LINE)
+        cur.text(label, SANS_MEDIUM, BODY, TEXT_1)
+        cur.right_text(value, MONO, BODY, TEXT_1)
+        cur.space(BODY_LINE)
+    cur.space(S2)
+    cur.paragraph(visit_window_text(context))
+    cur.space(S2)
+    cur.rule()
+
+
 def _location_basis(cur, context):
     """§17: what the location data IS — stated, not implied (D6).
 
@@ -664,8 +785,8 @@ def _location_basis(cur, context):
     cur.need(S6)
     cur.text("Location basis", SANS_SEMI, TITLE)
     cur.space(S4 + S2)
-    cur.text(location_basis_text(context), SANS, CAPTION, TEXT_3)
-    cur.space(BODY_LINE)
+    cur.paragraph(location_basis_text(context))
+    cur.space(S2)
 
     if not basis.get("pings"):
         # the absence sentence is part of `location_basis_text` now, so it has already
@@ -789,6 +910,9 @@ def render(pack, context: PackContext | None = None) -> bytes:
     _header(cur, pack, context)
     _pairs(cur, "Parties", context.parties)
     _pairs(cur, "References", context.references)
+    # BEFORE the timeline: the clerk should read what the visit WAS before reading the
+    # rows it is made of, rather than reconstructing it from them
+    _visit_window(cur, context)
     _timeline(cur, pack)
     _trace(cur, pack, context)
     _artifacts(cur, pack, context)
