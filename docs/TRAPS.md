@@ -259,6 +259,30 @@ session*; this file records what is permanently true.
     `login`, `register`, `password_change` — with separate F13 keys so one cannot lock out
     another, and a test must breach the *real* ceiling to prove it. *(122)*
 
+40a. **A new row TYPE inherits every existing query, including the ones written before
+    it existed.** `ReceivableKind.fee` is money the driver owes the PLATFORM; every other
+    kind is money a broker owes the driver. `money_owed` had no kind filter and the Money
+    tab sums its non-settled rows into the "what you are owed" hero — so switching the fee
+    on would have added our own fee to the figure telling a driver what brokers were
+    sitting on. **When you add a value to an enum, grep every reader of that column before
+    you ship the writer**, and carry direction in the KIND rather than a sign on the
+    amount: a negative row would have made every existing sum silently wrong instead.
+    *(129)*
+
+40b. **A gate that is never satisfied makes the rung it guards a no-op, and the counter
+    says so quietly.** Day-21 dunning was gated on `collection_partner_agreement`,
+    unsatisfied since the migration that added it, so every claim reaching day 21 was
+    counted `skipped_ungated` and the column was NULL on every row in the database — the
+    product's last word on an unpaid invoice was silence. **A skip counter climbing is not
+    the same as a feature working**; check whether the gated branch has EVER run before
+    assuming the gate is the only thing standing in the way. *(129)*
+
+40c. **Audit counterparty wording against RENDERED output, not source.** The escalation
+    sweep asserted the banned words absent from all three dunning rungs by rendering them
+    and reading the messages — which also caught a driver-facing string in six locales
+    (`money.ev.escalation_offered` → "Collection offered") describing a step that had never
+    once occurred. A source grep for the send path would have missed it entirely. *(129)*
+
 ## 6 · SQLAlchemy and Postgres
 
 45. **Relationship collections are not trustworthy when the service writes with `db.add`.**
