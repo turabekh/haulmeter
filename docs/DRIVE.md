@@ -293,6 +293,21 @@ ENTERed, at least one BOL captured via the checklist.
     The rework *added* the inline card; it did not remove the archive door.
 
 ## J6 — Money lifecycle `[M4-FR5, M9-FR4]`
+0. **The paid moment `[J1-B2]`** — flag `j1_fee_disclosure`. With it ON, marking a claim
+   paid posts our contingency share as a **`fee` receivable** (15% by default, tunable at
+   `m09.contingency_fee_basis_points` in `/admin/config`). Then check three things:
+   - **Settled → the recovery shows the deduction**: gross, `Haulmeter fee −$51`, `yours
+     $289`, and a line saying plainly it is **not collected — we have no way to charge it
+     yet**. A fee shown without that sentence reads as money already gone.
+   - **The hero must NOT move.** "What you are owed" counts what BROKERS owe; our fee is
+     money you owe us and must never inflate it. If the hero jumps by the fee, that is the
+     defect this slice exists to prevent.
+   - **The year line under the hero is NET** and adds up from the settled rows — open them
+     and check with a finger. That reconciliation is the only reason a big figure is
+     allowed there (§23 entry 142).
+   ⚠️ The **claim-paid push is dormant by design**: it fires only when someone *other than
+   the driver* records payment, and the only endpoint is driver-only. The observable is the
+   Money row, not the notification.
 1. **Money**: month summary (Meter treatment), receivables list with status pills + aging.
 2. Each receivable: one **Next action** (nudge / escalate / mark paid).
 3. **Mark paid** → state flips, month total moves, paid event lands in earnings (the DDD counter).

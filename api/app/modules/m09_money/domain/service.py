@@ -22,7 +22,7 @@ Composes f06 + f09 + m04 + m07. Runs behind the F13 flag m09_money.
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -78,6 +78,14 @@ class EarningsSummary:
     fuel_saved_cents: int
     flagged_cents: int
     ddd_cents: int  # Driver Dollars Delivered (North Star)
+    # J1 part 4: THIS YEAR, and NET. Gross and fees travel beside it so the figure can be
+    # taken apart on the screen that shows it (§11.7 — a figure does not travel without
+    # what produced it). Defaulted, and therefore last: a default before a required field
+    # is a TypeError at import, which is the whole dataclass telling you where it goes.
+    recovered_year_gross_cents: int = 0
+    fees_year_cents: int = 0
+    recovered_year_net_cents: int = 0
+    year: int = 0
 
 
 @dataclass
@@ -340,10 +348,28 @@ def _flagged_total(db: Session, account_id) -> int:
 
 
 # --- Earnings dashboard / North Star DDD (M9-FR4) ---
-def earnings_dashboard(db: Session, account_id) -> EarningsSummary:
-    recovered = sum(
-        r["amount_cents"] for r in m4.money_owed(db, account_id) if r["state"] == "recovered"
-    )
+def _as_utc(value):
+    """The rows carry tz-aware datetimes from m04, but a database that stored them naive
+    would silently compare wrong — the same guard f03 and m04 apply to the same values."""
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def earnings_dashboard(db: Session, account_id, now: datetime | None = None) -> EarningsSummary:
+    # AI-CONTEXT: THE RECONCILIATION RULE (§23 entry 142, extended by J1-R1).
+    #
+    # The year figure is computed from THE SAME ROWS the Money tab lists, and net of the
+    # same fees those rows show as deductions — so a driver can add it up from what is on
+    # their own screen. That property is the whole reason the figure is allowed to be
+    # large: entry 142 replaced a hero that summed things the list did not show, and a
+    # gross-of-fee year total would be that mistake again in a smaller way, overstating by
+    # exactly what we took.
+    now = now or datetime.now(UTC)
+    rows = m4.money_owed(db, account_id, now=now)
+    recovered_rows = [r for r in rows if r["state"] == "recovered"]
+    recovered = sum(r["amount_cents"] for r in recovered_rows)
+    year_rows = [r for r in recovered_rows if _as_utc(r["created_at"]).year == now.year]
+    year_gross = sum(r["amount_cents"] for r in year_rows)
+    year_fees = sum(r.get("fee_cents", 0) for r in year_rows)
     fuel_saved = m7.driver_analytics(db, account_id).savings_cents
     flagged = _flagged_total(db, account_id)
     return EarningsSummary(
@@ -351,6 +377,12 @@ def earnings_dashboard(db: Session, account_id) -> EarningsSummary:
         fuel_saved_cents=fuel_saved,
         flagged_cents=flagged,
         ddd_cents=recovered + fuel_saved + flagged,
+        recovered_year_gross_cents=year_gross,
+        fees_year_cents=year_fees,
+        # what the driver actually kept, which is the only version of this figure that
+        # can be checked against the rows beneath it
+        recovered_year_net_cents=year_gross - year_fees,
+        year=now.year,
     )
 
 
@@ -496,10 +528,19 @@ def fee_receivable_for(db: Session, receivable) -> object | None:
     )
 
 
+def _money(cents: int) -> str:
+    """§12.2: figures-first and cents preserved rather than rounded away — a driver
+    reading their own money must see the amount that landed, not a tidied one."""
+    amount = cents / 100
+    return f"${amount:,.0f}" if cents % 100 == 0 else f"${amount:,.2f}"
+
+
 def _fee_ref(receivable) -> str:
-    # the RECOVERY is the real-world thing being billed, so it is the external ref — and
-    # `uq_receivable_external_ref` makes a second post impossible rather than unlikely
-    return f"fee:{receivable.id}"
+    # F7 owns the convention: M4 reads this linkage to render gross/fee/net and cannot
+    # import this module, so a second copy of the string here is exactly the drift this
+    # codebase keeps finding. `uq_receivable_external_ref` makes a second post impossible
+    # rather than unlikely.
+    return ledger.fee_external_ref(receivable.id)
 
 
 def _post_fee_receivable(db: Session, receivable):
@@ -585,13 +626,33 @@ def mark_receivable_paid(
         return receivable, None
     amount = receivable.amount_cents / 100
     figure = f"${amount:,.0f}" if receivable.amount_cents % 100 == 0 else f"${amount:,.2f}"
+    # AI-CONTEXT: GROSS · FEE · NET in the body, in that order (J1 part 3).
+    #
+    # The fee is disclosed the instant it exists, in the same notification that announces
+    # the money — not later, on a screen the driver has to go looking for. A driver who
+    # learns of our cut after celebrating the gross has been surprised by their own
+    # platform, which is the one thing a P0 about their money must never do.
+    #
+    # With no fee posted (the flag off, or a recovery that predates it) the line states
+    # the amount alone: three figures where one of them is always zero would be arithmetic
+    # theatre.
+    fee = ledger.fee_for(db, receivable)
+    body_key = "claim_paid.body"
+    values = {}
+    if fee is not None:
+        body_key = "claim_paid.body_fee"
+        values = {
+            "gross": _money(receivable.amount_cents),
+            "fee": _money(fee.amount_cents),
+            "net": _money(receivable.amount_cents - fee.amount_cents),
+        }
     notification = notify.dispatch(
         db,
         receivable.account_id,
         notify.NotificationTier.P0,
         CLAIM_PAID_CATEGORY,
         _alert(db, receivable.account_id, "claim_paid.title", figure=figure),
-        _alert(db, receivable.account_id, "claim_paid.body"),
+        _alert(db, receivable.account_id, body_key, **values),
         deep_link,
         gateway,
         now=now,

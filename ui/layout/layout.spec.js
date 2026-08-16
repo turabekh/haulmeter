@@ -375,24 +375,36 @@ const MONEY_MOCKS = {
   // The names are long on purpose: at 360 dp under xx-XL the broker is what wraps.
   "/accessorial/owed": [
     { receivable_id: "r-1", kind: "detention", amount_cents: 8750, state: "invoiced",
+      fee_cents: 0, net_cents: 8750,
       aging_days: 12, is_reimbursement: false, counterparty_name: "Bolt Logistics LLC",
       facility_name: "Midwest Distribution Center — Dock 4", stop_id: "00000000-0000-0000-0000-0000000000aa",
       history: [{ event: "invoiced", at: "2026-07-30T12:00:00+00:00" }] },
     { receivable_id: "r-2", kind: "lumper", amount_cents: 12500, state: "disputed",
+      fee_cents: 0, net_cents: 12500,
       aging_days: 31, is_reimbursement: true, counterparty_name: "Blue Road Logistics LLC",
       facility_name: "Metro Market Warehouse", stop_id: null,
       history: [{ event: "invoiced", at: "2026-07-11T12:00:00+00:00" },
                 { event: "nudged", at: "2026-07-14T09:00:00+00:00" },
                 { event: "firmed", at: "2026-07-21T09:00:00+00:00" }] },
+    // AI-CONTEXT: a recovery WITH our fee taken (J1 parts 3-4). A fixture without
+    // `fee_cents` would render the settled row with no deduction line and measure a
+    // screen this session just changed — the entry-52 rule, one row over. The
+    // outstanding rows above carry 0/gross so BOTH shapes are laid out.
     { receivable_id: "r-3", kind: "tonu", amount_cents: 25000, state: "recovered",
       aging_days: 64, is_reimbursement: false, counterparty_name: "TQL",
-      facility_name: "Old Dock", stop_id: null, history: [] },
+      facility_name: "Old Dock", stop_id: null, history: [],
+      fee_cents: 3750, net_cents: 21250 },
   ],
   "/money/earnings": {
     recovered_cents: 42500,
     fuel_saved_cents: 18600,
     flagged_cents: 7500,
     ddd_cents: 61100,
+    // the year line under the hero — NET, and reconciling against r-3 above
+    recovered_year_gross_cents: 25000,
+    fees_year_cents: 3750,
+    recovered_year_net_cents: 21250,
+    year: 2026,
   },
   "/auth/me": { email: "driver@example.com", verified: true, authority: "owner_operator" },
 };

@@ -326,7 +326,19 @@ def money_owed(db: Session, account_id, now: datetime | None = None) -> list[dic
     now = now or datetime.now(UTC)
     rows = []
     for r in ledger.list_receivables(db, account_id):
+        # AI-CONTEXT: a FEE is not a row on this list (J1-R1, §23 entry 173).
+        #
+        # Every other kind here is money a BROKER owes the driver, and this list is summed
+        # into the "what you are owed" hero (§23 entry 142). A fee receivable is money the
+        # driver owes the PLATFORM and never leaves `invoiced`, because no collection
+        # rails exist — so leaving it in would have added our own fee to the figure
+        # telling a driver what brokers are sitting on. The biggest number on the screen,
+        # wrong, in the direction that flatters us. It belongs to the recovery it came
+        # from, and it is attached to that row below.
+        if r.kind is ledger.ReceivableKind.fee:
+            continue
         aging = (now - _as_utc(r.created_at)).days
+        fee = ledger.fee_for(db, r)
         rows.append(
             {
                 "receivable_id": str(r.id),
@@ -356,6 +368,12 @@ def money_owed(db: Session, account_id, now: datetime | None = None) -> list[dic
                 # nobody had touched — which is the whole difference between "wait" and
                 # "do something".
                 "history": _receivable_history(db, r),
+                # WHAT WE TOOK, and what is left. Present on every row so the shape does
+                # not shift between a recovery with a fee and one without: no fee means
+                # zero taken and the whole amount kept, which is a statement rather than
+                # an absence.
+                "fee_cents": fee.amount_cents if fee is not None else 0,
+                "net_cents": r.amount_cents - (fee.amount_cents if fee is not None else 0),
             }
         )
     return rows

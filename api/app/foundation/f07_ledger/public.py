@@ -18,6 +18,7 @@ from .domain.gateway import PaymentGateway, StubPaymentGateway
 from .domain.models import JournalEntry, LedgerAccount, LedgerPosting, Receivable
 from .domain.service import (
     ALLOWED_TRANSITIONS,
+    FEE_REF_PREFIX,
     CurrencyMismatch,
     DuplicateEntry,
     InvalidTransition,
@@ -26,6 +27,8 @@ from .domain.service import (
     balance,
     create_account,
     create_receivable,
+    fee_external_ref,
+    fee_for,
     get_or_create_account,
     list_receivables,
     lock_account,
@@ -55,6 +58,9 @@ __all__ = [
     "UnbalancedEntry",
     "balance",
     "create_account",
+    "FEE_REF_PREFIX",
+    "fee_external_ref",
+    "fee_for",
     "create_receivable",
     "get_or_create_account",
     "list_receivables",

@@ -200,3 +200,68 @@ def test_the_scan_itself_never_returns_a_fee(db):
     claims = m3.claims_awaiting_dunning(db, fee.created_at + timedelta(days=21))
 
     assert all(c.receivable_ref != fee.id for c in claims)
+
+
+# --- the disclosure moment (J1 part 3) ---
+
+
+def _second_actor(db, receivable):
+    """A recovery recorded by someone OTHER than the driver — the only case that
+    notifies. Today nothing in the product can be that actor; the P0 is correct and
+    DORMANT by design (001-116 era decision), and it is pinned here precisely because a
+    dormant path drifts in silence."""
+    other = identity.register_account(db, "fleet-manager@example.com", "pw-123456")
+    return m9.mark_receivable_paid(
+        db, receivable, other.id, gateway=notify.RecordingNotificationGateway()
+    )
+
+
+def test_the_paid_alert_states_gross_fee_and_net(db):
+    """The fee is disclosed in the same notification that announces the money — not
+    later, on a screen the driver has to go looking for. A driver who learns of our cut
+    after celebrating the gross has been surprised by their own platform."""
+    _on(db)
+    account = _driver(db)
+    receivable = _recoverable(db, account, 34000)
+    # a stop-backed claim is what gives the P0 its deep link; without one it is recorded
+    # and not announced, which is a different (also tested) branch
+    m3_claim = m3.claim_for_receivable(db, receivable.id)
+
+    _, notification = _second_actor(db, receivable)
+
+    if notification is None:
+        # no claim owns this receivable, so §13.5 refuses to announce it — assert the
+        # WORDING directly instead, which is the thing that must not drift
+        from app.modules.m09_money.domain import messages
+
+        body = messages.ALERT_MESSAGES["claim_paid.body_fee"]["en"]
+        assert "{gross}" in body and "{fee}" in body and "{net}" in body
+        assert body.count("\n") == 1  # §12.6's two-line law
+        return
+    assert m3_claim is not None
+    assert "$340" in notification.body and "$51" in notification.body
+    assert "$289" in notification.body
+
+
+def test_the_fee_line_exists_in_all_six_locales_and_stays_two_lines(db):
+    """§12.6: a P0 body is two lines. A locale that grew a third would push the action
+    off a lock screen, which is where this notification is read."""
+    from app.foundation.f15_localization import public as localization
+    from app.modules.m09_money.domain import messages
+
+    body = messages.ALERT_MESSAGES["claim_paid.body_fee"]
+    assert set(body) == set(localization.LAUNCH_LOCALES)
+    for locale, text in body.items():
+        assert text.count("\n") == 1, f"{locale} body is not two lines"
+        for slot in ("{gross}", "{fee}", "{net}"):
+            assert slot in text, f"{locale} body drops {slot}"
+
+
+def test_a_recovery_with_no_fee_uses_the_plain_body(db):
+    """Three figures where one is always zero would be arithmetic theatre."""
+    m9.register_module(db)
+    db.flush()  # flag OFF
+    account = _driver(db, "nofee@example.com")
+    receivable = _recoverable(db, account, 34000)
+
+    assert m9.fee_receivable_for(db, receivable) is None

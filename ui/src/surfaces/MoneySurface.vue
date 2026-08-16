@@ -121,6 +121,9 @@ const owedCents = computed(() => outstanding.value.reduce((n, r) => n + r.amount
 const owedBrokers = computed(
   () => new Set(outstanding.value.map((r) => r.counterparty_name).filter(Boolean)).size,
 );
+// NET, and read from the server rather than recomputed here — the figure and the rows it
+// reconciles against must come from one place, or the screen can disagree with itself.
+const yearNetCents = computed(() => earnings.value?.recovered_year_net_cents ?? 0);
 const owedFrom = computed(() =>
   owedBrokers.value === 1 ? t("money.owed_from_one") : t("money.owed_from", { n: owedBrokers.value }),
 );
@@ -206,6 +209,17 @@ async function onMarkPaid(receivableId) {
         :status="owedBrokers ? owedFrom : ''"
         variant="accruing"
       />
+      <!-- AI-CONTEXT: the year figure is a SECONDARY line, not a second Meter (J1 part
+           4, owner decision).
+           §23 entry 142 made this screen's one hero "what you are owed" after the
+           previous hero was wrong three ways, and a rival figure of similar weight would
+           undo that hierarchy — two large numbers and no answer to which one the tab is
+           about. It sits under the hero, NET of fees, and reconciles against the settled
+           rows below: a driver can add it up on their own screen. -->
+      <p v-if="yearNetCents > 0" class="year">
+        <span class="year__label">{{ t("money.year_recovered", { year: earnings.year }) }}</span>
+        <span class="year__figure mono">{{ formatMoney(yearNetCents) }}</span>
+      </p>
     </section>
 
     <!-- F1: verified authority — a §200 status pill where credibility is billed -->
@@ -296,6 +310,20 @@ async function onMarkPaid(receivableId) {
               :style="{ '--pill-color': `var(${receivableStatusToken(r.state)})` }"
             >{{ stateLabel(r.state) }}</span>
           </span>
+          <!-- AI-CONTEXT: what we took, as its own VISIBLE line (J1 part 3).
+               The deduction is shown rather than implied by a smaller total, so the
+               driver can reconcile the year figure above against these rows — entry
+               142's property, which is the only reason a big number is allowed here.
+               And it says plainly that we have not collected it: a fee shown without
+               that sentence reads as money already gone. -->
+          <span v-if="r.fee_cents > 0" class="row__fee">
+            <span class="row__feeline">
+              {{ t("money.fee_taken") }}
+              <span class="mono">−{{ formatMoney(r.fee_cents) }}</span>
+              <span class="row__feenet">{{ t("money.fee_yours") }} <span class="mono">{{ formatMoney(r.net_cents) }}</span></span>
+            </span>
+            <span class="row__feenote">{{ t("money.fee_uncollected") }}</span>
+          </span>
         </li>
       </ul>
     </template>
@@ -373,6 +401,43 @@ async function onMarkPaid(receivableId) {
 .row__go {
   flex-shrink: 0;
   color: var(--text-3);
+}
+.year {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
+}
+.year__label {
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+}
+.year__figure {
+  color: var(--text-1);
+  font-size: var(--type-title-size);
+}
+.row__fee {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  width: 100%;
+  margin-top: var(--s-2);
+}
+.row__feeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-2);
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+}
+.row__feenet {
+  color: var(--text-1);
+}
+.row__feenote {
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
 }
 .row--settled {
   opacity: 0.75;

@@ -53,6 +53,12 @@ def earnings(
         "fuel_saved_cents": s.fuel_saved_cents,
         "flagged_cents": s.flagged_cents,
         "ddd_cents": s.ddd_cents,
+        # J1 part 4 — the year figure and the two halves it is made of, so the screen can
+        # show what it is rather than only how big it is (§11.7)
+        "recovered_year_gross_cents": s.recovered_year_gross_cents,
+        "fees_year_cents": s.fees_year_cents,
+        "recovered_year_net_cents": s.recovered_year_net_cents,
+        "year": s.year,
     }
 
 

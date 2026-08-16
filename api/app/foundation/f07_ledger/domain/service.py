@@ -187,6 +187,33 @@ def balance(db: Session, account: LedgerAccount) -> int:
 
 
 # --- Receivables ---
+# AI-CONTEXT: the fee<->recovery linkage lives HERE, in the component that owns the
+# table, because two modules need it and they cannot talk to each other (J1-R1).
+#
+# M9 WRITES the fee when a recovery lands; M4 READS it to render gross/fee/net on the
+# Money tab — and m04 sits below m09 in the spine, so it cannot import the writer. The
+# alternative was two modules agreeing on the literal `f"fee:{id}"`, which is the string
+# convention this codebase keeps finding drifted. One definition, owned by F7.
+FEE_REF_PREFIX = "fee:"
+
+
+def fee_external_ref(receivable_id) -> str:
+    """The external ref a recovery's fee is filed under. Unique per recovery, which is
+    what `uq_receivable_external_ref` turns into idempotency."""
+    return f"{FEE_REF_PREFIX}{receivable_id}"
+
+
+def fee_for(db: Session, receivable) -> "Receivable | None":
+    """The platform's fee on this recovery, or None where none was posted — which is the
+    ordinary case for every recovery that predates the fee, and for every one recorded
+    while `j1_fee_disclosure` is off."""
+    if receivable.kind is ReceivableKind.fee:
+        return None  # a fee has no fee
+    return db.scalar(
+        select(Receivable).where(Receivable.external_ref == fee_external_ref(receivable.id))
+    )
+
+
 def create_receivable(
     db: Session,
     account_id,

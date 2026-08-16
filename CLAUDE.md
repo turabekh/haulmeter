@@ -111,3 +111,8 @@ An audit was completed 2026-08-07: 45 findings, 8 critical.
 
 Findings marked OBSERVED were read from a dump, not a running system.
 Re-grep before acting. Findings marked INFERRED need a command on the box first.
+
+
+Counsel. A read-only Fable advisor lives at .claude/agents/counsel.md. Delegate to it at any fork the brief doesn't resolve, and before presenting any plan for owner approval. It advises from the tree; it carries no owner authority — D-decisions, never-improvise categories, and push/deploy still stop for the owner.
+
+test-runner: delegate long test runs to test-runner; the main session reads the raw counts and failures it returns, and the pre-commit gate numbers go into the handoff from that raw report, never from memory.
