@@ -2748,6 +2748,92 @@ describe("RateConImportSheet (§10.2 empty state / PRD §108)", () => {
     const values = w.findAll(".rc__input").map((i) => i.element.value);
     expect(values.every((v) => v === "")).toBe(true); // no invented terms
   });
+
+  // --- the broker contact, read off the paper (J1-A1) ---
+
+  const CONTACT_DRAFT = {
+    ...DRAFT,
+    contact: { email: "dispatch@cardinal.example", phone: "7045550134" },
+  };
+
+  it("prefills the broker contact the rate con printed", async () => {
+    // the one thing A1 exists for. The field, its rule and the registry write have all
+    // existed since the counterparty-email session -- the PARSE never filled them in, so
+    // a driver retyped an address off a photograph at a truck stop every time.
+    stub(CONTACT_DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(w.vm.form.brokerEmail).toBe("dispatch@cardinal.example");
+    expect(w.vm.form.brokerPhone).toBe("7045550134");
+  });
+
+  it("leaves the fields editable, and what the driver types is what is sent", async () => {
+    // a parse is a PROPOSAL. The driver holds the paper and the phone; the app holds
+    // neither, and a prefilled field that could not be corrected would be an assertion.
+    const posts = stub(CONTACT_DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    const email = w.findAll("input[type=email]")[0];
+    await email.setValue("ap@cardinal.example");
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    const created = posts.find((p) => p.url.endsWith("/load") && p.body);
+    expect(created.body.counterparty_email).toBe("ap@cardinal.example");
+    expect(created.body.counterparty_phone).toBe("7045550134");
+  });
+
+  it("prefills nothing when the rate con printed nothing", async () => {
+    // absence stays absence. The "no email on file" state exists for genuinely silent
+    // paper and still tells the driver what to do about it.
+    stub({ ...DRAFT, contact: { email: null, phone: null } });
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(w.vm.form.brokerEmail).toBe("");
+    expect(w.vm.form.brokerPhone).toBe("");
+  });
+
+  it("survives a draft with no contact key at all", async () => {
+    // the flag ships OFF and older clients meet older servers. An absent key must read
+    // as "nothing printed", never as the string "undefined" in the field a driver is
+    // about to confirm.
+    stub(DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    expect(w.vm.form.brokerEmail).toBe("");
+    expect(w.vm.form.brokerPhone).toBe("");
+  });
+
+  it("refuses to post a phone it cannot read as ten digits", async () => {
+    const posts = stub(CONTACT_DRAFT);
+    const w = mount(RateConImportSheet);
+    await pickFile(w);
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+
+    await w.findAll("input[type=tel]")[0].setValue("704-555-0134 x229");
+    await w.vm.$nextTick();
+    // the driver is told, in their own language, rather than finding out from a 422
+    expect(w.text()).toContain(en["phone.ten_digits"]);
+
+    await w.find(".rc__cta").trigger("click");
+    await settle(w);
+    const created = posts.find((p) => p.url.endsWith("/load") && p.body);
+    expect(created.body.counterparty_phone).toBe(null);
+  });
+
 });
 
 describe("LoadSurface — §10.2 anatomy and DRIVING", () => {

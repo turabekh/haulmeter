@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import get_db
 from app.foundation.f02_facility import public as facility
@@ -946,3 +946,92 @@ def test_the_pack_says_which_stop_and_who_it_is_against(client, db):
     assert ("Broker", "Acme Brokerage") in context.parties
     assert ("Stop", "Delivery · 1 of 1") in context.references
     assert ("Facility", "Harvest Foods DC") in context.references
+
+
+# --- the broker contact, parsed off the paper (J1-A1) ---
+
+
+CONTACT_TERMS = {
+    **FULL_TERMS,
+    "counterparty_email": "dispatch@cardinal.example",
+    "counterparty_phone": "(704) 555-0134",
+}
+
+
+def _contact_on(db):
+    from app.foundation.f05_load import public as loads
+    from app.foundation.f13_flags import public as flags
+
+    loads.register_rate_con_contact(db)
+    flags.enable(db, loads.CONTACT_FLAG)
+    db.flush()
+
+
+def test_the_draft_carries_the_address_the_rate_con_prints(client, db, monkeypatch):
+    """The one thing A1 exists for: the driver stops typing an address off a photograph
+    at a truck stop. The field and the registry write were already there."""
+    _contact_on(db)
+    _with_parse(monkeypatch, CONTACT_TERMS)
+    headers = _headers(client, "rc-contact@example.com")
+
+    body = _import(client, headers).json()
+
+    assert body["contact"] == {"email": "dispatch@cardinal.example", "phone": "7045550134"}
+
+
+def test_the_draft_addresses_nothing_and_writes_no_registry_row(client, db, monkeypatch):
+    """A parsed address is a claim about the paper. It becomes a recipient when a human
+    who can see both the paper and the screen says so — `POST /load` still takes the
+    address from the confirmed form, and this endpoint creates nothing."""
+    from app.foundation.f05_load.domain.models import Counterparty
+
+    _contact_on(db)
+    _with_parse(monkeypatch, CONTACT_TERMS)
+    headers = _headers(client, "rc-no-write@example.com")
+
+    before = db.scalar(select(func.count()).select_from(Counterparty))
+    _import(client, headers)
+    after = db.scalar(select(func.count()).select_from(Counterparty))
+
+    assert after == before
+
+
+def test_a_rate_con_that_prints_no_address_says_so(client, db, monkeypatch):
+    """Absence renders as absence. The "no email on file" state stays for genuinely
+    silent paper and still tells the driver what to do."""
+    _contact_on(db)
+    _with_parse(monkeypatch, {**FULL_TERMS, "counterparty_email": None})
+    headers = _headers(client, "rc-silent-contact@example.com")
+
+    assert _import(client, headers).json()["contact"]["email"] is None
+
+
+def test_a_misread_footer_does_not_become_a_recipient(client, db, monkeypatch):
+    """A photograph that ran off the edge yields `dispatch@`. Prefilling that would put
+    a fragment in the field a driver is about to confirm — and a confirmed fragment is
+    how the packet ends up addressed to nobody."""
+    _contact_on(db)
+    _with_parse(monkeypatch, {**FULL_TERMS, "counterparty_email": "dispatch@"})
+    headers = _headers(client, "rc-fragment@example.com")
+
+    assert _import(client, headers).json()["contact"]["email"] is None
+
+
+def test_the_contact_is_withheld_while_the_flag_is_off(client, db, monkeypatch):
+    """`j1_contact_parse` ships OFF until the eval says how often the parse is right on
+    real paper. With it off the screen sees exactly what it saw before."""
+    _with_parse(monkeypatch, CONTACT_TERMS)
+    headers = _headers(client, "rc-flag-off@example.com")
+
+    assert _import(client, headers).json()["contact"] == {"email": None, "phone": None}
+
+
+def test_an_unreadable_rate_con_proposes_no_contact(client, db, monkeypatch):
+    """A parse the screen calls unreadable must not hand it an address anyway."""
+    _contact_on(db)
+    _with_parse(monkeypatch, {})
+    headers = _headers(client, "rc-unreadable-contact@example.com")
+
+    body = _import(client, headers).json()
+    assert body["readable"] is False
+    assert body["contact"] == {"email": None, "phone": None}

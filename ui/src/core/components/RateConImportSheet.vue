@@ -27,7 +27,12 @@ import { ref, reactive, computed } from "vue";
 import { Camera, TriangleAlert, Check } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 import { importRateCon, createActiveLoad, geocodeAddress } from "../api.js";
-import { contactEmailError, normalizeContactEmail } from "../contact.js";
+import {
+  contactEmailError,
+  contactPhoneError,
+  normalizeContactEmail,
+  normalizeContactPhone,
+} from "../contact.js";
 import { lastFix } from "../location.js";
 import Spinner from "./Spinner.vue";
 
@@ -52,6 +57,10 @@ const form = reactive({
   // file the load and run the clock, and the claim screen's `no_email` state is what
   // catches it later. An offer, not a gate.
   brokerEmail: "",
+  // AI-CONTEXT: read off the same rate con as the address, and useful for the same
+  // reason — it is the number a driver calls when the dock will not answer the buzzer,
+  // and until now they read it off the photograph every time.
+  brokerPhone: "",
   reference: "",
   freeMin: "",
   rateHr: "",
@@ -143,6 +152,15 @@ async function read() {
     const p = res.parsed ?? {};
     form.broker = p.broker_name ?? "";
     form.reference = p.reference_number ?? "";
+    // AI-CONTEXT: the contact the paper prints, PREFILLED — never sent (J1-A1).
+    //
+    // It arrives already held to the server's own address rule, so what lands here is
+    // either an address or nothing; a footer that ran off the edge of the photograph
+    // comes back absent rather than as `dispatch@`. The field stays editable and the
+    // driver still confirms, which is the whole posture: a parse is a claim about the
+    // paper, and only the person holding both it and the phone can make it a recipient.
+    form.brokerEmail = res.contact?.email ?? "";
+    form.brokerPhone = res.contact?.phone ?? "";
     // <input type="datetime-local"> wants "YYYY-MM-DDTHH:mm" with no zone
     stops.value = (res.stops ?? []).map((row) => ({
       ...blankStop(row.stop_type || "delivery"),
@@ -207,6 +225,7 @@ const routeReady = computed(() => stops.value.length > 0 && stops.value.every((s
 // the same rule the server applies, so a typo is caught while the driver is still looking
 // at the paper rather than as a 422 three taps later
 const brokerEmailError = computed(() => contactEmailError(form.brokerEmail));
+const brokerPhoneError = computed(() => contactPhoneError(form.brokerPhone));
 
 function stopSource(stop) {
   return stop.parsedStart && stop.apptStart === String(stop.parsedStart).slice(0, 16)
@@ -225,6 +244,7 @@ async function create() {
       address: stops.value[0].address || null,
       counterparty: form.broker || "Broker",
       counterparty_email: normalizeContactEmail(form.brokerEmail),
+      counterparty_phone: normalizeContactPhone(form.brokerPhone),
       reference_number: form.reference || null,
       free_time_minutes: Number(form.freeMin) || null,
       rate_cents_per_hour: form.rateHr ? Math.round(Number(form.rateHr) * 100) : null,
@@ -378,6 +398,21 @@ async function create() {
         />
         <span v-if="brokerEmailError" class="rc__error" role="alert">
           {{ t(brokerEmailError) }}
+        </span>
+      </label>
+      <!-- labelled for its purpose for the same reason the address above is: this is the
+           number to call about THIS load, not a contact record. -->
+      <label class="rc__field">
+        <span class="rc__label">{{ t("load.broker_phone") }}</span>
+        <input
+          v-model="form.brokerPhone"
+          class="rc__input"
+          type="tel"
+          inputmode="tel"
+          autocomplete="off"
+        />
+        <span v-if="brokerPhoneError" class="rc__error" role="alert">
+          {{ t(brokerPhoneError) }}
         </span>
       </label>
       <!-- the money the load pays. Editable like every other parsed value, because a

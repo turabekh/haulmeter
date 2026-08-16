@@ -3,7 +3,8 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci vapid-keys \
         seed seed-where seed-wallet purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
-        repair-fuel repair-contact repair-duplicates osm-publish ingest-remote ui-layout ui-layout-only
+        repair-fuel repair-contact repair-duplicates osm-publish ingest-remote ui-layout ui-layout-only \
+        ratecon-eval
 
 STATE ?= wisconsin
 # osmium-tool is packaged in Debian/Ubuntu; install it in a slim base at run time
@@ -190,6 +191,14 @@ m14-onboard:
 #   make m14-validate FLEET=<uuid> [FILE=ground-truth.csv]
 m14-validate:
 	$(COMPOSE) exec api python -m scripts.m14_validate
+
+# how often the rate-con parse is RIGHT on real paper (J1-A1). Calls the live model and
+# costs money per run, so it is NEVER part of `make ci` — it is a measurement, run when
+# the prompt changes and recorded in the handoff. The corpus lives OUTSIDE this
+# repository: a rate con is a counterparty's document and this repository is public.
+#   make ratecon-eval DIR=/path/to/corpus
+ratecon-eval:
+	$(COMPOSE) exec -e DIR=$(DIR) api python -m scripts.ratecon_eval
 
 # probe unverified TPIMS state feeds (KY/MN) — reachability + spec-shape, never CI
 probe-tpims:

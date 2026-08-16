@@ -333,6 +333,11 @@ const RATE_CON_DRAFT = {
     },
   },
   silent_on: ["tonu"],
+  // AI-CONTEXT: the contact the parse prefills (J1-A1). Present here for the same
+  // reason `rate_cents` is: a fixture that omits the key measures the field
+  // permanently blank, and a blank field is the one width that never overflows.
+  // A long real-world address, because 360 dp is where it has to survive.
+  contact: { email: "accountspayable@coyote-logistics.example", phone: "7045550134" },
   // AI-CONTEXT: a ROUTE (§23 entry 68) — two stops, so the confirm screen is measured
   // the way a real contract renders it rather than at its shortest.
   stops: [

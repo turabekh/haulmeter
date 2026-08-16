@@ -24,7 +24,22 @@ from sqlalchemy.orm import Session
 from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f09_ai_gateway import public as ai
 
+from .service import InvalidContactEmail, validate_contact_email
+
 RATE_CON_PROMPT = "rate_con_parse"
+
+# AI-CONTEXT: the broker contact parsed off the paper, behind its own flag.
+#
+# The address is printed on virtually every rate con and the driver types it by hand
+# anyway — the field, its validation and the F5 registry write have all existed since
+# the counterparty-email session; only the PARSE never filled them in.
+#
+# The flag gates whether the DRAFT CARRIES the contact, not whether the prompt asks for
+# it. With the flag off the extra keys are still extracted and simply not handed to the
+# screen, so switching it on exercises a path that has been running all along rather
+# than one nobody has ever executed — which is the failure mode a flag is supposed to
+# prevent, not create.
+CONTACT_FLAG = "j1_contact_parse"
 
 # What the parse is REQUIRED to return for the draft to be worth showing. Deliberately
 # short: a rate con that yields nothing but a detention rate is still worth confirming,
@@ -64,6 +79,8 @@ RATE_CON_SCHEMA = {
     "required": [
         "reference_number",
         "broker_name",
+        "counterparty_email",
+        "counterparty_phone",
         "rate_cents",
         "detention_rate_cents_per_hour",
         "free_time_minutes",
@@ -73,6 +90,17 @@ RATE_CON_SCHEMA = {
     "properties": {
         "reference_number": _nullable("string"),
         "broker_name": _nullable("string"),
+        # AI-CONTEXT: extracted so the driver stops TYPING it. A rate con prints the
+        # address the broker wants paperwork sent to, and the packet and the detention
+        # notice both need exactly that address — but the parse never asked for it, so
+        # every driver retyped it off a photograph at a truck stop.
+        #
+        # Nullable and required like every other field here: "this contract prints no
+        # email" is a fact the confirm screen must be able to state. A GUESSED address
+        # is the one outcome worse than an absent one — an absent one costs a driver
+        # some typing, and a wrong one mails a stranger the details of a load.
+        "counterparty_email": _nullable("string"),
+        "counterparty_phone": _nullable("string"),
         "rate_cents": _nullable("integer"),
         "detention_rate_cents_per_hour": _nullable("integer"),
         "free_time_minutes": _nullable("integer"),
@@ -122,6 +150,10 @@ PROMPT_TEMPLATE = (
     "You are reading a freight rate confirmation. Extract only what the document "
     "actually states. Return a single JSON object with these keys: "
     "reference_number (string or null), broker_name (string or null), "
+    "counterparty_email (the broker's own email address EXACTLY as printed on the "
+    "document — the address it gives for dispatch, billing, paperwork or claims — or "
+    "null), "
+    "counterparty_phone (the broker's phone number exactly as printed, or null), "
     "rate_cents (integer total linehaul in cents, or null), "
     "detention_rate_cents_per_hour (integer cents per hour, or null), "
     "free_time_minutes (integer minutes of free time before detention accrues, or null), "
@@ -132,7 +164,12 @@ PROMPT_TEMPLATE = (
     "given a window like \"08:00 - 10:00\" has both), "
     "accessorial_terms (a list of {term, wording} taken from the contract, may be empty). "
     "Use null for anything the document does not state. Never infer a market-standard "
-    "value for a term the document is silent on. The rate confirmation is attached. {doc}"
+    "value for a term the document is silent on. "
+    "For counterparty_email and counterparty_phone: copy only what is printed. Never "
+    "build an address from a company name or a website, never return an address "
+    "belonging to the carrier, the driver, or a factoring company, and never return a "
+    "placeholder such as N/A. If no broker email is printed, the answer is null. "
+    "The rate confirmation is attached. {doc}"
 )
 
 # The terms that make a parse worth showing as a parse. A model handed something it
@@ -168,10 +205,36 @@ def facility_candidates(db: Session, parsed: dict, limit: int = 3) -> list[dict]
 
 
 def register_rate_con_prompt(db: Session) -> None:
-    """Idempotent, and registered under the same key the Foundation e2e already uses,
-    so the assembled chain and the production path cannot drift apart."""
-    if ai.get_active_prompt(db, RATE_CON_PROMPT) is None:
-        ai.register_prompt(db, RATE_CON_PROMPT, ai.AiTask.document_parse, PROMPT_TEMPLATE)
+    """Register the CURRENT template, versioned, and registered under the same key the
+    Foundation e2e already uses so the assembled chain and the production path cannot
+    drift apart.
+
+    AI-CONTEXT: this used to read `if get_active_prompt(...) is None`, and that is a
+    deploy that changes nothing (TRAPS §1).
+
+    `parse_structured` runs the template stored in the DATABASE, not the constant in
+    this file. So on any box that had ever parsed a rate con, editing `PROMPT_TEMPLATE`
+    changed the source, shipped green, and altered the live parse not at all — the row
+    written on the first-ever call kept serving forever. It would have taken the new
+    `counterparty_email` key with it: the schema would demand a field the prompt never
+    mentioned, on production only, where no test looks.
+
+    A CHANGED template becomes a NEW VERSION rather than an in-place edit. `Prompt` has
+    a unique (key, version) and `get_active_prompt` orders by version descending, so the
+    newest wins and every earlier wording stays on the row that produced its calls —
+    which is the whole point of versioning a prompt: an `AiCall` from last week must
+    still be readable against the text that made it.
+    """
+    active = ai.get_active_prompt(db, RATE_CON_PROMPT)
+    if active is not None and active.template == PROMPT_TEMPLATE:
+        return
+    ai.register_prompt(
+        db,
+        RATE_CON_PROMPT,
+        ai.AiTask.document_parse,
+        PROMPT_TEMPLATE,
+        version=(active.version + 1) if active is not None else 1,
+    )
 
 
 def parse_rate_con(
@@ -249,6 +312,108 @@ def silent_terms(parsed: dict) -> list[str]:
     return gaps
 
 
+# AI-CONTEXT: the words a model reaches for when a field is not on the page. It answers
+# the question rather than declining to, and every one of these is a way of saying
+# "null" that would otherwise be stored as if it were an address.
+_ABSENT_WORDS = {
+    "",
+    "-",
+    "—",
+    "n/a",
+    "n\\a",
+    "na",
+    "none",
+    "null",
+    "nil",
+    "tbd",
+    "tba",
+    "unknown",
+    "not provided",
+    "not stated",
+    "not listed",
+    "not available",
+    "not applicable",
+    "no email",
+    "no email on file",
+    "see rate confirmation",
+}
+
+
+def _absent(raw) -> bool:
+    return not isinstance(raw, str) or raw.strip().lower() in _ABSENT_WORDS
+
+
+def parsed_email(parsed: dict | None) -> str | None:
+    """The broker address the paper prints, or None — never a repair.
+
+    Held to the SAME rule the driver's typed address is held to
+    (`validate_contact_email`), and a value that fails it becomes absence rather than an
+    error: a rate con is not invalid because a model misread its footer, and the driver
+    still has a field to type in. What must never happen is the failure in between —
+    storing `dispatch@` or `N/A` as a recipient, which reads on screen as an address
+    that was found.
+    """
+    raw = (parsed or {}).get("counterparty_email")
+    if _absent(raw):
+        return None
+    try:
+        return validate_contact_email(raw)
+    except InvalidContactEmail:
+        return None
+
+
+def parsed_phone(parsed: dict | None) -> str | None:
+    """Ten digits or nothing.
+
+    An extension, a second number in the same cell, or a fragment all come back as a
+    digit count that is not 10 (or 11 with a leading country code), and every one of
+    them is a case where the honest answer is that we do not know which digits are the
+    number. Truncating to the last ten — the shape used elsewhere in this codebase for
+    numbers a HUMAN typed into a phone field — would turn "555-0134 x229" into a number
+    that dials someone else.
+    """
+    raw = (parsed or {}).get("counterparty_phone")
+    if _absent(raw):
+        return None
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    return digits if len(digits) == 10 else None
+
+
+def parsed_contact(parsed: dict | None) -> dict:
+    """What the confirm screen prefills. Both halves independent: a rate con that prints
+    a phone and no email is common, and is not a failure of either."""
+    return {"email": parsed_email(parsed), "phone": parsed_phone(parsed)}
+
+
+# the shape is the SAME with the flag off — an absent contact and a switched-off parse
+# look identical to the screen, which is correct: in both cases the paper has told the
+# driver nothing and the field is theirs to fill
+_NO_CONTACT = {"email": None, "phone": None}
+
+
+def register_rate_con_contact(db: Session) -> None:
+    """Declared at boot so `/admin/flags` can show it before anyone needs it.
+
+    Registered OFF: the extraction is new, and the eval that says how often it is right
+    on real paper (`make ratecon-eval`) needs rate cons this project does not yet have.
+    Shipping it on would mean the first measurement of the parse was a driver noticing a
+    wrong address in the field.
+    """
+    from app.foundation.f13_flags import public as flags
+
+    flags.register_flag(
+        db,
+        CONTACT_FLAG,
+        description=(
+            "J1-A1: prefill the broker's email and phone on the rate-con confirm step "
+            "from the parse. The driver still confirms; nothing auto-sends."
+        ),
+        default_on=False,
+    )
+
+
 def facility_candidates_for(db: Session, name: str, limit: int = 3) -> list[dict]:
     """What the parsed receiver might already be in the registry.
 
@@ -301,6 +466,9 @@ def draft_from_rate_con(
 
     `readable` is the screen's right to say "read from your rate con", and it is false
     when nothing usable came back — a full object of nulls is not a read."""
+    from app.foundation.f13_flags import public as flags
+
+    contact_on = flags.is_enabled(db, CONTACT_FLAG)
     parsed = parse_rate_con(
         db,
         provider,
@@ -340,6 +508,12 @@ def draft_from_rate_con(
         "parsed": parsed if readable else None,
         "readable": readable,
         "silent_on": silent_terms(parsed) if readable else [],
+        # AI-CONTEXT: a PROPOSAL, and the naming says so. It prefills the field the
+        # driver already had; it does not write the registry and it does not address an
+        # envelope. `POST /load` still takes `counterparty_email` from the confirmed
+        # form, so the only address that ever reaches the F5 registry is one a human
+        # looked at next to the paper it came from.
+        "contact": parsed_contact(parsed) if readable and contact_on else _NO_CONTACT,
         # every stop carries its OWN candidates and its own geocode: a route is two
         # different docks, and offering the delivery's matches for a pickup would be
         # the pre-ticking defect (entry 65) wearing a different hat

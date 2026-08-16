@@ -15,6 +15,8 @@ from .domain.enums import (
 )
 from .domain.models import Counterparty, Load, Stop
 from .domain.ratecon import (
+    CONTACT_FLAG,
+    PROMPT_TEMPLATE,
     RATE_CON_PROMPT,
     RATE_CON_SCHEMA,
     REQUIRED_KEYS,
@@ -23,7 +25,11 @@ from .domain.ratecon import (
     facility_candidates_for,
     has_terms,
     parse_rate_con,
+    parsed_contact,
+    parsed_email,
+    parsed_phone,
     parsed_stops,
+    register_rate_con_contact,
     register_rate_con_prompt,
     silent_terms,
 )
@@ -34,6 +40,7 @@ from .domain.service import (
     MAX_CONTACT_EMAIL,
     FacilityNotFound,
     InvalidContactEmail,
+    InvalidContactPhone,
     active_stop_for_account,
     add_stop,
     arm_stop,
@@ -57,16 +64,23 @@ from .domain.service import (
     set_load_status,
     set_stop_appointment,
     validate_contact_email,
+    validate_contact_phone,
 )
 
 __all__ = [
     "Counterparty",
     "Load",
     "Stop",
+    "CONTACT_FLAG",
+    "PROMPT_TEMPLATE",
     "RATE_CON_PROMPT",
     "RATE_CON_SCHEMA",
     "REQUIRED_KEYS",
     "draft_from_rate_con",
+    "parsed_contact",
+    "parsed_email",
+    "parsed_phone",
+    "register_rate_con_contact",
     "facility_candidates",
     "facility_candidates_for",
     "parsed_stops",
@@ -85,6 +99,7 @@ __all__ = [
     "arm_stop",
     "MAX_CONTACT_EMAIL",
     "InvalidContactEmail",
+    "InvalidContactPhone",
     "create_counterparty",
     "create_load",
     "create_load_from_parsed_terms",
@@ -104,6 +119,7 @@ __all__ = [
     "record_claim",
     "record_stop_event",
     "validate_contact_email",
+    "validate_contact_phone",
     "record_payment_observation",
     "set_load_counterparty_email",
     "set_load_status",

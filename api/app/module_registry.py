@@ -98,6 +98,7 @@ def register_all(db: Session) -> list[str]:
     """
     from app.foundation.f01_identity import public as identity
     from app.foundation.f03_location import public as location
+    from app.foundation.f05_load import public as loads
 
     # AI-CONTEXT: F1's registration runs HERE, at boot, and it did not before.
     #
@@ -111,6 +112,11 @@ def register_all(db: Session) -> list[str]:
     # flag-gated like modules, so it takes no part in the enable-on-first-registration
     # rule below.
     identity.register_authority_verification(db)
+    # AI-CONTEXT: same reasoning again, one component over. F5's rate-con contact parse
+    # is a foundation capability behind a flag, so nothing in the MODULES loop below
+    # would ever register it — and an unregistered flag reads as OFF with no row for an
+    # operator to find, which is indistinguishable from a feature that was never built.
+    loads.register_rate_con_contact(db)
     # AI-CONTEXT: same reasoning, one component over (audit F-09). The ping-retention
     # window is declared at boot so it is in /admin/config before an operator needs it,
     # rather than appearing only once somebody has already set it.

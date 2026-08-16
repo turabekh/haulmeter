@@ -106,6 +106,20 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
    (BOL / photos / notice — honestly unticked).
 4. Unreadable branch: import a photo of your desk → manual form carries the load; no fake "read"
    claim.
+5. **Broker contact, prefilled from the paper `[J1-A1]`** — flag `j1_contact_parse`, ships **OFF**;
+   switch it on in `/admin/flags` first or the fields arrive blank and the step proves nothing.
+   With it on, a rate con that prints an AP address lands it in **Broker email** and the number in
+   **Broker phone**, both still editable — a parse is a proposal. Three things to watch, in
+   descending order of how much they matter:
+   - a rate con that prints **no** email leaves the field **empty**, never a placeholder;
+   - a **photographed** rate con whose footer runs off the edge also leaves it empty — the server
+     holds the parse to the driver's own address rule, so `dispatch@` never reaches the field;
+   - what you **type over** it is what gets filed. ⚠️ J0.7 applies with full force here: prefilled
+     means one tap from a real send, so a test rate con carries a **fixture** address
+     (`@example`, `@bolt.example`) and never a live broker's.
+   How often the parse is right on real paper is a **measurement, not a test** — `make ratecon-eval
+   DIR=…` against a corpus held outside this (public) repo. Below 10 documents across 3 broker
+   formats it reports itself as a sample.
 
 ## J4 — Arm, arrive, The Meter `[M3-FR1..2, F3, §9]`
 1. On the load: **Arm stop** for the **DEV — shipper**. Sensors = your seed ORIGIN (`make

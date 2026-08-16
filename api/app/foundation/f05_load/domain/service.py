@@ -19,6 +19,10 @@ class InvalidContactEmail(ValueError):
     pass
 
 
+class InvalidContactPhone(ValueError):
+    pass
+
+
 # AI-CONTEXT: the address every counterparty notice is sent to, and until this session
 # there was NOWHERE in the product to put one. `contact_email` has been on the model since
 # F5 shipped and nothing but tests ever wrote it, so every row carried NULL and M3
@@ -57,6 +61,28 @@ def validate_contact_email(raw: str | None) -> str | None:
     if "." not in domain or domain.startswith(".") or domain.endswith("."):
         raise InvalidContactEmail("email domain needs a dot")
     return email
+
+
+# AI-CONTEXT: the number a driver calls when the dock will not answer the buzzer, kept
+# beside the address it was read off the same rate con with.
+#
+# Ten digits, US, and the narrowness is the point rather than a limitation to fix later:
+# this product's counterparties are US brokers and every one of them prints a NANP
+# number. A rule that accepted anything would accept the extension digits too, and
+# "555-0134 x229" stored as a phone number is a number that dials someone else.
+def validate_contact_phone(raw: str | None) -> str | None:
+    """Normalise to ten digits. None/blank means an explicit CLEAR, not an error."""
+    if raw is None:
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) != 10:
+        raise InvalidContactPhone("phone needs 10 digits, area code included")
+    return digits
 
 
 # --- Counterparty registry ---

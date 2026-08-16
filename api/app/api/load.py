@@ -90,6 +90,7 @@ class CreateLoadIn(BaseModel):
     # file a load and accrue the clock; the claim screen's `no_email` state is what says
     # the notice cannot go. The driver-facing INPUT is a named follow-up.
     counterparty_email: str | None = None
+    counterparty_phone: str | None = None
     appointment: datetime | None = None
     # omit to use the live F13-config detention terms (default 2h free / $75/h)
     free_time_minutes: int | None = None
@@ -199,7 +200,8 @@ def create_load(
     fac = _resolve_facility(db, body)
     try:
         email = loads.validate_contact_email(body.counterparty_email)
-    except loads.InvalidContactEmail as exc:
+        phone = loads.validate_contact_phone(body.counterparty_phone)
+    except (loads.InvalidContactEmail, loads.InvalidContactPhone) as exc:
         # a typo here is not cosmetic: a malformed address becomes SMTPRecipientsRefused,
         # which PERMANENT_FAILURES never retries, so the notice is lost for good
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
@@ -208,6 +210,7 @@ def create_load(
         body.counterparty,
         loads.CounterpartyKind.broker,
         contact_email=email,
+        contact_phone=phone,
     )
     # unset terms fall back to the live F13-config detention defaults (M3 owns them)
     free_time = (
@@ -368,6 +371,11 @@ async def import_rate_con(
             "silent_on": [],
             "stops": [],
             "readable": False,
+            # the SAME shape the readable path returns, derived rather than restated:
+            # this branch and that one are two spellings of one response, and a key
+            # present in only one of them is `undefined` on the screen for the case
+            # where the driver is already being told the least
+            "contact": loads.parsed_contact(None),
         }
     return {"document_id": str(document.id), **draft}
 
