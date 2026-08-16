@@ -496,7 +496,7 @@ nobody re-runs decays into a screenshot in an old handoff. Its screenshots are o
 
 ---
 
-74. **UNCOMMITTED WORK IS NOT SAFE WHILE AN AGENT BELIEVES THE TREE IS FROZEN — it can
+73a. **UNCOMMITTED WORK IS NOT SAFE WHILE AN AGENT BELIEVES THE TREE IS FROZEN — it can
     and will be deleted.** A session told a verification agent "the tree is frozen at
     `0d11a8c`, stop if it moves", then kept WRITING new files into that tree while the
     agent ran. The agent did the reasonable thing: it tried to restore the state it had
