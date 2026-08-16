@@ -2,7 +2,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci vapid-keys \
-        seed seed-where seed-wallet purge-demo ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
+        seed seed-where seed-wallet purge-demo m15-tg-draft ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
         repair-fuel repair-contact repair-duplicates osm-publish ingest-remote ui-layout ui-layout-only \
         ratecon-eval
 
@@ -129,6 +129,12 @@ ci: env preflight lint test ui-layout ui-pwa ui-image
 ORIGIN ?= $(DEV_SEED_ORIGIN)
 seed:
 	$(COMPOSE) exec -e DEV_SEED=1 -e DEV_SEED_ORIGIN="$(ORIGIN)" api python -m scripts.seed_demo
+
+# AI-CONTEXT: the Tajik reviewer's working file (E3 §E3.3). It TRANSLATES NOTHING —
+# see the script's own header. `m15-*` per E3 §E3.8's namespace note; `m14-*` belongs
+# to the recovery overlay and is on production.
+m15-tg-draft:
+	$(COMPOSE) run --rm --no-deps -v $(PWD):/repo -e REPO_ROOT=/repo api python -m scripts.i18n_draft_tg
 
 # WHERE did I seed? The env was not self-describing, and that made the whole stop
 # auto-pilot unwalkable: a browser spoofed to Tampa against pins seeded around Madison

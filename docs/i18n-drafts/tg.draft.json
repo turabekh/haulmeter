@@ -1,0 +1,5038 @@
+{
+  "_README": [
+    "TAJIK DRAFT — NOT A CATALOGUE, AND NOT MERGEABLE AS ONE.",
+    "This file lives outside ui/src/core/i18n/ on purpose: `tg` is not in",
+    "LAUNCH_LOCALES and must not be added until a native reviewer has signed",
+    "this file. Adding it early fails the CI completeness gate on every empty",
+    "key, and a red suite is exactly the pressure that gets unreviewed",
+    "machine translation merged.",
+    "",
+    "`tg` slots are EMPTY by design. Nothing here was machine-translated:",
+    "1187 keys of unreviewed Tajik is the artifact E3 §E3.3 warns about, and a",
+    "reviewer would have to check every line against the English regardless.",
+    "",
+    "`glossary_hold` marks trucking jargon that STAYS ENGLISH inside Tajik text",
+    "(design-prd §12.3). 'detention' rendered as a Tajik word for imprisonment",
+    "is not a typo, it is a claim about what this product does.",
+    "",
+    "`icu_placeholders` must survive translation exactly, including the braces.",
+    "Full ICU messages only — never concatenate fragments (§12.5)."
+  ],
+  "_meta": {
+    "source": "ui/src/core/i18n/en.json",
+    "keys": 1187,
+    "keys_with_glossary_terms": 62,
+    "keys_with_icu_placeholders": 23,
+    "status": "AWAITING NATIVE REVIEW — owner-track (E3 §E3.3)"
+  },
+  "entries": {
+    "admin.acct.active": {
+      "en": "Active",
+      "tg": ""
+    },
+    "admin.acct.admin_confirm": {
+      "en": "This gives them every power in this console, including granting it to others.",
+      "tg": ""
+    },
+    "admin.acct.create": {
+      "en": "Create account",
+      "tg": ""
+    },
+    "admin.acct.deactivate": {
+      "en": "Deactivate",
+      "tg": ""
+    },
+    "admin.acct.email": {
+      "en": "Email",
+      "tg": ""
+    },
+    "admin.acct.empty": {
+      "en": "No accounts match.",
+      "tg": ""
+    },
+    "admin.acct.equipment": {
+      "en": "Equipment",
+      "tg": ""
+    },
+    "admin.acct.grant_admin": {
+      "en": "Grant platform admin",
+      "tg": ""
+    },
+    "admin.acct.history": {
+      "en": "What support has done here",
+      "tg": ""
+    },
+    "admin.acct.inactive": {
+      "en": "Deactivated",
+      "tg": ""
+    },
+    "admin.acct.must_change": {
+      "en": "Must change at next login",
+      "tg": ""
+    },
+    "admin.acct.name": {
+      "en": "Name",
+      "tg": ""
+    },
+    "admin.acct.no_delete": {
+      "en": "Accounts are never deleted — they reference money, claims and evidence.",
+      "tg": ""
+    },
+    "admin.acct.reactivate": {
+      "en": "Reactivate",
+      "tg": ""
+    },
+    "admin.acct.register_vendor": {
+      "en": "Register as vendor",
+      "tg": ""
+    },
+    "admin.acct.reset": {
+      "en": "Reset password",
+      "tg": ""
+    },
+    "admin.acct.revoke": {
+      "en": "Revoke",
+      "tg": ""
+    },
+    "admin.acct.role": {
+      "en": "Role",
+      "tg": ""
+    },
+    "admin.acct.search": {
+      "en": "Email, name, MC/DOT or plate",
+      "tg": "",
+      "glossary_hold": [
+        "DOT",
+        "MC"
+      ]
+    },
+    "admin.acct.temp_password": {
+      "en": "Temporary password — give it to them now, it is not shown again",
+      "tg": ""
+    },
+    "admin.add": {
+      "en": "Add",
+      "tg": ""
+    },
+    "admin.approve": {
+      "en": "Approve",
+      "tg": ""
+    },
+    "admin.audit.changed": {
+      "en": "changed",
+      "tg": ""
+    },
+    "admin.audit.filter_actor": {
+      "en": "Filter by action",
+      "tg": ""
+    },
+    "admin.audit_empty": {
+      "en": "No operator actions yet.",
+      "tg": ""
+    },
+    "admin.audit_title": {
+      "en": "Audit log",
+      "tg": ""
+    },
+    "admin.audit_what": {
+      "en": "Action",
+      "tg": ""
+    },
+    "admin.audit_when": {
+      "en": "When",
+      "tg": ""
+    },
+    "admin.audit_who": {
+      "en": "Operator",
+      "tg": ""
+    },
+    "admin.cancel": {
+      "en": "Cancel",
+      "tg": ""
+    },
+    "admin.cfg.bad_json": {
+      "en": "Not saved: invalid JSON",
+      "tg": ""
+    },
+    "admin.cfg.default": {
+      "en": "Not set — shipped default",
+      "tg": ""
+    },
+    "admin.cfg.set_by": {
+      "en": "set by",
+      "tg": ""
+    },
+    "admin.cfg.was": {
+      "en": "was",
+      "tg": ""
+    },
+    "admin.config_title": {
+      "en": "Runtime config",
+      "tg": ""
+    },
+    "admin.confirm": {
+      "en": "Yes, turn it off",
+      "tg": ""
+    },
+    "admin.data.by_source": {
+      "en": "Facilities by source",
+      "tg": ""
+    },
+    "admin.data.last_ingest": {
+      "en": "Last ingest",
+      "tg": ""
+    },
+    "admin.data.records": {
+      "en": "records",
+      "tg": ""
+    },
+    "admin.data.sources": {
+      "en": "Source endpoints",
+      "tg": ""
+    },
+    "admin.disable": {
+      "en": "Disable",
+      "tg": ""
+    },
+    "admin.enable": {
+      "en": "Enable",
+      "tg": ""
+    },
+    "admin.fac.add": {
+      "en": "Add facility",
+      "tg": ""
+    },
+    "admin.fac.dupes": {
+      "en": "Possible duplicates",
+      "tg": ""
+    },
+    "admin.fac.merge": {
+      "en": "Merge duplicate",
+      "tg": ""
+    },
+    "admin.fac.merge_confirm_body": {
+      "en": "The duplicate keeps its id and resolves to the surviving site. There is no unmerge from this console.",
+      "tg": ""
+    },
+    "admin.fac.merge_confirm_title": {
+      "en": "Merge these two facilities?",
+      "tg": ""
+    },
+    "admin.fac.no_delete": {
+      "en": "Facilities are never deleted — merge a duplicate instead.",
+      "tg": ""
+    },
+    "admin.fac.provenance": {
+      "en": "Your edit is added as an admin source — it never erases what a feed recorded.",
+      "tg": ""
+    },
+    "admin.fac.search": {
+      "en": "Search facilities",
+      "tg": ""
+    },
+    "admin.fac.sources": {
+      "en": "Sources",
+      "tg": ""
+    },
+    "admin.fac.title": {
+      "en": "Facilities",
+      "tg": ""
+    },
+    "admin.flag.blocked": {
+      "en": "Gates unmet",
+      "tg": ""
+    },
+    "admin.flag.confirm_body": {
+      "en": "This switches off a whole module for every driver.",
+      "tg": ""
+    },
+    "admin.flag.confirm_title": {
+      "en": "Turn this off?",
+      "tg": ""
+    },
+    "admin.flag.family.foundation": {
+      "en": "Foundation",
+      "tg": ""
+    },
+    "admin.flag.family.ingest": {
+      "en": "Ingest",
+      "tg": ""
+    },
+    "admin.flag.family.modules": {
+      "en": "Modules",
+      "tg": ""
+    },
+    "admin.flag.family.other": {
+      "en": "Other",
+      "tg": ""
+    },
+    "admin.flag.last_changed": {
+      "en": "last changed",
+      "tg": ""
+    },
+    "admin.flag.off": {
+      "en": "Off",
+      "tg": ""
+    },
+    "admin.flag.on": {
+      "en": "On",
+      "tg": ""
+    },
+    "admin.flag.search": {
+      "en": "Search flags",
+      "tg": ""
+    },
+    "admin.flags": {
+      "en": "Feature flags",
+      "tg": ""
+    },
+    "admin.funnel_title": {
+      "en": "Detention funnel",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "admin.gate.satisfy": {
+      "en": "Mark met",
+      "tg": ""
+    },
+    "admin.gate.withdraw": {
+      "en": "Withdraw",
+      "tg": ""
+    },
+    "admin.gates": {
+      "en": "gates",
+      "tg": ""
+    },
+    "admin.imp.banner": {
+      "en": "You are viewing Haulmeter as",
+      "tg": ""
+    },
+    "admin.imp.ends": {
+      "en": "Ends",
+      "tg": ""
+    },
+    "admin.imp.exit": {
+      "en": "Exit view-as",
+      "tg": ""
+    },
+    "admin.imp.view_as": {
+      "en": "View as vendor",
+      "tg": ""
+    },
+    "admin.imp.writes": {
+      "en": "Anything you change is recorded as you, not them.",
+      "tg": ""
+    },
+    "admin.mod.age": {
+      "en": "Age",
+      "tg": ""
+    },
+    "admin.mod.dismiss": {
+      "en": "Dismiss",
+      "tg": ""
+    },
+    "admin.mod.empty": {
+      "en": "Nothing to review.",
+      "tg": ""
+    },
+    "admin.mod.frivolous": {
+      "en": "Frivolous report",
+      "tg": ""
+    },
+    "admin.mod.not_built": {
+      "en": "Registered, not built yet",
+      "tg": ""
+    },
+    "admin.mod.reports": {
+      "en": "Reports",
+      "tg": ""
+    },
+    "admin.mod.uphold": {
+      "en": "Uphold",
+      "tg": ""
+    },
+    "admin.mod_empty": {
+      "en": "Nothing to moderate.",
+      "tg": ""
+    },
+    "admin.moderation": {
+      "en": "Moderation queue",
+      "tg": ""
+    },
+    "admin.module": {
+      "en": "Module",
+      "tg": ""
+    },
+    "admin.nav.accounts": {
+      "en": "Accounts",
+      "tg": ""
+    },
+    "admin.nav.audit": {
+      "en": "Audit",
+      "tg": ""
+    },
+    "admin.nav.data": {
+      "en": "Data & ingest",
+      "tg": ""
+    },
+    "admin.nav.flags": {
+      "en": "Flags & config",
+      "tg": ""
+    },
+    "admin.nav.moderation": {
+      "en": "Moderation",
+      "tg": ""
+    },
+    "admin.nav.modules": {
+      "en": "Modules",
+      "tg": ""
+    },
+    "admin.nav.overview": {
+      "en": "Overview",
+      "tg": ""
+    },
+    "admin.nav.vendors": {
+      "en": "Vendors",
+      "tg": ""
+    },
+    "admin.new_key": {
+      "en": "key",
+      "tg": ""
+    },
+    "admin.new_value": {
+      "en": "value",
+      "tg": ""
+    },
+    "admin.no_access": {
+      "en": "Platform admins only.",
+      "tg": ""
+    },
+    "admin.ov.all_clear": {
+      "en": "Nothing waiting.",
+      "tg": ""
+    },
+    "admin.ov.appearances": {
+      "en": "Vendor appearances",
+      "tg": ""
+    },
+    "admin.ov.confirmed_of": {
+      "en": "confirmed of",
+      "tg": ""
+    },
+    "admin.ov.detention": {
+      "en": "Detention",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "admin.ov.disputes": {
+      "en": "Claim disputes",
+      "tg": ""
+    },
+    "admin.ov.facilities": {
+      "en": "Facilities",
+      "tg": ""
+    },
+    "admin.ov.funnels": {
+      "en": "Value loops",
+      "tg": ""
+    },
+    "admin.ov.job_failing": {
+      "en": "failing",
+      "tg": ""
+    },
+    "admin.ov.job_off": {
+      "en": "switched off",
+      "tg": ""
+    },
+    "admin.ov.job_ok": {
+      "en": "ok",
+      "tg": ""
+    },
+    "admin.ov.jobs": {
+      "en": "Background jobs",
+      "tg": ""
+    },
+    "admin.ov.moderation": {
+      "en": "Moderation queue",
+      "tg": ""
+    },
+    "admin.ov.never_ran": {
+      "en": "never ran",
+      "tg": ""
+    },
+    "admin.ov.overdue": {
+      "en": "overdue",
+      "tg": ""
+    },
+    "admin.ov.pending": {
+      "en": "Waiting for you",
+      "tg": ""
+    },
+    "admin.ov.retry_at": {
+      "en": "retry",
+      "tg": ""
+    },
+    "admin.ov.verification": {
+      "en": "Vendor verification",
+      "tg": ""
+    },
+    "admin.reject": {
+      "en": "Reject",
+      "tg": ""
+    },
+    "admin.scope": {
+      "en": "Scope",
+      "tg": ""
+    },
+    "admin.step.arrived": {
+      "en": "Arrived",
+      "tg": ""
+    },
+    "admin.step.claim_sent": {
+      "en": "Claim filed",
+      "tg": ""
+    },
+    "admin.step.load_added": {
+      "en": "Load added",
+      "tg": ""
+    },
+    "admin.title": {
+      "en": "Admin Console",
+      "tg": ""
+    },
+    "admin.vendor.blocked": {
+      "en": "Cannot publish until",
+      "tg": ""
+    },
+    "admin.vendor.detail": {
+      "en": "Open",
+      "tg": ""
+    },
+    "admin.vendor.disputes": {
+      "en": "Claim disputes",
+      "tg": ""
+    },
+    "admin.vendor.documents": {
+      "en": "Documents",
+      "tg": ""
+    },
+    "admin.vendor.edit_note": {
+      "en": "Your edits are recorded as support acting for this vendor, and they can see them.",
+      "tg": ""
+    },
+    "admin.vendor.empty": {
+      "en": "No vendors registered.",
+      "tg": ""
+    },
+    "admin.vendor.halal_hint": {
+      "en": "Halal sourcing — write \"none\" if they make no claim",
+      "tg": ""
+    },
+    "admin.vendor.languages_hint": {
+      "en": "Languages (comma separated)",
+      "tg": ""
+    },
+    "admin.vendor.metro": {
+      "en": "Metro",
+      "tg": ""
+    },
+    "admin.vendor.new": {
+      "en": "Register a vendor",
+      "tg": ""
+    },
+    "admin.vendor.owner": {
+      "en": "Owner account email",
+      "tg": ""
+    },
+    "admin.vendor.phone": {
+      "en": "Phone",
+      "tg": ""
+    },
+    "admin.vendor.ready": {
+      "en": "Ready to publish",
+      "tg": ""
+    },
+    "admin.vendor.reinstate": {
+      "en": "Reinstate",
+      "tg": ""
+    },
+    "admin.vendor.reports": {
+      "en": "Upheld reports",
+      "tg": ""
+    },
+    "admin.vendor.save": {
+      "en": "Save vendor",
+      "tg": ""
+    },
+    "admin.vendor.strikes": {
+      "en": "Strikes",
+      "tg": ""
+    },
+    "admin.vendor.suspend": {
+      "en": "Suspend",
+      "tg": ""
+    },
+    "admin.vendor.tier": {
+      "en": "Tier",
+      "tg": ""
+    },
+    "admin.vendor.verify": {
+      "en": "Mark verified",
+      "tg": ""
+    },
+    "admin.views": {
+      "en": "Module views",
+      "tg": ""
+    },
+    "audit.carrier": {
+      "en": "Carrier",
+      "tg": ""
+    },
+    "audit.load_failed": {
+      "en": "Could not check this settlement.",
+      "tg": ""
+    },
+    "audit.missed": {
+      "en": "Missed pay",
+      "tg": ""
+    },
+    "audit.none": {
+      "en": "No missed pay — your settlement matches your evidence.",
+      "tg": ""
+    },
+    "audit.paid": {
+      "en": "Paid on settlement",
+      "tg": ""
+    },
+    "audit.review": {
+      "en": "Review with your carrier. This isn't legal advice.",
+      "tg": ""
+    },
+    "audit.run": {
+      "en": "Find missed pay",
+      "tg": ""
+    },
+    "audit.title": {
+      "en": "Audit a settlement",
+      "tg": ""
+    },
+    "auth.authority.company": {
+      "en": "Company driver",
+      "tg": ""
+    },
+    "auth.authority.leased": {
+      "en": "Leased to a carrier",
+      "tg": ""
+    },
+    "auth.authority.own_mc": {
+      "en": "My own authority",
+      "tg": ""
+    },
+    "auth.authority_desc.company": {
+      "en": "You drive the company's truck; your carrier collects detention.",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "auth.authority_desc.leased": {
+      "en": "You own the truck but run under a carrier's authority.",
+      "tg": ""
+    },
+    "auth.authority_desc.own_mc": {
+      "en": "You have your own MC# — you bill brokers directly.",
+      "tg": "",
+      "glossary_hold": [
+        "MC"
+      ]
+    },
+    "auth.authority_q": {
+      "en": "How do you run?",
+      "tg": ""
+    },
+    "auth.email": {
+      "en": "Email",
+      "tg": ""
+    },
+    "auth.error_invalid": {
+      "en": "Email or password is wrong. Try again.",
+      "tg": ""
+    },
+    "auth.error_network": {
+      "en": "No connection. Check signal and try again.",
+      "tg": ""
+    },
+    "auth.error_taken": {
+      "en": "That email already has an account. Log in instead.",
+      "tg": ""
+    },
+    "auth.login": {
+      "en": "Log in",
+      "tg": ""
+    },
+    "auth.logout": {
+      "en": "Log out",
+      "tg": ""
+    },
+    "auth.password": {
+      "en": "Password",
+      "tg": ""
+    },
+    "auth.password_too_short": {
+      "en": "Use at least 8 characters.",
+      "tg": ""
+    },
+    "auth.register": {
+      "en": "Create account",
+      "tg": ""
+    },
+    "auth.tagline": {
+      "en": "Parking, fuel, and getting paid — one app.",
+      "tg": ""
+    },
+    "auth.to_login": {
+      "en": "Have an account? Log in",
+      "tg": ""
+    },
+    "auth.to_register": {
+      "en": "New here? Create an account",
+      "tg": ""
+    },
+    "authority.disabled": {
+      "en": "Verification isn't turned on yet.",
+      "tg": ""
+    },
+    "authority.error": {
+      "en": "We couldn't confirm that number. Check it and try again.",
+      "tg": ""
+    },
+    "authority.hint": {
+      "en": "Confirm your authority with a free FMCSA lookup — it strengthens your detention claims.",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "authority.not_verified": {
+      "en": "Not verified",
+      "tg": ""
+    },
+    "authority.number_label": {
+      "en": "MC or DOT number",
+      "tg": "",
+      "glossary_hold": [
+        "DOT",
+        "MC"
+      ]
+    },
+    "authority.number_ph": {
+      "en": "e.g. MC 123456",
+      "tg": "",
+      "glossary_hold": [
+        "MC"
+      ]
+    },
+    "authority.verified": {
+      "en": "Verified",
+      "tg": ""
+    },
+    "authority.verify": {
+      "en": "Verify with FMCSA",
+      "tg": ""
+    },
+    "authority.verifying": {
+      "en": "Checking…",
+      "tg": ""
+    },
+    "book.failed": {
+      "en": "Couldn't book — please try again.",
+      "tg": ""
+    },
+    "book.taken": {
+      "en": "This spot was just booked for those nights. Try another.",
+      "tg": ""
+    },
+    "booking.booked": {
+      "en": "Booked",
+      "tg": ""
+    },
+    "booking.confirmation": {
+      "en": "Your spot is reserved. Show this on arrival.",
+      "tg": ""
+    },
+    "booking.done": {
+      "en": "Done",
+      "tg": ""
+    },
+    "booking.nights": {
+      "en": "Nights",
+      "tg": ""
+    },
+    "booking.per_night": {
+      "en": "per night",
+      "tg": ""
+    },
+    "booking.title": {
+      "en": "Book parking",
+      "tg": ""
+    },
+    "booking.total": {
+      "en": "You pay",
+      "tg": ""
+    },
+    "bookings.cancel": {
+      "en": "Cancel booking",
+      "tg": ""
+    },
+    "bookings.cancel_confirm": {
+      "en": "Confirm cancel",
+      "tg": ""
+    },
+    "bookings.empty": {
+      "en": "No parking booked yet. Find a spot on the map.",
+      "tg": ""
+    },
+    "bookings.st_booked": {
+      "en": "Booked",
+      "tg": ""
+    },
+    "bookings.st_canceled": {
+      "en": "Canceled",
+      "tg": ""
+    },
+    "bookings.st_checked_in": {
+      "en": "Checked in",
+      "tg": ""
+    },
+    "bookings.st_checked_out": {
+      "en": "Checked out",
+      "tg": ""
+    },
+    "bookings.st_refunded": {
+      "en": "Canceled · refunded",
+      "tg": ""
+    },
+    "bookings.title": {
+      "en": "My bookings",
+      "tg": ""
+    },
+    "bookings.view": {
+      "en": "View bookings",
+      "tg": ""
+    },
+    "busy.discarding": {
+      "en": "Discarding…",
+      "tg": ""
+    },
+    "busy.filing": {
+      "en": "Filing…",
+      "tg": ""
+    },
+    "busy.preparing": {
+      "en": "Preparing…",
+      "tg": ""
+    },
+    "busy.saving": {
+      "en": "Saving…",
+      "tg": ""
+    },
+    "busy.sending": {
+      "en": "Sending…",
+      "tg": ""
+    },
+    "busy.uploading": {
+      "en": "Uploading…",
+      "tg": ""
+    },
+    "busy.working": {
+      "en": "Working…",
+      "tg": ""
+    },
+    "calc.basis_detention": {
+      "en": "Detention from",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "calc.basis_mpg_default": {
+      "en": "Fuel figured at {mpg} mpg — ours, not yours. Set it under More.",
+      "tg": "",
+      "icu_placeholders": [
+        "{mpg}"
+      ]
+    },
+    "calc.basis_no_fuel": {
+      "en": "No network fuel on this route, so fuel is not in this figure.",
+      "tg": ""
+    },
+    "calc.basis_no_stops": {
+      "en": "No tracked stops at this receiver yet, so detention is not in this figure.",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "calc.basis_recovery": {
+      "en": "Assumes you recover none of the detention.",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "calc.calculate": {
+      "en": "Calculate",
+      "tg": ""
+    },
+    "calc.detention": {
+      "en": "Expected detention",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "calc.excludes": {
+      "en": "Not counted in this figure:",
+      "tg": ""
+    },
+    "calc.free_min": {
+      "en": "Free time (min)",
+      "tg": ""
+    },
+    "calc.from_load": {
+      "en": "From your rate con",
+      "tg": "",
+      "glossary_hold": [
+        "rate con"
+      ]
+    },
+    "calc.fuel": {
+      "en": "Route fuel",
+      "tg": ""
+    },
+    "calc.miles": {
+      "en": "Loaded miles",
+      "tg": ""
+    },
+    "calc.net": {
+      "en": "True profit",
+      "tg": ""
+    },
+    "calc.not_included": {
+      "en": "not included",
+      "tg": ""
+    },
+    "calc.rate_hr": {
+      "en": "Detention $/hr",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "calc.receiver": {
+      "en": "Receiver",
+      "tg": ""
+    },
+    "calc.receiver_hint": {
+      "en": "Search for the dock",
+      "tg": ""
+    },
+    "calc.receiver_set": {
+      "en": "Detention estimated for this dock",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "calc.revenue": {
+      "en": "Rate",
+      "tg": ""
+    },
+    "calc.rpm": {
+      "en": "per mile",
+      "tg": ""
+    },
+    "calc.title": {
+      "en": "Load profit",
+      "tg": ""
+    },
+    "calc.tolls": {
+      "en": "Tolls",
+      "tg": ""
+    },
+    "claim.breakdown": {
+      "en": "How it's calculated",
+      "tg": ""
+    },
+    "claim.detention_time": {
+      "en": "Detention time",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "claim.doc_note": {
+      "en": "Export the PDF or share a link from the evidence record.",
+      "tg": ""
+    },
+    "claim.ev_action": {
+      "en": "Action logged",
+      "tg": ""
+    },
+    "claim.ev_doc": {
+      "en": "Document attached",
+      "tg": ""
+    },
+    "claim.ev_gps": {
+      "en": "GPS arrival verified",
+      "tg": ""
+    },
+    "claim.ev_notice": {
+      "en": "Broker notified",
+      "tg": ""
+    },
+    "claim.ev_photo": {
+      "en": "Photo captured",
+      "tg": ""
+    },
+    "claim.ev_system": {
+      "en": "Event recorded",
+      "tg": ""
+    },
+    "claim.evidence": {
+      "en": "GPS evidence",
+      "tg": ""
+    },
+    "claim.exported": {
+      "en": "Handed to your carrier",
+      "tg": ""
+    },
+    "claim.exported_hint": {
+      "en": "Company driver — the evidence pack goes to your carrier to collect.",
+      "tg": ""
+    },
+    "claim.free_time": {
+      "en": "Free time",
+      "tg": ""
+    },
+    "claim.none": {
+      "en": "No claim for this stop yet.",
+      "tg": ""
+    },
+    "claim.notice_not_sent": {
+      "en": "Broker not notified",
+      "tg": ""
+    },
+    "claim.notice_resent": {
+      "en": "Second copy sent.",
+      "tg": ""
+    },
+    "claim.notice_sent": {
+      "en": "Broker notified",
+      "tg": ""
+    },
+    "claim.owed": {
+      "en": "Money owed to you",
+      "tg": ""
+    },
+    "claim.owed_hint": {
+      "en": "Own authority — the broker is invoiced in your name.",
+      "tg": ""
+    },
+    "claim.pack_blocked": {
+      "en": "Evidence check failed — the pack was not sent",
+      "tg": ""
+    },
+    "claim.pack_blocked_hint": {
+      "en": "The evidence chain for this stop did not verify. Nothing was sent to the broker.",
+      "tg": ""
+    },
+    "claim.photos": {
+      "en": "Photos",
+      "tg": ""
+    },
+    "claim.rate": {
+      "en": "Rate",
+      "tg": ""
+    },
+    "claim.records": {
+      "en": "Records",
+      "tg": ""
+    },
+    "claim.share_active": {
+      "en": "Active",
+      "tg": ""
+    },
+    "claim.share_expires": {
+      "en": "Expires",
+      "tg": ""
+    },
+    "claim.share_extend": {
+      "en": "Extend",
+      "tg": ""
+    },
+    "claim.share_opens": {
+      "en": "Opens",
+      "tg": ""
+    },
+    "claim.share_opens_caveat": {
+      "en": "Opens include automated email scanners",
+      "tg": ""
+    },
+    "claim.share_revoke": {
+      "en": "Revoke",
+      "tg": ""
+    },
+    "claim.share_revoked": {
+      "en": "Revoked",
+      "tg": ""
+    },
+    "claim.shares": {
+      "en": "Links you've shared",
+      "tg": ""
+    },
+    "claim.shares_none": {
+      "en": "No links shared yet",
+      "tg": ""
+    },
+    "claim.title": {
+      "en": "Detention claim",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "claim.verified": {
+      "en": "Chain verified",
+      "tg": ""
+    },
+    "claim.view": {
+      "en": "View claim",
+      "tg": ""
+    },
+    "cond.done": {
+      "en": "Condition documented",
+      "tg": ""
+    },
+    "cond.driving": {
+      "en": "Pull over to photograph the load. Your progress is saved.",
+      "tg": ""
+    },
+    "cond.of": {
+      "en": "of",
+      "tg": ""
+    },
+    "cond.start": {
+      "en": "Capture cargo condition",
+      "tg": ""
+    },
+    "cond.step": {
+      "en": "Step",
+      "tg": ""
+    },
+    "cond.step.load_blocking": {
+      "en": "Load blocking",
+      "tg": ""
+    },
+    "cond.step.reefer_setpoint": {
+      "en": "Reefer setpoint",
+      "tg": "",
+      "glossary_hold": [
+        "reefer"
+      ]
+    },
+    "cond.step.seals": {
+      "en": "Seals",
+      "tg": ""
+    },
+    "cond.step.trailer_exterior": {
+      "en": "Trailer exterior",
+      "tg": ""
+    },
+    "cond.take": {
+      "en": "Take photo",
+      "tg": ""
+    },
+    "cond.title": {
+      "en": "Cargo condition",
+      "tg": ""
+    },
+    "corridor.empty": {
+      "en": "Nothing ahead on this stretch.",
+      "tg": ""
+    },
+    "corridor.no_heading": {
+      "en": "Waiting for your direction of travel.",
+      "tg": ""
+    },
+    "docs.add": {
+      "en": "Add document",
+      "tg": ""
+    },
+    "docs.arch_blocked": {
+      "en": "A current one is already in your wallet. Remove that one first to bring this back.",
+      "tg": ""
+    },
+    "docs.arch_empty": {
+      "en": "Nothing is archived yet. Documents you remove, and credentials replaced by a newer one, stay here.",
+      "tg": ""
+    },
+    "docs.arch_hint": {
+      "en": "Nothing here is deleted. Tap any document to open it.",
+      "tg": ""
+    },
+    "docs.arch_removed": {
+      "en": "You removed this",
+      "tg": ""
+    },
+    "docs.arch_restore": {
+      "en": "Restore",
+      "tg": ""
+    },
+    "docs.arch_superseded": {
+      "en": "Replaced by a newer one",
+      "tg": ""
+    },
+    "docs.arch_title": {
+      "en": "Archived documents",
+      "tg": ""
+    },
+    "docs.archived": {
+      "en": "Archived",
+      "tg": ""
+    },
+    "docs.cap_expiry": {
+      "en": "Expires on",
+      "tg": ""
+    },
+    "docs.cap_expiry_hint": {
+      "en": "We warn you 30, 14 and 3 days before.",
+      "tg": ""
+    },
+    "docs.cap_filed": {
+      "en": "Saved to your wallet.",
+      "tg": ""
+    },
+    "docs.cap_lost": {
+      "en": "Couldn't save on your phone. Take the photo again.",
+      "tg": ""
+    },
+    "docs.cap_offline": {
+      "en": "Saves to your phone if you have no signal.",
+      "tg": ""
+    },
+    "docs.cap_photo": {
+      "en": "Photo or file",
+      "tg": ""
+    },
+    "docs.cap_queued": {
+      "en": "Saved on your phone. Syncs when you have signal.",
+      "tg": ""
+    },
+    "docs.cap_replaced_done": {
+      "en": "The previous one was archived, not deleted.",
+      "tg": ""
+    },
+    "docs.cap_replaces": {
+      "en": "You already have one of these. Saving replaces it — the old one stays in your records.",
+      "tg": ""
+    },
+    "docs.cap_save": {
+      "en": "Save to wallet",
+      "tg": ""
+    },
+    "docs.cap_type": {
+      "en": "What is it?",
+      "tg": ""
+    },
+    "docs.empty": {
+      "en": "Your CDL, medical card, insurance and permits live here, ready for a roadside inspection even with no signal. They appear as they are added to your account.",
+      "tg": "",
+      "glossary_hold": [
+        "CDL",
+        "roadside"
+      ]
+    },
+    "docs.inspection": {
+      "en": "Inspection mode",
+      "tg": ""
+    },
+    "docs.load_failed": {
+      "en": "Could not load your documents.",
+      "tg": ""
+    },
+    "docs.mine": {
+      "en": "Your documents",
+      "tg": ""
+    },
+    "docs.paperwork": {
+      "en": "Load paperwork",
+      "tg": ""
+    },
+    "docs.remove_short": {
+      "en": "Remove",
+      "tg": ""
+    },
+    "docs.rm_body": {
+      "en": "It leaves your wallet and stops expiry reminders. Nothing is deleted — you can restore it any time from Archived.",
+      "tg": ""
+    },
+    "docs.rm_confirm": {
+      "en": "Remove",
+      "tg": ""
+    },
+    "docs.rm_keep": {
+      "en": "Keep it",
+      "tg": ""
+    },
+    "docs.rm_title": {
+      "en": "Remove from wallet?",
+      "tg": ""
+    },
+    "docs.status.expired": {
+      "en": "expired",
+      "tg": ""
+    },
+    "docs.status.expiring": {
+      "en": "expiring",
+      "tg": ""
+    },
+    "docs.type.bol": {
+      "en": "BOL",
+      "tg": "",
+      "glossary_hold": [
+        "BOL"
+      ]
+    },
+    "docs.type.cdl": {
+      "en": "CDL",
+      "tg": "",
+      "glossary_hold": [
+        "CDL"
+      ]
+    },
+    "docs.type.damage": {
+      "en": "Damage",
+      "tg": ""
+    },
+    "docs.type.insurance": {
+      "en": "Insurance",
+      "tg": ""
+    },
+    "docs.type.lumper_receipt": {
+      "en": "Lumper receipt",
+      "tg": "",
+      "glossary_hold": [
+        "lumper"
+      ]
+    },
+    "docs.type.med_card": {
+      "en": "Medical card",
+      "tg": ""
+    },
+    "docs.type.other": {
+      "en": "Other",
+      "tg": ""
+    },
+    "docs.type.permit": {
+      "en": "Permit",
+      "tg": ""
+    },
+    "docs.type.pod": {
+      "en": "POD",
+      "tg": "",
+      "glossary_hold": [
+        "POD"
+      ]
+    },
+    "docs.type.rate_con": {
+      "en": "Rate con",
+      "tg": "",
+      "glossary_hold": [
+        "rate con"
+      ]
+    },
+    "docs.type.seal": {
+      "en": "Seal",
+      "tg": ""
+    },
+    "docs.type.settlement": {
+      "en": "Settlement",
+      "tg": ""
+    },
+    "docs.unattached": {
+      "en": "Not attached to a load",
+      "tg": ""
+    },
+    "docs.unattached_hint": {
+      "en": "Photographed, no load made.",
+      "tg": ""
+    },
+    "docs.view_close": {
+      "en": "Close",
+      "tg": ""
+    },
+    "docs.view_edit": {
+      "en": "Edit",
+      "tg": ""
+    },
+    "docs.view_edit_hint": {
+      "en": "Corrects the date only. To replace the document itself, add a new one.",
+      "tg": ""
+    },
+    "docs.view_expires": {
+      "en": "Expires",
+      "tg": ""
+    },
+    "docs.view_failed": {
+      "en": "Could not open this one. It is still saved.",
+      "tg": ""
+    },
+    "docs.view_hint": {
+      "en": "Tap any document to show it.",
+      "tg": ""
+    },
+    "docs.view_loading": {
+      "en": "Opening…",
+      "tg": ""
+    },
+    "docs.view_open": {
+      "en": "Open document",
+      "tg": ""
+    },
+    "docs.view_remove": {
+      "en": "Remove from wallet",
+      "tg": ""
+    },
+    "driving.paused": {
+      "en": "Available when you're stopped.",
+      "tg": ""
+    },
+    "email.domain_dot": {
+      "en": "The domain needs a dot — like acme.com.",
+      "tg": "",
+      "glossary_hold": [
+        "DOT"
+      ]
+    },
+    "email.needs_both": {
+      "en": "An email address needs a name and a domain.",
+      "tg": ""
+    },
+    "email.no_spaces": {
+      "en": "An email address can't contain spaces.",
+      "tg": ""
+    },
+    "email.one_at": {
+      "en": "An email address needs exactly one @.",
+      "tg": ""
+    },
+    "email.too_long": {
+      "en": "That address is too long.",
+      "tg": ""
+    },
+    "equipment.mpg": {
+      "en": "Miles per gallon",
+      "tg": ""
+    },
+    "equipment.mpg_hint": {
+      "en": "Leave blank and we'll use 6.0.",
+      "tg": ""
+    },
+    "equipment.plate_number": {
+      "en": "Plate number",
+      "tg": ""
+    },
+    "equipment.plate_state": {
+      "en": "Plate state",
+      "tg": ""
+    },
+    "equipment.save": {
+      "en": "Save equipment",
+      "tg": ""
+    },
+    "equipment.saved": {
+      "en": "Saved",
+      "tg": ""
+    },
+    "equipment.self_reported": {
+      "en": "Self-reported. We don't verify these.",
+      "tg": ""
+    },
+    "equipment.title": {
+      "en": "My equipment",
+      "tg": ""
+    },
+    "equipment.unit_number": {
+      "en": "Unit number",
+      "tg": ""
+    },
+    "equipment.vin": {
+      "en": "VIN (optional)",
+      "tg": ""
+    },
+    "equipment.vin_error": {
+      "en": "That VIN doesn't look right — check the 17 characters.",
+      "tg": ""
+    },
+    "evidence.documents": {
+      "en": "Documents on file",
+      "tg": ""
+    },
+    "evidence.ev.arrived": {
+      "en": "Arrived",
+      "tg": ""
+    },
+    "evidence.ev.departed": {
+      "en": "Departed",
+      "tg": ""
+    },
+    "evidence.ev.notice_sent": {
+      "en": "Broker notified",
+      "tg": ""
+    },
+    "evidence.ev.on_time_check": {
+      "en": "On-time check",
+      "tg": ""
+    },
+    "evidence.export": {
+      "en": "Export PDF",
+      "tg": ""
+    },
+    "evidence.export_failed": {
+      "en": "Couldn't build the PDF just now. Check your signal and try again.",
+      "tg": ""
+    },
+    "evidence.images_note": {
+      "en": "Every photo is stored securely and shown here with its verified hash.",
+      "tg": ""
+    },
+    "evidence.no_events": {
+      "en": "No events recorded yet.",
+      "tg": ""
+    },
+    "evidence.no_photos": {
+      "en": "No condition photos captured yet.",
+      "tg": ""
+    },
+    "evidence.photos": {
+      "en": "Cargo condition photos",
+      "tg": ""
+    },
+    "evidence.send": {
+      "en": "Send this record",
+      "tg": ""
+    },
+    "evidence.share": {
+      "en": "Share with broker",
+      "tg": ""
+    },
+    "evidence.share_lead": {
+      "en": "They get one link to this record. No sign-in needed.",
+      "tg": ""
+    },
+    "evidence.share_note": {
+      "en": "The link opens exactly what you send today, even if you add photos later. You can close it any time.",
+      "tg": ""
+    },
+    "evidence.share_queued": {
+      "en": "No signal — this sends when you have one.",
+      "tg": ""
+    },
+    "evidence.share_send": {
+      "en": "Create link",
+      "tg": ""
+    },
+    "evidence.share_sent": {
+      "en": "Sent. They have the link.",
+      "tg": ""
+    },
+    "evidence.share_to": {
+      "en": "Their email (optional)",
+      "tg": ""
+    },
+    "evidence.shared": {
+      "en": "Link created. Add their email to send it.",
+      "tg": ""
+    },
+    "evidence.timeline": {
+      "en": "Timeline",
+      "tg": ""
+    },
+    "evidence.title": {
+      "en": "Evidence",
+      "tg": ""
+    },
+    "evidence.view_all": {
+      "en": "View all evidence →",
+      "tg": ""
+    },
+    "facility.book": {
+      "en": "Book spot",
+      "tg": ""
+    },
+    "facility.call": {
+      "en": "Call",
+      "tg": ""
+    },
+    "facility.call_at_stop": {
+      "en": "Call at next stop",
+      "tg": ""
+    },
+    "facility.claimed_by": {
+      "en": "From {name} — the business's own details.",
+      "tg": "",
+      "icu_placeholders": [
+        "{name}"
+      ]
+    },
+    "facility.dwell_risk": {
+      "en": "Runs long",
+      "tg": ""
+    },
+    "facility.fuel": {
+      "en": "Fuel",
+      "tg": ""
+    },
+    "facility.fuel_here": {
+      "en": "Fuel here",
+      "tg": ""
+    },
+    "facility.fully_booked": {
+      "en": "Fully booked tonight",
+      "tg": ""
+    },
+    "facility.intel_failed": {
+      "en": "Could not load the timing for this place.",
+      "tg": ""
+    },
+    "facility.load_failed": {
+      "en": "Could not load this place.",
+      "tg": ""
+    },
+    "facility.navigate": {
+      "en": "Navigate",
+      "tg": ""
+    },
+    "facility.no_report": {
+      "en": "No recent report",
+      "tg": ""
+    },
+    "facility.questions_failed": {
+      "en": "Could not load the questions.",
+      "tg": ""
+    },
+    "facility.report_price": {
+      "en": "Report diesel price",
+      "tg": ""
+    },
+    "facility.service.fuel": {
+      "en": "Fuel",
+      "tg": ""
+    },
+    "facility.service.mobile_repair": {
+      "en": "Mobile repair",
+      "tg": ""
+    },
+    "facility.service.parts": {
+      "en": "Parts",
+      "tg": ""
+    },
+    "facility.service.scale": {
+      "en": "Scale",
+      "tg": ""
+    },
+    "facility.service.tire": {
+      "en": "Tires",
+      "tg": ""
+    },
+    "facility.service.towing": {
+      "en": "Towing",
+      "tg": ""
+    },
+    "facility.service.truck_repair": {
+      "en": "Repair",
+      "tg": ""
+    },
+    "facility.service.wash": {
+      "en": "Wash",
+      "tg": ""
+    },
+    "facility.spots": {
+      "en": "spots",
+      "tg": ""
+    },
+    "facility.type.composite": {
+      "en": "Multi-service stop",
+      "tg": ""
+    },
+    "facility.type.fuel_station": {
+      "en": "Fuel station",
+      "tg": ""
+    },
+    "facility.type.parking_property": {
+      "en": "Parking",
+      "tg": ""
+    },
+    "facility.type.repair": {
+      "en": "Repair",
+      "tg": ""
+    },
+    "facility.type.rest_area": {
+      "en": "Rest area",
+      "tg": ""
+    },
+    "facility.type.scale": {
+      "en": "Scale",
+      "tg": ""
+    },
+    "facility.type.shipper_receiver": {
+      "en": "Shipper / receiver",
+      "tg": ""
+    },
+    "facility.type.truck_stop": {
+      "en": "Truck stop",
+      "tg": ""
+    },
+    "facility.type.weigh_station": {
+      "en": "Weigh station",
+      "tg": ""
+    },
+    "facility.view": {
+      "en": "View facility",
+      "tg": ""
+    },
+    "facility.your_stop": {
+      "en": "This is your stop",
+      "tg": ""
+    },
+    "filters.apply": {
+      "en": "Show these",
+      "tg": ""
+    },
+    "filters.button": {
+      "en": "Filters",
+      "tg": ""
+    },
+    "filters.clear": {
+      "en": "Clear filters",
+      "tg": ""
+    },
+    "filters.dish": {
+      "en": "Looking for something",
+      "tg": ""
+    },
+    "filters.dish_placeholder": {
+      "en": "tamales, samosa, coffee…",
+      "tg": ""
+    },
+    "filters.halal": {
+      "en": "Halal",
+      "tg": ""
+    },
+    "filters.halal_hint": {
+      "en": "This is what each cook says about their own food. We do not check it ourselves.",
+      "tg": ""
+    },
+    "filters.in_view": {
+      "en": "Searches the stops in view, not the whole country.",
+      "tg": ""
+    },
+    "filters.language": {
+      "en": "Speaks",
+      "tg": ""
+    },
+    "filters.none_match": {
+      "en": "No food in view matches what you asked for.",
+      "tg": ""
+    },
+    "filters.title": {
+      "en": "Narrow it down",
+      "tg": ""
+    },
+    "fleet.approvals": {
+      "en": "Approvals",
+      "tg": ""
+    },
+    "fleet.approvals_blocked": {
+      "en": "Counsel sign-off is pending, so approved claims will not be sent yet. Your decision is recorded.",
+      "tg": ""
+    },
+    "fleet.approvals_none": {
+      "en": "Nothing waiting for a decision.",
+      "tg": ""
+    },
+    "fleet.approve": {
+      "en": "Approve",
+      "tg": ""
+    },
+    "fleet.basis.eld_derived": {
+      "en": "ELD only",
+      "tg": "",
+      "glossary_hold": [
+        "ELD"
+      ]
+    },
+    "fleet.basis.mixed": {
+      "en": "ELD + driver capture",
+      "tg": "",
+      "glossary_hold": [
+        "ELD"
+      ]
+    },
+    "fleet.basis.phone_verified": {
+      "en": "Driver capture",
+      "tg": ""
+    },
+    "fleet.broker": {
+      "en": "Broker",
+      "tg": ""
+    },
+    "fleet.claims": {
+      "en": "Claims desk",
+      "tg": ""
+    },
+    "fleet.create": {
+      "en": "Create a fleet",
+      "tg": ""
+    },
+    "fleet.create_go": {
+      "en": "Create",
+      "tg": ""
+    },
+    "fleet.decide": {
+      "en": "Decision",
+      "tg": ""
+    },
+    "fleet.driver": {
+      "en": "Driver",
+      "tg": ""
+    },
+    "fleet.drivers": {
+      "en": "Drivers",
+      "tg": ""
+    },
+    "fleet.evidence_basis": {
+      "en": "Evidence basis",
+      "tg": ""
+    },
+    "fleet.load_failed": {
+      "en": "Could not load your fleet.",
+      "tg": ""
+    },
+    "fleet.members": {
+      "en": "Members",
+      "tg": ""
+    },
+    "fleet.name": {
+      "en": "Fleet name",
+      "tg": ""
+    },
+    "fleet.none": {
+      "en": "You don't run a fleet yet.",
+      "tg": ""
+    },
+    "fleet.open": {
+      "en": "Open",
+      "tg": ""
+    },
+    "fleet.owed": {
+      "en": "Owed",
+      "tg": ""
+    },
+    "fleet.recovery_rate": {
+      "en": "Recovery rate",
+      "tg": ""
+    },
+    "fleet.reject": {
+      "en": "Reject",
+      "tg": ""
+    },
+    "fleet.title": {
+      "en": "Fleet Workspace",
+      "tg": ""
+    },
+    "fleet.your_fleets": {
+      "en": "Your fleets",
+      "tg": ""
+    },
+    "freshness.feed": {
+      "en": "official feed",
+      "tg": ""
+    },
+    "fuel.be_first": {
+      "en": "Be the first to report the diesel price here.",
+      "tg": ""
+    },
+    "fuel.code": {
+      "en": "Pump code",
+      "tg": ""
+    },
+    "fuel.gallons": {
+      "en": "Gallons",
+      "tg": ""
+    },
+    "fuel.get_code": {
+      "en": "Get pump code",
+      "tg": ""
+    },
+    "fuel.net": {
+      "en": "net",
+      "tg": ""
+    },
+    "fuel.regional_avg": {
+      "en": "regional avg",
+      "tg": ""
+    },
+    "fuel.report.decrease": {
+      "en": "Decrease price",
+      "tg": ""
+    },
+    "fuel.report.increase": {
+      "en": "Increase price",
+      "tg": ""
+    },
+    "fuel.report.question": {
+      "en": "What's the diesel price here?",
+      "tg": ""
+    },
+    "fuel.report.submit": {
+      "en": "Submit price",
+      "tg": ""
+    },
+    "fuel.report.title": {
+      "en": "Report diesel price",
+      "tg": ""
+    },
+    "fuel.reported": {
+      "en": "reported",
+      "tg": ""
+    },
+    "fuel.save": {
+      "en": "save",
+      "tg": ""
+    },
+    "fuel.saved": {
+      "en": "Fuel saved",
+      "tg": ""
+    },
+    "fuel.show_pump": {
+      "en": "Show this at the pump",
+      "tg": ""
+    },
+    "fuel.title": {
+      "en": "Fuel",
+      "tg": ""
+    },
+    "fuel.week_of": {
+      "en": "wk of",
+      "tg": ""
+    },
+    "fuel.you_save": {
+      "en": "You save",
+      "tg": ""
+    },
+    "ghost.approve": {
+      "en": "Approve & send",
+      "tg": ""
+    },
+    "ghost.draft": {
+      "en": "Write it",
+      "tg": ""
+    },
+    "ghost.english": {
+      "en": "English — ready to send",
+      "tg": ""
+    },
+    "ghost.facts": {
+      "en": "What happened?",
+      "tg": ""
+    },
+    "ghost.facts_placeholder": {
+      "en": "e.g. 3 hours past free time at Dallas Receiver",
+      "tg": ""
+    },
+    "ghost.sent": {
+      "en": "Sent",
+      "tg": ""
+    },
+    "ghost.title": {
+      "en": "Draft a message",
+      "tg": ""
+    },
+    "ghost.tone.firm": {
+      "en": "Firm",
+      "tg": ""
+    },
+    "ghost.tone.neutral": {
+      "en": "Neutral",
+      "tg": ""
+    },
+    "ghost.tone.relationship": {
+      "en": "Friendly",
+      "tg": ""
+    },
+    "handoff.broadcast_done": {
+      "en": "Broadcast — a nearby driver gets your spot",
+      "tg": ""
+    },
+    "handoff.claim": {
+      "en": "Claim",
+      "tg": ""
+    },
+    "handoff.claimed": {
+      "en": "Claimed",
+      "tg": ""
+    },
+    "handoff.empty": {
+      "en": "No spots opening right now",
+      "tg": ""
+    },
+    "handoff.leaving": {
+      "en": "Leaving soon",
+      "tg": ""
+    },
+    "handoff.leaving_in": {
+      "en": "leaving in",
+      "tg": ""
+    },
+    "handoff.mine": {
+      "en": "Yours",
+      "tg": ""
+    },
+    "handoff.nearby": {
+      "en": "opening nearby",
+      "tg": ""
+    },
+    "handoff.title": {
+      "en": "Spot handoffs",
+      "tg": ""
+    },
+    "incident.file": {
+      "en": "File incident",
+      "tg": ""
+    },
+    "incident.filed": {
+      "en": "Filed — a protected record is open.",
+      "tg": ""
+    },
+    "incident.k_damage": {
+      "en": "Damage",
+      "tg": ""
+    },
+    "incident.k_other": {
+      "en": "Other",
+      "tg": ""
+    },
+    "incident.k_refused": {
+      "en": "Load refused",
+      "tg": ""
+    },
+    "incident.k_theft": {
+      "en": "Theft",
+      "tg": ""
+    },
+    "incident.k_unsafe": {
+      "en": "Unsafe site",
+      "tg": ""
+    },
+    "incident.kind": {
+      "en": "Type",
+      "tg": ""
+    },
+    "incident.lead": {
+      "en": "Log what happened — it opens a protected record.",
+      "tg": ""
+    },
+    "incident.logged": {
+      "en": "Incident logged — added to your evidence",
+      "tg": ""
+    },
+    "incident.note": {
+      "en": "Note (optional)",
+      "tg": ""
+    },
+    "incident.note_hint": {
+      "en": "What happened?",
+      "tg": ""
+    },
+    "incident.queued": {
+      "en": "Saved — it'll sync when you're back online.",
+      "tg": ""
+    },
+    "incident.title": {
+      "en": "Report an incident",
+      "tg": ""
+    },
+    "incident.view": {
+      "en": "View what you filed",
+      "tg": ""
+    },
+    "install.action": {
+      "en": "Add",
+      "tg": ""
+    },
+    "install.action_long": {
+      "en": "Install",
+      "tg": ""
+    },
+    "install.dismiss": {
+      "en": "Not now",
+      "tg": ""
+    },
+    "install.ios_step1": {
+      "en": "Tap Share in the bottom bar",
+      "tg": ""
+    },
+    "install.ios_step2": {
+      "en": "Choose “Add to Home Screen”",
+      "tg": ""
+    },
+    "install.ios_step3": {
+      "en": "Tap “Add”",
+      "tg": ""
+    },
+    "install.offer": {
+      "en": "Install Haulmeter",
+      "tg": ""
+    },
+    "install.title": {
+      "en": "Install Haulmeter",
+      "tg": ""
+    },
+    "install.why": {
+      "en": "Opens without signal, and it is the only way to get alerts on an iPhone.",
+      "tg": ""
+    },
+    "load.appointment": {
+      "en": "Appointment",
+      "tg": ""
+    },
+    "load.appt_add": {
+      "en": "Add the appointment",
+      "tg": ""
+    },
+    "load.appt_fix": {
+      "en": "Correct the appointment",
+      "tg": ""
+    },
+    "load.appt_fix_hint": {
+      "en": "Use the time on the rate con. This is what your detention clock is measured against.",
+      "tg": "",
+      "glossary_hold": [
+        "detention",
+        "rate con"
+      ]
+    },
+    "load.appt_from.manual": {
+      "en": "You entered this",
+      "tg": ""
+    },
+    "load.appt_from.rate_con_parse": {
+      "en": "Read from your rate con",
+      "tg": "",
+      "glossary_hold": [
+        "rate con"
+      ]
+    },
+    "load.appt_from.tms_push": {
+      "en": "From your fleet system",
+      "tg": ""
+    },
+    "load.appt_passed": {
+      "en": "Appointment passed",
+      "tg": ""
+    },
+    "load.appt_save": {
+      "en": "Save appointment",
+      "tg": ""
+    },
+    "load.arrival_pending": {
+      "en": "Arrival not recorded yet",
+      "tg": ""
+    },
+    "load.arrive": {
+      "en": "I've arrived",
+      "tg": ""
+    },
+    "load.arrive_failed": {
+      "en": "Couldn't record that — try again.",
+      "tg": ""
+    },
+    "load.broker": {
+      "en": "Broker",
+      "tg": ""
+    },
+    "load.broker_email": {
+      "en": "Broker email — where detention notices go",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "load.broker_email_add": {
+      "en": "Add broker email",
+      "tg": ""
+    },
+    "load.broker_email_edit": {
+      "en": "Edit",
+      "tg": ""
+    },
+    "load.broker_email_none": {
+      "en": "No broker email on file",
+      "tg": ""
+    },
+    "load.broker_email_save": {
+      "en": "Save",
+      "tg": ""
+    },
+    "load.broker_email_saved": {
+      "en": "Broker email saved",
+      "tg": ""
+    },
+    "load.broker_phone": {
+      "en": "Broker phone — who to call about this load",
+      "tg": ""
+    },
+    "load.capture_title": {
+      "en": "Add paperwork",
+      "tg": ""
+    },
+    "load.check_profit": {
+      "en": "Check load profit",
+      "tg": ""
+    },
+    "load.create": {
+      "en": "Start",
+      "tg": ""
+    },
+    "load.cta.bol": {
+      "en": "Snap BOL",
+      "tg": "",
+      "glossary_hold": [
+        "BOL"
+      ]
+    },
+    "load.cta.claim": {
+      "en": "Generate claim",
+      "tg": ""
+    },
+    "load.cta.notice": {
+      "en": "Send notice",
+      "tg": ""
+    },
+    "load.cta.notice_again": {
+      "en": "Send again",
+      "tg": ""
+    },
+    "load.cta.photos": {
+      "en": "Take cargo photos",
+      "tg": ""
+    },
+    "load.cta.warn": {
+      "en": "Warn broker — {minutes} min free time left",
+      "tg": "",
+      "icu_placeholders": [
+        "{minutes}"
+      ]
+    },
+    "load.detention": {
+      "en": "Detention",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "load.doc.bol": {
+      "en": "BOL captured",
+      "tg": "",
+      "glossary_hold": [
+        "BOL"
+      ]
+    },
+    "load.doc.bol_missing": {
+      "en": "BOL not captured",
+      "tg": "",
+      "glossary_hold": [
+        "BOL"
+      ]
+    },
+    "load.doc.cargo_condition": {
+      "en": "Cargo photographed",
+      "tg": ""
+    },
+    "load.doc.cargo_condition_missing": {
+      "en": "Cargo not photographed",
+      "tg": ""
+    },
+    "load.doc.damage": {
+      "en": "Damage photographed",
+      "tg": ""
+    },
+    "load.doc.damage_missing": {
+      "en": "No damage recorded",
+      "tg": ""
+    },
+    "load.doc.lumper_receipt": {
+      "en": "Lumper receipt captured",
+      "tg": "",
+      "glossary_hold": [
+        "lumper"
+      ]
+    },
+    "load.doc.lumper_receipt_missing": {
+      "en": "Lumper receipt not captured",
+      "tg": "",
+      "glossary_hold": [
+        "lumper"
+      ]
+    },
+    "load.doc.pod": {
+      "en": "POD captured",
+      "tg": "",
+      "glossary_hold": [
+        "POD"
+      ]
+    },
+    "load.doc.pod_missing": {
+      "en": "POD not captured",
+      "tg": "",
+      "glossary_hold": [
+        "POD"
+      ]
+    },
+    "load.doc.seal": {
+      "en": "Seal photographed",
+      "tg": ""
+    },
+    "load.doc.seal_missing": {
+      "en": "Seal not photographed",
+      "tg": ""
+    },
+    "load.empty_hint": {
+      "en": "The Meter runs when you have a load. Add one and it starts.",
+      "tg": ""
+    },
+    "load.empty_title": {
+      "en": "No load",
+      "tg": ""
+    },
+    "load.end": {
+      "en": "End load",
+      "tg": ""
+    },
+    "load.end_title": {
+      "en": "Finish this load?",
+      "tg": ""
+    },
+    "load.evidence": {
+      "en": "Evidence",
+      "tg": ""
+    },
+    "load.facility": {
+      "en": "Facility",
+      "tg": ""
+    },
+    "load.far_back": {
+      "en": "Not yet",
+      "tg": ""
+    },
+    "load.far_body": {
+      "en": "Your phone puts you {mi} from {at}. If you're waiting at the gate that's normal — we'll record where you are either way.",
+      "tg": "",
+      "icu_placeholders": [
+        "{mi}",
+        "{at}"
+      ]
+    },
+    "load.far_go": {
+      "en": "Yes, I'm here",
+      "tg": ""
+    },
+    "load.far_title": {
+      "en": "Are you at the dock?",
+      "tg": ""
+    },
+    "load.filed_frozen": {
+      "en": "Claim filed — clock stopped",
+      "tg": ""
+    },
+    "load.free_time": {
+      "en": "Free time",
+      "tg": ""
+    },
+    "load.geo_fix": {
+      "en": "Turn location back on",
+      "tg": ""
+    },
+    "load.geo_off": {
+      "en": "Location is off, so arrivals aren't detected. Start the meter yourself when you reach a dock.",
+      "tg": ""
+    },
+    "load.history": {
+      "en": "Past loads",
+      "tg": ""
+    },
+    "load.history_empty": {
+      "en": "Loads you finish are kept here, with whatever they produced — the evidence pack, the paperwork, and what was owed.",
+      "tg": ""
+    },
+    "load.history_no_money": {
+      "en": "no detention",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "load.history_nothing": {
+      "en": "nothing was captured",
+      "tg": ""
+    },
+    "load.history_pack": {
+      "en": "evidence pack",
+      "tg": ""
+    },
+    "load.history_stops": {
+      "en": "{n} stops",
+      "tg": "",
+      "icu_placeholders": [
+        "{n}"
+      ]
+    },
+    "load.late": {
+      "en": "Late",
+      "tg": ""
+    },
+    "load.leave_back": {
+      "en": "Stay here",
+      "tg": ""
+    },
+    "load.leave_body": {
+      "en": "Your detention clock stops here, and the paperwork for this stop will be ready to send.",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "load.leave_stop": {
+      "en": "Leave this stop",
+      "tg": ""
+    },
+    "load.leave_title": {
+      "en": "Leave this stop?",
+      "tg": ""
+    },
+    "load.more": {
+      "en": "More for this stop",
+      "tg": ""
+    },
+    "load.next_stop": {
+      "en": "Next",
+      "tg": ""
+    },
+    "load.notice_early": {
+      "en": "Detention hasn't started yet — nothing to notify.",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "load.notice_ok": {
+      "en": "Broker notified — detention on record.",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "load.on_time": {
+      "en": "On time",
+      "tg": ""
+    },
+    "load.on_time_offer": {
+      "en": "Tell {broker} when I arrive",
+      "tg": "",
+      "icu_placeholders": [
+        "{broker}"
+      ]
+    },
+    "load.paperwork_for_stop": {
+      "en": "Paperwork for this stop",
+      "tg": ""
+    },
+    "load.photos": {
+      "en": "Photos",
+      "tg": ""
+    },
+    "load.rc_add": {
+      "en": "Add a load",
+      "tg": ""
+    },
+    "load.rc_address": {
+      "en": "Receiver address",
+      "tg": ""
+    },
+    "load.rc_appt_end": {
+      "en": "Window ends",
+      "tg": ""
+    },
+    "load.rc_best_hour": {
+      "en": "Quickest hour here",
+      "tg": ""
+    },
+    "load.rc_confirm_hint": {
+      "en": "The load is created with these terms. You can correct them here first.",
+      "tg": ""
+    },
+    "load.rc_find": {
+      "en": "Find this place",
+      "tg": ""
+    },
+    "load.rc_from": {
+      "en": "Read from your rate con. Check it against the paper.",
+      "tg": "",
+      "glossary_hold": [
+        "rate con"
+      ]
+    },
+    "load.rc_here": {
+      "en": "Where you were when you filed this",
+      "tg": ""
+    },
+    "load.rc_lead": {
+      "en": "Photograph the rate confirmation and we read the terms off it. Nothing is created until you confirm what we read.",
+      "tg": ""
+    },
+    "load.rc_matched": {
+      "en": "Is this the same place?",
+      "tg": ""
+    },
+    "load.rc_no_match": {
+      "en": "None of these",
+      "tg": ""
+    },
+    "load.rc_original_note": {
+      "en": "Quoted exactly as printed, in English. A claim is argued from the contract's own words, so these are not translated.",
+      "tg": ""
+    },
+    "load.rc_photo": {
+      "en": "Rate con photo or file",
+      "tg": "",
+      "glossary_hold": [
+        "rate con"
+      ]
+    },
+    "load.rc_place_needed": {
+      "en": "Add the address so arrivals at this dock are detected.",
+      "tg": ""
+    },
+    "load.rc_placed": {
+      "en": "Placed at",
+      "tg": ""
+    },
+    "load.rc_placing": {
+      "en": "Looking…",
+      "tg": ""
+    },
+    "load.rc_rate": {
+      "en": "Load pays ($)",
+      "tg": ""
+    },
+    "load.rc_read": {
+      "en": "Read the rate con",
+      "tg": "",
+      "glossary_hold": [
+        "rate con"
+      ]
+    },
+    "load.rc_reading": {
+      "en": "Reading…",
+      "tg": ""
+    },
+    "load.rc_risk": {
+      "en": "Ran past {free} free minutes",
+      "tg": "",
+      "icu_placeholders": [
+        "{free}"
+      ]
+    },
+    "load.rc_silent": {
+      "en": "This rate con does not state:",
+      "tg": "",
+      "glossary_hold": [
+        "rate con"
+      ]
+    },
+    "load.rc_states": {
+      "en": "What this rate con states",
+      "tg": "",
+      "glossary_hold": [
+        "rate con"
+      ]
+    },
+    "load.rc_term.detention": {
+      "en": "detention",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "load.rc_term.free_time": {
+      "en": "free time",
+      "tg": ""
+    },
+    "load.rc_term.layover": {
+      "en": "layover",
+      "tg": "",
+      "glossary_hold": [
+        "layover"
+      ]
+    },
+    "load.rc_term.lumper": {
+      "en": "lumper",
+      "tg": "",
+      "glossary_hold": [
+        "lumper"
+      ]
+    },
+    "load.rc_term.tonu": {
+      "en": "TONU",
+      "tg": "",
+      "glossary_hold": [
+        "TONU"
+      ]
+    },
+    "load.rc_unplaced": {
+      "en": "We could not place this address. Check it, or use where you are now.",
+      "tg": ""
+    },
+    "load.rc_unreadable": {
+      "en": "We could not read this one. It is saved to your wallet — enter the terms below.",
+      "tg": ""
+    },
+    "load.rc_use_here": {
+      "en": "Use where I am now",
+      "tg": ""
+    },
+    "load.start": {
+      "en": "Start a load",
+      "tg": ""
+    },
+    "load.stop.delivery": {
+      "en": "Delivery",
+      "tg": ""
+    },
+    "load.stop.pickup": {
+      "en": "Pickup",
+      "tg": ""
+    },
+    "load.terms.absent": {
+      "en": "the rate con does not say",
+      "tg": "",
+      "glossary_hold": [
+        "rate con"
+      ]
+    },
+    "load.terms.detention": {
+      "en": "Detention",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "load.terms.free": {
+      "en": "Free time",
+      "tg": ""
+    },
+    "load.terms.minutes": {
+      "en": "minutes",
+      "tg": ""
+    },
+    "load.terms.pays": {
+      "en": "This load pays",
+      "tg": ""
+    },
+    "load.terms.per_hour": {
+      "en": "per hour",
+      "tg": ""
+    },
+    "load.terms.title": {
+      "en": "The money terms we read",
+      "tg": ""
+    },
+    "load.until_appt": {
+      "en": "Until appointment",
+      "tg": ""
+    },
+    "load.waiting": {
+      "en": "Waiting to arrive",
+      "tg": ""
+    },
+    "load.warn_ok": {
+      "en": "Broker warned — detention starts soon.",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "locale.en": {
+      "en": "English",
+      "tg": ""
+    },
+    "locale.es": {
+      "en": "Español",
+      "tg": ""
+    },
+    "locale.pa": {
+      "en": "ਪੰਜਾਬੀ",
+      "tg": ""
+    },
+    "locale.ru": {
+      "en": "Русский",
+      "tg": ""
+    },
+    "locale.so": {
+      "en": "Soomaali",
+      "tg": ""
+    },
+    "locale.uz": {
+      "en": "O'zbekcha",
+      "tg": ""
+    },
+    "map.basemap_failed": {
+      "en": "Map unavailable — the places below still work",
+      "tg": ""
+    },
+    "map.basemap_no_webgl": {
+      "en": "This phone can't draw the map (battery saver often turns this off). The places below still work.",
+      "tg": ""
+    },
+    "map.basemap_pending": {
+      "en": "Map · loading",
+      "tg": ""
+    },
+    "map.cluster_label": {
+      "en": "stops",
+      "tg": ""
+    },
+    "map.data_credit": {
+      "en": "© OpenStreetMap contributors (ODbL)",
+      "tg": ""
+    },
+    "map.load_failed": {
+      "en": "Could not load the places on this map.",
+      "tg": ""
+    },
+    "map.preset.drive": {
+      "en": "Drive",
+      "tg": ""
+    },
+    "map.preset.food": {
+      "en": "Food",
+      "tg": ""
+    },
+    "map.preset.fuel": {
+      "en": "Fuel",
+      "tg": ""
+    },
+    "map.preset.service": {
+      "en": "Service",
+      "tg": ""
+    },
+    "map.preset.tonight": {
+      "en": "Tonight",
+      "tg": ""
+    },
+    "map.preset.work": {
+      "en": "Work",
+      "tg": ""
+    },
+    "map.report": {
+      "en": "Report status",
+      "tg": ""
+    },
+    "map.report.question": {
+      "en": "How's parking here right now?",
+      "tg": ""
+    },
+    "map.report.question_scale": {
+      "en": "Is this scale open right now?",
+      "tg": ""
+    },
+    "map.service_none": {
+      "en": "No repair or service shops mapped here yet",
+      "tg": ""
+    },
+    "map.status.closed": {
+      "en": "Closed",
+      "tg": ""
+    },
+    "map.status.empty": {
+      "en": "Empty",
+      "tg": ""
+    },
+    "map.status.full": {
+      "en": "Full",
+      "tg": ""
+    },
+    "map.status.open": {
+      "en": "Open",
+      "tg": ""
+    },
+    "map.status.some": {
+      "en": "Some",
+      "tg": ""
+    },
+    "map.status.unknown": {
+      "en": "Unknown",
+      "tg": ""
+    },
+    "money.act_chase": {
+      "en": "Write a message to chase it",
+      "tg": ""
+    },
+    "money.act_evidence": {
+      "en": "See the evidence",
+      "tg": ""
+    },
+    "money.act_paid": {
+      "en": "They paid me",
+      "tg": ""
+    },
+    "money.all_paid": {
+      "en": "Nothing outstanding — every claim you've filed has been paid.",
+      "tg": ""
+    },
+    "money.audit_cta": {
+      "en": "Check a settlement for missed pay",
+      "tg": ""
+    },
+    "money.chased_many": {
+      "en": "Chased {n} times",
+      "tg": "",
+      "icu_placeholders": [
+        "{n}"
+      ]
+    },
+    "money.chased_none": {
+      "en": "Nothing sent yet",
+      "tg": ""
+    },
+    "money.chased_one": {
+      "en": "Chased once",
+      "tg": ""
+    },
+    "money.days": {
+      "en": "{n} days",
+      "tg": "",
+      "icu_placeholders": [
+        "{n}"
+      ]
+    },
+    "money.days_one": {
+      "en": "1 day",
+      "tg": ""
+    },
+    "money.delivered": {
+      "en": "Delivered to you",
+      "tg": ""
+    },
+    "money.detail_what": {
+      "en": "What's happened",
+      "tg": ""
+    },
+    "money.earnings_failed": {
+      "en": "Could not load your earnings.",
+      "tg": ""
+    },
+    "money.empty": {
+      "en": "Recovered and saved money shows up here. Add your first load to start the meter.",
+      "tg": ""
+    },
+    "money.ev.final_notice_sent": {
+      "en": "Final notice sent",
+      "tg": ""
+    },
+    "money.ev.firmed": {
+      "en": "Firm reminder sent",
+      "tg": ""
+    },
+    "money.ev.invoiced": {
+      "en": "Invoice sent",
+      "tg": ""
+    },
+    "money.ev.nudged": {
+      "en": "Reminder sent",
+      "tg": ""
+    },
+    "money.fee_taken": {
+      "en": "Haulmeter fee",
+      "tg": ""
+    },
+    "money.fee_uncollected": {
+      "en": "Not collected — we have no way to charge it yet.",
+      "tg": ""
+    },
+    "money.fee_yours": {
+      "en": "yours",
+      "tg": ""
+    },
+    "money.flagged": {
+      "en": "Flagged for review",
+      "tg": ""
+    },
+    "money.kind.detention": {
+      "en": "Detention",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "money.kind.fee": {
+      "en": "Haulmeter fee",
+      "tg": ""
+    },
+    "money.kind.layover": {
+      "en": "Layover",
+      "tg": "",
+      "glossary_hold": [
+        "layover"
+      ]
+    },
+    "money.kind.lumper": {
+      "en": "Lumper",
+      "tg": "",
+      "glossary_hold": [
+        "lumper"
+      ]
+    },
+    "money.kind.tonu": {
+      "en": "TONU",
+      "tg": "",
+      "glossary_hold": [
+        "TONU"
+      ]
+    },
+    "money.load_failed": {
+      "en": "Could not load what you are owed.",
+      "tg": ""
+    },
+    "money.no_broker": {
+      "en": "No broker recorded",
+      "tg": ""
+    },
+    "money.owed_from": {
+      "en": "from {n} brokers",
+      "tg": "",
+      "icu_placeholders": [
+        "{n}"
+      ]
+    },
+    "money.owed_from_one": {
+      "en": "from 1 broker",
+      "tg": ""
+    },
+    "money.owed_label": {
+      "en": "Owed to you",
+      "tg": ""
+    },
+    "money.paid.cta": {
+      "en": "Mark a claim paid",
+      "tg": ""
+    },
+    "money.paid.note": {
+      "en": "This records that you were paid. The money goes straight to your bank — the app never holds it.",
+      "tg": ""
+    },
+    "money.paid.question": {
+      "en": "Which claim did the broker pay?",
+      "tg": ""
+    },
+    "money.paid.submit": {
+      "en": "Mark as paid",
+      "tg": ""
+    },
+    "money.paid_so_far": {
+      "en": "Paid to you",
+      "tg": ""
+    },
+    "money.recovered": {
+      "en": "Recovered",
+      "tg": ""
+    },
+    "money.settled": {
+      "en": "Already paid",
+      "tg": ""
+    },
+    "money.settled_hide": {
+      "en": "Hide",
+      "tg": ""
+    },
+    "money.settled_show": {
+      "en": "Show what's been paid",
+      "tg": ""
+    },
+    "money.state.acknowledged": {
+      "en": "Acknowledged",
+      "tg": ""
+    },
+    "money.state.disputed": {
+      "en": "Disputed",
+      "tg": ""
+    },
+    "money.state.escalated": {
+      "en": "Escalated",
+      "tg": ""
+    },
+    "money.state.exported": {
+      "en": "Sent to carrier",
+      "tg": ""
+    },
+    "money.state.invoiced": {
+      "en": "Invoiced",
+      "tg": ""
+    },
+    "money.state.open": {
+      "en": "Open",
+      "tg": ""
+    },
+    "money.state.packaged": {
+      "en": "Pack ready",
+      "tg": ""
+    },
+    "money.state.recovered": {
+      "en": "Recovered",
+      "tg": ""
+    },
+    "money.state.written_off": {
+      "en": "Written off",
+      "tg": ""
+    },
+    "money.title": {
+      "en": "Money owed",
+      "tg": ""
+    },
+    "money.waiting": {
+      "en": "Waiting on brokers",
+      "tg": ""
+    },
+    "money.year_recovered": {
+      "en": "Recovered in {year}",
+      "tg": "",
+      "icu_placeholders": [
+        "{year}"
+      ]
+    },
+    "more.account": {
+      "en": "Account",
+      "tg": ""
+    },
+    "more.appearance": {
+      "en": "Appearance",
+      "tg": ""
+    },
+    "more.authority": {
+      "en": "Operating authority",
+      "tg": ""
+    },
+    "more.change_password": {
+      "en": "Change password",
+      "tg": ""
+    },
+    "more.language": {
+      "en": "Language",
+      "tg": ""
+    },
+    "more.notifications": {
+      "en": "Notifications",
+      "tg": ""
+    },
+    "more.points_failed": {
+      "en": "Could not load your points.",
+      "tg": ""
+    },
+    "more.theme.dark": {
+      "en": "Dark",
+      "tg": ""
+    },
+    "more.theme.light": {
+      "en": "Light",
+      "tg": ""
+    },
+    "more.theme.system": {
+      "en": "System",
+      "tg": ""
+    },
+    "mpg.number": {
+      "en": "That needs to be a number.",
+      "tg": ""
+    },
+    "mpg.range": {
+      "en": "Miles per gallon should be between 3 and 12.",
+      "tg": ""
+    },
+    "nav.back": {
+      "en": "Back",
+      "tg": ""
+    },
+    "nav.docs": {
+      "en": "Docs",
+      "tg": ""
+    },
+    "nav.load": {
+      "en": "Load",
+      "tg": ""
+    },
+    "nav.map": {
+      "en": "Map",
+      "tg": ""
+    },
+    "nav.money": {
+      "en": "Money",
+      "tg": ""
+    },
+    "nav.more": {
+      "en": "More",
+      "tg": ""
+    },
+    "notice.delivery.failed": {
+      "en": "Notice failed — broker not reached",
+      "tg": ""
+    },
+    "notice.delivery.no_email": {
+      "en": "No broker email — add one to notify",
+      "tg": ""
+    },
+    "notice.delivery.not_sent": {
+      "en": "Broker not notified",
+      "tg": ""
+    },
+    "notice.delivery.queued": {
+      "en": "Notice queued — sending to broker",
+      "tg": ""
+    },
+    "notice.delivery.retrying": {
+      "en": "Notice didn't send — retrying",
+      "tg": ""
+    },
+    "notice.delivery.sent": {
+      "en": "Broker notified",
+      "tg": ""
+    },
+    "notifications.empty": {
+      "en": "Nothing yet.",
+      "tg": ""
+    },
+    "notifications.held": {
+      "en": "Held · not sent",
+      "tg": ""
+    },
+    "notifications.title": {
+      "en": "Notifications",
+      "tg": ""
+    },
+    "notifications.unread": {
+      "en": "{n} unread",
+      "tg": "",
+      "icu_placeholders": [
+        "{n}"
+      ]
+    },
+    "owner.active": {
+      "en": "Active",
+      "tg": ""
+    },
+    "owner.add_property": {
+      "en": "Add property",
+      "tg": ""
+    },
+    "owner.add_spot": {
+      "en": "Add spot",
+      "tg": ""
+    },
+    "owner.bookings": {
+      "en": "Bookings",
+      "tg": ""
+    },
+    "owner.cancel": {
+      "en": "Cancel",
+      "tg": ""
+    },
+    "owner.cancel_confirm": {
+      "en": "Confirm cancel",
+      "tg": ""
+    },
+    "owner.charged": {
+      "en": "Charged",
+      "tg": ""
+    },
+    "owner.demo": {
+      "en": "Demo data — sign in to manage your listings.",
+      "tg": ""
+    },
+    "owner.empty": {
+      "en": "No properties listed yet.",
+      "tg": ""
+    },
+    "owner.lat": {
+      "en": "Lat",
+      "tg": ""
+    },
+    "owner.load_failed": {
+      "en": "Could not load your board.",
+      "tg": ""
+    },
+    "owner.lon": {
+      "en": "Lon",
+      "tg": ""
+    },
+    "owner.nights": {
+      "en": "nights",
+      "tg": ""
+    },
+    "owner.no_bookings": {
+      "en": "No bookings yet.",
+      "tg": ""
+    },
+    "owner.pause": {
+      "en": "Pause",
+      "tg": ""
+    },
+    "owner.paused": {
+      "en": "Paused",
+      "tg": ""
+    },
+    "owner.payout": {
+      "en": "Payable to you",
+      "tg": ""
+    },
+    "owner.payout_note": {
+      "en": "Settlement activates when payments go live",
+      "tg": ""
+    },
+    "owner.per_night": {
+      "en": "/night",
+      "tg": ""
+    },
+    "owner.price": {
+      "en": "Price",
+      "tg": ""
+    },
+    "owner.prop_name": {
+      "en": "Property name",
+      "tg": ""
+    },
+    "owner.properties": {
+      "en": "Your properties",
+      "tg": ""
+    },
+    "owner.resume": {
+      "en": "Resume",
+      "tg": ""
+    },
+    "owner.spot_label": {
+      "en": "Spot",
+      "tg": ""
+    },
+    "owner.spots": {
+      "en": "spots",
+      "tg": ""
+    },
+    "owner.st_booked": {
+      "en": "Booked",
+      "tg": ""
+    },
+    "owner.st_canceled": {
+      "en": "Canceled",
+      "tg": ""
+    },
+    "owner.st_checked_in": {
+      "en": "Checked in",
+      "tg": ""
+    },
+    "owner.st_checked_out": {
+      "en": "Checked out",
+      "tg": ""
+    },
+    "owner.st_refunded": {
+      "en": "Refunded",
+      "tg": ""
+    },
+    "owner.status": {
+      "en": "Status",
+      "tg": ""
+    },
+    "owner.title": {
+      "en": "Property Owner",
+      "tg": ""
+    },
+    "owner.vetted": {
+      "en": "Vetted",
+      "tg": ""
+    },
+    "owner.your_cut": {
+      "en": "Your payout",
+      "tg": ""
+    },
+    "packet.claim_none": {
+      "en": "No claim filed for this stop. File it from the load first.",
+      "tg": ""
+    },
+    "packet.contents_none": {
+      "en": "Nothing was captured at this stop.",
+      "tg": ""
+    },
+    "packet.discard": {
+      "en": "Discard",
+      "tg": ""
+    },
+    "packet.discard_body": {
+      "en": "Nothing will be sent. Your photos and documents are kept — you can still find them under Past loads.",
+      "tg": ""
+    },
+    "packet.discard_confirm": {
+      "en": "Discard paperwork",
+      "tg": ""
+    },
+    "packet.discard_failed": {
+      "en": "Not discarded — try again.",
+      "tg": ""
+    },
+    "packet.discard_keep": {
+      "en": "Keep it",
+      "tg": ""
+    },
+    "packet.discard_title": {
+      "en": "Discard this paperwork?",
+      "tg": ""
+    },
+    "packet.driving": {
+      "en": "Sends when you're stopped.",
+      "tg": ""
+    },
+    "packet.empty": {
+      "en": "No paperwork waiting. After you leave a dock, the packet shows up here for you to check.",
+      "tg": ""
+    },
+    "packet.goes_to": {
+      "en": "Goes to {email}",
+      "tg": "",
+      "icu_placeholders": [
+        "{email}"
+      ]
+    },
+    "packet.loading": {
+      "en": "Loading…",
+      "tg": ""
+    },
+    "packet.needs_email": {
+      "en": "No email on file — you'll add one before this sends.",
+      "tg": ""
+    },
+    "packet.no_recipient": {
+      "en": "No email on file",
+      "tg": ""
+    },
+    "packet.no_reference": {
+      "en": "No load reference",
+      "tg": ""
+    },
+    "packet.note": {
+      "en": "Nothing goes out until you send it.",
+      "tg": ""
+    },
+    "packet.offline": {
+      "en": "No signal. Send this when you're back online.",
+      "tg": ""
+    },
+    "packet.ready": {
+      "en": "You left {place}. Your paperwork is ready.",
+      "tg": "",
+      "icu_placeholders": [
+        "{place}"
+      ]
+    },
+    "packet.ready_driving": {
+      "en": "Paperwork ready — review it when you stop.",
+      "tg": ""
+    },
+    "packet.ready_nowhere": {
+      "en": "You've left the dock. Your paperwork is ready.",
+      "tg": ""
+    },
+    "packet.recipient_label": {
+      "en": "Send to",
+      "tg": ""
+    },
+    "packet.ref": {
+      "en": "Load {ref}",
+      "tg": "",
+      "icu_placeholders": [
+        "{ref}"
+      ]
+    },
+    "packet.review": {
+      "en": "Check and send",
+      "tg": ""
+    },
+    "packet.review_title": {
+      "en": "Review before it sends",
+      "tg": ""
+    },
+    "packet.section_paperwork": {
+      "en": "Paperwork",
+      "tg": ""
+    },
+    "packet.send": {
+      "en": "Send packet",
+      "tg": ""
+    },
+    "packet.send_failed": {
+      "en": "Not sent — try again, or check with support if it keeps failing.",
+      "tg": ""
+    },
+    "packet.send_with_claim": {
+      "en": "Send packet and claim",
+      "tg": ""
+    },
+    "packet.title": {
+      "en": "Paperwork to send",
+      "tg": ""
+    },
+    "packet.to": {
+      "en": "To",
+      "tg": ""
+    },
+    "packet.unknown_recipient": {
+      "en": "Unknown recipient",
+      "tg": ""
+    },
+    "packet.waiting": {
+      "en": "{n} packet waiting — check before it sends",
+      "tg": "",
+      "icu_placeholders": [
+        "{n}"
+      ]
+    },
+    "phone.ten_digits": {
+      "en": "A phone number needs 10 digits, area code included.",
+      "tg": ""
+    },
+    "place.back": {
+      "en": "Back to me",
+      "tg": ""
+    },
+    "place.button": {
+      "en": "Somewhere else",
+      "tg": ""
+    },
+    "place.failed": {
+      "en": "Could not reach the place finder. Check your connection and try again.",
+      "tg": ""
+    },
+    "place.hint": {
+      "en": "This only moves the map. Your location, your stop and the clock stay where you are.",
+      "tg": ""
+    },
+    "place.label": {
+      "en": "Town, city or address",
+      "tg": ""
+    },
+    "place.none": {
+      "en": "Nothing found for that.",
+      "tg": ""
+    },
+    "place.placeholder": {
+      "en": "Dallas, TX",
+      "tg": ""
+    },
+    "place.search": {
+      "en": "Find",
+      "tg": ""
+    },
+    "place.searching": {
+      "en": "Looking…",
+      "tg": ""
+    },
+    "place.title": {
+      "en": "Show me somewhere else",
+      "tg": ""
+    },
+    "place.viewing": {
+      "en": "Viewing {place}",
+      "tg": "",
+      "icu_placeholders": [
+        "{place}"
+      ]
+    },
+    "points.level.elite": {
+      "en": "Elite",
+      "tg": ""
+    },
+    "points.level.pro": {
+      "en": "Pro",
+      "tg": ""
+    },
+    "points.level.regular": {
+      "en": "Regular",
+      "tg": ""
+    },
+    "points.level.rookie": {
+      "en": "Rookie",
+      "tg": ""
+    },
+    "points.title": {
+      "en": "Points",
+      "tg": ""
+    },
+    "portal.vendor.add_promotion": {
+      "en": "Add promotion",
+      "tg": ""
+    },
+    "portal.vendor.analytics": {
+      "en": "How you're doing",
+      "tg": ""
+    },
+    "portal.vendor.cancel": {
+      "en": "Cancel",
+      "tg": ""
+    },
+    "portal.vendor.confirmations": {
+      "en": "Driver confirmations",
+      "tg": ""
+    },
+    "portal.vendor.delivered": {
+      "en": "drivers told",
+      "tg": ""
+    },
+    "portal.vendor.gaps": {
+      "en": "Finish these before you can publish",
+      "tg": ""
+    },
+    "portal.vendor.no_access": {
+      "en": "This is the vendor portal. Sign in with a vendor account to manage your week.",
+      "tg": ""
+    },
+    "portal.vendor.no_promotions": {
+      "en": "No promotions running.",
+      "tg": ""
+    },
+    "portal.vendor.no_schedule": {
+      "en": "Nothing scheduled yet.",
+      "tg": ""
+    },
+    "portal.vendor.profile": {
+      "en": "Profile",
+      "tg": ""
+    },
+    "portal.vendor.promotions": {
+      "en": "Promotions",
+      "tg": ""
+    },
+    "portal.vendor.save": {
+      "en": "Save",
+      "tg": ""
+    },
+    "portal.vendor.schedule": {
+      "en": "Schedule",
+      "tg": ""
+    },
+    "portal.vendor.suspended": {
+      "en": "Publishing is paused while we review reports about you.",
+      "tg": ""
+    },
+    "portal.vendor.title": {
+      "en": "Vendor portal",
+      "tg": ""
+    },
+    "portal.vendor.views": {
+      "en": "Sheet views",
+      "tg": ""
+    },
+    "profile.add_review": {
+      "en": "Add review",
+      "tg": ""
+    },
+    "profile.best_hour": {
+      "en": "Fastest hour",
+      "tg": ""
+    },
+    "profile.dock_time": {
+      "en": "Dock time",
+      "tg": ""
+    },
+    "profile.empty": {
+      "en": "No driver has reported on this stop yet.",
+      "tg": ""
+    },
+    "profile.median": {
+      "en": "median",
+      "tg": ""
+    },
+    "profile.rating": {
+      "en": "Driver rating",
+      "tg": ""
+    },
+    "profile.reviews": {
+      "en": "reviews",
+      "tg": ""
+    },
+    "profile.reviews_title": {
+      "en": "Reviews",
+      "tg": ""
+    },
+    "profile.risk": {
+      "en": "Detention risk",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "profile.sc_hours": {
+      "en": "Hours",
+      "tg": ""
+    },
+    "profile.sc_phone": {
+      "en": "Phone",
+      "tg": ""
+    },
+    "profile.sc_source": {
+      "en": "Hours, phone and services are this business's own words.",
+      "tg": ""
+    },
+    "profile.service_center": {
+      "en": "Service centre",
+      "tg": ""
+    },
+    "profile.stops": {
+      "en": "stops",
+      "tg": ""
+    },
+    "profile.stops_basis": {
+      "en": "tracked stops",
+      "tg": ""
+    },
+    "prompts.lot_elsewhere": {
+      "en": "You'll still be asked at other stops.",
+      "tg": ""
+    },
+    "prompts.lot_mute": {
+      "en": "Don't ask about this lot",
+      "tg": ""
+    },
+    "prompts.lot_muted": {
+      "en": "Muted. We won't ask about this lot again.",
+      "tg": ""
+    },
+    "prompts.lot_off": {
+      "en": "Stop asking about lots",
+      "tg": ""
+    },
+    "prompts.lot_on": {
+      "en": "Ask me about lots",
+      "tg": ""
+    },
+    "prompts.lot_title": {
+      "en": "Lot status prompts",
+      "tg": ""
+    },
+    "prompts.lot_unmute": {
+      "en": "Ask me again",
+      "tg": ""
+    },
+    "prompts.lot_what": {
+      "en": "When you park at a truck stop we'll ask how full the lot is — once a day, never while you're moving. Your answer helps the next driver find a spot.",
+      "tg": ""
+    },
+    "push.disable": {
+      "en": "Turn off alerts",
+      "tg": ""
+    },
+    "push.enable": {
+      "en": "Turn on alerts",
+      "tg": ""
+    },
+    "push.what": {
+      "en": "Alerts reach you when the app is closed: detention started, a claim paid, a booking canceled.",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "push.why_denied": {
+      "en": "Alerts are blocked for this site. Turn them back on in your browser settings.",
+      "tg": ""
+    },
+    "push.why_error": {
+      "en": "Could not turn alerts on. Check your connection and try again.",
+      "tg": ""
+    },
+    "push.why_unconfigured": {
+      "en": "Alerts are not set up on this server yet.",
+      "tg": ""
+    },
+    "push.why_unsupported": {
+      "en": "Alerts need a secure connection and a browser that supports them.",
+      "tg": ""
+    },
+    "pw.current": {
+      "en": "Current password",
+      "tg": ""
+    },
+    "pw.err_current": {
+      "en": "That current password isn't right.",
+      "tg": ""
+    },
+    "pw.err_network": {
+      "en": "Couldn't reach the server. Try again.",
+      "tg": ""
+    },
+    "pw.err_throttled": {
+      "en": "Too many attempts just now. Please wait {seconds} seconds and then try again.",
+      "tg": "",
+      "icu_placeholders": [
+        "{seconds}"
+      ]
+    },
+    "pw.forced_hint": {
+      "en": "You're signed in with a temporary password. Choose your own to continue.",
+      "tg": ""
+    },
+    "pw.forced_title": {
+      "en": "Set a new password",
+      "tg": ""
+    },
+    "pw.new": {
+      "en": "New password",
+      "tg": ""
+    },
+    "pw.ok": {
+      "en": "Password changed",
+      "tg": ""
+    },
+    "pw.others_out": {
+      "en": "Your other devices have been signed out.",
+      "tg": ""
+    },
+    "pw.submit": {
+      "en": "Change password",
+      "tg": ""
+    },
+    "pw.title": {
+      "en": "Change password",
+      "tg": ""
+    },
+    "qa.ask": {
+      "en": "Ask a question",
+      "tg": ""
+    },
+    "qa.onsite": {
+      "en": "on-site",
+      "tg": ""
+    },
+    "qa.placeholder": {
+      "en": "What do you want to know?",
+      "tg": ""
+    },
+    "qa.submit": {
+      "en": "Post question",
+      "tg": ""
+    },
+    "qa.title": {
+      "en": "Driver Q&A",
+      "tg": ""
+    },
+    "quiet.always": {
+      "en": "Same start and end means no quiet hours — alerts can arrive at any time.",
+      "tg": ""
+    },
+    "quiet.from": {
+      "en": "From",
+      "tg": ""
+    },
+    "quiet.to": {
+      "en": "Until",
+      "tg": ""
+    },
+    "quiet.what": {
+      "en": "Quiet hours: useful-today alerts are filed here instead of interrupting you. Money and safety alerts always come through.",
+      "tg": ""
+    },
+    "quiet.zone": {
+      "en": "Times are in {zone}, which follows your phone.",
+      "tg": "",
+      "icu_placeholders": [
+        "{zone}"
+      ]
+    },
+    "rec.broken": {
+      "en": "This record can't be sent: its evidence chain doesn't check out. Contact support.",
+      "tg": ""
+    },
+    "rec.claimed": {
+      "en": "{money} detention claimed",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ],
+      "icu_placeholders": [
+        "{money}"
+      ]
+    },
+    "rec.claimed_none": {
+      "en": "No detention claimed",
+      "tg": "",
+      "glossary_hold": [
+        "detention"
+      ]
+    },
+    "rec.docs_none": {
+      "en": "No paperwork on file",
+      "tg": ""
+    },
+    "rec.download": {
+      "en": "Save a copy to my phone",
+      "tg": ""
+    },
+    "rec.download_failed": {
+      "en": "Couldn't save it — try again.",
+      "tg": ""
+    },
+    "rec.driving": {
+      "en": "Sending waits until you stop.",
+      "tg": ""
+    },
+    "rec.empty": {
+      "en": "Nothing was captured on this load, so there is no record to send.",
+      "tg": ""
+    },
+    "rec.failed": {
+      "en": "Couldn't load this record.",
+      "tg": ""
+    },
+    "rec.gps": {
+      "en": "GPS arrival and departure",
+      "tg": ""
+    },
+    "rec.gps_none": {
+      "en": "No GPS record",
+      "tg": ""
+    },
+    "rec.no_email": {
+      "en": "No email on file — type where it should go.",
+      "tg": ""
+    },
+    "rec.open_stop": {
+      "en": "See everything from this dock",
+      "tg": ""
+    },
+    "rec.photos": {
+      "en": "{n} photos",
+      "tg": "",
+      "icu_placeholders": [
+        "{n}"
+      ]
+    },
+    "rec.photos_none": {
+      "en": "No photos",
+      "tg": ""
+    },
+    "rec.send": {
+      "en": "Send to the broker",
+      "tg": ""
+    },
+    "rec.send_body": {
+      "en": "The broker gets a link to this record — the photos, the paperwork and the GPS trail, exactly as shown.",
+      "tg": ""
+    },
+    "rec.send_failed": {
+      "en": "Not sent — try again.",
+      "tg": ""
+    },
+    "rec.send_go": {
+      "en": "Send it",
+      "tg": ""
+    },
+    "rec.send_offline": {
+      "en": "No signal. This sends when you're back online.",
+      "tg": ""
+    },
+    "rec.send_title": {
+      "en": "Send this record",
+      "tg": ""
+    },
+    "rec.send_to": {
+      "en": "Send to",
+      "tg": ""
+    },
+    "rec.sent": {
+      "en": "Sent. The broker has the link.",
+      "tg": ""
+    },
+    "rec.title": {
+      "en": "Load record",
+      "tg": ""
+    },
+    "rec.whats_in": {
+      "en": "What's in this record",
+      "tg": ""
+    },
+    "review.overall": {
+      "en": "Rate this stop",
+      "tg": ""
+    },
+    "review.pending": {
+      "en": "Your review appears right away. We remove ones that break the rules.",
+      "tg": ""
+    },
+    "review.placeholder": {
+      "en": "What should other drivers know?",
+      "tg": ""
+    },
+    "review.submit": {
+      "en": "Submit review",
+      "tg": ""
+    },
+    "saved.ago": {
+      "en": "saved",
+      "tg": ""
+    },
+    "saved.empty": {
+      "en": "Nothing saved yet.",
+      "tg": ""
+    },
+    "saved.hint": {
+      "en": "Tapped while you were driving. Statuses aren't shown here — they were true when you tapped, not now.",
+      "tg": ""
+    },
+    "saved.mark": {
+      "en": "Save for when you stop",
+      "tg": ""
+    },
+    "saved.remove": {
+      "en": "Remove",
+      "tg": ""
+    },
+    "saved.title": {
+      "en": "Saved on this run",
+      "tg": ""
+    },
+    "score.dock": {
+      "en": "Dock time",
+      "tg": ""
+    },
+    "score.load_failed": {
+      "en": "Could not load the scorecard.",
+      "tg": ""
+    },
+    "score.median": {
+      "en": "median",
+      "tg": ""
+    },
+    "score.no_dwell": {
+      "en": "Not enough tracked stops yet",
+      "tg": ""
+    },
+    "score.rating": {
+      "en": "Driver rating",
+      "tg": ""
+    },
+    "score.reviews": {
+      "en": "reviews",
+      "tg": ""
+    },
+    "score.search": {
+      "en": "Search facilities",
+      "tg": ""
+    },
+    "score.search_failed": {
+      "en": "Could not search facilities.",
+      "tg": ""
+    },
+    "score.search_hint": {
+      "en": "Search a receiver, shipper, or truck stop by name.",
+      "tg": ""
+    },
+    "score.stops": {
+      "en": "stops",
+      "tg": ""
+    },
+    "score.title": {
+      "en": "Facility Scorecard",
+      "tg": ""
+    },
+    "score.what_drivers_say": {
+      "en": "What drivers say",
+      "tg": ""
+    },
+    "send.again": {
+      "en": "Send again",
+      "tg": ""
+    },
+    "send.again_confirm": {
+      "en": "Send a second copy to the broker?",
+      "tg": ""
+    },
+    "send.again_lead": {
+      "en": "They already have this. Only send again if they say it never arrived.",
+      "tg": ""
+    },
+    "send.already": {
+      "en": "Already sent to this address.",
+      "tg": ""
+    },
+    "send.link_only": {
+      "en": "Link created. Add their email to send it.",
+      "tg": ""
+    },
+    "service.mobile_repair": {
+      "en": "Mobile repair",
+      "tg": ""
+    },
+    "service.parts": {
+      "en": "Parts",
+      "tg": ""
+    },
+    "service.tire": {
+      "en": "Tires",
+      "tg": ""
+    },
+    "service.towing": {
+      "en": "Towing",
+      "tg": ""
+    },
+    "service.truck_repair": {
+      "en": "Repair",
+      "tg": ""
+    },
+    "service.wash": {
+      "en": "Wash",
+      "tg": ""
+    },
+    "sleep.empty": {
+      "en": "No stops in range yet.",
+      "tg": ""
+    },
+    "sleep.find": {
+      "en": "Find stops",
+      "tg": ""
+    },
+    "sleep.fuel": {
+      "en": "Fuel on the way",
+      "tg": ""
+    },
+    "sleep.guaranteed": {
+      "en": "Guaranteed spot",
+      "tg": ""
+    },
+    "sleep.hours": {
+      "en": "Hours left",
+      "tg": ""
+    },
+    "sleep.load_failed": {
+      "en": "Could not load a sleep plan.",
+      "tg": ""
+    },
+    "sleep.title": {
+      "en": "Where do I sleep?",
+      "tg": ""
+    },
+    "surface.placeholder": {
+      "en": "This tab arrives with its module.",
+      "tg": ""
+    },
+    "system.failed": {
+      "en": "Not sent — still on your phone",
+      "tg": ""
+    },
+    "system.load_offline": {
+      "en": "No connection. This loads when you have signal.",
+      "tg": ""
+    },
+    "system.loading": {
+      "en": "Loading",
+      "tg": ""
+    },
+    "system.offline": {
+      "en": "Offline — everything saves to your phone",
+      "tg": ""
+    },
+    "system.pending": {
+      "en": "Saved on your phone",
+      "tg": ""
+    },
+    "system.retry": {
+      "en": "Try again",
+      "tg": ""
+    },
+    "system.update_apply": {
+      "en": "Restart",
+      "tg": ""
+    },
+    "system.update_ready": {
+      "en": "New version ready",
+      "tg": ""
+    },
+    "unit.mi": {
+      "en": "mi",
+      "tg": ""
+    },
+    "vendor.a_stop": {
+      "en": "A stop",
+      "tg": ""
+    },
+    "vendor.add_appearance": {
+      "en": "Add an appearance",
+      "tg": ""
+    },
+    "vendor.add_item": {
+      "en": "Add an item",
+      "tg": ""
+    },
+    "vendor.alerts": {
+      "en": "Food alerts",
+      "tg": ""
+    },
+    "vendor.alerts_hint": {
+      "en": "Off by default. One a day at most, only on your route.",
+      "tg": ""
+    },
+    "vendor.all": {
+      "en": "All vendors",
+      "tg": ""
+    },
+    "vendor.appearance.cancelled": {
+      "en": "Cancelled",
+      "tg": ""
+    },
+    "vendor.appearance.done": {
+      "en": "Done",
+      "tg": ""
+    },
+    "vendor.appearance.lapsed": {
+      "en": "No-show",
+      "tg": ""
+    },
+    "vendor.appearance.live": {
+      "en": "On now",
+      "tg": ""
+    },
+    "vendor.appearance.scheduled": {
+      "en": "Scheduled",
+      "tg": ""
+    },
+    "vendor.assisted.appearance_cancel": {
+      "en": "a cancelled appearance",
+      "tg": ""
+    },
+    "vendor.assisted.appearance_publish": {
+      "en": "an appearance",
+      "tg": ""
+    },
+    "vendor.assisted.menu_add": {
+      "en": "your menu",
+      "tg": ""
+    },
+    "vendor.assisted.menu_edit": {
+      "en": "a price",
+      "tg": ""
+    },
+    "vendor.assisted.menu_retire": {
+      "en": "your menu",
+      "tg": ""
+    },
+    "vendor.assisted.profile_edit": {
+      "en": "your details",
+      "tg": ""
+    },
+    "vendor.assisted.promotion_cancel": {
+      "en": "a cancelled promotion",
+      "tg": ""
+    },
+    "vendor.assisted.promotion_create": {
+      "en": "a promotion",
+      "tg": ""
+    },
+    "vendor.assisted.promotion_edit": {
+      "en": "a promotion",
+      "tg": ""
+    },
+    "vendor.assisted_note": {
+      "en": "Edited by Haulmeter support",
+      "tg": ""
+    },
+    "vendor.call": {
+      "en": "Call",
+      "tg": ""
+    },
+    "vendor.cancel_edit": {
+      "en": "Cancel",
+      "tg": ""
+    },
+    "vendor.cancel_series": {
+      "en": "Cancel all",
+      "tg": ""
+    },
+    "vendor.categories": {
+      "en": "Kind of food or service",
+      "tg": ""
+    },
+    "vendor.chars_left": {
+      "en": "left",
+      "tg": ""
+    },
+    "vendor.date": {
+      "en": "Date",
+      "tg": ""
+    },
+    "vendor.days": {
+      "en": "days",
+      "tg": ""
+    },
+    "vendor.delivery_caps": {
+      "en": "Fewer than were nearby: drivers choose these alerts, and get at most one a day.",
+      "tg": ""
+    },
+    "vendor.distance_direct": {
+      "en": "Distances are direct, not driving distance.",
+      "tg": ""
+    },
+    "vendor.doc.halal_cert": {
+      "en": "Halal certificate",
+      "tg": ""
+    },
+    "vendor.doc.insurance": {
+      "en": "Insurance",
+      "tg": ""
+    },
+    "vendor.doc.license": {
+      "en": "Licence or permit",
+      "tg": ""
+    },
+    "vendor.doc_kind": {
+      "en": "Kind",
+      "tg": ""
+    },
+    "vendor.doc_status.approved": {
+      "en": "Approved",
+      "tg": ""
+    },
+    "vendor.doc_status.pending": {
+      "en": "Waiting for review",
+      "tg": ""
+    },
+    "vendor.doc_status.rejected": {
+      "en": "Not accepted",
+      "tg": ""
+    },
+    "vendor.documents_on_file": {
+      "en": "License on file",
+      "tg": ""
+    },
+    "vendor.edit": {
+      "en": "Edit",
+      "tg": ""
+    },
+    "vendor.edit_no_resend": {
+      "en": "Editing updates your pin. It does not send another alert.",
+      "tg": ""
+    },
+    "vendor.file": {
+      "en": "File",
+      "tg": ""
+    },
+    "vendor.finished": {
+      "en": "Finished",
+      "tg": ""
+    },
+    "vendor.follow": {
+      "en": "Follow this cook",
+      "tg": ""
+    },
+    "vendor.follow_note": {
+      "en": "Turns on food alerts. At most one a day, never at night.",
+      "tg": ""
+    },
+    "vendor.follow_on_note": {
+      "en": "We will tell you when they publish near you.",
+      "tg": ""
+    },
+    "vendor.following": {
+      "en": "Following",
+      "tg": ""
+    },
+    "vendor.from": {
+      "en": "From",
+      "tg": ""
+    },
+    "vendor.gap.facility": {
+      "en": "Choose where you will be",
+      "tg": ""
+    },
+    "vendor.gap.halal_disclosure": {
+      "en": "Answer the halal question",
+      "tg": ""
+    },
+    "vendor.gap.languages": {
+      "en": "Add the languages you speak",
+      "tg": ""
+    },
+    "vendor.gap.offering_with_price": {
+      "en": "Add at least one dish with a price",
+      "tg": ""
+    },
+    "vendor.gap.time_window": {
+      "en": "Set a start and end time",
+      "tg": ""
+    },
+    "vendor.halal": {
+      "en": "Halal sourcing",
+      "tg": ""
+    },
+    "vendor.halal_claim.certified": {
+      "en": "Halal certificate on file",
+      "tg": ""
+    },
+    "vendor.halal_claim.not_claimed": {
+      "en": "No halal claim",
+      "tg": ""
+    },
+    "vendor.halal_claim.self_declared": {
+      "en": "Vendor says halal",
+      "tg": ""
+    },
+    "vendor.halal_claim_hint": {
+      "en": "\"Certificate on file\" unlocks once you send a halal certificate and it is approved.",
+      "tg": ""
+    },
+    "vendor.halal_claim_label": {
+      "en": "Halal claim",
+      "tg": ""
+    },
+    "vendor.halal_none": {
+      "en": "No halal claim made",
+      "tg": ""
+    },
+    "vendor.here_now": {
+      "en": "He's here",
+      "tg": ""
+    },
+    "vendor.hours": {
+      "en": "Hours",
+      "tg": ""
+    },
+    "vendor.item": {
+      "en": "Item",
+      "tg": ""
+    },
+    "vendor.items": {
+      "en": "items",
+      "tg": ""
+    },
+    "vendor.join.business": {
+      "en": "About your business",
+      "tg": ""
+    },
+    "vendor.join.create_account": {
+      "en": "Create an account",
+      "tg": ""
+    },
+    "vendor.join.duplicate": {
+      "en": "A business with these details is already registered.",
+      "tg": ""
+    },
+    "vendor.join.email_taken": {
+      "en": "That email already has an account.",
+      "tg": ""
+    },
+    "vendor.join.error": {
+      "en": "That did not work. Check the details and try again.",
+      "tg": ""
+    },
+    "vendor.join.finish": {
+      "en": "Finish",
+      "tg": ""
+    },
+    "vendor.join.free": {
+      "en": "It is free. We take no commission and sell nothing here.",
+      "tg": ""
+    },
+    "vendor.join.halal_hint": {
+      "en": "Say plainly what you do or do not claim. \"No halal claim\" is a complete answer.",
+      "tg": ""
+    },
+    "vendor.join.languages_hint": {
+      "en": "Separate with commas. Drivers filter by language.",
+      "tg": ""
+    },
+    "vendor.join.metro": {
+      "en": "Area you work",
+      "tg": ""
+    },
+    "vendor.join.name": {
+      "en": "Business name",
+      "tg": ""
+    },
+    "vendor.join.next": {
+      "en": "Next",
+      "tg": ""
+    },
+    "vendor.join.signin": {
+      "en": "Sign in",
+      "tg": ""
+    },
+    "vendor.join.starts_unverified": {
+      "en": "You start as Unverified, and your pin says so. Upload a licence later to move up.",
+      "tg": ""
+    },
+    "vendor.join.subtitle": {
+      "en": "Put your food on the {brand} map.",
+      "tg": "",
+      "icu_placeholders": [
+        "{brand}"
+      ]
+    },
+    "vendor.join.title": {
+      "en": "Cook for drivers",
+      "tg": ""
+    },
+    "vendor.join.to_signin": {
+      "en": "Already have an account? Sign in",
+      "tg": ""
+    },
+    "vendor.join.to_signup": {
+      "en": "New here? Create an account",
+      "tg": ""
+    },
+    "vendor.join.type": {
+      "en": "What you do",
+      "tg": ""
+    },
+    "vendor.languages": {
+      "en": "Languages",
+      "tg": ""
+    },
+    "vendor.live_now": {
+      "en": "Here now",
+      "tg": ""
+    },
+    "vendor.lot_unknown": {
+      "en": "Location not given",
+      "tg": ""
+    },
+    "vendor.manage_week": {
+      "en": "Manage my week",
+      "tg": ""
+    },
+    "vendor.menu_empty": {
+      "en": "Nothing on the menu yet.",
+      "tg": ""
+    },
+    "vendor.menu_empty_hint": {
+      "en": "Your menu is empty. Add a dish first:",
+      "tg": ""
+    },
+    "vendor.menu_error": {
+      "en": "That item was not saved.",
+      "tg": ""
+    },
+    "vendor.menu_snapshot_note": {
+      "en": "Changing a price here changes what you advertise NEXT. Anything already published keeps the price drivers were shown.",
+      "tg": ""
+    },
+    "vendor.mute": {
+      "en": "Mute this vendor",
+      "tg": ""
+    },
+    "vendor.nav.menu": {
+      "en": "Menu & prices",
+      "tg": ""
+    },
+    "vendor.nav.overview": {
+      "en": "Overview",
+      "tg": ""
+    },
+    "vendor.nav.promotions": {
+      "en": "Promotions",
+      "tg": ""
+    },
+    "vendor.nav.reputation": {
+      "en": "Reputation",
+      "tg": ""
+    },
+    "vendor.nav.site": {
+      "en": "My site",
+      "tg": ""
+    },
+    "vendor.nav.verification": {
+      "en": "Verification",
+      "tg": ""
+    },
+    "vendor.nav.week": {
+      "en": "My week",
+      "tg": ""
+    },
+    "vendor.navigate": {
+      "en": "Navigate",
+      "tg": ""
+    },
+    "vendor.next_up": {
+      "en": "Next up",
+      "tg": ""
+    },
+    "vendor.no_documents": {
+      "en": "Nothing sent yet.",
+      "tg": ""
+    },
+    "vendor.no_reviews": {
+      "en": "No reviews yet",
+      "tg": ""
+    },
+    "vendor.no_shows_warning": {
+      "en": "Drivers reported you did not show up {n} time(s) in a row. A few more pauses publishing.",
+      "tg": "",
+      "icu_placeholders": [
+        "{n}"
+      ]
+    },
+    "vendor.none_nearby": {
+      "en": "No cooks on this stretch tonight.",
+      "tg": ""
+    },
+    "vendor.not_here": {
+      "en": "Not here",
+      "tg": ""
+    },
+    "vendor.of": {
+      "en": "of",
+      "tg": ""
+    },
+    "vendor.opens": {
+      "en": "opens",
+      "tg": ""
+    },
+    "vendor.past": {
+      "en": "Already done",
+      "tg": ""
+    },
+    "vendor.phone": {
+      "en": "Phone",
+      "tg": ""
+    },
+    "vendor.portions": {
+      "en": "How many",
+      "tg": ""
+    },
+    "vendor.price": {
+      "en": "Price",
+      "tg": ""
+    },
+    "vendor.promo.active": {
+      "en": "Running",
+      "tg": ""
+    },
+    "vendor.promo.cancelled": {
+      "en": "Cancelled",
+      "tg": ""
+    },
+    "vendor.promo.expired": {
+      "en": "Finished",
+      "tg": ""
+    },
+    "vendor.promo.hidden_pending": {
+      "en": "Hidden, under review",
+      "tg": ""
+    },
+    "vendor.promo.removed": {
+      "en": "Removed",
+      "tg": ""
+    },
+    "vendor.promo_error": {
+      "en": "That promotion was not saved.",
+      "tg": ""
+    },
+    "vendor.promo_text": {
+      "en": "What you want to say",
+      "tg": ""
+    },
+    "vendor.promoted": {
+      "en": "Promoted",
+      "tg": ""
+    },
+    "vendor.property_approved": {
+      "en": "I have the property's permission to be here",
+      "tg": ""
+    },
+    "vendor.property_approved_hint": {
+      "en": "Drivers see this. A false claim can be reported and acted on.",
+      "tg": ""
+    },
+    "vendor.publish": {
+      "en": "Publish",
+      "tg": ""
+    },
+    "vendor.publish_failed": {
+      "en": "That did not publish. Try again.",
+      "tg": ""
+    },
+    "vendor.rate": {
+      "en": "Rate this vendor",
+      "tg": ""
+    },
+    "vendor.reason.false_information": {
+      "en": "Not true",
+      "tg": ""
+    },
+    "vendor.reason.false_property_attestation": {
+      "en": "Not allowed to be here",
+      "tg": ""
+    },
+    "vendor.reason.impersonation": {
+      "en": "Pretending to be someone else",
+      "tg": ""
+    },
+    "vendor.reason.offensive": {
+      "en": "Offensive",
+      "tg": ""
+    },
+    "vendor.reason.other": {
+      "en": "Something else",
+      "tg": ""
+    },
+    "vendor.reason.spam": {
+      "en": "Spam",
+      "tg": ""
+    },
+    "vendor.repeat": {
+      "en": "Repeat weekly",
+      "tg": ""
+    },
+    "vendor.repeat_hint": {
+      "en": "Leave empty for a one-off.",
+      "tg": ""
+    },
+    "vendor.report": {
+      "en": "Report",
+      "tg": ""
+    },
+    "vendor.report_sent": {
+      "en": "Thanks — we'll look at this.",
+      "tg": ""
+    },
+    "vendor.report_sold_out": {
+      "en": "Sold out",
+      "tg": ""
+    },
+    "vendor.report_title": {
+      "en": "What's wrong?",
+      "tg": ""
+    },
+    "vendor.required": {
+      "en": "needed to publish",
+      "tg": ""
+    },
+    "vendor.restore": {
+      "en": "Put back",
+      "tg": ""
+    },
+    "vendor.retire": {
+      "en": "Take off",
+      "tg": ""
+    },
+    "vendor.retired": {
+      "en": "Off the menu",
+      "tg": ""
+    },
+    "vendor.review_placeholder": {
+      "en": "What was it like?",
+      "tg": ""
+    },
+    "vendor.review_policy": {
+      "en": "Reviews are shown as written. If one breaks the rules you can report it, and a moderator decides.",
+      "tg": ""
+    },
+    "vendor.review_send": {
+      "en": "Send review",
+      "tg": ""
+    },
+    "vendor.review_too_soon": {
+      "en": "You reviewed this cook recently. You can review again in a week.",
+      "tg": ""
+    },
+    "vendor.reviewers": {
+      "en": "drivers",
+      "tg": ""
+    },
+    "vendor.reviews": {
+      "en": "Reviews",
+      "tg": ""
+    },
+    "vendor.rung_means.documents_on_file": {
+      "en": "Your paperwork is on file. Nobody has inspected your kitchen.",
+      "tg": ""
+    },
+    "vendor.rung_means.unverified": {
+      "en": "You told us who you are. Nothing is checked yet.",
+      "tg": ""
+    },
+    "vendor.rung_means.verified": {
+      "en": "Your documents were reviewed and approved.",
+      "tg": ""
+    },
+    "vendor.running": {
+      "en": "Running now",
+      "tg": ""
+    },
+    "vendor.runs_for": {
+      "en": "Runs for",
+      "tg": ""
+    },
+    "vendor.save": {
+      "en": "Save",
+      "tg": ""
+    },
+    "vendor.save_error": {
+      "en": "That was not saved.",
+      "tg": ""
+    },
+    "vendor.saved": {
+      "en": "Saved.",
+      "tg": ""
+    },
+    "vendor.says_here": {
+      "en": "vendor says here",
+      "tg": ""
+    },
+    "vendor.section_title": {
+      "en": "Food here",
+      "tg": ""
+    },
+    "vendor.service_center": {
+      "en": "Service center",
+      "tg": ""
+    },
+    "vendor.services": {
+      "en": "Services",
+      "tg": ""
+    },
+    "vendor.shows_up": {
+      "en": "Shows up",
+      "tg": ""
+    },
+    "vendor.shows_up_note": {
+      "en": "The same figure drivers see. Never a percentage.",
+      "tg": ""
+    },
+    "vendor.site.business_name": {
+      "en": "Your business name",
+      "tg": ""
+    },
+    "vendor.site.business_name_note": {
+      "en": "As it appears on the building or your paperwork. We compare it with the name we hold for this site.",
+      "tg": ""
+    },
+    "vendor.site.claim_step": {
+      "en": "Claim this site",
+      "tg": ""
+    },
+    "vendor.site.find": {
+      "en": "Find your site",
+      "tg": ""
+    },
+    "vendor.site.find_note": {
+      "en": "Search by the name the site is known by. Only places we already record as offering repair, tire, wash or parts work can be claimed.",
+      "tg": ""
+    },
+    "vendor.site.food_vendor": {
+      "en": "Claiming a site is for fixed repair, tire and wash businesses. Your listing moves with you, so there is nothing here to claim.",
+      "tg": ""
+    },
+    "vendor.site.from_records": {
+      "en": "from our records",
+      "tg": ""
+    },
+    "vendor.site.from_you": {
+      "en": "added by you",
+      "tg": ""
+    },
+    "vendor.site.hours": {
+      "en": "Hours",
+      "tg": ""
+    },
+    "vendor.site.means.approved": {
+      "en": "Drivers see your hours, phone and services on this site's page.",
+      "tg": ""
+    },
+    "vendor.site.means.disputed": {
+      "en": "Another business claims this site too. An operator decides who it belongs to; neither claim is live until then.",
+      "tg": ""
+    },
+    "vendor.site.means.pending": {
+      "en": "An operator checks claims by hand. Nothing changes on the map until one does.",
+      "tg": ""
+    },
+    "vendor.site.means.rejected": {
+      "en": "We could not match this claim to the site. Send a licence or lease and claim it again.",
+      "tg": ""
+    },
+    "vendor.site.mismatch": {
+      "en": "That name is not close enough to the one we hold for this site, which is:",
+      "tg": ""
+    },
+    "vendor.site.mismatch_next": {
+      "en": "Enter the name this site trades under, or pick a different site.",
+      "tg": ""
+    },
+    "vendor.site.no_results": {
+      "en": "Nothing matched that name. Check the spelling, or try the name on the sign rather than the legal name.",
+      "tg": ""
+    },
+    "vendor.site.phone": {
+      "en": "Phone",
+      "tg": ""
+    },
+    "vendor.site.proof": {
+      "en": "Proof of business (optional)",
+      "tg": ""
+    },
+    "vendor.site.proof_note": {
+      "en": "A licence, utility bill or lease helps an operator decide. Without one they have only the name to go on, so a claim can take longer or be turned down.",
+      "tg": ""
+    },
+    "vendor.site.save_error": {
+      "en": "Could not save. Try again.",
+      "tg": ""
+    },
+    "vendor.site.saved": {
+      "en": "Saved.",
+      "tg": ""
+    },
+    "vendor.site.search": {
+      "en": "Search",
+      "tg": ""
+    },
+    "vendor.site.search_error": {
+      "en": "Could not search just now. Try again.",
+      "tg": ""
+    },
+    "vendor.site.search_placeholder": {
+      "en": "Business name",
+      "tg": ""
+    },
+    "vendor.site.status.approved": {
+      "en": "Yours",
+      "tg": ""
+    },
+    "vendor.site.status.disputed": {
+      "en": "Disputed",
+      "tg": ""
+    },
+    "vendor.site.status.pending": {
+      "en": "Waiting for review",
+      "tg": ""
+    },
+    "vendor.site.status.rejected": {
+      "en": "Not approved",
+      "tg": ""
+    },
+    "vendor.site.submit": {
+      "en": "Submit claim",
+      "tg": ""
+    },
+    "vendor.site.submit_error": {
+      "en": "Could not send that claim. Try again.",
+      "tg": ""
+    },
+    "vendor.site.taken": {
+      "en": "Another business has claimed this site. You can still claim it, and an operator decides who it belongs to.",
+      "tg": ""
+    },
+    "vendor.site.union_note": {
+      "en": "Add what we are missing. What we already record stays — you cannot remove it here, and neither can we by mistake.",
+      "tg": ""
+    },
+    "vendor.site.yours": {
+      "en": "You have claimed this site.",
+      "tg": ""
+    },
+    "vendor.sold_out": {
+      "en": "Sold out",
+      "tg": ""
+    },
+    "vendor.stat.shows_up": {
+      "en": "Showed up",
+      "tg": ""
+    },
+    "vendor.stat.views": {
+      "en": "Times your card was opened",
+      "tg": ""
+    },
+    "vendor.suggest": {
+      "en": "Suggest a cook",
+      "tg": ""
+    },
+    "vendor.suggest_thanks": {
+      "en": "Noted — we'll look for cooks here.",
+      "tg": ""
+    },
+    "vendor.this_week": {
+      "en": "This week",
+      "tg": ""
+    },
+    "vendor.to": {
+      "en": "To",
+      "tg": ""
+    },
+    "vendor.today": {
+      "en": "Today",
+      "tg": ""
+    },
+    "vendor.type.food_mobile": {
+      "en": "I cook and travel",
+      "tg": ""
+    },
+    "vendor.type.service_center": {
+      "en": "Repair or service shop",
+      "tg": ""
+    },
+    "vendor.until": {
+      "en": "until",
+      "tg": ""
+    },
+    "vendor.unverified": {
+      "en": "Not verified",
+      "tg": ""
+    },
+    "vendor.upcoming": {
+      "en": "Coming up",
+      "tg": ""
+    },
+    "vendor.upheld_note": {
+      "en": "reports were reviewed and upheld. Enough of these pauses publishing.",
+      "tg": ""
+    },
+    "vendor.upheld_reports": {
+      "en": "Reports upheld against you",
+      "tg": ""
+    },
+    "vendor.upload": {
+      "en": "Send a document",
+      "tg": ""
+    },
+    "vendor.upload_error": {
+      "en": "That document was not sent.",
+      "tg": ""
+    },
+    "vendor.upload_note": {
+      "en": "Sending a document is not approval. Someone reviews it first.",
+      "tg": ""
+    },
+    "vendor.verified": {
+      "en": "Verified",
+      "tg": ""
+    },
+    "vendor.weekday.1": {
+      "en": "Mon",
+      "tg": ""
+    },
+    "vendor.weekday.2": {
+      "en": "Tue",
+      "tg": ""
+    },
+    "vendor.weekday.3": {
+      "en": "Wed",
+      "tg": ""
+    },
+    "vendor.weekday.4": {
+      "en": "Thu",
+      "tg": ""
+    },
+    "vendor.weekday.5": {
+      "en": "Fri",
+      "tg": ""
+    },
+    "vendor.weekday.6": {
+      "en": "Sat",
+      "tg": ""
+    },
+    "vendor.weekday.7": {
+      "en": "Sun",
+      "tg": ""
+    },
+    "vendor.what": {
+      "en": "What you are bringing",
+      "tg": ""
+    },
+    "vendor.what_drivers_said": {
+      "en": "What drivers said",
+      "tg": ""
+    },
+    "vendor.where": {
+      "en": "Where",
+      "tg": ""
+    },
+    "vendor.your_documents": {
+      "en": "What you have sent",
+      "tg": ""
+    },
+    "voice.ask": {
+      "en": "Ask",
+      "tg": ""
+    },
+    "voice.insecure": {
+      "en": "Voice needs a secure connection (https). Type your question instead.",
+      "tg": ""
+    },
+    "voice.listening": {
+      "en": "Listening…",
+      "tg": ""
+    },
+    "voice.mic": {
+      "en": "Voice",
+      "tg": ""
+    },
+    "voice.mic_blocked": {
+      "en": "Mic is off — type your question.",
+      "tg": ""
+    },
+    "voice.net_down": {
+      "en": "Voice needs a connection right now. Type instead.",
+      "tg": ""
+    },
+    "voice.no_mic": {
+      "en": "No microphone on this device — type your question.",
+      "tg": ""
+    },
+    "voice.placeholder": {
+      "en": "Ask about parking, fuel, or what you're owed",
+      "tg": ""
+    },
+    "voice.replay": {
+      "en": "Play answer",
+      "tg": ""
+    },
+    "voice.retry": {
+      "en": "Didn't catch that — try again or type.",
+      "tg": ""
+    },
+    "voice.stop": {
+      "en": "Stop",
+      "tg": ""
+    },
+    "voice.title": {
+      "en": "Copilot",
+      "tg": ""
+    },
+    "voice.unavailable": {
+      "en": "Voice is on the Map tab for now.",
+      "tg": ""
+    },
+    "voice.unsupported": {
+      "en": "Voice isn't available here — type your question.",
+      "tg": ""
+    }
+  }
+}
