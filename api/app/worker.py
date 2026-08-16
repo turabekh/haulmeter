@@ -94,6 +94,12 @@ def _jobs() -> list[Job]:
         # Unflagged HERE and gated inside the dispatcher instead: a job that does not run
         # cannot be observed running, and silence is this class's most likely failure.
         Job("arrival_reminders", None, 60, runners.run_arrival_reminders),
+        # AI-CONTEXT: the 30-day audio retention sweep (E3 §E3.4.3, D14). UNFLAGGED for
+        # the same reason `outbound_mail` is, and the runner argues it at length: a
+        # retention promise a feature flag can revoke was never a promise. Hourly because
+        # the window is thirty days — a coarser tick would be indistinguishable and a
+        # finer one would scan for nothing all day.
+        Job("audio_retention", None, 3600, runners.run_audio_retention),
         # AI-CONTEXT: driver push, and the same argument as `outbound_mail` one line up.
         # `dispatch` opened an HTTP connection per subscription inside the request that
         # decided to notify — every §13.1 law is still applied there, at the moment the

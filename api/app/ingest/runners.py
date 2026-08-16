@@ -563,3 +563,34 @@ def run_m14_poll(db: Session, commit: bool = True, client_factory=None) -> dict:
         "events": events,
         "failed": failed,
     }
+
+
+def run_audio_retention(db: Session, commit: bool = True) -> dict:
+    """Delete raw driver audio whose 30-day window has closed (E3 §E3.4.3, D14).
+
+    AI-CONTEXT: UNFLAGGED, and that is a deviation from the kickoff's advice worth stating
+    rather than hiding. Counsel proposed gating this on the module flag "per the
+    established worker pattern", and the established pattern is exactly what argues
+    against it — `Job.flag_key`'s own note says giving a foundation safety net a flag "is
+    how it becomes another engine that is built, wired and permanently idle", and
+    `outbound_mail` is unflagged for the same reason: there is no activation decision to
+    make about it.
+
+    Retention is an obligation, not a feature. Two failures follow directly from flagging
+    it, and both end with a driver's voice kept past the promise:
+
+    · `m15_roadside` has never been enabled, so `is_enabled` is False, so the sweep never
+      runs — and audio recorded during any pilot sits forever;
+    · worse, the flag is turned OFF after audio exists, and retention silently stops. A
+      promise that a feature flag can revoke was never a promise.
+
+    Running it unflagged costs nothing when there is nothing to sweep: the SELECT is
+    `retention_class = audio_30d AND bytes_expire_at <= now`, which matches no row at all
+    until m15 has actually recorded something.
+    """
+    from app.foundation.f06_documents import public as documents
+
+    deleted = documents.sweep(db)
+    if commit:
+        db.commit()
+    return {"audio_bytes_deleted": deleted}

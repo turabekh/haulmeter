@@ -32,13 +32,14 @@ import sys
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.core.config import get_settings
 from app.foundation.f04_evidence import public as evidence
 from app.foundation.f06_documents import public as documents
+from app.foundation.f06_documents.domain import audio as audio_media
 
 router = APIRouter(prefix="/media", tags=["media"])
 
@@ -90,6 +91,7 @@ def media_url(kind: str, ref, size: str = SIZE_THUMB, ttl: int | None = None) ->
 
 @router.get("/{kind}/{ref}")
 def serve_media(
+    request: Request,
     kind: str,
     ref: uuid.UUID,
     exp: int,
@@ -118,6 +120,20 @@ def serve_media(
     if storage_key is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no image")
 
+    # AI-CONTEXT: retained-then-deleted is a DIFFERENT answer from never-existed, and a
+    # player deserves to be told which (E3 §E3.4.3). 410 Gone rather than 404: the object
+    # was here, its retention window closed, and it is not coming back — so a client
+    # should stop asking rather than retry. Without this the driver would get a 500 from
+    # a read against bytes the sweep removed, which reads as a broken product rather than
+    # as a promise being kept.
+    if kind == KIND_DOCUMENT:
+        doc = db.get(documents.Document, ref)
+        if doc is not None and doc.bytes_deleted_at is not None:
+            raise HTTPException(
+                status.HTTP_410_GONE,
+                "this recording passed its 30-day retention window and was deleted",
+            )
+
     if size == SIZE_THUMB:
         try:
             data = documents.default_storage().get(documents.thumbnail_key(storage_key))
@@ -132,18 +148,55 @@ def serve_media(
     else:
         data = _read_or_404(storage_key)
 
+    headers = {
+        # AI-CONTEXT: the evidence photo route had NO cache header at all, so every
+        # scroll past a contact sheet re-downloaded every photograph. The bytes are
+        # immutable — an artifact is appended to a hash chain, never edited — so the
+        # long immutable cache the document route has always had is correct here too.
+        # `private` because these are one driver's evidence and must not sit in a
+        # shared proxy.
+        "Cache-Control": "private, max-age=31536000, immutable",
+    }
+
+    # AI-CONTEXT: RANGE, and only for audio (E3 §E3.4.3).
+    #
+    # An `<audio>` element issues a Range request before it will show a duration or let
+    # anyone scrub. A server that answers 200-with-everything makes the element download a
+    # whole recording to play the last four seconds — on a driver's data plan, in a truck
+    # stop. Images do not do this, which is why `Accept-Ranges` is advertised only where
+    # it is true: claiming range support and then ignoring the header is worse than not
+    # claiming it, because a player believes the claim.
+    #
+    # The Range header is NOT part of the signature, deliberately. The signature
+    # authorises the object; which slice of it the browser wants is a transport concern,
+    # and folding it in would mint a URL that works once and fails on the first seek.
+    if not audio_media.is_audio(content_type):
+        return Response(
+            content=data, media_type=content_type or "application/octet-stream", headers=headers
+        )
+
+    headers["Accept-Ranges"] = "bytes"
+    try:
+        window = audio_media.parse_range(request.headers.get("range"), len(data))
+    except audio_media.InvalidRange as exc:
+        # 416 rather than 400: a player reads this as "ask differently", and the
+        # Content-Range tells it what the object's real size is so it can.
+        raise HTTPException(
+            status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            str(exc),
+            headers={"Content-Range": f"bytes */{len(data)}"},
+        ) from exc
+
+    if window is None:
+        return Response(content=data, media_type=content_type, headers=headers)
+
+    start, end = window
+    headers["Content-Range"] = audio_media.content_range_header(start, end, len(data))
     return Response(
-        content=data,
-        media_type=content_type or "application/octet-stream",
-        headers={
-            # AI-CONTEXT: the evidence photo route had NO cache header at all, so every
-            # scroll past a contact sheet re-downloaded every photograph. The bytes are
-            # immutable — an artifact is appended to a hash chain, never edited — so the
-            # long immutable cache the document route has always had is correct here too.
-            # `private` because these are one driver's evidence and must not sit in a
-            # shared proxy.
-            "Cache-Control": "private, max-age=31536000, immutable",
-        },
+        content=data[start : end + 1],  # inclusive on both ends, unlike a Python slice
+        status_code=status.HTTP_206_PARTIAL_CONTENT,
+        media_type=content_type,
+        headers=headers,
     )
 
 
