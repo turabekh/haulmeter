@@ -111,7 +111,7 @@ class DetentionClaim(Base):
     dunning_firm_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    dunning_escalation_offer_sent_at: Mapped[datetime | None] = mapped_column(
+    dunning_final_notice_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     # M3-FR7's collection-partner handle. `escalate` took this argument and discarded it,

@@ -1213,7 +1213,7 @@ def generate_pack(db: Session, claim: DetentionClaim, now: datetime, gateway=Non
 
 # --- Dunning cadence (M3-FR6) ---
 def dunning_schedule(invoiced_at: datetime) -> list[dict]:
-    actions = ["nudge", "firm", "escalation_offer"]
+    actions = ["nudge", "firm", "final_notice"]
     return [
         {"day": day, "action": action, "at": invoiced_at + timedelta(days=day)}
         for day, action in zip(DUNNING_DAYS, actions, strict=True)
@@ -1252,24 +1252,28 @@ def escalate(db: Session, claim: DetentionClaim, external_ref: str | None = None
 #     switching this on cannot spray a year of missed follow-ups at real brokers in one
 #     tick. Nothing is marked on that path — a stale action was not suppressed, it never
 #     had a send to make, and recording one would say otherwise;
-#   · day 21 offers escalation to a collection partner, and may only be sent when
-#     `collection_partner_agreement` is SATISFIED. Otherwise `skipped_ungated`. The
-#     product must not offer a driver a path it does not have — which is exactly what
-#     F13's gates exist to prevent, and exactly what they were failing to prevent before
-#     migration 0066.
-DUNNING_ACTIONS = ["nudge", "firm", "escalation_offer"]
+#   · day 21 is the FIRM, CONTRACT-CITING follow-up (J1-R2, §23 entry 171). It used to
+#     offer escalation to a collection partner and was gated on
+#     `collection_partner_agreement` — a gate unsatisfied since 0066 — so what day 21
+#     actually did on every claim that ever reached it was NOTHING. A broker who ignored
+#     day 3 and day 10 heard nothing further, ever. The gate was right and the rung it
+#     guarded was never built; the answer is to say the strongest TRUE thing at day 21
+#     rather than to keep silent waiting for a partner nobody has signed.
+#     `collection_partner_agreement` stays in `GATES`, still unsatisfied, and still
+#     guards whatever escalation rung is built later.
+DUNNING_ACTIONS = ["nudge", "firm", "final_notice"]
 DUNNING_COLUMN = {
     "nudge": "dunning_nudge_sent_at",
     "firm": "dunning_firm_sent_at",
-    "escalation_offer": "dunning_escalation_offer_sent_at",
+    "final_notice": "dunning_final_notice_sent_at",
 }
-DUNNING_COUNTER = {"nudge": "nudged", "firm": "firmed", "escalation_offer": "offered"}
+DUNNING_COUNTER = {"nudge": "nudged", "firm": "firmed", "final_notice": "final_notice"}
 # distinct and greppable, so an AP clerk's thread and our own logs both say which of the
 # three a broker actually received
 DUNNING_SUBJECT = {
     "nudge": "Detention invoice — payment reminder",
     "firm": "Detention invoice — second request",
-    "escalation_offer": "Detention invoice — final notice before collection",
+    "final_notice": "Detention invoice — final notice",
 }
 DUNNING_GRACE = timedelta(days=7)
 # 28 = 21 + 7, and the two are NOT independent knobs. The window must be at least the last
@@ -1277,15 +1281,13 @@ DUNNING_GRACE = timedelta(days=7)
 # it is still current — a follow-up that silently never sends, which is F6's own shape.
 # Pinned by a test so a later edit to either number has to look at the other.
 DUNNING_WINDOW = timedelta(days=max(DUNNING_DAYS)) + DUNNING_GRACE
-ESCALATION_GATE = "collection_partner_agreement"
+# AI-CONTEXT: `collection_partner_agreement` stays in `GATES` above and stays
+# unsatisfied. Nothing in the dunning cadence consults it any more, because the rung it
+# guarded — an offer to hand the claim to a collection partner — was never built and day
+# 21 now says something this product can actually stand behind (J1-R2). The gate is what
+# a future escalation rung must satisfy; it is not a switch on the cadence.
 DUNNING_TERMINAL_STATES = ("recovered", "escalated")
 
-
-def _escalation_gate_satisfied(db: Session) -> bool:
-    from app.foundation.f13_flags import public as flags
-
-    gate = flags.get_gate(db, FLAG_KEY, ESCALATION_GATE)
-    return bool(gate is not None and gate.satisfied)
 
 
 def claims_awaiting_dunning(db: Session, now: datetime) -> list[DetentionClaim]:
@@ -1302,19 +1304,28 @@ def claims_awaiting_dunning(db: Session, now: datetime) -> list[DetentionClaim]:
                 or_(
                     DetentionClaim.dunning_nudge_sent_at.is_(None),
                     DetentionClaim.dunning_firm_sent_at.is_(None),
-                    DetentionClaim.dunning_escalation_offer_sent_at.is_(None),
+                    DetentionClaim.dunning_final_notice_sent_at.is_(None),
                 ),
             )
         )
     )
 
 
-def _dunning_body(db: Session, claim: DetentionClaim, now: datetime) -> str:
+def _dunning_body(
+    db: Session, claim: DetentionClaim, now: datetime, action: str = "nudge"
+) -> str:
     """Self-contained, and English like every other counterparty message.
 
     Each notice restates the amount, the dock, the service date and carries a FRESH
     evidence link, because it must never presume an earlier email arrived — the whole
     reason a broker is being chased is that something did not land.
+
+    AI-CONTEXT: day 21 is FIRMER, and firmer means citing the contract — not threatening
+    a collection partner this product has not signed (J1-R2). The escalation offer it
+    replaces was gated on `collection_partner_agreement` and so never sent at all, which
+    made day 21 silence. **The strongest thing we can honestly say is what the rate
+    confirmation already obliges**, and that is what it now says. No deadline is invented,
+    no consequence is named that we cannot deliver, and nothing here mentions collection.
     """
     stop = loads.get_stop(db, claim.stop_ref)
     log = db.get(evidence.EvidenceLog, claim.evidence_log_ref)
@@ -1347,10 +1358,22 @@ def _dunning_body(db: Session, claim: DetentionClaim, now: datetime) -> str:
     load = loads.get_load(db, stop.load_id) if stop is not None else None
     reference = getattr(load, "reference_number", None)
     which = f" on load {reference}" if reference else ""
-    return (
+    body = (
         f"Detention of {amount} was invoiced per the rate confirmation for the stop"
         f"{which} served on {served}, and remains outstanding.\n\n{where}"
     )
+    if action == "final_notice":
+        # the contract, restated. A clerk who has ignored two emails is being told what
+        # they already agreed to — which is both the firmest and the only honest lever
+        # this product holds today.
+        body += (
+            "\n\nThis detention was accrued and evidenced under the terms of that rate "
+            "confirmation, which provides for detention at the agreed rate after the "
+            "agreed free time. The evidence above records when the truck arrived and "
+            "when it left. We have had no response to our previous two messages about "
+            "this invoice."
+        )
+    return body
 
 
 def run_dunning(db: Session, gateway, now: datetime | None = None) -> dict:
@@ -1361,12 +1384,10 @@ def run_dunning(db: Session, gateway, now: datetime | None = None) -> dict:
         "scanned": len(claims),
         "nudged": 0,
         "firmed": 0,
-        "offered": 0,
+        "final_notice": 0,
         "skipped_no_email": 0,
         "skipped_stale": 0,
-        "skipped_ungated": 0,
     }
-    gate_open = _escalation_gate_satisfied(db)
     for claim in claims:
         receivable = db.get(ledger.Receivable, claim.receivable_ref)
         if receivable is None:
@@ -1382,9 +1403,6 @@ def run_dunning(db: Session, gateway, now: datetime | None = None) -> dict:
             if now - due > DUNNING_GRACE:
                 summary["skipped_stale"] += 1
                 continue
-            if action == "escalation_offer" and not gate_open:
-                summary["skipped_ungated"] += 1
-                continue
             message = _send_counterparty(
                 db,
                 claim,
@@ -1395,7 +1413,7 @@ def run_dunning(db: Session, gateway, now: datetime | None = None) -> dict:
                 # all three. Keying on the claim alone would send only the first.
                 purpose=f"dunning:{action}",
                 subject=DUNNING_SUBJECT[action],
-                body=_dunning_body(db, claim, now),
+                body=_dunning_body(db, claim, now, action),
             )
             if message is None:
                 summary["skipped_no_email"] += 1

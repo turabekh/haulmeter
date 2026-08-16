@@ -657,7 +657,7 @@
   "money.detail_what": "What's happened",
   "money.earnings_failed": "Could not load your earnings.",
   "money.empty": "Recovered and saved money shows up here. Add your first load to start the meter.",
-  "money.ev.escalation_offered": "Collection offered",
+  "money.ev.final_notice_sent": "Final notice sent",
   "money.ev.firmed": "Firm reminder sent",
   "money.ev.invoiced": "Invoice sent",
   "money.ev.nudged": "Reminder sent",

@@ -657,7 +657,7 @@
   "money.detail_what": "Nima bo'ldi",
   "money.earnings_failed": "Daromadingizni yuklab bo'lmadi.",
   "money.empty": "Qaytarilgan va tejalgan pul shu yerda ko'rinadi. Hisoblagichni ishga tushirish uchun birinchi yukingizni qo'shing.",
-  "money.ev.escalation_offered": "Undirish taklif qilindi",
+  "money.ev.final_notice_sent": "Yakuniy ogohlantirish yuborildi",
   "money.ev.firmed": "Qat'iy eslatma yuborildi",
   "money.ev.invoiced": "Hisob-faktura yuborildi",
   "money.ev.nudged": "Eslatma yuborildi",

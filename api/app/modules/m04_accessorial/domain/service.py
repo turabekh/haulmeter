@@ -406,7 +406,7 @@ def _receivable_history(db: Session, receivable) -> list[dict]:
     for event, column in (
         ("nudged", "dunning_nudge_sent_at"),
         ("firmed", "dunning_firm_sent_at"),
-        ("escalation_offered", "dunning_escalation_offer_sent_at"),
+        ("final_notice_sent", "dunning_final_notice_sent_at"),
     ):
         at = getattr(claim, column, None)
         if at is not None:

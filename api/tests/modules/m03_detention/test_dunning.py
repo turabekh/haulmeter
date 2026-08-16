@@ -102,7 +102,6 @@ def test_nothing_goes_out_before_day_three(db):
 
 def test_each_action_has_its_own_subject_and_its_own_column(db):
     _, claim, _ = _invoiced(db)
-    _satisfy_escalation_gate(db)
     gateway = notify.RecordingNotificationGateway()
 
     m3.run_dunning(db, gateway, now=FILED + timedelta(days=3, hours=1))
@@ -111,7 +110,7 @@ def test_each_action_has_its_own_subject_and_its_own_column(db):
 
     assert claim.dunning_nudge_sent_at is not None
     assert claim.dunning_firm_sent_at is not None
-    assert claim.dunning_escalation_offer_sent_at is not None
+    assert claim.dunning_final_notice_sent_at is not None
     # delivery is the `outbound_mail` sweep's job now, not the request path's
     notify.retry_unsent_messages(db, gateway)
     assert len(gateway.sent) == 3
@@ -125,11 +124,10 @@ def test_switching_this_on_over_a_backlog_does_not_spray_the_missed_ones(db):
 
     Day 25 on a claim nobody has ever chased: the day-3 nudge is 22 days late and the
     day-10 firm is 15, both far outside the grace window, so neither is sent. The day-21
-    offer is 4 days late — inside it — so that one, and only that one, goes out. The broker
-    gets the follow-up that is still current instead of three at once.
+    final notice is 4 days late — inside it — so that one, and only that one, goes out.
+    The broker gets the follow-up that is still current instead of three at once.
     """
     _, claim, _ = _invoiced(db)
-    _satisfy_escalation_gate(db)
     gateway = notify.RecordingNotificationGateway()
 
     summary = m3.run_dunning(db, gateway, now=FILED + timedelta(days=25))
@@ -139,7 +137,7 @@ def test_switching_this_on_over_a_backlog_does_not_spray_the_missed_ones(db):
     # delivery is the `outbound_mail` sweep's job now, not the request path's
     notify.retry_unsent_messages(db, gateway)
     assert len(gateway.sent) == 1
-    assert gateway.sent[0].subject == m3.DUNNING_SUBJECT["escalation_offer"]
+    assert gateway.sent[0].subject == m3.DUNNING_SUBJECT["final_notice"]
     # not suppressed — a stale action never had a send to make, so nothing is recorded
     assert claim.dunning_nudge_sent_at is None
     assert claim.dunning_firm_sent_at is None
@@ -165,49 +163,75 @@ def test_a_receivable_older_than_the_scan_window_is_not_scanned_at_all(db):
     assert gateway.sent == []
 
 
-def test_the_escalation_offer_waits_on_the_collection_partner_gate(db):
-    """The product must not offer an escalation path it does not have."""
+def test_day_twenty_one_sends_the_firm_follow_up_with_no_partner_agreement(db):
+    """R2. The escalation offer this replaces was gated on `collection_partner_agreement`,
+    that gate has been unsatisfied since 0066, and the rung it guarded was never built —
+    so what day 21 DID, on every claim that ever reached it, was nothing. A broker who
+    ignored day 3 and day 10 heard nothing further, ever.
+
+    The gate was right; the silence was the defect. Day 21 now says the strongest TRUE
+    thing available, which is what the rate confirmation already obliges.
+    """
     _, claim, _ = _invoiced(db)
-    _register_gates(db)  # registered, deliberately NOT satisfied
+    _register_gates(db)  # registered, and deliberately NOT satisfied
     gateway = notify.RecordingNotificationGateway()
 
-    # walked day by day, because an action skipped as stale is a different outcome and
-    # this test is about the gate
     m3.run_dunning(db, gateway, now=FILED + timedelta(days=3, hours=1))
     m3.run_dunning(db, gateway, now=FILED + timedelta(days=10, hours=1))
     summary = m3.run_dunning(db, gateway, now=FILED + timedelta(days=21, hours=1))
 
-    assert summary["skipped_ungated"] == 1
-    assert summary["offered"] == 0
-    assert claim.dunning_escalation_offer_sent_at is None
-    # the other two are unaffected — a missing partner agreement is not a reason to stop
-    # asking a broker to pay an invoice they already owe
+    assert summary["final_notice"] == 1
+    assert claim.dunning_final_notice_sent_at is not None
     assert claim.dunning_nudge_sent_at is not None
     assert claim.dunning_firm_sent_at is not None
 
 
-def test_a_gate_row_that_does_not_exist_is_not_an_open_gate(db):
-    """Fail closed. `get_gate` returns None on a box where nothing registered it."""
-    _, claim, _ = _invoiced(db)
+def test_the_partner_gate_still_exists_and_is_still_unsatisfied(db):
+    """Retiring the SEND that consulted it must not quietly retire the gate. It is what a
+    future escalation rung has to satisfy; nothing about that changed."""
+    from app.foundation.f13_flags import public as flags
+
+    _register_gates(db)
+
+    gate = flags.get_gate(db, m3.FLAG_KEY, "collection_partner_agreement")
+    assert gate is not None
+    assert gate.satisfied is False
+
+
+def test_no_message_at_any_rung_offers_collection(db):
+    """R2's template-level assertion, made against the RENDERED output rather than the
+    source: a subject or body that offers to hand the claim to a collection partner would
+    be promising a path this product does not have. Checked at every rung, because the
+    wording only had to survive in one of them to reach a broker.
+    """
+    _, _, _ = _invoiced(db)
     gateway = notify.RecordingNotificationGateway()
+    for day in (3, 10, 21):
+        m3.run_dunning(db, gateway, now=FILED + timedelta(days=day, hours=1))
+    notify.retry_unsent_messages(db, gateway)
 
-    summary = m3.run_dunning(db, gateway, now=FILED + timedelta(days=21, hours=1))
+    assert len(gateway.sent) == 3
+    for message in gateway.sent:
+        blob = f"{message.subject} {message.body}".lower()
+        for banned in ("collection", "collections", "escalat", "debt", "agency"):
+            assert banned not in blob, f"{banned!r} reached a broker in: {message.subject}"
 
-    assert summary["skipped_ungated"] == 1
-    assert claim.dunning_escalation_offer_sent_at is None
 
-
-def test_the_escalation_offer_goes_out_once_the_gate_is_satisfied(db):
-    _, claim, _ = _invoiced(db)
-    _satisfy_escalation_gate(db)
+def test_the_final_notice_cites_the_contract_rather_than_a_threat(db):
+    """Firmer means citing what they already agreed to. The strongest honest lever this
+    product holds is the rate confirmation itself."""
+    _, _, _ = _invoiced(db)
     gateway = notify.RecordingNotificationGateway()
+    for day in (3, 10, 21):
+        m3.run_dunning(db, gateway, now=FILED + timedelta(days=day, hours=1))
+    notify.retry_unsent_messages(db, gateway)
 
-    m3.run_dunning(db, gateway, now=FILED + timedelta(days=3, hours=1))
-    m3.run_dunning(db, gateway, now=FILED + timedelta(days=10, hours=1))
-    summary = m3.run_dunning(db, gateway, now=FILED + timedelta(days=21, hours=1))
-
-    assert summary["offered"] == 1
-    assert claim.dunning_escalation_offer_sent_at is not None
+    final = [m for m in gateway.sent if m.subject == m3.DUNNING_SUBJECT["final_notice"]][0]
+    assert "rate confirmation" in final.body.lower()
+    assert "previous two messages" in final.body.lower()
+    # and it is genuinely different from the earlier rungs rather than a relabelled repeat
+    earlier = [m for m in gateway.sent if m.subject != m3.DUNNING_SUBJECT["final_notice"]]
+    assert all(m.body != final.body for m in earlier)
 
 
 # --- who is left out ---

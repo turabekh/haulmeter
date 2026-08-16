@@ -657,7 +657,7 @@
   "money.detail_what": "ਕੀ ਹੋਇਆ",
   "money.earnings_failed": "ਤੁਹਾਡੀ ਕਮਾਈ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੀ।",
   "money.empty": "ਵਸੂਲਿਆ ਅਤੇ ਬਚਾਇਆ ਪੈਸਾ ਇੱਥੇ ਦਿਖਦਾ ਹੈ। ਮੀਟਰ ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਆਪਣਾ ਪਹਿਲਾ ਲੋਡ ਸ਼ਾਮਲ ਕਰੋ।",
-  "money.ev.escalation_offered": "ਵਸੂਲੀ ਦੀ ਪੇਸ਼ਕਸ਼",
+  "money.ev.final_notice_sent": "ਅੰਤਿਮ ਨੋਟਿਸ ਭੇਜਿਆ",
   "money.ev.firmed": "ਸਖ਼ਤ ਯਾਦ-ਪੱਤਰ ਭੇਜਿਆ",
   "money.ev.invoiced": "ਬਿੱਲ ਭੇਜਿਆ",
   "money.ev.nudged": "ਯਾਦ-ਪੱਤਰ ਭੇਜਿਆ",
