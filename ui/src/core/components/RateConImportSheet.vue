@@ -34,6 +34,7 @@ import {
   normalizeContactPhone,
 } from "../contact.js";
 import { lastFix } from "../location.js";
+import { formatMoney } from "../meter.js";
 import Spinner from "./Spinner.vue";
 
 const emit = defineEmits(["created"]);
@@ -130,6 +131,44 @@ function blankStop(type = "delivery") {
 const NO_MATCH = "__none";
 
 const readable = computed(() => !!draft.value?.readable);
+
+// AI-CONTEXT: the app stating its OWN READING of the money terms, in the driver's
+// language (J1-A2).
+//
+// The confirm step is a comparison against a piece of paper, and until now the only way
+// to make it was to decode three separate input boxes labelled in trucking English. A
+// driver whose locale is `uz` could confirm a contract they could not read.
+//
+// These are composed from the parsed slots — the app saying what it understood — and
+// they are NOT the paper's words. The paper's words stay verbatim and English further
+// down, under a heading that says so, because a translated clause cannot be compared
+// against the original and a claim is argued from the original (§11.7, §12.3).
+//
+// Each figure carries its own absence. A term the parse did not find renders "the rate
+// con does not say" in the driver's language rather than a fabricated line or a silent
+// zero — and NEVER an English fallback, which is the Q-9 principle: a driver who meets
+// English here cannot tell "we found nothing" from "we did not translate this".
+const reading = computed(() => [
+  {
+    key: "pays",
+    label: "load.terms.pays",
+    value: form.rate ? formatMoney(Math.round(Number(form.rate) * 100)) : null,
+    unit: null,
+  },
+  {
+    key: "detention",
+    label: "load.terms.detention",
+    value: form.rateHr ? formatMoney(Math.round(Number(form.rateHr) * 100)) : null,
+    unit: "load.terms.per_hour",
+  },
+  {
+    key: "free",
+    label: "load.terms.free",
+    value: form.freeMin !== "" && form.freeMin != null ? String(form.freeMin) : null,
+    unit: "load.terms.minutes",
+  },
+]);
+
 const silentOn = computed(() => draft.value?.silent_on ?? []);
 
 function onFile(event) {
@@ -328,6 +367,23 @@ async function create() {
         {{ t("load.rc_unreadable") }}
       </p>
 
+      <!-- AI-CONTEXT: what the app UNDERSTOOD, in the driver's language (J1-A2).
+           Composed from the parsed slots, not translated from the paper — the paper's
+           own words are further down under a heading that says so. Label and figure are
+           separate elements because the pseudo-locale generator cannot inflate
+           `{placeholders}` and a two-placeholder sentence never clears +40% (entry 138). -->
+      <section v-if="readable" class="rc__reading">
+        <h3 class="rc__label">{{ t("load.terms.title") }}</h3>
+        <p v-for="row in reading" :key="row.key" class="rc__readline">
+          <span class="rc__readlabel">{{ t(row.label) }}</span>
+          <template v-if="row.value">
+            <span class="rc__readfigure mono">{{ row.value }}</span>
+            <span v-if="row.unit" class="rc__readunit">{{ t(row.unit) }}</span>
+          </template>
+          <span v-else class="rc__readabsent">{{ t("load.terms.absent") }}</span>
+        </p>
+      </section>
+
       <!-- a term the contract does not state, said as silence rather than as a zero -->
       <p v-if="silentOn.length" class="rc__silent">
         <TriangleAlert :size="16" :stroke-width="2" aria-hidden="true" />
@@ -497,11 +553,24 @@ async function create() {
            from, and a field that let a driver retype it would invite an argument from
            language the paper does not contain. -->
       <section v-if="Object.keys(terms).length" class="rc__terms-block">
+        <!-- AI-CONTEXT: BESIDE the reading above, never behind a tap (J1-A2).
+             Collapsing this was tried and reverted: M4-FR4's terms block exists because
+             "a driver was asked to accept a load on the strength of terms they could not
+             read", and putting the wording one tap away reverses that recorded decision
+             rather than implementing this one. The kickoff allows behind OR beside; the
+             existing decision settles which. The reading above leads by ORDER instead.
+             (Caught by the test that asserts the clause text is on screen — it went red
+             the moment the wording moved behind a button.) -->
         <h3 class="rc__label">{{ t("load.rc_states") }}</h3>
+        <!-- WHY this block is English wherever you are: a claim is argued from the
+             contract's own words, and a translated clause cannot be compared against the
+             paper in the driver's hand (§12.3). Said out loud rather than left to look
+             like a translation somebody forgot. -->
+        <p class="rc__original-note">{{ t("load.rc_original_note") }}</p>
         <dl class="rc__termlist">
           <div v-for="(wording, term) in terms" :key="term" class="rc__term">
             <dt class="rc__termname">{{ t(`load.rc_term.${term}`) === `load.rc_term.${term}` ? term : t(`load.rc_term.${term}`) }}</dt>
-            <dd class="rc__termtext">{{ wording }}</dd>
+            <dd class="rc__termtext" lang="en">{{ wording }}</dd>
           </div>
         </dl>
       </section>
@@ -604,6 +673,38 @@ async function create() {
 /* the contract's own words, quoted. Hairline card like the stop blocks above it — no
    new pattern, and deliberately not `marker`: this is what the paper DOES say, which is
    reassurance, while the silence warning above it is the caution. */
+.rc__reading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.rc__readline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-2);
+  margin: 0;
+}
+.rc__readlabel {
+  color: var(--text-2);
+}
+.rc__readfigure {
+  color: var(--text-1);
+}
+.rc__readunit {
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+}
+.rc__readabsent {
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+}
+.rc__original-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-body-line);
+}
 .rc__terms-block {
   padding: var(--s-3);
   border: 1px solid var(--line-1);

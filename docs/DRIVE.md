@@ -106,6 +106,9 @@ a review CARD arrives on the Load tab → one Send). Everything else is unchange
    (BOL / photos / notice — honestly unticked).
 4. Unreadable branch: import a photo of your desk → manual form carries the load; no fake "read"
    claim.
+4a. **What we read, in your language `[J1-A2]`** — the money terms appear as a stated
+   reading above the editable fields, so the confirm step is a comparison a non-English
+   reader can actually make. Full walk-through in **J17 step 3a**.
 5. **Broker contact, prefilled from the paper `[J1-A1]`** — flag `j1_contact_parse`, ships **OFF**;
    switch it on in `/admin/flags` first or the fields arrive blank and the step proves nothing.
    With it on, a rate con that prints an AP address lands it in **Broker email** and the number in
@@ -349,6 +352,16 @@ as a parking reading) → status + freshness update; armed load → corridor sur
    Russian Cyrillic.
 2. Jargon stays English every locale (detention, BOL, rate con, lumper).
 3. Units stay imperial every locale.
+3a. **The rate-con confirm step in a non-English locale `[J1-A2]`** — no flag; locale
+   compliance is law, not a feature. Set the language to **Uzbek**, then run J3 step 2.
+   The confirm sheet now carries a **"the money terms we read"** block above the editable
+   fields, in Uzbek, with each figure beside its label. Then check the seam that matters:
+   - a rate con **silent** on detention prints *"rate con'da bu ko'rsatilmagan"* — in
+     Uzbek, not English, and never **$0.00**. Silent English here is unreadable as
+     absence: a driver cannot tell "we found nothing" from "we did not translate this";
+   - the **contract's own wording** below stays **English in every locale**, with the note
+     saying why — a claim is argued from the paper's words, and a translated clause cannot
+     be compared against the contract in your hand. This is deliberate, not a gap.
 4. **More → Appearance**: manual light/dark override persists across reload; map style pairs.
 
 ---

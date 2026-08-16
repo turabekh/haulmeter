@@ -1183,6 +1183,28 @@ const SURFACES = [
   // the OTHER half of the import: a rate con the parse could not read. It is a
   // different screen — no match list, no "read from your rate con", the manual form
   // carrying the whole load — and §12.4 gives it copy to get right at 360 dp.
+  // AI-CONTEXT: a readable rate con that states NO money terms (J1-A2). A different
+  // screen from the unreadable one below: the route parsed fine, so the sheet is full,
+  // and every money line reads "the rate con does not say" in the driver's language.
+  // That copy is longer than the figures it replaces, which is exactly why it needs
+  // measuring at 360 dp rather than being assumed to fit where a "$75.00" fitted.
+  ["sheet-confirm-silent", "/load", {
+    mocks: {
+      ...NO_LOAD_MOCKS,
+      "/load/import": {
+        ...RATE_CON_DRAFT,
+        parsed: {
+          ...RATE_CON_DRAFT.parsed,
+          rate_cents: null,
+          detention_rate_cents_per_hour: null,
+          free_time_minutes: null,
+        },
+        silent_on: ["detention", "free_time", "tonu"],
+      },
+    },
+    open: [".cta:not(.cta--text)", { upload: ".rc__input" }, ".rc__cta"],
+    ready: ".rc__readabsent",
+  }],
   // AI-CONTEXT: the SAME sheet with a dock chosen, so the pre-acceptance lines are
   // measured (J1-A3). The confirm state above stops at the candidate list, and these
   // two lines only exist after a driver picks one — measuring the sheet without them
