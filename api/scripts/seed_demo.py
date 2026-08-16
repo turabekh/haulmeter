@@ -19,6 +19,7 @@ from app.modules.m02_facility_intel import public as m2
 from app.modules.m06_parking import public as m6
 from app.modules.m07_fuel import public as m7
 from app.modules.m13_vendor import public as m13
+from app.modules.m15_roadside import public as m15
 
 CENTER = (32.7767, -96.7970)  # downtown Dallas — spoof your browser GPS here
 MARKER = "Love's Travel Stop #212 (demo)"
@@ -206,6 +207,101 @@ def _seed_origin(db):
     print(f"DEV origin seeded around {lat},{lon}: shipper, truck stop, bookable yard")
 
 
+def _seed_m15_roadside(db):
+    """A DRAFT scenario the engine can be exercised against (E3 §E3.8, D14 Session A).
+
+    AI-CONTEXT: DRAFT, and it stays draft. Quality law Q-6 says content ships reviewed or
+    not at all, so nothing seeded here has a path to a driver — which is exactly what
+    makes it safe to seed. The owner-track scenario-1 pack enters the same pipeline as
+    `draft` when it exists; until then this is what the engine builds against, and E3 is
+    explicit that nothing waits on the content.
+
+    One variant is `holdout=True` on purpose. Q-5 is a property of the generators, and a
+    seed with no holdout in it would let a leak look correct locally — the drills would
+    simply contain everything, and nothing would look wrong.
+
+    No audio is attached. `audio_ref` is nullable and the synthesis path is a NAMED
+    REMAINDER of Session A; seeding a fake audio row would put a document in F6 that no
+    recording backs, which is the kind of stand-in that later gets mistaken for real.
+    """
+    if db.query(m15.Intent).filter(m15.Intent.key == "hos_hours_driven").first():
+        print("m15 demo scenario already seeded — skipping")
+        return
+
+    scenario = m15.ScenarioVersion(
+        version=1,
+        difficulty=m15.Difficulty.clear,
+        environment="roadside_daytime",
+        allowed_intents=["hos_hours_driven", "destination", "logbook_request"],
+        status=m15.ContentStatus.draft,
+    )
+    db.add(scenario)
+
+    specs = [
+        (
+            "hos_hours_driven",
+            "hours_of_service",
+            "the driver states how many hours they have driven today",
+            {"hours": "required"},
+            [
+                ("How many hours have you been driving today?", False),
+                ("How long you been behind the wheel?", False),
+                ("What time did you start driving this morning?", True),
+            ],
+        ),
+        (
+            "destination",
+            "trip",
+            "the driver states where they are headed",
+            {"destination": "required"},
+            [
+                ("Where are you headed?", False),
+                ("What's your destination today?", False),
+                ("Where does this load drop?", True),
+            ],
+        ),
+        (
+            "logbook_request",
+            "paperwork",
+            "the driver acknowledges and offers the logbook",
+            {"acknowledgement": "required"},
+            [
+                ("May I see your logbook?", False),
+                ("Can I take a look at your logs?", True),
+            ],
+        ),
+    ]
+
+    for key, domain, meaning, slots, variants in specs:
+        intent = m15.Intent(
+            key=key, domain=domain, canonical_meaning=meaning, required_slots=slots
+        )
+        db.add(intent)
+        db.flush()
+        for text, holdout in variants:
+            db.add(
+                m15.PhraseVariant(
+                    intent_id=intent.id,
+                    text=text,
+                    difficulty=m15.Difficulty.clear,
+                    holdout=holdout,
+                    status=m15.ContentStatus.draft,
+                )
+            )
+        # uz coaching, also draft — Q-9's honest-absence case is what a missing locale
+        # should render, so only one locale is seeded deliberately
+        db.add(
+            m15.CoachingContent(
+                intent_id=intent.id,
+                locale="uz",
+                explanation=f"[draft uz coaching for {key} — owner-track content pending]",
+                review_status=m15.ContentStatus.draft,
+            )
+        )
+    db.flush()
+    print("m15: seeded 1 draft scenario, 3 intents, 8 variants (1 holdout each for 3)")
+
+
 def main():
     if os.environ.get("DEV_SEED") != "1":
         print(
@@ -215,6 +311,12 @@ def main():
     db = SessionLocal()
     _seed_origin(db)  # honor DEV_SEED_ORIGIN even if the Dallas cluster already exists
     _make_dev_driver_owner_operator(db)  # always run — independent of the cluster guard
+    # AI-CONTEXT: also before the cluster guard, and that placement is the point. Below
+    # this, `main` returns early when the Dallas marker already exists — so anything
+    # seeded down there never lands on a box that has been seeded once, which is every
+    # box a developer actually uses. It carries its own idempotency check instead.
+    _seed_m15_roadside(db)
+    db.commit()
     existing = (
         [f for f in facility.nearest(db, *CENTER, 8000) if f.name == MARKER]
         if hasattr(facility, "nearest")
