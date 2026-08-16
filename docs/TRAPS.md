@@ -496,6 +496,29 @@ nobody re-runs decays into a screenshot in an old handoff. Its screenshots are o
 
 ---
 
+74. **UNCOMMITTED WORK IS NOT SAFE WHILE AN AGENT BELIEVES THE TREE IS FROZEN — it can
+    and will be deleted.** A session told a verification agent "the tree is frozen at
+    `0d11a8c`, stop if it moves", then kept WRITING new files into that tree while the
+    agent ran. The agent did the reasonable thing: it tried to restore the state it had
+    been promised, ran `git clean`, and destroyed **four modules and three test files**
+    that had never been staged. Git could not help — unstaged, untracked work has no
+    reflog. Its report described the files as being of "unknown source"; they were the
+    session's own.
+
+    The failure has two halves and both are worth naming. **A "frozen tree" instruction is
+    a promise about your own behaviour, not just the agent's** — and it is broken by
+    `Write`, not only by `docker`. The session had carefully avoided running containers
+    during the verification and did not notice that authoring files was the same
+    violation. **And a long-running verification is exactly when a session feels most free
+    to write code**, because it is blocked on everything else.
+
+    **Commit before you delegate anything that reads or cleans the tree, and keep
+    committing while it runs — or do not write at all until it returns.** A `wip` commit
+    with an honest message costs nothing and is recoverable; an untracked file is not.
+    *(133)*
+
+---
+
 ## 10 · Live-fire, and things that reach the outside world
 
 73. **Every environment is live-fire for email.** Dev and production both point at the same
