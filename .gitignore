@@ -51,3 +51,4 @@ split_dump.py
 # is public (rule 3), and nobody has read 3.4 MB of dump for secrets. Ignored so the
 # accident cannot recur; the file itself is left exactly where the owner put it.
 _backend.txt
+docs/voice-samples/session/
