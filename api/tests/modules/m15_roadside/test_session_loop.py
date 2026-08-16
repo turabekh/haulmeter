@@ -300,3 +300,55 @@ def test_completing_writes_the_band_and_keeps_provisional(db):
     assert session.completed_at is not None
     assert session.band == verdict.band.value
     assert session.provisional is True, "uncalibrated bands stay provisional (Q-8)"
+
+
+# --- hidden state: the defect a real session found ---------------------------------------
+
+
+def test_expected_slots_come_from_the_scenarios_facts_not_the_slot_names(db):
+    """The bug a live probe found and no unit test could.
+
+    `intent.required_slots` names WHICH facts a question needs; the scenario's
+    `hidden_state` holds what they ARE. The first implementation used the former as the
+    answer key, so a driver who said "six hours today" was checked against the literal
+    string "required" and scored `answer_completeness: 0` — told they answered
+    incompletely when they had answered perfectly.
+
+    Every earlier test passed because each supplied its own expected slots directly. This
+    one goes through `next_officer_turn`, which is where the resolution actually happens.
+    """
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination"])
+    scenario.hidden_state = {"destination": "Chicago"}
+    db.flush()
+    session = _open(db, scenario)
+
+    officer = loop.next_officer_turn(db, session)
+    turn = loop.record_driver_turn(
+        db, session, officer=officer, transcript="I am going to Chicago",
+        asr_confidence=0.95, rubric=DeterministicRubric(),
+    )
+
+    assert turn.expected_slots == {"destination": "Chicago"}
+    assert turn.observed_slots == {"destination": "Chicago"}
+    assert turn.scores["answer_completeness"] == 100, (
+        "a driver who named the destination must not be scored incomplete"
+    )
+    assert turn.scores["task_completion"] == 100
+
+
+def test_a_slot_the_scenario_has_no_fact_for_is_dropped_not_left_unanswerable(db):
+    """A question we cannot mark cannot be failed."""
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination"])
+    scenario.hidden_state = {}  # no facts at all
+    db.flush()
+    session = _open(db, scenario)
+
+    officer = loop.next_officer_turn(db, session)
+    turn = loop.record_driver_turn(
+        db, session, officer=officer, transcript="I am going to Chicago",
+        asr_confidence=0.95, rubric=DeterministicRubric(),
+    )
+    assert turn.expected_slots == {}
+    assert turn.scores["answer_completeness"] == 100

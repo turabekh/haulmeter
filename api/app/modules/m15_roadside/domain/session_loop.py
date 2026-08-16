@@ -198,7 +198,7 @@ def next_officer_turn(
         speaker=Speaker.officer,
         intent_id=intent.id,
         transcript=variant.text,
-        expected_slots=dict(intent.required_slots or {}),
+        expected_slots=expected_slots_for(intent, scenario),
     )
     db.add(turn)
     db.flush()
@@ -209,6 +209,26 @@ def next_officer_turn(
         audio_ref=variant.audio_ref,
         seq=turn.seq,
     )
+
+
+def expected_slots_for(intent: Intent, scenario: ScenarioVersion) -> dict[str, str]:
+    """The FACTS this question expects, resolved from the scenario's hidden state.
+
+    AI-CONTEXT: `intent.required_slots` names WHICH facts a question needs; the scenario's
+    `hidden_state` holds what they actually are. Using the former as the answer key scored
+    a driver who said "six hours today" as incomplete, because it checked whether they had
+    said the word "required" — the defect a real session found and no unit test could,
+    since every test supplied its expected slots directly.
+
+    A slot the scenario has no fact for is DROPPED rather than kept unanswerable: a
+    question we cannot mark cannot be failed.
+    """
+    facts = scenario.hidden_state or {}
+    return {
+        slot: str(facts[slot])
+        for slot in (intent.required_slots or {})
+        if slot in facts and facts[slot] not in (None, "")
+    }
 
 
 def record_driver_turn(
@@ -230,7 +250,8 @@ def record_driver_turn(
     assert_may_continue(driver_state)
 
     intent = db.scalar(select(Intent).where(Intent.key == officer.intent_key))
-    expected = dict(intent.required_slots or {}) if intent else {}
+    scenario = db.get(ScenarioVersion, session.scenario_version_id)
+    expected = expected_slots_for(intent, scenario) if intent and scenario else {}
     result = score_turn(
         officer_line=officer.text,
         transcript=transcript,
@@ -302,6 +323,7 @@ __all__ = [
     "RefusedInMotion",
     "assert_may_continue",
     "complete_session",
+    "expected_slots_for",
     "next_officer_turn",
     "record_driver_turn",
     "review_needed_count",

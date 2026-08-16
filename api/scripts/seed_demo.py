@@ -234,6 +234,18 @@ def _seed_m15_roadside(db):
         environment="roadside_daytime",
         allowed_intents=["hos_hours_driven", "destination", "logbook_request"],
         status=m15.ContentStatus.draft,
+        # AI-CONTEXT: the FACTS this stop is built on (E3 §E3.1.2). Expected answers
+        # derive from here — `intent.required_slots` only names which of them a question
+        # needs. The first version of this seed put the string "required" in the slot
+        # values, so the scorer checked whether the driver had said the word "required"
+        # and marked a perfect answer incomplete.
+        hidden_state={
+            "hours": "6",
+            "destination": "Chicago",
+            "cargo": "furniture",
+            "carrier": "Acme Trucking",
+            "trailer": "dry van",
+        },
     )
     db.add(scenario)
 

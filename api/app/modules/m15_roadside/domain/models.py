@@ -75,6 +75,12 @@ class ScenarioVersion(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     version: Mapped[int] = mapped_column(Integer)
     domain_mix: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # AI-CONTEXT: the FACTS a scenario is built on — destination, HOS hours, cargo, trailer
+    # (E3 §E3.1.2). Expected answers DERIVE from this; `intent.required_slots` only names
+    # WHICH facts a question needs. Conflating the two scored a driver who answered
+    # perfectly as incomplete, because the validator was matching their words against the
+    # string "required". Found by running a real session, not by reading the schema.
+    hidden_state: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
     difficulty: Mapped[Difficulty] = mapped_column(
         Enum(Difficulty, name="difficulty", schema=SCHEMA)
     )
