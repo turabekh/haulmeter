@@ -391,9 +391,15 @@ session*; this file records what is permanently true.
     full red layout sweep. *(123)*
 
 69. **An ad-hoc Playwright probe must run `playwright install --with-deps chromium` first**,
-    the way the Makefile targets do. Without it the browser dies with `Target page, context
-    or browser has been closed` and a wall of Chromium flags, and the real cause —
-    `libglib-2.0.so.0` missing — is buried far below. Cost four wasted runs. *(126, 127)*
+    the way the Makefile targets do — and **EVERY invocation**, because `run --rm` gives a
+    fresh container and the system libraries never persist. Without it the browser dies
+    with `Target page, context or browser has been closed` and a wall of Chromium flags,
+    and the real cause — `libglib-2.0.so.0` missing — is buried far below. Session 129 hit
+    it by copying a working command without its install prefix on the RE-RUN, so a spec
+    that had just passed failed instantly and looked like a regression in the page.
+    **If a Playwright run fails instantly where the previous identical run passed, suspect
+    the missing install line before touching anything else.** Cost five wasted runs across
+    four sessions. *(126, 127, 129)*
 
 70. **A probe hitting the real API from inside the container needs `page.route` to rewrite
     `localhost:8008` → `api:8008`**, must `route.abort()` on failure so one stalled
