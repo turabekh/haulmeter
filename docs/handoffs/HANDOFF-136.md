@@ -160,6 +160,32 @@ above. Left in place; deleting production rows to tidy a record is worse than th
 
 ---
 
+## 4d. The owner used it, and it was hollow (entries 183–184)
+
+**"I thought roadside readiness would be a conversational interview — now nothing useful
+or testable."** Correct on every count. Six defects, none visible from a green suite,
+because every one of them lived in a seam a test had stubbed:
+
+| what was wrong | why no test saw it |
+|---|---|
+| **the officer never spoke** — 8 released lines, 0 with audio | nothing had ever called the working Azure adapter for content |
+| **the audio URL was unsigned** and would have 422'd | unreachable while `audio_ref` was null on every row |
+| **a turn did nothing visible** — transcript/confidence/tags discarded by the surface | the frame was asserted server-side, never rendered |
+| **you could not hear yourself** | no test asks to |
+| **"sorry, say again?" scored as a wrong answer** | the prompt never asked for `asked_for_repeat`, so only the deterministic test rubric could set it |
+| **`DIAGNOSTIC_ONLY` was read by nothing** | one test asserted the set's *membership*, not its effect |
+
+All fixed and on production. The officer speaks (5 of 5 synthesized, served 200 with Range
+206), the transcript comes back, the answer replays in-browser, the officer **repeats
+himself rephrased** when asked — and the request costs nothing.
+
+**Still not done:** the officer does not react to the CONTENT of an answer (that is new
+content and goes through Q-6, not invented here); the driver's audio is not persisted, so
+replay ends with the turn; FR5's coaching loop is unstarted. The consent copy was corrected
+to stop promising a 30-day retention of audio that is never stored.
+
+---
+
 ## 5. The state of the local box, deliberately
 
 - **`m15_roadside` is ON in the local dev database.** My own kickoff DoD said it would be
