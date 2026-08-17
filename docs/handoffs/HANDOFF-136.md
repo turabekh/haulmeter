@@ -99,6 +99,35 @@ run at `c2cb6aa` this session, plus the earlier one at `0d11a8c`. Two, not five.
 
 ---
 
+## 4b. DEPLOYED — and the first content ever released (2026-08-18, after §4 was written)
+
+The owner authorized the deploy that "release scenario 1's lines on production" required.
+Decision entry **181**.
+
+| check | result |
+|---|---|
+| alembic (prod) | **0087_m15_hidden** (was 0083) |
+| `m15` tables | **12** |
+| `m15_roadside` | present, `enabled` NULL, `default_on` false — **OFF** |
+| content | **5 released**, 3 draft holdouts, 1 released scenario |
+| audit | **12 rows** (6 review + 6 release) — the review record |
+| outbound queue | **0 unsent of 63**, unchanged across the deploy |
+| public edge | site 200 · `/api/health` 200 · **`/api/roadside/scenarios` 404** |
+
+**That 404 is the module gate working.** Released content sits behind a closed flag; no
+driver can reach any of it. Flipping `m15_roadside` is question 14 and has not been asked.
+
+Only `_seed_m15_roadside` was run on production — never `seed_demo.main()`, which would
+also plant a dev-driver account and "DEV —" facilities there.
+
+**One over-broad action.** The release went through the real HTTP surface rather than the
+database, because the audit entry is the record — which needed a server-side session for
+`admin@haulmeter.online`. Revoking it failed on a wrong signature, and the correction ended
+**all 3 live sessions on that account, of which 1 was mine.** Anyone signed in as that admin
+is signed out. Nothing lost, no password touched.
+
+---
+
 ## 5. The state of the local box, deliberately
 
 - **`m15_roadside` is ON in the local dev database.** My own kickoff DoD said it would be
