@@ -114,8 +114,7 @@ Decision entry **181**.
 | outbound queue | **0 unsent of 63**, unchanged across the deploy |
 | public edge | site 200 · `/api/health` 200 · **`/api/roadside/scenarios` 404** |
 
-**That 404 is the module gate working.** Released content sits behind a closed flag; no
-driver can reach any of it. Flipping `m15_roadside` is question 14 and has not been asked.
+**That 404 was the module gate working.** It is now **200** — see §4c.
 
 Only `_seed_m15_roadside` was run on production — never `seed_demo.main()`, which would
 also plant a dev-driver account and "DEV —" facilities there.
@@ -125,6 +124,39 @@ database, because the audit entry is the record — which needed a server-side s
 `admin@haulmeter.online`. Revoking it failed on a wrong signature, and the correction ended
 **all 3 live sessions on that account, of which 1 was mine.** Anyone signed in as that admin
 is signed out. Nothing lost, no password touched.
+
+---
+
+## 4c. LIVE — `m15_roadside` is ON in production (entry 182)
+
+Asked for directly after a hold was recommended. **The flag alone would have shipped a dead
+control**, and that is the part worth carrying forward:
+
+**Production had no speech keys.** `DeepgramSttAdapter` refuses at construction, and
+`_answer_frame` catches `RubricUnavailable` but not `SpeechUnavailable` — so a driver would
+have reached the officer's question, answered, and watched the socket die. Row → consent →
+question → *"The practice check stopped."* Found by checking the box, not by assuming a
+deployed module is a working one.
+
+`DEEPGRAM_API_KEY`, `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION` were added to the VM's
+`.env` (backed up first: `.env.bak-20260817-203129`), transferred as a file so no value
+entered a transcript. **Live Deepgram and Azure spend now starts for anyone who uses the
+feature**, bounded by F9's module budget and nothing else.
+
+| proof | result |
+|---|---|
+| Azure → Deepgram round trip on the box | 18,000 bytes → **confidence 1.0** |
+| a full scored turn through the real loop | **100 on all four dimensions**, no tags, `not_needed` |
+| public edge `GET /api/roadside/scenarios` | **200**, the released scenario |
+| deployed bundle | carries all six `roadside.band.*` keys |
+| flag flip | `POST /admin/flags/m15_roadside/enable` → audited `flag_enable` |
+| outbound queue | **0 unsent of 63**, across the deploy and both restarts |
+
+The operator session was revoked **targeted** this time — the correction to §4b's
+over-broad revoke.
+
+**Test data on production:** one guest session and one scored turn, from the verification
+above. Left in place; deleting production rows to tidy a record is worse than the record.
 
 ---
 
