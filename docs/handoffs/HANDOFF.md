@@ -3,7 +3,7 @@
 This file is a **pointer, not content**, and as of 2026-08-16 it is one again: it had grown
 to 45 KB of inline summary, which every session read to find one filename.
 
-➡️ **[HANDOFF-133.md](HANDOFF-133.md)** — read this first, every session. It holds the current state,
+➡️ **[HANDOFF-134.md](HANDOFF-134.md)** — read this first, every session. It holds the current state,
 the decisions, the exact next task and the blockers.
 
 - **[SUMMARIES.md](SUMMARIES.md)** — the narrative arc across recent sessions, moved here
@@ -19,6 +19,7 @@ The full history below is never deleted; a handoff is a dated record.
 
 | # | Session |
 |---|---|
+| [134](HANDOFF-134.md) | the state of the platform at the break |
 | [133](HANDOFF-133.md) | M15 Session B: the loop runs on real speech, and two things it found |
 | [132](HANDOFF-132.md) | M15 Session A: the foundations, and a constraint that was wrong twice |
 | [131](HANDOFF-131.md) | the state of the platform at the break |
