@@ -1748,3 +1748,173 @@ def assist_cancel_promotion(
         db, actor, vendor, "promotion_cancel", {"status": "active"}, {"status": "cancelled"}
     )
     return {"promotion_id": str(promotion.id), "status": promotion.status.value}
+
+
+# --- M15 content pipeline (E3 §E3.1.5) ------------------------------------------------
+#
+# AI-CONTEXT: Q-6's operator surface, and it did not exist. `mark_reviewed` and `release`
+# lived in `m15_roadside/domain/content.py` with no caller anywhere in the product, so
+# nothing could ever become `released` and every driver surface in M15 would have rendered
+# its empty state permanently. The laws stay in the domain — these routes are a way for a
+# named human to reach them, not a second place where the rules are decided.
+#
+# THE REVIEWER IS THE ADMIN'S OWN EMAIL, not a free-text field. `mark_reviewed` requires a
+# named human because a blank reviewer is how "reviewed" silently becomes "generated"; a
+# field the operator types into would let that name be anything, including nothing
+# meaningful. The account that clicked is the one claim the server can actually make.
+
+
+def _m15_variant(db: Session, item_id: uuid.UUID):
+    from app.modules.m15_roadside.domain import models as m15m
+
+    item = db.get(m15m.PhraseVariant, item_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such variant")
+    return item
+
+
+def _m15_scenario(db: Session, item_id: uuid.UUID):
+    from app.modules.m15_roadside.domain import models as m15m
+
+    item = db.get(m15m.ScenarioVersion, item_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such scenario")
+    return item
+
+
+@router.get("/roadside/content")
+def roadside_content(
+    _admin: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Everything in the pipeline, with its status. The review queue IS this list."""
+    from app.modules.m15_roadside.domain import models as m15m
+
+    scenarios = db.scalars(select(m15m.ScenarioVersion).order_by(m15m.ScenarioVersion.version))
+    intents = db.scalars(select(m15m.Intent).order_by(m15m.Intent.key))
+    variants = list(db.scalars(select(m15m.PhraseVariant)))
+    by_intent: dict = {}
+    for variant in variants:
+        by_intent.setdefault(variant.intent_id, []).append(variant)
+
+    return {
+        "scenarios": [
+            {
+                "id": str(s.id),
+                "version": s.version,
+                "status": s.status.value,
+                "difficulty": s.difficulty.value,
+                "intents": list(s.allowed_intents or []),
+            }
+            for s in scenarios
+        ],
+        "intents": [
+            {
+                "key": intent.key,
+                "domain": intent.domain,
+                "variants": [
+                    {
+                        "id": str(v.id),
+                        "text": v.text,
+                        "status": v.status.value,
+                        "version": v.version,
+                        # AI-CONTEXT: shown because a holdout must NEVER be released into
+                        # the teaching pool by someone who could not see what it was. Q-5
+                        # is enforced in the generators, but an operator releasing blind
+                        # is how a reviewer becomes an accomplice to a leak.
+                        "holdout": v.holdout,
+                    }
+                    for v in sorted(by_intent.get(intent.id, []), key=lambda v: v.version)
+                ],
+            }
+            for intent in intents
+        ],
+    }
+
+
+@router.post("/roadside/content/{kind}/{item_id}/review")
+def roadside_review(
+    kind: str,
+    item_id: uuid.UUID,
+    actor: identity.Account = Depends(current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.modules.m15_roadside.domain import content as m15content
+
+    item = _m15_variant(db, item_id) if kind == "variant" else _m15_scenario(db, item_id)
+    was = item.status.value
+    try:
+        m15content.mark_reviewed(item, actor.email)
+    except m15content.ContentNotReviewed as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    # AI-CONTEXT: the audit entry IS the review record. Q-6 wants a named human, and
+    # `mark_reviewed` only checks that a name was supplied — this is where the name is
+    # kept, against the item, with a timestamp. Without it "who said this was fit for a
+    # driver" is answerable only until the next release overwrites the status.
+    admin.record_action(
+        db,
+        "roadside_content_review",
+        actor_account_id=actor.id,
+        target_kind=f"m15_{kind}",
+        target_key=str(item.id),
+        detail={"kind": kind, "reviewer": actor.email},
+        before={"status": was},
+        after={"status": item.status.value},
+    )
+    db.commit()
+    return {"id": str(item.id), "status": item.status.value, "reviewer": actor.email}
+
+
+@router.post("/roadside/content/{kind}/{item_id}/release")
+def roadside_release(
+    kind: str,
+    item_id: uuid.UUID,
+    _admin: identity.Account = Depends(current_admin),  # noqa: ARG001 — the actor, audited
+    db: Session = Depends(get_db),
+) -> dict:
+    """Promote reviewed -> released. The bump is checked against what is ALREADY released.
+
+    AI-CONTEXT: `previous_version` is computed here rather than accepted, and it is the
+    highest version already released among the item's siblings — the other variants of the
+    same intent, or the other versions of the same scenario. That is what "which text was
+    the driver scored against" actually means; a per-item counter would let two different
+    released texts share a version, which is the question the bump exists to keep
+    answerable.
+    """
+    from app.modules.m15_roadside.domain import content as m15content
+    from app.modules.m15_roadside.domain import enums as m15enums
+    from app.modules.m15_roadside.domain import models as m15m
+
+    if kind == "variant":
+        item = _m15_variant(db, item_id)
+        previous = db.scalar(
+            select(func.max(m15m.PhraseVariant.version)).where(
+                m15m.PhraseVariant.intent_id == item.intent_id,
+                m15m.PhraseVariant.status == m15enums.ContentStatus.released,
+            )
+        )
+    else:
+        item = _m15_scenario(db, item_id)
+        previous = db.scalar(
+            select(func.max(m15m.ScenarioVersion.version)).where(
+                m15m.ScenarioVersion.status == m15enums.ContentStatus.released
+            )
+        )
+
+    was = item.status.value
+    try:
+        m15content.release(item, previous_version=previous or 0)
+    except m15content.ContentNotReviewed as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    admin.record_action(
+        db,
+        "roadside_content_release",
+        actor_account_id=_admin.id,
+        target_kind=f"m15_{kind}",
+        target_key=str(item.id),
+        detail={"kind": kind, "previous_version": previous or 0},
+        before={"status": was},
+        after={"status": item.status.value, "version": item.version},
+    )
+    db.commit()
+    return {"id": str(item.id), "status": item.status.value, "version": item.version}

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import bearer_token, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f13_flags import public as flags
+from app.modules.m15_roadside import public as m15
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -326,6 +327,12 @@ def me(
         "account_id": str(account.id),
         "email": account.email,
         "verification_enabled": flags.is_enabled(db, identity.AUTHORITY_VERIFICATION_FLAG),
+        # AI-CONTEXT: the More row's condition, and it rides `/me` for the same reason
+        # `verification_enabled` does — a driver app cannot read F13, and a capability
+        # nobody has switched on must not advertise itself. The FLAG_KEY constant rather
+        # than a literal: `is_enabled` treats an unregistered flag as OFF, so a typo here
+        # would not fail, it would silently hide the entry forever.
+        "roadside_enabled": flags.is_enabled(db, m15.FLAG_KEY),
         # AI-CONTEXT: on `/me` as well as on the login response, and THIS is the one that
         # mattered (D4). Sessions last 30 days, so a driver who signs in with a temporary
         # password and reopens the app next morning never sees `/login` again — the flag

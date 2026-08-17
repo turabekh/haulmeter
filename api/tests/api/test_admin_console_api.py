@@ -454,6 +454,10 @@ def test_every_mutating_admin_endpoint_writes_an_audit_entry(client, db):
         "/admin/vendors/{vendor_id}/appearances/{appearance_id}": "assisted_appearance_cancel",
         "/admin/vendors/{vendor_id}/promotions": "assisted_promotion_create",
         "/admin/vendors/{vendor_id}/promotions/{promotion_id}": "assisted_promotion_cancel",
+        # M15 content pipeline — publishing what a driver is scored against is exactly
+        # the kind of power this table exists to keep a name against (Q-6)
+        "/admin/roadside/content/{kind}/{item_id}/review": "roadside_content_review",
+        "/admin/roadside/content/{kind}/{item_id}/release": "roadside_content_release",
     }
     unaudited = sorted(mutating - set(covered))
     assert not unaudited, f"mutating admin endpoints with no audit action mapped: {unaudited}"

@@ -53,6 +53,38 @@ CLOSE_NO_CONTENT = 4003
 CLOSE_BAD_SESSION = 4004
 
 
+@router.get("/scenarios")
+def scenarios(db: Session = Depends(get_db)) -> dict:
+    """What a driver may be offered, and the only way a client can learn a scenario id.
+
+    AI-CONTEXT: this route did not exist and the surface could not have. `POST /session`
+    takes a `scenario_version_id`, and the only thing that had ever supplied one was the
+    dev probe, which queries the database directly. A driver app has no database.
+
+    `startable_scenarios` is the whole policy and it lives in `domain/content.py` beside
+    Q-5 and Q-6 rather than here — an endpoint that filtered content itself would be a
+    second place for those laws to be decided, which is the shape of the defect this
+    module already had once (entry 180).
+
+    AN EMPTY LIST IS THE EXPECTED ANSWER TODAY and is not an error: no content has been
+    through review yet. The surface renders its empty state, which is the honest thing to
+    show, and a 404 here would say "no such feature" about a feature that exists and has
+    nothing reviewed in it.
+    """
+    from app.modules.m15_roadside.domain import content
+
+    return {
+        "scenarios": [
+            {
+                "id": str(s.id),
+                "difficulty": s.difficulty.value,
+                "intents": list(s.allowed_intents or []),
+            }
+            for s in content.startable_scenarios(db)
+        ]
+    }
+
+
 @router.post("/session", status_code=status.HTTP_201_CREATED)
 def open_session(
     body: dict,

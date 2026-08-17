@@ -147,3 +147,73 @@ def test_the_generator_guard_fires_rather_than_returning_a_leak(db):
     holdout = _variant(db, intent, "held out", holdout=True)
     with pytest.raises(content.HoldoutLeak):
         content._assert_no_holdout([holdout])
+
+
+# --- what a driver may be OFFERED (Q-6 at the catalogue) ------------------------------
+
+
+def _scenario(db, keys, *, status=m.ContentStatus.released, version=1):
+    scenario = m.ScenarioVersion(
+        version=version,
+        difficulty=m.Difficulty.clear,
+        allowed_intents=list(keys),
+        status=status,
+    )
+    db.add(scenario)
+    db.flush()
+    return scenario
+
+
+def test_a_draft_scenario_is_never_offered(db):
+    """The catalogue obeys the same law as the turn. A driver picking from a list of
+    scenarios is being shown content, and draft content has no path to them."""
+    intent = _intent(db, key="offer_draft")
+    _variant(db, intent, "released line")
+    _scenario(db, ["offer_draft"], status=m.ContentStatus.draft)
+
+    assert content.startable_scenarios(db) == []
+
+
+def test_a_released_scenario_whose_intents_cannot_speak_is_not_offered(db):
+    """THE ONE WORTH HAVING.
+
+    Scenario and phrasing move through the pipeline separately, so a scenario can be
+    released while its intents hold nothing released. Offering it produces a session that
+    opens and shuts on NoContentAvailable, which a driver reads as "this is broken" —
+    correctly.
+    """
+    intent = _intent(db, key="offer_no_variants")
+    _variant(db, intent, "still a draft", status=m.ContentStatus.draft)
+    _scenario(db, ["offer_no_variants"])
+
+    assert content.startable_scenarios(db) == []
+
+
+def test_a_scenario_whose_intents_hold_only_holdouts_is_not_offered(db):
+    """Q-5 reaches the catalogue for free, because the check runs through
+    `teachable_variants` rather than a second query written beside it."""
+    intent = _intent(db, key="offer_holdout_only")
+    _variant(db, intent, "held out", holdout=True)
+    _scenario(db, ["offer_holdout_only"])
+
+    assert content.startable_scenarios(db) == []
+
+
+def test_a_scenario_naming_an_intent_that_does_not_exist_is_not_offered(db):
+    """`allowed_intents` is an array of KEYS with no foreign key behind it, so a typo in
+    authored content is a live possibility rather than a hypothetical."""
+    intent = _intent(db, key="offer_real")
+    _variant(db, intent, "released line")
+    _scenario(db, ["offer_real", "offer_typo"])
+
+    assert content.startable_scenarios(db) == []
+
+
+def test_a_fully_released_scenario_is_offered(db):
+    """The other side of the law — otherwise every assertion above would also pass on a
+    function that returns nothing at all."""
+    intent = _intent(db, key="offer_ready")
+    _variant(db, intent, "released line")
+    scenario = _scenario(db, ["offer_ready"])
+
+    assert content.startable_scenarios(db) == [scenario]

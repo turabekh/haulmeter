@@ -112,6 +112,63 @@ def _session(db):
     )
 
 
+def test_the_catalogue_is_empty_rather_than_absent_when_nothing_is_reviewed(client, db):
+    """200 with an empty list, not a 404.
+
+    Today this IS the state of the module: nothing has been through review. The surface
+    renders its empty state from this, and a 404 would say "no such feature" about a
+    feature that exists and is waiting on a human.
+    """
+    _module_on(db)
+    _draft_content(db)
+
+    resp = client.get("/roadside/scenarios")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"scenarios": []}
+
+
+def test_the_catalogue_never_names_a_scenario_the_driver_could_not_run(client, db):
+    """The endpoint is a thin read over `startable_scenarios` — this asserts the wiring,
+    not the policy, which is held in the domain tests where the laws live."""
+    _module_on(db)
+    intent = _draft_content(db)
+    db.add(
+        m.PhraseVariant(
+            intent_id=intent.id,
+            text="RELEASED LINE — where are you headed?",
+            difficulty=m.Difficulty.clear,
+            status=m.ContentStatus.released,
+            version=2,
+        )
+    )
+    scenario = m.ScenarioVersion(
+        version=1,
+        difficulty=m.Difficulty.clear,
+        allowed_intents=["destination"],
+        status=m.ContentStatus.released,
+    )
+    db.add(scenario)
+    db.flush()
+
+    body = client.get("/roadside/scenarios").json()
+
+    assert [s["id"] for s in body["scenarios"]] == [str(scenario.id)]
+    assert body["scenarios"][0]["intents"] == ["destination"]
+    # the version is HIDDEN STATE — a driver never sees it and never picks it
+    assert "version" not in body["scenarios"][0]
+
+
+def test_the_catalogue_is_gated_with_the_module(client, db):
+    """A disabled module is NOT THERE (404, entry 105) — including its catalogue."""
+    m15.register_module(db)
+    flag = db.get(flags.FeatureFlag, m15.FLAG_KEY)
+    flag.enabled = False
+    db.flush()
+
+    assert client.get("/roadside/scenarios").status_code == 404
+
+
 def test_a_client_asking_for_draft_content_is_refused(client, db):
     """THE ONE THIS FILE EXISTS FOR.
 
@@ -170,3 +227,30 @@ def test_released_content_is_served(client, db):
 
     assert frame["type"] == "officer"
     assert frame["text"] == "RELEASED LINE — where are you headed?"
+
+
+# --- the client's own condition for showing the entry ---------------------------------
+
+
+def test_me_says_whether_roadside_is_on(client, db):
+    """AI-CONTEXT: the More row hangs off this. A driver app cannot read F13, so the one
+    place it can learn a capability exists is `/me` — the same route and the same reason
+    as `verification_enabled`.
+
+    Asserted in BOTH directions, because a payload key that is always False looks
+    identical to a working gate right up until someone switches the module on.
+    """
+    _register = client.post(
+        "/auth/register",
+        json={"email": f"m15-me-{uuid.uuid4().hex[:8]}@example.com", "password": "pw-123456"},
+    )
+    headers = {"Authorization": f"Bearer {_register.json()['token']}"}
+
+    m15.register_module(db)
+    flag = db.get(flags.FeatureFlag, m15.FLAG_KEY)
+    db.flush()
+    assert client.get("/auth/me", headers=headers).json()["roadside_enabled"] is False
+
+    flag.enabled = True
+    db.flush()
+    assert client.get("/auth/me", headers=headers).json()["roadside_enabled"] is True

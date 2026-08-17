@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .enums import ContentStatus
-from .models import CoachingContent, PhraseVariant, SignItem
+from .models import CoachingContent, Intent, PhraseVariant, ScenarioVersion, SignItem
 
 
 class ContentNotReviewed(ValueError):
@@ -37,7 +37,9 @@ class HoldoutLeak(AssertionError):
 # --- Q-6: draft -> reviewed -> released ---------------------------------------------
 
 
-def mark_reviewed(item: PhraseVariant | SignItem | CoachingContent, reviewer: str | None) -> None:
+def mark_reviewed(
+    item: PhraseVariant | SignItem | CoachingContent | ScenarioVersion, reviewer: str | None
+) -> None:
     """A human says they read it. `reviewer` is required and is the whole point.
 
     AI-CONTEXT: F9 may DRAFT content — that is what the classify/draft prompts are for —
@@ -53,7 +55,9 @@ def mark_reviewed(item: PhraseVariant | SignItem | CoachingContent, reviewer: st
     _set_status(item, ContentStatus.reviewed)
 
 
-def release(item: PhraseVariant | SignItem | CoachingContent, *, previous_version: int) -> None:
+def release(
+    item: PhraseVariant | SignItem | CoachingContent | ScenarioVersion, *, previous_version: int
+) -> None:
     """Promote reviewed -> released. Refuses from draft, and refuses without a bump.
 
     The version bump is not bookkeeping: released content is what a driver is scored
@@ -74,6 +78,11 @@ def release(item: PhraseVariant | SignItem | CoachingContent, *, previous_versio
     _set_status(item, ContentStatus.released)
 
 
+# AI-CONTEXT: `ScenarioVersion` joined the union when the publish surface was built. It
+# always carried `status` and `version` and was always content by any reading — it simply
+# had no operator path, so nothing had ever asked it to move. The transition rules are the
+# ones above, unchanged: a scenario cannot be released from draft either, and it needs the
+# same version bump for the same reason (which definition was a driver scored against).
 def _status(item) -> ContentStatus:
     return item.review_status if isinstance(item, CoachingContent) else item.status
 
@@ -126,6 +135,48 @@ def reassessment_variants(db: Session, intent_id) -> list[PhraseVariant]:
         )
     )
     return holdouts + teachable_variants(db, intent_id)
+
+
+# --- what a driver may be offered ----------------------------------------------------
+
+
+def startable_scenarios(db: Session) -> list[ScenarioVersion]:
+    """Released scenarios that can actually produce a turn.
+
+    AI-CONTEXT: TWO conditions, and the second is the one worth having. A scenario may be
+    released while the intents it names have no released variants — the scenario and its
+    phrasing are separate content moving through the pipeline separately — and offering one
+    of those to a driver produces a session that opens and immediately closes on
+    `NoContentAvailable`. The driver's reading of that is "this feature is broken", which
+    is a fair reading.
+
+    So "startable" means EVERY allowed intent can be spoken, checked through
+    `teachable_variants` rather than by a query written here: that function is where Q-5
+    and Q-6 are enforced together, and a second implementation of the same filter is a
+    second place for them to drift apart.
+
+    An empty list is a legitimate answer and the surfaces are built for it. It is the
+    honest state of a module whose content has not been reviewed yet, and it is what the
+    driver sees rather than draft text.
+    """
+    released = list(
+        db.scalars(
+            select(ScenarioVersion)
+            .where(ScenarioVersion.status == ContentStatus.released)
+            .order_by(ScenarioVersion.version)
+        )
+    )
+    return [s for s in released if _every_intent_can_speak(db, s)]
+
+
+def _every_intent_can_speak(db: Session, scenario: ScenarioVersion) -> bool:
+    keys = list(scenario.allowed_intents or [])
+    if not keys:
+        return False
+    intents = list(db.scalars(select(Intent).where(Intent.key.in_(keys))))
+    if len(intents) != len(set(keys)):
+        return False
+    return all(teachable_variants(db, intent.id) for intent in intents)
 
 
 def _assert_no_holdout(variants: list[PhraseVariant]) -> None:
