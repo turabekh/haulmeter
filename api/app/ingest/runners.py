@@ -565,6 +565,23 @@ def run_m14_poll(db: Session, commit: bool = True, client_factory=None) -> dict:
     }
 
 
+def run_m15_content_audio(db: Session, commit: bool = True) -> dict:
+    """Give released officer lines a voice (E3 §E3.1.2).
+
+    AI-CONTEXT: FLAGGED, unlike the retention sweep one function down, and the difference
+    is worth stating because the two look alike. Retention is a PROMISE and a promise a
+    flag can revoke was never one. This is a COST: every line costs an Azure call, and a
+    box with the module switched off is a box whose officer lines nobody will hear. There
+    is nothing to keep running for.
+    """
+    from app.modules.m15_roadside.domain import audio as m15_audio
+
+    summary = m15_audio.synthesize_missing(db)
+    if commit:
+        db.commit()
+    return summary
+
+
 def run_audio_retention(db: Session, commit: bool = True) -> dict:
     """Delete raw driver audio whose 30-day window has closed (E3 §E3.4.3, D14).
 

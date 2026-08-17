@@ -41,6 +41,7 @@ const Phase = {
   OFFICER: "officer",
   RECORDING: "recording",
   SCORING: "scoring",
+  HEARD: "heard",
   PAUSED: "paused",
   FAILED: "failed",
   MIC_DENIED: "mic_denied",
@@ -49,6 +50,23 @@ const Phase = {
 const phase = ref(Phase.CONNECTING);
 const officerText = ref("");
 const officerAudio = ref(null);
+// AI-CONTEXT: what the RECOGNISER heard, shown back before the next question.
+//
+// The `scored` frame has always carried `transcript`, `confidence` and `review_needed`,
+// and this surface discarded all three — so a driver spoke into a mic and the screen did
+// nothing until a new question replaced the old one. That is not a practice tool, it is a
+// prompt with a microphone next to it.
+//
+// It shows the TRANSCRIPT, never the score. A running verdict mid-inspection turns
+// practice into a test, and the reading belongs on the result surface. But "here is what
+// I heard you say" is not a verdict — it is the one piece of feedback that lets a driver
+// tell "I said it wrong" from "it heard me wrong", which is the difference between a tool
+// they can improve with and one they distrust.
+const heardText = ref("");
+const heardUnclear = ref(false);
+// the driver's own recording, kept in the browser for the length of the turn so they can
+// hear themselves. Nothing is uploaded for this — it is the blob that was just sent.
+const answerAudio = ref(null);
 
 let socket = null;
 let recorder = null;
@@ -90,9 +108,9 @@ onMounted(() => {
       officerAudio.value = frame.audio_url ? `${API_BASE}${frame.audio_url}` : null;
       phase.value = Phase.OFFICER;
     } else if (frame.type === "scored") {
-      // the score itself is NOT shown per turn — a running verdict mid-inspection turns
-      // practice into a test, and E3 puts the reading on the result surface
-      askForNextLine();
+      heardText.value = frame.transcript || "";
+      heardUnclear.value = Boolean(frame.review_needed);
+      phase.value = Phase.HEARD;
     } else if (frame.type === "complete") {
       router.replace({ name: "roadside-result", params: { sessionId: route.params.sessionId } });
     }
@@ -131,6 +149,8 @@ function stopRecording() {
 async function sendAnswer() {
   phase.value = Phase.SCORING;
   const blob = new Blob(chunks, { type: "audio/webm" });
+  releaseAnswerAudio();
+  answerAudio.value = URL.createObjectURL(blob);
   const buffer = await blob.arrayBuffer();
   let binary = "";
   const bytes = new Uint8Array(buffer);
@@ -138,12 +158,26 @@ async function sendAnswer() {
   send({ type: "answer", audio_b64: btoa(binary), driver_state: "IDLE" });
 }
 
+function nextQuestion() {
+  releaseAnswerAudio();
+  heardText.value = "";
+  heardUnclear.value = false;
+  askForNextLine();
+}
+
+function releaseAnswerAudio() {
+  if (answerAudio.value) URL.revokeObjectURL(answerAudio.value);
+  answerAudio.value = null;
+}
+
 function end() {
+  releaseAnswerAudio();
   send({ type: "bye" });
   router.replace({ name: "roadside-result", params: { sessionId: route.params.sessionId } });
 }
 
 onBeforeUnmount(() => {
+  releaseAnswerAudio();
   stopRecording();
   if (socket && socket.readyState === WebSocket.OPEN) socket.close();
 });
@@ -173,6 +207,20 @@ onBeforeUnmount(() => {
       <p class="session__line">{{ officerText }}</p>
       <audio v-if="officerAudio" :src="officerAudio" autoplay class="session__audio" />
 
+      <template v-if="phase === Phase.HEARD">
+        <p class="session__heard-label">{{ t("roadside.session.heard") }}</p>
+        <p class="session__heard">{{ heardText || "—" }}</p>
+        <p v-if="heardUnclear" class="session__unclear">{{ t("roadside.session.unclear") }}</p>
+
+        <audio v-if="answerAudio" :src="answerAudio" controls class="session__replay"
+               :aria-label="t('roadside.session.replay')" />
+
+        <button class="session__next" type="button" @click="nextQuestion">
+          {{ t("roadside.session.next") }}
+        </button>
+      </template>
+
+      <template v-else>
       <p class="session__status">
         {{ phase === Phase.RECORDING ? t("roadside.session.listening")
            : phase === Phase.SCORING ? t("roadside.session.scoring")
@@ -191,6 +239,7 @@ onBeforeUnmount(() => {
       >
         <Mic :size="28" aria-hidden="true" />
       </button>
+      </template>
     </template>
 
     <button class="session__end" type="button" @click="end">
@@ -260,6 +309,45 @@ onBeforeUnmount(() => {
 }
 .session__mic[aria-pressed="true"] {
   background: var(--flare-500);
+}
+/* what the recogniser heard — the driver's own words, so they read at body size and not
+   as a caption. `--text-1` because this is content, not chrome. */
+.session__heard-label {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  text-transform: uppercase;
+}
+.session__heard {
+  margin: 0;
+  color: var(--text-1);
+  font-size: var(--type-title-size);
+  line-height: var(--type-title-line);
+  text-align: center;
+}
+.session__unclear {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  text-align: center;
+}
+.session__replay {
+  width: 100%;
+  max-width: 100%;
+}
+.session__next {
+  min-height: var(--touch-primary);
+  padding: var(--s-3) var(--s-4);
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-family: var(--font-sans);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
 }
 .session__end {
   min-height: var(--touch-min);

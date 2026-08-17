@@ -30,6 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db, require_module
+from app.api.media import KIND_DOCUMENT, SIZE_FULL, media_url
 from app.core.db import SessionLocal
 from app.foundation.f01_identity import public as identity
 from app.foundation.f09_ai_gateway.domain import speech
@@ -251,7 +252,19 @@ async def _officer_frame(websocket: WebSocket, session_id, message) -> bool:
             # E3 §E3.1.2 is explicit that pre-synthesized officer audio is what holds the
             # simulation to sub-1.3s and ~$0.10 COGS; pushing bytes down the control
             # channel would put synthesis latency inside the turn.
-            "audio_url": f"/media/document/{officer.audio_ref}" if officer.audio_ref else None,
+            #
+            # THE URL MUST BE SIGNED. This was a hand-built `/media/document/{ref}` with no
+            # `exp` and no `sig`, and `serve_media` requires both — so the moment any line
+            # had audio, the player would have got a 422 instead of a voice. It could not be
+            # seen because `audio_ref` has been null on every row that ever existed: the
+            # synthesis path is still a named remainder. `media_url` is the only correct way
+            # to address F6, and SIZE_FULL because there is no such thing as a thumbnail of
+            # a recording.
+            "audio_url": (
+                media_url(KIND_DOCUMENT, officer.audio_ref, size=SIZE_FULL)
+                if officer.audio_ref
+                else None
+            ),
         })
         return True
     finally:

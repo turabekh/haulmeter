@@ -145,7 +145,8 @@ def test_two_phrasings_of_one_question_can_both_be_released(client, db):
 
     for variant in (first, second):
         client.post(f"/admin/roadside/content/variant/{variant.id}/review")
-        assert client.post(f"/admin/roadside/content/variant/{variant.id}/release").status_code == 200
+        resp = client.post(f"/admin/roadside/content/variant/{variant.id}/release")
+        assert resp.status_code == 200
 
     from app.modules.m15_roadside.domain import content
 

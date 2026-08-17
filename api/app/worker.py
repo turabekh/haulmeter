@@ -94,6 +94,12 @@ def _jobs() -> list[Job]:
         # Unflagged HERE and gated inside the dispatcher instead: a job that does not run
         # cannot be observed running, and silence is this class's most likely failure.
         Job("arrival_reminders", None, 60, runners.run_arrival_reminders),
+        # AI-CONTEXT: officer-line synthesis (E3 §E3.1.2). FLAGGED, unlike the sweep
+        # below it: that one is a promise, this one is a cost. Fifteen minutes because
+        # content is released by a human a few lines at a time, and a driver reaching a
+        # newly released line before its voice exists simply reads it — the surface
+        # already treats text as the simulation when audio is absent.
+        Job("m15_content_audio", "m15_roadside", 900, runners.run_m15_content_audio),
         # AI-CONTEXT: the 30-day audio retention sweep (E3 §E3.4.3, D14). UNFLAGGED for
         # the same reason `outbound_mail` is, and the runner argues it at length: a
         # retention promise a feature flag can revoke was never a promise. Hourly because
