@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.foundation.f09_ai_gateway import public as ai
 
 PROMPT_KEY = "m15_intent_classify"
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 
 # AI-CONTEXT: Q-1 lives in the prompt text itself, not only in the tests. A rubric that
 # says "score the response" invites a model to score the ENGLISH, because that is the
@@ -43,6 +43,8 @@ Report, as JSON:
   "slots_filled": the required pieces of information that are present in the answer.
   "slots_missing": those that are not.
   "intelligible": true if a person could understand what was meant.
+  "asked_for_repeat": true if the driver did not answer but ASKED THE OFFICER TO REPEAT
+    or rephrase — "sorry?", "say again", "could you repeat that", "I didn't catch that".
 
 RULES YOU MUST FOLLOW:
 - Judge MEANING ONLY. Never judge accent, grammar, fluency, vocabulary size, verb tense,
@@ -52,6 +54,9 @@ RULES YOU MUST FOLLOW:
 - A grammatically perfect answer to the WRONG question is intent_matched false.
 - If you cannot tell what was said, set intelligible false. Do not guess, and do not
   penalise — an unclear recording is not a failed answer.
+- ASKING THE OFFICER TO REPEAT IS NOT A WRONG ANSWER. It is what a careful driver does
+  when they did not hear. Set asked_for_repeat true and intent_matched false; the two
+  together mean "they did not answer, and here is why" rather than "they got it wrong".
 """
 
 # AI-CONTEXT: the fixture that matters most is the first one, and it is E3's own example.
@@ -59,6 +64,27 @@ RULES YOU MUST FOLLOW:
 # carries the meaning beats fluent English that does not. A rubric that gets this backwards
 # is one that scores accent while claiming not to.
 EVAL_FIXTURES = [
+    # AI-CONTEXT: the repeat request, and it is here because the field existed for a
+    # version without the prompt ever asking for it — `rubric_f9` parsed
+    # `asked_for_repeat` out of a payload no model had been told to produce, so
+    # REPETITION_REQUIRED could not fire in production and the officer never repeated
+    # himself. Measured, not reasoned: a live session answered "Sorry, could you say that
+    # again?" and was scored INTENT_MISUNDERSTOOD + IRRELEVANT.
+    {
+        "input": {
+            "officer_line": "How many hours have you been driving today?",
+            "canonical_meaning": "the driver states hours driven today",
+            "required_slots": "hours",
+            "transcript": "Sorry, could you say that again?",
+        },
+        "expected": {
+            "intent_matched": False,
+            "slots_filled": [],
+            "slots_missing": ["hours"],
+            "intelligible": True,
+            "asked_for_repeat": True,
+        },
+    },
     {
         "input": {
             "officer_line": "Where are you headed?",

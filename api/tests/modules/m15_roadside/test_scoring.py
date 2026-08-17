@@ -231,3 +231,41 @@ def test_the_rubric_returns_a_verdict_not_a_score():
     assert hasattr(verdict, "intent_matched")
     assert not hasattr(verdict, "score")
     assert not hasattr(verdict, "band")
+
+
+def test_a_repeat_request_INSTEAD_of_an_answer_carries_no_scores():
+    """AI-CONTEXT: the half `DIAGNOSTIC_ONLY` claimed and nothing implemented.
+
+    That frozenset named REPETITION_REQUIRED as "never a failure" and was read by no code
+    at all. A driver who said "sorry?" and nothing else scored comprehension 0 and picked
+    up INTENT_MISUNDERSTOOD and IRRELEVANT — by definition, since they had not matched the
+    intent. So the product punished the exact behaviour a careful driver shows at a real
+    window, while a comment said it did not.
+
+    No scores at all, in the shape NO_RESPONSE and the ASR floor already use: excluded
+    from the band rather than dragging it down.
+    """
+    asked = _score("Sorry, could you say that again?", rubric=DeterministicRubric(
+        asked_for_repeat=True, intent_matched=False
+    ))
+    assert asked.scores == {}
+    assert asked.failure_tags == [FailureTag.REPETITION_REQUIRED.value]
+    assert FailureTag.INTENT_MISUNDERSTOOD.value not in asked.failure_tags
+    assert FailureTag.IRRELEVANT.value not in asked.failure_tags
+
+
+def test_the_prompt_asks_for_every_field_the_rubric_parses():
+    """The defect that made all of this dead code, as a test.
+
+    `rubric_f9` reads `asked_for_repeat` out of the model's JSON. The prompt never asked
+    for it, so no model ever produced it, so it was always False, so REPETITION_REQUIRED
+    could not fire in production — and the officer never repeated himself. A parsed field
+    that the prompt does not request is a feature that cannot happen.
+    """
+    from app.modules.m15_roadside.domain import prompts
+
+    for field in ("intent_matched", "slots_filled", "slots_missing", "intelligible",
+                  "asked_for_repeat"):
+        assert f'"{field}"' in prompts.PROMPT_TEMPLATE, (
+            f"{field} is parsed from the model's reply but the prompt never asks for it"
+        )

@@ -226,10 +226,13 @@ def score_turn(
     Order matters and is not arbitrary:
       1. NO RESPONSE  — nothing was said; nothing else can be judged.
       2. ASR FLOOR    — we could not hear it; Q-2 forbids scoring it either way.
-      3. everything else.
+      3. ASKED TO REPEAT — they asked a question INSTEAD of answering (asking AND then
+         answering is an answer, and keeps its score).
+      4. everything else.
 
-    Steps 1 and 2 both return early WITHOUT a negative score, which is the Q-2 law: a turn
-    we could not hear is excluded from bands, not marked wrong.
+    Steps 1, 2 and 3 all return early WITHOUT a negative score, which is the Q-2 law: a
+    turn we could not hear — or that was not an attempt at an answer — is excluded from
+    bands, not marked wrong.
     """
     if transcript is None or not transcript.strip():
         return TurnScore(
@@ -253,6 +256,28 @@ def score_turn(
     verdict = rubric.judge(
         officer_line=officer_line, transcript=transcript, intent_key=intent_key
     )
+    # AI-CONTEXT: a REPEAT REQUEST IS NOT A WRONG ANSWER, and until this existed it was
+    # scored as one. `DIAGNOSTIC_ONLY` named REPETITION_REQUIRED as "never a failure" and
+    # NOTHING READ THAT SET — the tag was appended beside INTENT_MISUNDERSTOOD and
+    # IRRELEVANT, and comprehension scored 0, because a driver who asks "sorry?" has by
+    # definition not matched the intent. So the product punished the exact behaviour a
+    # careful driver shows at a real window, and the comment claiming otherwise had no
+    # code behind it.
+    #
+    # Early return in the shape steps 1 and 2 already use: no scores at all, so the turn
+    # is excluded from the band rather than dragging it down. The officer answers this by
+    # asking again (`session_loop.REASK_TRIGGERS`), which is the whole point.
+    # ...but ONLY when it is a repeat request INSTEAD of an answer. "Sorry, say again?
+    # Chicago." is both, and it is a complete answer with a diagnostic attached — a test
+    # that predates this caught exactly that and stopped it losing its score.
+    if verdict.asked_for_repeat and not verdict.intent_matched:
+        return TurnScore(
+            scores={},
+            failure_tags=[FailureTag.REPETITION_REQUIRED.value],
+            review_needed=False,
+            slots=SlotResult(missing=list(expected_slots)),
+        )
+
     slots = validate_slots(expected_slots, transcript)
     tags: list[str] = []
 
