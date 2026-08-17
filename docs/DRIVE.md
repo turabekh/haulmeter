@@ -370,26 +370,35 @@ as a parking reading) → status + freshness update; armed load → corridor sur
 at all — that is step 1, and it is the only step most sessions should see.
 
 With the flag on (`/admin/flags`, an operator decision — not a step to take casually):
-1. **More → Roadside Ready.** With nothing released, the screen says **why** it is empty —
+1. **The stop opens and closes.** "Afternoon. I'll need to ask you a few questions." at
+   the start, "That's everything." at the end — not a screen that simply changes.
+2. **More → Roadside Ready.** With nothing released, the screen says **why** it is empty —
    the lines are with a reviewer — rather than showing a spinner or an offer that fails.
 2. **Admin → Roadside content** (a second, platform-admin browser): a variant reads `draft`
    and offers only **Mark reviewed**. Release is not offered from draft, because the server
    refuses it and a button that always 422s teaches an operator to distrust the surface.
    Review it → **Release** appears → release it. **Holdouts are labelled** in the list.
 3. Back on the driver app, reload **Roadside Ready** → the check is now offered.
-4. **Hands-free is the point.** The officer finishes speaking and **the mic opens by
+4. **Answer the WRONG question on purpose** — say "I'm hauling furniture" when asked about
+   hours. The officer must **clarify** ("I'm asking how long you've been driving today, not
+   where you're headed"), **once**, and then move on if you miss it again. That is FR2's
+   repair branch and its validation line: reached, and recovered from.
+5. **Listen for yourself in his mouth.** Answer "Chicago" and he says *"Chicago. Okay."* —
+   the fragment is synthesized once ever and cached by text. And he must NOT thank you for
+   an answer he is about to correct.
+6. **Hands-free is the point.** The officer finishes speaking and **the mic opens by
    itself** — do not reach for a button. Answer normally; a pause of about a second ends
    your turn. Then the officer says something ("Alright.") before the next question.
    **If it never hears you** (loud cab, denied mic) it says so and gives you the button.
-5. **Start** → the consent screen states three things: the voice recording, the **30-day
+7. **Start** → the consent screen states three things: the voice recording, the **30-day
    deletion** with scores kept, and the microphone prompt. **"Not now" is a full-size
    button beside "I agree"** — check that, it is the whole value of the record.
-6. **Agree** → the session opens. The officer's line is the largest thing on the screen;
+8. **Agree** → the session opens. The officer's line is the largest thing on the screen;
    the mic is 56 dp. Hold it, answer, release.
-7. **The pause:** with the session open, put the app in DRIVING (`/dev`, or drive). The
+9. **The pause:** with the session open, put the app in DRIVING (`/dev`, or drive). The
    session says **"Paused — the truck is moving"** and stops recording. It does **not**
    redirect — a driver bounced to the map mid-sentence learns nothing.
-8. Finish → the **result**: a band, the word **provisional**, the skills worth practising
+10. Finish → the **result**: a band, the word **provisional**, the skills worth practising
    named as skills, and **no percentage anywhere**.
 
 ## J13c — The teaching loop `[M15-FR5]`
