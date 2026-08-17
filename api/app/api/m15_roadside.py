@@ -511,7 +511,13 @@ async def _answer_frame(websocket: WebSocket, session_id, message) -> bool:
         # of its own. A separate frame would need its own ordering guarantee against the
         # next officer line, and the client would have to sequence two sounds it received
         # independently — the ack belongs to the answer that earned it.
-        ack = loop.pick_acknowledgement(db)
+        # AI-CONTEXT: NO ACKNOWLEDGEMENT WHEN A CLARIFICATION IS COMING. Measured on a live
+        # session: the officer said "Thank you." and then immediately "I'm asking how long
+        # you've been driving today, not where you're headed" — nobody thanks you and then
+        # corrects you in the same breath. When the answer missed the question, the REPAIR
+        # is the response; an ack in front of it is a machine being polite on a schedule.
+        misunderstood = "INTENT_MISUNDERSTOOD" in (turn.failure_tags or [])
+        ack = None if misunderstood else loop.pick_acknowledgement(db)
         # AI-CONTEXT: THE OFFICER SAYS YOUR ANSWER BACK. "Chicago. Okay." is a different
         # experience from "Okay." — it is the difference between a machine that scored you
         # and a person who heard you, and E3 budgets the runtime TTS for exactly this. The

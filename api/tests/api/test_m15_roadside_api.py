@@ -342,3 +342,71 @@ def test_an_audio_url_is_signed_when_a_line_has_a_voice(client, db):
     url = plan["phrase_family"][0]["audio_url"]
 
     assert "sig=" in url and "exp=" in url, "an unsigned media URL is a 422 in the player"
+
+
+def _rubric_saying(intent_matched: bool):
+    class _Stub:
+        def __init__(self, *a, **kw):
+            pass
+
+        def judge(self, *, officer_line, transcript, intent_key):
+            from app.modules.m15_roadside.domain.scoring import RubricVerdict
+
+            return RubricVerdict(intent_matched=intent_matched, intelligible=True)
+
+    return _Stub
+
+
+def _answering_session(db):
+    """A released question, an open session, and one officer turn already asked."""
+    _module_on(db)
+    intent = _draft_content(db)
+    db.add(m.PhraseVariant(
+        intent_id=intent.id, text="Where are you headed?",
+        difficulty=m.Difficulty.clear, status=m.ContentStatus.released, version=2,
+    ))
+    db.add(m.OfficerAck(text="Okay.", kind="ack", status=m.ContentStatus.released))
+    db.flush()
+    session = _session(db)
+    db.add(m.Turn(
+        session_id=session.id, seq=1, speaker=m.Speaker.officer,
+        intent_id=intent.id, transcript="Where are you headed?",
+    ))
+    db.flush()
+    return session
+
+
+def _scored_frame(client, session, transcript):
+    with client.websocket_connect(f"/roadside/session/{session.id}/stream") as ws:
+        ws.send_json({"type": "answer", "transcript": transcript, "driver_state": "IDLE"})
+        frame = ws.receive_json()
+        ws.send_json({"type": "bye"})
+    return frame
+
+
+def test_no_acknowledgement_when_a_clarification_is_coming(client, db, monkeypatch):
+    """AI-CONTEXT: measured on a live session, not reasoned about. The officer said
+    "Thank you." and then "I'm asking how long you've been driving today, not where you're
+    headed." Nobody thanks you and then corrects you in the same breath — when the answer
+    missed the question, the repair IS the response and an ack in front of it is a machine
+    being polite on a schedule.
+    """
+    monkeypatch.setattr(m15_api, "F9Rubric", _rubric_saying(False))
+    session = _answering_session(db)
+
+    frame = _scored_frame(client, session, "I am hauling furniture")
+
+    assert "INTENT_MISUNDERSTOOD" in frame["tags"]
+    assert frame["ack"] is None
+
+
+def test_an_answer_that_landed_still_gets_acknowledged(client, db, monkeypatch):
+    """The control. Without it the assertion above would also pass on a socket that had
+    quietly stopped acknowledging anything at all."""
+    monkeypatch.setattr(m15_api, "F9Rubric", _rubric_saying(True))
+    session = _answering_session(db)
+
+    frame = _scored_frame(client, session, "I am headed to Chicago")
+
+    assert "INTENT_MISUNDERSTOOD" not in frame["tags"]
+    assert frame["ack"] == "Okay."
