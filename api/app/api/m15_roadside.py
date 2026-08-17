@@ -176,11 +176,19 @@ async def _officer_frame(websocket: WebSocket, session_id, message) -> bool:
             await websocket.close(code=CLOSE_BAD_SESSION)
             return False
         try:
+            # AI-CONTEXT: `allow_draft` IS NOT READ FROM THE FRAME, and this line used to
+            # read it. The dev seam's entire safety is that nothing in the request path
+            # passes it — `session_loop.py` says so in its docstring and
+            # `test_session_loop.py` asserts the domain DEFAULT, which cannot testify
+            # about what an HTTP layer chooses to pass. This layer was passing it, off
+            # the client's own JSON, so any browser could ask for unreleased content and
+            # be served it. Q-6 is "content ships reviewed or not at all"; F9 drafts the
+            # text, and a client-set boolean turned the review pipeline into a
+            # suggestion. The refusal now belongs to the server in every case.
             officer = loop.next_officer_turn(
                 db,
                 session,
                 driver_state=loop.DriverState(message.get("driver_state", "IDLE")),
-                allow_draft=bool(message.get("allow_draft")),
             )
         except loop.RefusedInMotion:
             db.commit()
