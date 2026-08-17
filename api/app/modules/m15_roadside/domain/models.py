@@ -295,6 +295,42 @@ class Turn(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ModelAnswer(Base):
+    """A clear answer a driver SHADOWS (M15-FR5), in English.
+
+    AI-CONTEXT: deliberately NOT a `PhraseVariant`. That table is "one way an officer might
+    say an intent", and the session loop draws its questions from it — a model answer
+    living there could be asked as a question, which is the exchange back to front.
+
+    Shaped like one on purpose, though: same `status`, `version` and `audio_ref`, so the
+    Q-6 publish path, the admin review surface and the TTS job all handle it without
+    special cases.
+    """
+
+    __tablename__ = "model_answer"
+    __table_args__ = (
+        Index("ix_model_answer_intent_status", "intent_id", "status"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    intent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey(f"{SCHEMA}.intent.id"))
+    text: Mapped[str] = mapped_column(Text)
+    # the answer is ENGLISH — it is what the driver is practising. The coaching that
+    # explains it is in their own language, and lives in `coaching_content`.
+    locale: Mapped[str] = mapped_column(String(12), default="en", server_default="en")
+    audio_ref: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("f06.document.id"), nullable=True
+    )
+    status: Mapped[ContentStatus] = mapped_column(
+        Enum(ContentStatus, name="content_status", schema=SCHEMA),
+        default=ContentStatus.draft,
+        server_default=ContentStatus.draft.value,
+    )
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class SkillState(Base):
     """Spaced repetition per driver per variant."""
 
