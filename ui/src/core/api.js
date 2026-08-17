@@ -2407,3 +2407,14 @@ export async function submitCoachingAttempt(variantId, audioB64) {
   if (!resp.ok) throw new Error(`coaching attempt ${resp.status}`);
   return resp.json();
 }
+
+export const fetchTodaysDrill = () => apiGet("/roadside/drill/today");
+
+export async function completeDrill(planId) {
+  const resp = await fetch(`${API_BASE}/roadside/drill/${planId}/complete`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!resp.ok) throw new Error(`drill complete ${resp.status}`);
+  return resp.json();
+}

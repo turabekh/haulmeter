@@ -405,6 +405,20 @@ an hours question — so there is something to teach.
 5. **Signed in**, a `m15.skill_state` row appears and its `srs_due_at` moves. As a
    **guest**, nothing is recorded and the screen says so rather than pretending.
 
+## J13d — The daily drill `[M15-FR6, partial]`
+Follows J13c, **signed in** — a drill belongs to a person.
+
+1. **Roadside Ready → Today's practice.** Before any check has been done it says
+   *"Nothing due today. Practice appears after a check."*
+2. After coaching, it holds the phrasings you practised, **interleaved**: two consecutive
+   items should be DIFFERENT questions, not two ways of asking one. That is the property
+   worth eyeballing — it is what makes the drill teach the question rather than the answer.
+3. Answer each; the day ends on **Finish** and `m15.drill_plan.completed_at` is stamped.
+4. **What is deliberately missing:** nothing reminds you this screen exists (P-1 is an
+   unsigned owner fork), and the drill does **not** work offline yet — F12 prefetch of
+   drill audio is not built, so FR6's own validation (a day's drill in airplane mode) is
+   still unmet. The surface makes no promise about either.
+
 ## J14 — Evidence share links `[F4 sharing]`
 1. Export PDF and Share are real 48 dp controls.
 2. Create link → open incognito (no session) → renders from **pinned bytes**.

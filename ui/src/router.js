@@ -49,6 +49,7 @@ import RoadsideConsentSurface from "./surfaces/RoadsideConsentSurface.vue";
 import RoadsideSessionSurface from "./surfaces/RoadsideSessionSurface.vue";
 import RoadsideResultSurface from "./surfaces/RoadsideResultSurface.vue";
 import RoadsideCoachSurface from "./surfaces/RoadsideCoachSurface.vue";
+import RoadsideDrillSurface from "./surfaces/RoadsideDrillSurface.vue";
 import { mustChangePassword, isAuthenticated } from "./core/api.js";
 
 // DEV-ONLY: the /dev directory ships ONLY in development builds. Vite replaces
@@ -120,6 +121,12 @@ export const routes = [
     name: "roadside-session",
     component: RoadsideSessionSurface,
     meta: { chrome: false, driving: "withdraws" },
+  },
+  {
+    path: "/roadside/drill",
+    name: "roadside-drill",
+    component: RoadsideDrillSurface,
+    meta: { driving: "withdraws" },
   },
   {
     path: "/roadside/coach/:sessionId",

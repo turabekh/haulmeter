@@ -81,6 +81,16 @@ function start() {
         {{ t("roadside.start") }}
       </button>
     </template>
+
+    <!-- AI-CONTEXT: the drill entry, and it sits OUTSIDE the catalogue's data branch on
+         purpose — a driver with practice due has something to do even on a box where no
+         scenario is currently startable. Nothing reminds them it is here (P-1 is
+         unsigned), so the app has to at least show it. -->
+    <template v-if="state === LoadState.LOADED">
+      <button class="roadside__drill" type="button" @click="router.push({ name: 'roadside-drill' })">
+        {{ t("roadside.drill.cta") }}
+      </button>
+    </template>
   </div>
 </template>
 
@@ -133,6 +143,17 @@ function start() {
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
   font-weight: var(--type-label-weight);
+}
+.roadside__drill {
+  min-height: var(--touch-min);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+  background: var(--ink-2);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
 }
 .roadside__retry {
   min-height: var(--touch-min);

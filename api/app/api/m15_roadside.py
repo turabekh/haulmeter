@@ -260,6 +260,66 @@ def coaching_attempt(
     }
 
 
+@router.get("/drill/today")
+def drill_today(
+    db: Session = Depends(get_db),
+    account: identity.Account | None = Depends(current_account),
+) -> dict:
+    """Today's drill (M15-FR6). A guest gets an honest empty answer, not a 403.
+
+    AI-CONTEXT: `plan: null` covers three different situations on purpose — a guest, a
+    driver with nothing due, and a driver who has finished today. The surface distinguishes
+    them from what it already knows (is anyone signed in, was the day completed), and none
+    of the three is an error worth a status code.
+
+    NO REMINDER IS SENT FROM ANYWHERE. P-1 `readiness_reminder` is an unsigned owner fork
+    (entry 177): a driver who opens the app finds their drill, and a driver who does not is
+    the half that waits for that signature.
+    """
+    from app.modules.m15_roadside.domain import drills
+
+    plan = drills.todays_drill(db, account.id if account else None)
+    if plan is None:
+        return {"plan": None}
+
+    items = []
+    for raw in plan.items.get("variant_ids", []):
+        variant = db.get(m15.PhraseVariant, uuid.UUID(raw))
+        if variant is None:
+            continue
+        items.append({
+            "variant_id": str(variant.id),
+            "text": variant.text,
+            "audio_url": _audio_url(variant.audio_ref),
+        })
+    db.commit()
+    return {
+        "plan": {
+            "id": str(plan.id),
+            "day": plan.plan_day,
+            "completed": plan.completed_at is not None,
+            "items": items,
+        }
+    }
+
+
+@router.post("/drill/{plan_id}/complete")
+def drill_complete(
+    plan_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    account: identity.Account | None = Depends(current_account),
+) -> dict:
+    from app.modules.m15_roadside.domain import drills
+
+    plan = db.get(m15.DrillPlan, plan_id)
+    if plan is None or account is None or plan.account_id != account.id:
+        # a plan belongs to one driver; not-yours and not-there are the same answer
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such plan")
+    drills.complete_drill(db, plan)
+    db.commit()
+    return {"id": str(plan.id), "completed": True}
+
+
 def _audio_url(ref):
     return media_url(KIND_DOCUMENT, ref, size=SIZE_FULL) if ref else None
 

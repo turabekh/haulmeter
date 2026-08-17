@@ -765,6 +765,26 @@ const ROADSIDE_COACHING_Q9 = {
   coaching: [{ ...ROADSIDE_COACHING.coaching[0], explanation: null, glosses: {} }],
 };
 
+const ROADSIDE_DRILL = {
+  plan: {
+    id: "00000000-0000-0000-0000-0000000000d4",
+    day: 3,
+    completed: false,
+    items: [
+      {
+        variant_id: "00000000-0000-0000-0000-0000000000d3",
+        text: "How many hours are on your clock today?",
+        audio_url: null,
+      },
+      {
+        variant_id: "00000000-0000-0000-0000-0000000000d5",
+        text: "Where you delivering to?",
+        audio_url: null,
+      },
+    ],
+  },
+};
+
 const ROADSIDE_RESULT = {
   session_id: ROADSIDE_SESSION,
   band: "yellow",
@@ -1083,6 +1103,18 @@ const SURFACES = [
   }],
   ["roadside-consent", "/roadside/consent/00000000-0000-0000-0000-0000000000d1", {
     ready: ".consent__agree",
+  }],
+  /* AI-CONTEXT: the drill's two states. `roadside-drill` is a live item — the display-step
+   * question, the play control and the 56 dp mic — and `roadside-drill-none` is the one a
+   * driver meets most often at the start, because practice only exists after a check.
+   * An empty state has a layout spec like anything else (§15.3). */
+  ["roadside-drill", "/roadside/drill", {
+    mocks: { "/roadside/drill/today": ROADSIDE_DRILL },
+    ready: ".drill__line",
+  }],
+  ["roadside-drill-none", "/roadside/drill", {
+    mocks: { "/roadside/drill/today": { plan: null } },
+    ready: ".drill__note",
   }],
   ["roadside-coach", `/roadside/coach/${ROADSIDE_SESSION}`, {
     mocks: { [`/roadside/session/${ROADSIDE_SESSION}/coaching`]: ROADSIDE_COACHING },
