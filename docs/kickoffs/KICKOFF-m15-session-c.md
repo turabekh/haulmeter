@@ -1,8 +1,24 @@
 # KICKOFF — M15 Session C: the surface that makes it reachable
 
-**Status: DRAFT, awaiting owner approval.** D14 is signed at **scope (b) — Session A only**,
-with "B and C authorized against this entry by their own kickoffs." This document is that
-kickoff for C. No code until it is approved.
+**Status: APPROVED 2026-08-18 (owner), AMENDED mid-session — see §0.** D14 is signed at
+**scope (b) — Session A only**, with "B and C authorized against this entry by their own
+kickoffs." This document is that kickoff for C. Decision-log entry **179** records the
+approval, the signed band thresholds and the amendment; entry **180** records the defect
+that forced it.
+
+---
+
+## 0. What the owner signed, and the one thing that changed
+
+**Signed as written:** the scope in §2, **band thresholds `m15.band_green_min` 80 /
+`m15.band_yellow_min` 55**, and **six locales + pseudo** with the seven-locale DoD line
+recorded as OPEN rather than claimed.
+
+**Amended, on a finding:** the **F14 content review/publish surface joins this session's
+scope.** The reason is in §4a. Without it every surface below renders its empty state
+permanently — there is no path, anywhere in the product, for content to become `released`,
+so the driver screens would have nothing to show on production or on the owner's own
+machine.
 
 ---
 
@@ -56,6 +72,30 @@ is the kind of screen that invites invention.
   something worth opening.
 - **No deploy.** Production does not have the m15 flag row or migrations 0084–0087, and that
   stays true until you ask.
+
+## 4a. The amendment: the publish path, and why it is not scope creep
+
+Two facts, both found by reading rather than assuming:
+
+- **Nothing is released and nothing can be.** The DEV_SEED scenario is draft by explicit
+  design — *"DRAFT, and it stays draft… which is exactly what makes it safe to seed"* — and
+  Q-6 forbids draft reaching a driver.
+- **`mark_reviewed` and `release` exist in `domain/content.py` and nothing exposes them.**
+  `admin.py` carries no m15 reference. The review pipeline has no operator surface, so no
+  human can move content forward through any screen in the product.
+
+Add the entry-180 fix — a client could previously set `allow_draft` itself, and now cannot —
+and the driver surfaces would be permanently empty. So Session C also builds the **F14
+content review/publish surface** that E3 §E3.1.5 already specifies: list draft/reviewed
+content, mark reviewed with a named human, release with a version bump.
+
+**The officer lines are English.** Q-6 requires a *named human* reviewer, not a native Uzbek
+speaker, so the owner can review and release scenario 1 himself. The Uzbek dependency stays
+on Session D's coaching content, where it belongs.
+
+It also needs **`GET /roadside/scenarios`**: the probe finds a scenario by querying the
+database directly, and there is no HTTP route by which a client could ever learn one. A
+surface cannot open a session it has no way to name.
 
 ## 4. Three things that block the Phase A DoD, and none of them are code
 
