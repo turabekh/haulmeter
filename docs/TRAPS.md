@@ -425,6 +425,24 @@ session*; this file records what is permanently true.
     slots is label-plus-figures in separate elements** — which is right anyway, since a
     figure is data and not part of a translated sentence. *(128, and 138 before it)*
 
+64b. **THERE IS NO ICU PLURAL SUPPORT. `t()` does `replace(/\{(\w+)\}/g, …)` and nothing
+    else** — design-prd §12.5 says "full ICU messages with placeholders", and the runtime
+    implements the placeholder half only. A `{count, plural, one {…} other {…}}` string
+    renders to the driver **literally, braces and all**, and no test in the suite says so:
+    the catalogue contained no plural at all until M15, so nothing had ever exercised it.
+
+    **The pseudo-locale test is what actually catches you, and it names the wrong thing.**
+    `pseudoInflate` splits on `/(\{[^}]+\})/g`, so an ICU plural's first `}` ends the
+    "placeholder" and almost the whole message is treated as untranslatable — the inflation
+    lands far under +40% and the failure reads *"roadside.result.review_needed not
+    inflated: expected 95 to be greater than or equal to 124"*. That is a message about
+    padding, arriving for a reason that has nothing to do with padding.
+
+    **Write the string so no runtime has to inflect it.** `"Waiting on a human check: {n}"`
+    is correct at 1 and at 7, in six languages, and needs no plural rules — the same
+    label-plus-figure shape 64a already arrives at from the other direction. Adding real
+    ICU is a change to `i18n.js` with its own tests, not something to assume works. *(135)*
+
 65. **A driver-facing string belongs in a `messages.py` beside its module**, registered with
     `f15.register_catalogue(db, prefix, mapping)` and read with
     `notify.localized_text(db, account_id, key, fallback, **values)` — not in a literal at
