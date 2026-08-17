@@ -331,6 +331,61 @@ class ModelAnswer(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class RepairLine(Base):
+    """What an officer says when you answered a DIFFERENT question (M15-FR2).
+
+    AI-CONTEXT: E3 names these outright — "repair/clarification branches ('I'm asking where
+    you picked UP this load')" — and FR2's validation requires one reached and recovered
+    from. A real officer neither repeats himself nor shrugs and moves on: he tells you
+    which question he asked. Its own table for the same reason `officer_ack` has one — as
+    an intent's phrase variant it could be ASKED as an opening question, which is the
+    conversation inside out.
+    """
+
+    __tablename__ = "repair_line"
+    __table_args__ = (
+        Index("ix_repair_line_intent_status", "intent_id", "status"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    intent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey(f"{SCHEMA}.intent.id"))
+    text: Mapped[str] = mapped_column(Text)
+    locale: Mapped[str] = mapped_column(String(12), default="en", server_default="en")
+    audio_ref: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("f06.document.id"), nullable=True
+    )
+    status: Mapped[ContentStatus] = mapped_column(
+        Enum(ContentStatus, name="content_status", schema=SCHEMA),
+        default=ContentStatus.draft,
+        server_default=ContentStatus.draft.value,
+    )
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AudioFragment(Base):
+    """A synthesized scrap — a city, a number — cached by its text forever.
+
+    AI-CONTEXT: this is what lets the officer say "Chicago." back to a driver without
+    paying Azure every time anyone mentions Chicago. E3 budgets runtime TTS for exactly
+    this ("only small dynamic slot fragments touch TTS at runtime"); the unique index on
+    text is what turns per-turn into once-ever.
+    """
+
+    __tablename__ = "audio_fragment"
+    __table_args__ = (
+        UniqueConstraint("text", "locale", name="uq_audio_fragment_text_locale"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    text: Mapped[str] = mapped_column(String(200))
+    locale: Mapped[str] = mapped_column(String(12), default="en", server_default="en")
+    audio_ref: Mapped[uuid.UUID] = mapped_column(ForeignKey("f06.document.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class OfficerAck(Base):
     """What an officer says BETWEEN questions — "okay", "alright, thank you".
 
@@ -358,6 +413,10 @@ class OfficerAck(Base):
         server_default=ContentStatus.draft.value,
     )
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    # "ack" between questions, "opening" to start the stop, "closing" to end it. A real
+    # stop begins and ends; this one used to start mid-interrogation and stop by running
+    # out of questions.
+    kind: Mapped[str] = mapped_column(String(16), default="ack", server_default="ack")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

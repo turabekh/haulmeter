@@ -76,6 +76,11 @@ const answerAudio = ref(null);
 // someone talking into a screen that is not listening.
 const handsFree = ref(true);
 const ackText = ref("");
+// what the officer said back of the driver's OWN answer — "Chicago." — played before the
+// acknowledgement. The difference between a machine that scored you and a person who heard
+// you, and E3 budgets the runtime TTS for exactly this.
+const echoText = ref("");
+const closingText = ref("");
 
 let socket = null;
 let recorder = null;
@@ -94,6 +99,23 @@ let advanceTimer = null;
 function cancelAutoAdvance() {
   if (advanceTimer) clearTimeout(advanceTimer);
   advanceTimer = null;
+}
+
+// AI-CONTEXT: two clips, in order, without stacking them on top of each other. `Audio`
+// plays immediately, so firing both at once makes the officer say "ChicagoOkay" over
+// himself — which is worse than saying neither.
+function playInOrder(urls) {
+  const queue = urls.filter(Boolean);
+  if (!queue.length) return;
+  const next = () => {
+    const url = queue.shift();
+    if (!url) return;
+    const audio = new Audio(`${API_BASE}${url}`);
+    audio.onended = next;
+    audio.onerror = next;
+    audio.play().catch(next);
+  };
+  next();
 }
 
 function send(frame) {
@@ -142,11 +164,23 @@ onMounted(() => {
       phase.value = Phase.HEARD;
       // the officer acknowledges before moving on — that is the difference between an
       // interview and an interrogation by a machine
-      if (frame.ack_audio_url) new Audio(`${API_BASE}${frame.ack_audio_url}`).play().catch(() => {});
       cancelAutoAdvance();
       advanceTimer = setTimeout(nextQuestion, AUTO_ADVANCE_MS);
     } else if (frame.type === "complete") {
-      router.replace({ name: "roadside-result", params: { sessionId: route.params.sessionId } });
+      // a stop ENDS — the officer lets you go rather than the screen simply changing
+      closingText.value = frame.closing || "";
+      const leave = () =>
+        router.replace({ name: "roadside-result", params: { sessionId: route.params.sessionId } });
+      if (frame.closing_audio_url) {
+        const audio = new Audio(`${API_BASE}${frame.closing_audio_url}`);
+        audio.onended = leave;
+        audio.onerror = leave;
+        officerText.value = frame.closing || officerText.value;
+        phase.value = Phase.OFFICER;
+        audio.play().catch(leave);
+      } else {
+        leave();
+      }
     }
   };
 });
@@ -303,7 +337,9 @@ onBeforeUnmount(() => {
       />
 
       <template v-if="phase === Phase.HEARD">
-        <p v-if="ackText" class="session__ack">{{ ackText }}</p>
+        <p v-if="echoText || ackText" class="session__ack">
+          {{ [echoText, ackText].filter(Boolean).join(" ") }}
+        </p>
         <p class="session__heard-label">{{ t("roadside.session.heard") }}</p>
         <p class="session__heard">{{ heardText || "—" }}</p>
         <p v-if="heardUnclear" class="session__unclear">{{ t("roadside.session.unclear") }}</p>

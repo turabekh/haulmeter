@@ -29,6 +29,7 @@ from .models import (
     ModelAnswer,
     OfficerAck,
     PhraseVariant,
+    RepairLine,
     ScenarioVersion,
     SignItem,
 )
@@ -47,7 +48,13 @@ class HoldoutLeak(AssertionError):
 
 # every kind of content this module publishes; the transitions below are the same for all
 Publishable = (
-    PhraseVariant | SignItem | CoachingContent | ScenarioVersion | ModelAnswer | OfficerAck
+    PhraseVariant
+    | SignItem
+    | CoachingContent
+    | ScenarioVersion
+    | ModelAnswer
+    | OfficerAck
+    | RepairLine
 )
 
 

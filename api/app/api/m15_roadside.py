@@ -36,6 +36,7 @@ from app.foundation.f01_identity import public as identity
 from app.foundation.f09_ai_gateway.domain import speech
 from app.foundation.f09_ai_gateway.domain.enums import AiTask
 from app.modules.m15_roadside import public as m15
+from app.modules.m15_roadside.domain import audio as m15_audio
 from app.modules.m15_roadside.domain import session_loop as loop
 from app.modules.m15_roadside.domain.rubric_f9 import F9Rubric, RubricUnavailable
 
@@ -117,8 +118,15 @@ def open_session(
     except loop.RefusedInMotion as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
+    opening = loop.pick_line(db, "opening")
     db.commit()
-    return {"session_id": str(session.id), "consent_at": session.consent_at.isoformat()}
+    return {
+        "session_id": str(session.id),
+        "consent_at": session.consent_at.isoformat(),
+        # a real stop begins with the officer saying something before he asks anything
+        "opening": opening.text if opening else None,
+        "opening_audio_url": _audio_url(opening.audio_ref) if opening else None,
+    }
 
 
 @router.get("/session/{session_id}/result")
@@ -407,12 +415,17 @@ async def _officer_frame(websocket: WebSocket, session_id, message) -> bool:
 
         if officer is None:
             verdict = loop.complete_session(db, session)
+            # AI-CONTEXT: a stop ENDS. It used to stop by running out of questions, which
+            # is how a form ends, not how a person lets you go.
+            closing = loop.pick_line(db, "closing")
             db.commit()
             await websocket.send_json({
                 "type": "complete",
                 "band": verdict.band.value,
                 "provisional": verdict.provisional,
                 "label_key": verdict.label_key,
+                "closing": closing.text if closing else None,
+                "closing_audio_url": _audio_url(closing.audio_ref) if closing else None,
             })
             return True
 
@@ -499,9 +512,20 @@ async def _answer_frame(websocket: WebSocket, session_id, message) -> bool:
         # next officer line, and the client would have to sequence two sounds it received
         # independently — the ack belongs to the answer that earned it.
         ack = loop.pick_acknowledgement(db)
+        # AI-CONTEXT: THE OFFICER SAYS YOUR ANSWER BACK. "Chicago. Okay." is a different
+        # experience from "Okay." — it is the difference between a machine that scored you
+        # and a person who heard you, and E3 budgets the runtime TTS for exactly this. The
+        # fragment is cached by text, so the first driver to say Chicago pays one call and
+        # every later one pays nothing.
+        echo_text = next(iter((turn.observed_slots or {}).values()), None)
+        echo_ref = (
+            m15_audio.fragment_audio(db, str(echo_text)) if echo_text else None
+        )
         await websocket.send_json({
             "type": "scored",
             "seq": turn.seq,
+            "echo": str(echo_text) if echo_text else None,
+            "echo_audio_url": _audio_url(echo_ref),
             "ack": ack.text if ack else None,
             "ack_audio_url": _audio_url(ack.audio_ref) if ack else None,
             "transcript": transcript,

@@ -31,6 +31,7 @@ from app.modules.m15_roadside.domain.models import (
     ModelAnswer,
     OfficerAck,
     PhraseVariant,
+    RepairLine,
 )
 from db_registry import import_all_models
 
@@ -72,6 +73,38 @@ MODEL_ANSWERS = {
 # acknowledgement that sounds pleased ("Great!") teaches a driver to expect warmth that a
 # real stop will not supply. Neutral is the accurate register and also the kind one: it
 # does not tell a nervous driver they did well when they did not.
+# AI-CONTEXT: FR2's repair branches — what the officer says when you answered a DIFFERENT
+# question. E3's own example is the register: "I'm asking where you picked UP this load."
+# Each one NAMES the confusion rather than restating the question louder, because the
+# driver did understand English well enough to answer something — they answered the wrong
+# thing, and telling them which thing is the help.
+REPAIRS = {
+    "destination": [
+        "I'm asking where you're going, not what you're carrying.",
+        "Where are you delivering this load to?",
+    ],
+    "hos_hours_driven": [
+        "I'm asking how long you've been driving today, not where you're headed.",
+        "Hours. How many hours behind the wheel today?",
+    ],
+    "logbook_request": [
+        "I'm asking to see your logbook.",
+        "Your logs — can you show me your logs?",
+    ],
+}
+
+# how a stop starts and how it ends. Without these the simulation began mid-interrogation
+# and finished by running out of questions, which is how a form ends and not how a person
+# lets you go.
+OPENINGS = [
+    "Afternoon. I'll need to ask you a few questions.",
+    "Good afternoon. Just a routine check today.",
+]
+CLOSINGS = [
+    "Alright, you're good to go. Drive safe.",
+    "That's everything. Thanks for your time.",
+]
+
 ACKS = [
     "Okay.",
     "Alright.",
@@ -131,11 +164,24 @@ def main() -> None:
         added_answers += 1
 
     added_acks = 0
-    for text in ACKS:
-        if db.scalar(select(OfficerAck).where(OfficerAck.text == text)) is not None:
+    for kind, texts in (("ack", ACKS), ("opening", OPENINGS), ("closing", CLOSINGS)):
+        for text in texts:
+            if db.scalar(select(OfficerAck).where(OfficerAck.text == text)) is not None:
+                continue
+            db.add(OfficerAck(text=text, kind=kind, status=ContentStatus.draft))
+            added_acks += 1
+
+    added_repairs = 0
+    for key, texts in REPAIRS.items():
+        intent = db.scalar(select(Intent).where(Intent.key == key))
+        if intent is None:
             continue
-        db.add(OfficerAck(text=text, status=ContentStatus.draft))
-        added_acks += 1
+        for text in texts:
+            if db.scalar(select(RepairLine).where(RepairLine.text == text)) is not None:
+                continue
+            db.add(RepairLine(intent_id=intent.id, text=text, status=ContentStatus.draft))
+            added_repairs += 1
+    print(f"  + {added_repairs} repair lines")
 
     db.commit()
     print(f"  + {added_acks} officer acknowledgements")

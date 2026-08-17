@@ -41,7 +41,7 @@ from app.foundation.f09_ai_gateway import public as ai
 
 from .content import teachable_variants
 from .enums import ContentStatus
-from .models import Intent, ModelAnswer, OfficerAck
+from .models import AudioFragment, Intent, ModelAnswer, OfficerAck, RepairLine
 
 # AI-CONTEXT: a mailbox nobody reads on a domain the owner controls. It exists to satisfy
 # an ownership column, never to receive anything, and it holds no credential — F1 will not
@@ -84,7 +84,7 @@ def variants_needing_audio(db: DbSession) -> list:
     out: list = []
     for intent in db.scalars(select(Intent)):
         out.extend(v for v in teachable_variants(db, intent.id) if v.audio_ref is None)
-    for table in (ModelAnswer, OfficerAck):
+    for table in (ModelAnswer, OfficerAck, RepairLine):
         out.extend(
             db.scalars(
                 select(table).where(
@@ -94,6 +94,49 @@ def variants_needing_audio(db: DbSession) -> list:
             )
         )
     return out
+
+
+def fragment_audio(db: DbSession, text: str, *, locale: str = "en", storage=None):
+    """A synthesized scrap — a city, a number — cached by its text forever.
+
+    AI-CONTEXT: this is what lets the officer say "Chicago." back to a driver. E3 budgets
+    runtime TTS for exactly this ("only small dynamic slot fragments (names, cities, hours)
+    touch TTS at runtime"), and the cache is what keeps the budget: the FIRST driver to say
+    Chicago pays one Azure call, every later one pays nothing, for the life of the product.
+
+    Returns None rather than raising when there is no key or the call fails. An officer who
+    cannot say your city back still has an acknowledgement to fall back on, and a turn is
+    not worth failing over a flourish.
+    """
+    text = (text or "").strip()
+    if not text or len(text) > 200:
+        return None
+    existing = db.scalar(
+        select(AudioFragment).where(AudioFragment.text == text, AudioFragment.locale == locale)
+    )
+    if existing is not None:
+        return existing.audio_ref
+
+    try:
+        tts = ai.resolve_tts()
+        audio = tts.synthesize(text, locale=locale)
+    except Exception:
+        return None
+
+    owner = content_account(db)
+    document = documents.store_document(
+        db,
+        owner.id,
+        documents.DocType.other,
+        audio,
+        filename=f"fragment-{abs(hash(text))}.mp3",
+        content_type=AUDIO_CONTENT_TYPE,
+        storage=storage,
+    )
+    db.add(AudioFragment(text=text, locale=locale, audio_ref=document.id))
+    ai.record_audio_minutes(db, "m15", ai.AiTask.tts, max(len(audio) / 320_000.0, 0.02))
+    db.flush()
+    return document.id
 
 
 def synthesize_missing(db: DbSession, *, limit: int = 25, storage=None) -> dict:

@@ -33,6 +33,7 @@ from .domain.enums import (
     TurnReviewStatus,
 )
 from .domain.models import (
+    AudioFragment,
     CoachingContent,
     DrillPlan,
     Entitlement,
@@ -40,6 +41,7 @@ from .domain.models import (
     ModelAnswer,
     OfficerAck,
     PhraseVariant,
+    RepairLine,
     ReviewSample,
     ScenarioVersion,
     Session,
@@ -67,7 +69,9 @@ __all__ = [
     "MODULE",
     "CoachingContent",
     "ModelAnswer",
+    "AudioFragment",
     "OfficerAck",
+    "RepairLine",
     "ContentStatus",
     "Difficulty",
     "DrillPlan",

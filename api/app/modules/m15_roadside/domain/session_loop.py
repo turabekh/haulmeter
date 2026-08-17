@@ -38,7 +38,15 @@ from sqlalchemy.orm import Session as DbSession
 from .content import teachable_variants
 from .diagnosis import band_for
 from .enums import ContentStatus, SessionMode, Speaker, TurnReviewStatus
-from .models import Intent, OfficerAck, PhraseVariant, ScenarioVersion, Session, Turn
+from .models import (
+    Intent,
+    OfficerAck,
+    PhraseVariant,
+    RepairLine,
+    ScenarioVersion,
+    Session,
+    Turn,
+)
 from .scoring import ASR_CONFIDENCE_FLOOR, FailureTag, Rubric, score_turn
 
 
@@ -176,6 +184,52 @@ REASK_TRIGGERS = frozenset({
 MAX_REASKS_PER_INTENT = 1
 
 
+def pick_line(db: DbSession, kind: str, *, rng=None) -> OfficerAck | None:
+    """One released officer utterance of a kind — "ack", "opening", "closing"."""
+    pool = list(
+        db.scalars(
+            select(OfficerAck).where(
+                OfficerAck.status == ContentStatus.released, OfficerAck.kind == kind
+            )
+        )
+    )
+    if not pool:
+        return None
+    if rng is None:
+        import random
+
+        return random.choice(pool)
+    return pool[rng.randrange(len(pool))]
+
+
+def repair_for(db: DbSession, intent_id, *, rng=None) -> RepairLine | None:
+    """The clarification for an intent the driver answered past (M15-FR2).
+
+    AI-CONTEXT: E3 names these — *"repair/clarification branches ('I'm asking where you
+    picked UP this load')"* — and FR2's validation requires one reached and recovered from.
+    They are the most human thing in the loop: a real officer neither repeats himself
+    verbatim nor moves on in silence, he says which question he asked.
+
+    Released only, like every other line a driver hears (Q-6). None means the officer has
+    no clarification for this intent and the loop moves on rather than inventing one.
+    """
+    pool = list(
+        db.scalars(
+            select(RepairLine).where(
+                RepairLine.intent_id == intent_id,
+                RepairLine.status == ContentStatus.released,
+            )
+        )
+    )
+    if not pool:
+        return None
+    if rng is None:
+        import random
+
+        return random.choice(pool)
+    return pool[rng.randrange(len(pool))]
+
+
 def pick_acknowledgement(db: DbSession, *, rng=None) -> OfficerAck | None:
     """What the officer says before moving on. None when no ack has been released.
 
@@ -191,16 +245,40 @@ def pick_acknowledgement(db: DbSession, *, rng=None) -> OfficerAck | None:
     and content that has not been reviewed does not reach a driver (Q-6), even when it is
     one word long.
     """
-    pool = list(
-        db.scalars(select(OfficerAck).where(OfficerAck.status == ContentStatus.released))
-    )
-    if not pool:
-        return None
-    if rng is None:
-        import random
+    return pick_line(db, "ack", rng=rng)
 
-        return random.choice(pool)
-    return pool[rng.randrange(len(pool))]
+
+def intent_to_repair(db: DbSession, session: Session) -> Intent | None:
+    """The intent the driver answered PAST, if the officer should clarify it (M15-FR2).
+
+    AI-CONTEXT: this is the correction to entry 184's reasoning, which said a wrong answer
+    must not trigger a re-ask because "an officer who re-asks until you get it right is
+    running a quiz". True of REPEATING the same question, and it left the loop shrugging at
+    a misunderstanding and moving on — which no officer does. Clarifying is a different
+    act: it happens ONCE, it says something new, and recovering from it is what FR2's
+    validation is about.
+    """
+    last = db.scalar(
+        select(Turn)
+        .where(Turn.session_id == session.id, Turn.speaker == Speaker.driver)
+        .order_by(Turn.seq.desc())
+        .limit(1)
+    )
+    if last is None or last.intent_id is None:
+        return None
+    if FailureTag.INTENT_MISUNDERSTOOD.value not in (last.failure_tags or []):
+        return None
+    # once. A second clarification of the same question is the quiz entry 184 warned about.
+    already = db.scalar(
+        select(func.count(Turn.id)).where(
+            Turn.session_id == session.id,
+            Turn.speaker == Speaker.officer,
+            Turn.intent_id == last.intent_id,
+        )
+    ) or 0
+    if already > 1:
+        return None
+    return db.get(Intent, last.intent_id)
 
 
 def _intent_to_reask(db: DbSession, session: Session) -> Intent | None:
@@ -262,6 +340,39 @@ def next_officer_turn(
     assert_may_continue(driver_state)
 
     scenario = db.get(ScenarioVersion, session.scenario_version_id)
+
+    # AI-CONTEXT: REPAIR FIRST. A driver who answered the wrong question gets told which
+    # question it was, once, before anything else happens — that is FR2's repair branch and
+    # it outranks both a rephrase and moving on.
+    repair_intent = intent_to_repair(db, session)
+    if repair_intent is not None:
+        repair = repair_for(db, repair_intent.id)
+        if repair is not None:
+            seq = int(
+                db.scalar(
+                    select(func.coalesce(func.max(Turn.seq), 0)).where(
+                        Turn.session_id == session.id
+                    )
+                )
+                or 0
+            )
+            turn = Turn(
+                session_id=session.id,
+                seq=seq + 1,
+                speaker=Speaker.officer,
+                intent_id=repair_intent.id,
+                transcript=repair.text,
+                expected_slots=expected_slots_for(repair_intent, scenario),
+            )
+            db.add(turn)
+            db.flush()
+            return OfficerTurn(
+                intent_key=repair_intent.key,
+                variant_id=repair.id,
+                text=repair.text,
+                audio_ref=repair.audio_ref,
+                seq=turn.seq,
+            )
 
     intent = _intent_to_reask(db, session)
     if intent is None:

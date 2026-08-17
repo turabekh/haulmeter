@@ -492,3 +492,83 @@ def test_a_good_answer_moves_the_conversation_on(db):
     _driver_turn(db, session, first, tags=[])
 
     assert loop.next_officer_turn(db, session).intent_key != first.intent_key
+
+
+# --- the repair branch (M15-FR2) --------------------------------------------------------
+
+
+def _repair(db, intent_key, text="I'm asking how long you've been driving today."):
+    intent = db.query(m.Intent).filter(m.Intent.key == intent_key).first()
+    line = m.RepairLine(intent_id=intent.id, text=text, status=m.ContentStatus.released)
+    db.add(line)
+    db.flush()
+    return line
+
+
+def test_answering_the_wrong_question_gets_a_clarification(db):
+    """FR2's repair branch, and its validation says "at least one reached and recovered
+    from". The loop used to shrug at a misunderstanding and ask something else — which no
+    officer does. Entry 184 was right that a wrong answer must not get the same question
+    REPEATED, and wrong that it should get nothing.
+    """
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination", "hos_hours_driven"])
+    session = _open(db, scenario)
+    repair = _repair(db, "destination", "I'm asking where you're going.")
+
+    first = loop.next_officer_turn(db, session)
+    _driver_turn(db, session, first, tags=["INTENT_MISUNDERSTOOD"])
+    second = loop.next_officer_turn(db, session)
+
+    assert second.text == repair.text
+    assert second.intent_key == first.intent_key
+
+
+def test_the_officer_clarifies_once_and_then_moves_on(db):
+    """A second clarification of the same question is the quiz entry 184 warned about."""
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination", "hos_hours_driven"])
+    session = _open(db, scenario)
+    _repair(db, "destination", "I'm asking where you're going.")
+
+    first = loop.next_officer_turn(db, session)
+    _driver_turn(db, session, first, tags=["INTENT_MISUNDERSTOOD"])
+    second = loop.next_officer_turn(db, session)
+    _driver_turn(db, session, second, tags=["INTENT_MISUNDERSTOOD"])
+    third = loop.next_officer_turn(db, session)
+
+    assert third.intent_key != first.intent_key
+
+
+def test_an_unreleased_repair_is_never_spoken(db):
+    """Q-6 reaches the repair branch like everything else a driver hears."""
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination", "hos_hours_driven"])
+    session = _open(db, scenario)
+    intent = db.query(m.Intent).filter(m.Intent.key == "destination").first()
+    db.add(m.RepairLine(
+        intent_id=intent.id, text="a drafted clarification", status=m.ContentStatus.draft
+    ))
+    db.flush()
+
+    first = loop.next_officer_turn(db, session)
+    _driver_turn(db, session, first, tags=["INTENT_MISUNDERSTOOD"])
+    second = loop.next_officer_turn(db, session)
+
+    assert second.text != "a drafted clarification"
+    assert second.intent_key != first.intent_key, "no repair released, so the stop moves on"
+
+
+def test_a_stop_has_an_opening_and_a_closing(db):
+    """It used to begin mid-interrogation and end by running out of questions."""
+    db.add_all([
+        m.OfficerAck(text="Afternoon.", kind="opening", status=m.ContentStatus.released),
+        m.OfficerAck(text="You're good to go.", kind="closing", status=m.ContentStatus.released),
+        m.OfficerAck(text="Okay.", kind="ack", status=m.ContentStatus.released),
+    ])
+    db.flush()
+
+    assert loop.pick_line(db, "opening").text == "Afternoon."
+    assert loop.pick_line(db, "closing").text == "You're good to go."
+    # an ack must never be drawn from the opening pool, or a stop starts with "Okay."
+    assert loop.pick_acknowledgement(db).text == "Okay."
