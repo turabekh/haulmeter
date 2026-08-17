@@ -31,6 +31,7 @@ import AdminAccounts from "./surfaces/admin/AdminAccounts.vue";
 import AdminData from "./surfaces/admin/AdminData.vue";
 import AdminModules from "./surfaces/admin/AdminModules.vue";
 import AdminAudit from "./surfaces/admin/AdminAudit.vue";
+import AdminRoadside from "./surfaces/admin/AdminRoadside.vue";
 import PublicScorecardSurface from "./surfaces/PublicScorecardSurface.vue";
 import OwnerPortalSurface from "./surfaces/OwnerPortalSurface.vue";
 import VendorPortalShell from "./surfaces/vendor/VendorPortalShell.vue";
@@ -43,6 +44,10 @@ import VendorReputation from "./surfaces/vendor/VendorReputation.vue";
 import VendorProfile from "./surfaces/vendor/VendorProfile.vue";
 import VendorSite from "./surfaces/vendor/VendorSite.vue";
 import VendorJoinSurface from "./surfaces/vendor/VendorJoinSurface.vue";
+import RoadsideSurface from "./surfaces/RoadsideSurface.vue";
+import RoadsideConsentSurface from "./surfaces/RoadsideConsentSurface.vue";
+import RoadsideSessionSurface from "./surfaces/RoadsideSessionSurface.vue";
+import RoadsideResultSurface from "./surfaces/RoadsideResultSurface.vue";
 import { mustChangePassword, isAuthenticated } from "./core/api.js";
 
 // DEV-ONLY: the /dev directory ships ONLY in development builds. Vite replaces
@@ -94,6 +99,33 @@ export const routes = [
   { path: "/docs", name: "docs", component: DocsSurface, meta: { driving: "withdraws" } },
   { path: "/bookings", name: "bookings", component: BookingsSurface, meta: { driving: "withdraws" } },
   { path: "/more", name: "more", component: MoreSurface, meta: { driving: "safe" } },
+  // AI-CONTEXT: M15 (E3 §E3.1.6). A LINEAR FLOW as four full-screen pushes — §NAV-3
+  // reserves that shape for exactly this and names claim review as the precedent. No new
+  // bottom-nav tab: tab changes remain the standing A8/D7 owner decision, so the entry is
+  // a row on More.
+  //
+  // Every one declares `withdraws`, the session included. A spoken inspection at 65 mph is
+  // the worst thing on this list, and Q-4 makes the engine refuse anyway — the session
+  // surface turns that refusal into a paused state rather than a closed socket.
+  { path: "/roadside", name: "roadside", component: RoadsideSurface, meta: { driving: "withdraws" } },
+  {
+    path: "/roadside/consent/:scenarioId",
+    name: "roadside-consent",
+    component: RoadsideConsentSurface,
+    meta: { driving: "withdraws" },
+  },
+  {
+    path: "/roadside/session/:sessionId",
+    name: "roadside-session",
+    component: RoadsideSessionSurface,
+    meta: { chrome: false, driving: "withdraws" },
+  },
+  {
+    path: "/roadside/result/:sessionId",
+    name: "roadside-result",
+    component: RoadsideResultSurface,
+    meta: { driving: "withdraws" },
+  },
   // §18 web-first portal — no tab chrome, wider frame; auth required (fleet owner)
   { path: "/fleet", name: "fleet", component: FleetWorkspaceSurface, meta: { chrome: false, portal: true } },
   // Admin Console 2.0 (§23 E-D4): sections are router CHILDREN so a queue can be
@@ -110,6 +142,7 @@ export const routes = [
       { path: "accounts", name: "admin-accounts", component: AdminAccounts },
       { path: "data", name: "admin-data", component: AdminData },
       { path: "modules", name: "admin-modules", component: AdminModules },
+      { path: "roadside", name: "admin-roadside", component: AdminRoadside },
       { path: "audit", name: "admin-audit", component: AdminAudit },
     ],
   },

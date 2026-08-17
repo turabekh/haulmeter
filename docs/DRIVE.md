@@ -365,6 +365,29 @@ as a parking reading) → status + freshness update; armed load → corridor sur
    is live, and the block **names** the obstacle.
 4. **Inspection mode**: from cold start, ≤2 taps, **works with the API stopped**.
 
+## J13b — Roadside Ready `[M15-FR3/FR4, E3 §E3.1.6]`
+**Gated on `m15_roadside`, which is OFF.** With the flag off, More shows **no Roadside row**
+at all — that is step 1, and it is the only step most sessions should see.
+
+With the flag on (`/admin/flags`, an operator decision — not a step to take casually):
+1. **More → Roadside Ready.** With nothing released, the screen says **why** it is empty —
+   the lines are with a reviewer — rather than showing a spinner or an offer that fails.
+2. **Admin → Roadside content** (a second, platform-admin browser): a variant reads `draft`
+   and offers only **Mark reviewed**. Release is not offered from draft, because the server
+   refuses it and a button that always 422s teaches an operator to distrust the surface.
+   Review it → **Release** appears → release it. **Holdouts are labelled** in the list.
+3. Back on the driver app, reload **Roadside Ready** → the check is now offered.
+4. **Start** → the consent screen states three things: the voice recording, the **30-day
+   deletion** with scores kept, and the microphone prompt. **"Not now" is a full-size
+   button beside "I agree"** — check that, it is the whole value of the record.
+5. **Agree** → the session opens. The officer's line is the largest thing on the screen;
+   the mic is 56 dp. Hold it, answer, release.
+6. **The pause:** with the session open, put the app in DRIVING (`/dev`, or drive). The
+   session says **"Paused — the truck is moving"** and stops recording. It does **not**
+   redirect — a driver bounced to the map mid-sentence learns nothing.
+7. Finish → the **result**: a band, the word **provisional**, the skills worth practising
+   named as skills, and **no percentage anywhere**.
+
 ## J14 — Evidence share links `[F4 sharing]`
 1. Export PDF and Share are real 48 dp controls.
 2. Create link → open incognito (no session) → renders from **pinned bytes**.

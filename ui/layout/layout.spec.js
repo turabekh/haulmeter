@@ -724,6 +724,31 @@ const OWNER_MOCKS = {
   },
 };
 
+// AI-CONTEXT: M15 fixtures. Shapes copied from the endpoints' own returns
+// (api/app/api/m15_roadside.py::scenarios and ::session_result) — a fixture whose shape
+// drifts from its endpoint measures a screen the change never reached.
+const ROADSIDE_SESSION = "00000000-0000-0000-0000-0000000000d2";
+const ROADSIDE_SCENARIO = {
+  id: "00000000-0000-0000-0000-0000000000d1",
+  difficulty: "clear",
+  intents: ["destination", "hos_hours_driven"],
+};
+const ROADSIDE_RESULT = {
+  session_id: ROADSIDE_SESSION,
+  band: "yellow",
+  provisional: true,
+  label_key: "roadside.band.yellow_provisional",
+  agreement_pct: null,
+  review_needed_turns: 2,
+  // four tags: the list is what makes this the longest the surface gets
+  failure_tags: [
+    "INTENT_MISUNDERSTOOD",
+    "MULTI_PART_PARTIAL",
+    "TERMINOLOGY_UNKNOWN",
+    "DYNAMIC_SIGN_INCORRECT",
+  ],
+};
+
 const SURFACES = [
   ["map", "/"],
   /* AI-CONTEXT: the map with NO BASEMAP (§23 entry 159) — the screen the owner
@@ -1006,6 +1031,31 @@ const SURFACES = [
     ready: ".queued__row",
   }],
   ["more", "/more"],
+  /* AI-CONTEXT: M15's four surfaces (E3 §E3.1.6). Every one is registered in the same
+   * commit that creates it (v2.0 acceptance #3) — the rule exists because a surface added
+   * without a harness row is a surface nobody measures at 360 dp until a driver finds it.
+   *
+   * `roadside` is the EMPTY state and that is deliberate rather than a shortcut: with no
+   * released content the catalogue is legitimately empty, so this is the screen a driver
+   * actually gets today, and §15.3 gives an empty state a layout spec like anything else.
+   * `roadside-offer` mocks a startable scenario to measure the other branch — the CTA and
+   * the paused card share that space and neither had ever been rendered at 360 dp.
+   *
+   * The RESULT is the one worth the mock. It carries the band in the Meter type step, the
+   * provisional sentence, the review line and a tag list, which is the longest this screen
+   * ever gets and the shape most likely to reflow under +40% in Gurmukhi. */
+  ["roadside", "/roadside", { mocks: { "/roadside/scenarios": { scenarios: [] } }, ready: ".roadside__empty" }],
+  ["roadside-offer", "/roadside", {
+    mocks: { "/roadside/scenarios": { scenarios: [ROADSIDE_SCENARIO] } },
+    ready: ".roadside__cta",
+  }],
+  ["roadside-consent", "/roadside/consent/00000000-0000-0000-0000-0000000000d1", {
+    ready: ".consent__agree",
+  }],
+  ["roadside-result", `/roadside/result/${ROADSIDE_SESSION}`, {
+    mocks: { [`/roadside/session/${ROADSIDE_SESSION}/result`]: ROADSIDE_RESULT },
+    ready: ".result__band",
+  }],
   // AI-CONTEXT: §23 entry 152 — the app asking to be installed, on both surfaces that
   // ask. The strip row is measured on the MAP because that is where the strip's height
   // is most expensive (entry 89 returned 56 dp of map by emptying it), and because the

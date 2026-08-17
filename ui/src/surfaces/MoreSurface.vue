@@ -394,6 +394,24 @@ function signOut() {
       </button>
     </section>
 
+    <!-- AI-CONTEXT: M15's entry (E3 §E3.1.6). A ROW, composed from the inbox row above —
+         §10.5 keeps More a plain row list with no cards, no promos and no badges, and a
+         new capability is exactly the thing that wants to arrive as a promo. There is no
+         new bottom-nav tab either: tab changes are the standing A8/D7 owner decision.
+
+         It renders only when the module is ON (`/auth/me` -> `roadside_enabled`), because
+         a capability nobody has switched on must not advertise itself — the same reason
+         the authority section reads `me.verification_enabled`. The caption is the one
+         concession to it being unfamiliar: a row saying only "Roadside Ready" tells a
+         driver nothing about what tapping it does. -->
+    <section v-if="me && me.roadside_enabled" class="card">
+      <h2 class="card__title">{{ t("more.roadside") }}</h2>
+      <button class="alerts alerts--link" type="button" @click="router.push({ name: 'roadside' })">
+        <span class="alerts__name">{{ t("more.roadside") }}</span>
+      </button>
+      <p class="equip__note">{{ t("more.roadside_caption") }}</p>
+    </section>
+
     <section class="card">
       <h2 class="card__title">{{ t("more.account") }}</h2>
       <p v-if="email" class="more__email">{{ email }}</p>

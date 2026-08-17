@@ -33,6 +33,7 @@ const SECTIONS = [
   { key: "accounts", to: "/admin/accounts", label: "admin.nav.accounts" },
   { key: "data", to: "/admin/data", label: "admin.nav.data" },
   { key: "modules", to: "/admin/modules", label: "admin.nav.modules" },
+  { key: "roadside", to: "/admin/roadside", label: "admin.nav.roadside" },
   { key: "audit", to: "/admin/audit", label: "admin.nav.audit" },
 ];
 

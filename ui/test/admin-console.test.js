@@ -112,7 +112,7 @@ describe("Admin shell — sectioned portal (§23 E-D4)", () => {
     await flushPromises();
 
     const labels = w.findAll(".rail__item").map((a) => a.text());
-    expect(labels.length).toBe(8);
+    expect(labels.length).toBe(9);
     expect(labels.join(" ")).toContain("Accounts");
     expect(labels.join(" ")).toContain("Overview");
     expect(labels.join(" ")).toContain("Moderation");
@@ -167,6 +167,8 @@ describe("Admin shell — sectioned portal (§23 E-D4)", () => {
       "accounts",
       "data",
       "modules",
+      // M15's content pipeline — publishing what a driver is scored against (Q-6)
+      "roadside",
       "audit",
     ]);
   });

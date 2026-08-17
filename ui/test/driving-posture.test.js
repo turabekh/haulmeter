@@ -43,6 +43,12 @@ const SOURCE = {
   bookings: "BookingsSurface",
   more: "MoreSurface",
   "stop-packets": "StopPacketsSurface",
+  // M15 — the session withdraws by PAUSING rather than by hiding a control, which is
+  // still a consultation of the driver state and still the same claim
+  roadside: "RoadsideSurface",
+  "roadside-consent": "RoadsideConsentSurface",
+  "roadside-session": "RoadsideSessionSurface",
+  "roadside-result": "RoadsideResultSurface",
 };
 
 // the driver app: everything that is not a §18 portal and not a public page

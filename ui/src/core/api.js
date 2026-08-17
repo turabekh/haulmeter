@@ -2328,3 +2328,65 @@ export async function markNotificationRead(id) {
   if (!resp.ok) throw new Error(`mark read failed: ${resp.status}`);
   return resp.json();
 }
+
+// --- M15 Roadside Ready (E3 §E3.1.5) --------------------------------------------------
+
+// AI-CONTEXT: NOT cached through `apiGet`'s cacheKey. A driver offline cannot hold a
+// spoken session anyway — the socket, the speech-to-text and the scoring are all
+// server-side — so a cached catalogue would offer a practice check that cannot start.
+// §15.5's rule is degrade to one-tap, never to nothing; here "nothing available offline"
+// IS the honest degradation, and the surface says so rather than listing scenarios that
+// will fail on tap.
+export async function fetchRoadsideScenarios() {
+  const resp = await fetch(`${API_BASE}/roadside/scenarios`, { headers: headers() });
+  // 404 is the module gate (entry 105) — "not enabled" is not an error to report, it is
+  // an absence, and the caller renders the same empty state either way.
+  if (resp.status === 404) return { scenarios: [] };
+  if (!resp.ok) throw new Error(`/roadside/scenarios ${resp.status}`);
+  return resp.json();
+}
+
+export async function openRoadsideSession(body) {
+  const resp = await fetch(`${API_BASE}/roadside/session`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const err = new Error(`/roadside/session ${resp.status}`);
+    err.status = resp.status;
+    throw err;
+  }
+  return resp.json();
+}
+
+export const fetchRoadsideResult = (sessionId) =>
+  apiGet(`/roadside/session/${sessionId}/result`);
+
+// AI-CONTEXT: the WebSocket URL, built here so the surface never assembles an origin.
+//
+// `API_BASE` is "/api" in a deployment and an absolute http:// URL in dev, and a socket
+// needs an ABSOLUTE ws:// or wss:// either way — a relative path is not a valid
+// WebSocket URL. Resolving against `location` covers both, and picking the scheme from
+// the PAGE rather than hardcoding is what stops a wss: page opening a ws: socket, which
+// browsers block as mixed content.
+//
+// The token rides the query string because a browser cannot set headers on a WebSocket —
+// the same constraint EventSource has, recorded in the API's own docstring, and the same
+// upgrade (a single-use stream ticket) applies to both when this leaves testing.
+export function roadsideStreamUrl(sessionId) {
+  const base = new URL(API_BASE, window.location.origin);
+  const scheme = base.protocol === "https:" ? "wss:" : "ws:";
+  const url = new URL(`${base.pathname.replace(/\/$/, "")}/roadside/session/${sessionId}/stream`, base);
+  url.protocol = scheme;
+  if (token.value) url.searchParams.set("token", token.value);
+  return url.toString();
+}
+
+// --- F14: the M15 content pipeline ----------------------------------------------------
+
+export const fetchRoadsideContent = () => adminGet("/roadside/content");
+export const reviewRoadsideContent = (kind, id) =>
+  adminSend(`/roadside/content/${kind}/${id}/review`, "POST");
+export const releaseRoadsideContent = (kind, id) =>
+  adminSend(`/roadside/content/${kind}/${id}/release`, "POST");
