@@ -929,7 +929,7 @@
   "roadside.consent.decline": "Hozir emas",
   "roadside.consent.mic": "Telefoningiz mikrofonga ruxsat so‘raydi.",
   "roadside.consent.recording": "Javoblaringizni baholash uchun ovozingiz yozib olinadi.",
-  "roadside.consent.retention": "Yozuvlar 30 kundan so‘ng o‘chiriladi. Baholaringiz va natijalaringiz saqlanadi.",
+  "roadside.consent.retention": "Ovozingiz baholash uchun yuboriladi va saqlanmaydi. Baholaringiz va natijalaringiz qoladi.",
   "roadside.consent.title": "Boshlashdan oldin",
   "roadside.empty": "Hozircha mashq uchun material yo‘q — ingliz tilidagi matnlar hali ko‘rib chiqilmoqda.",
   "roadside.failed": "Roadside Ready yuklanmadi. Aloqani tekshiring va qayta urining.",

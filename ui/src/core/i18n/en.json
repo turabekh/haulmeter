@@ -929,7 +929,7 @@
   "roadside.consent.decline": "Not now",
   "roadside.consent.mic": "Your phone will ask for the microphone.",
   "roadside.consent.recording": "This records your voice so your answers can be scored.",
-  "roadside.consent.retention": "Recordings are deleted after 30 days. Your scores and progress stay.",
+  "roadside.consent.retention": "Your voice is sent to be scored and is not kept. Your scores and progress stay.",
   "roadside.consent.title": "Before you start",
   "roadside.empty": "Nothing to practise yet — the English lines are still with a reviewer.",
   "roadside.failed": "Roadside Ready did not load. Check your signal and try again.",

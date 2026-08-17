@@ -929,7 +929,7 @@
   "roadside.consent.decline": "Не сейчас",
   "roadside.consent.mic": "Телефон запросит доступ к микрофону.",
   "roadside.consent.recording": "Ваш голос записывается, чтобы оценить ответы.",
-  "roadside.consent.retention": "Записи удаляются через 30 дней. Оценки и прогресс остаются.",
+  "roadside.consent.retention": "Ваш голос отправляется для оценки и не сохраняется. Оценки и прогресс остаются.",
   "roadside.consent.title": "Перед началом",
   "roadside.empty": "Пока не с чем тренироваться — английские реплики ещё на проверке.",
   "roadside.failed": "Roadside Ready не загрузился. Проверьте связь и повторите.",
