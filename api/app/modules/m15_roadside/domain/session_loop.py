@@ -39,7 +39,7 @@ from .content import teachable_variants
 from .diagnosis import band_for
 from .enums import ContentStatus, SessionMode, Speaker, TurnReviewStatus
 from .models import Intent, PhraseVariant, ScenarioVersion, Session, Turn
-from .scoring import ASR_CONFIDENCE_FLOOR, Rubric, score_turn
+from .scoring import ASR_CONFIDENCE_FLOOR, FailureTag, Rubric, score_turn
 
 
 class DriverState(enum.Enum):
@@ -147,6 +147,76 @@ def _pool_for(db: DbSession, intent: Intent, *, allow_draft: bool) -> list[Phras
     )
 
 
+# AI-CONTEXT: WHEN AN OFFICER ASKS AGAIN (M15-FR2/FR3).
+#
+# The loop used to ask every intent exactly once, whatever came back. So a driver who said
+# "sorry, could you say that again?" — which the scorer RECOGNISES, tags
+# REPETITION_REQUIRED and correctly treats as diagnostic rather than a failure — was
+# answered with a completely different question. That is not a conversation, and it taught
+# a driver that asking for a repeat makes things worse.
+#
+# NO NEW CONTENT IS INVENTED HERE. A re-ask draws another RELEASED phrasing of the SAME
+# intent, which is what the variant pool exists for and what a real officer does: the words
+# change, the question does not. Anything else would be F9 text reaching a driver without
+# review (Q-6).
+#
+# THREE TRIGGERS, and each is a moment a real officer would repeat themselves: the driver
+# asked; nothing was said; or what was said could not be made out. A wrong answer is NOT a
+# trigger — an officer who re-asks until you get it right is running a quiz, and E3's
+# taxonomy already carries "misunderstood" as a finding rather than a thing to drill on the
+# spot.
+REASK_TRIGGERS = frozenset({
+    FailureTag.REPETITION_REQUIRED.value,
+    FailureTag.UNINTELLIGIBLE.value,
+    FailureTag.NO_RESPONSE.value,
+})
+
+# ONE repeat, then the officer moves on — which is also what happens at a real window, and
+# what stops a driver in a dead microphone from being trapped in a loop forever.
+MAX_REASKS_PER_INTENT = 1
+
+
+def _intent_to_reask(db: DbSession, session: Session) -> Intent | None:
+    """The intent the officer should ask again, or None to move on."""
+    last = db.scalar(
+        select(Turn)
+        .where(Turn.session_id == session.id, Turn.speaker == Speaker.driver)
+        .order_by(Turn.seq.desc())
+        .limit(1)
+    )
+    if last is None or last.intent_id is None:
+        return None
+    if not REASK_TRIGGERS.intersection(last.failure_tags or []):
+        return None
+
+    asked_times = (
+        db.scalar(
+            select(func.count(Turn.id)).where(
+                Turn.session_id == session.id,
+                Turn.speaker == Speaker.officer,
+                Turn.intent_id == last.intent_id,
+            )
+        )
+        or 0
+    )
+    if asked_times > MAX_REASKS_PER_INTENT:
+        return None
+    return db.get(Intent, last.intent_id)
+
+
+def _already_said(db: DbSession, session: Session, intent_id) -> set[str]:
+    """The phrasings this session has already used for an intent, so a repeat REPHRASES."""
+    return set(
+        db.scalars(
+            select(Turn.transcript).where(
+                Turn.session_id == session.id,
+                Turn.speaker == Speaker.officer,
+                Turn.intent_id == intent_id,
+            )
+        )
+    )
+
+
 def next_officer_turn(
     db: DbSession,
     session: Session,
@@ -165,26 +235,37 @@ def next_officer_turn(
     assert_may_continue(driver_state)
 
     scenario = db.get(ScenarioVersion, session.scenario_version_id)
-    asked = set(
-        db.scalars(
-            select(Intent.key)
-            .join(Turn, Turn.intent_id == Intent.id)
-            .where(Turn.session_id == session.id, Turn.speaker == Speaker.officer)
-        )
-    )
-    remaining = [k for k in (scenario.allowed_intents or []) if k not in asked]
-    if not remaining:
-        return None
 
-    intent = db.scalar(select(Intent).where(Intent.key == remaining[0]))
+    intent = _intent_to_reask(db, session)
     if intent is None:
-        raise NoContentAvailable(f"scenario names intent {remaining[0]!r} which does not exist")
+        asked = set(
+            db.scalars(
+                select(Intent.key)
+                .join(Turn, Turn.intent_id == Intent.id)
+                .where(Turn.session_id == session.id, Turn.speaker == Speaker.officer)
+            )
+        )
+        remaining = [k for k in (scenario.allowed_intents or []) if k not in asked]
+        if not remaining:
+            return None
+
+        intent = db.scalar(select(Intent).where(Intent.key == remaining[0]))
+        if intent is None:
+            raise NoContentAvailable(
+                f"scenario names intent {remaining[0]!r} which does not exist"
+            )
 
     pool = _pool_for(db, intent, allow_draft=allow_draft)
     if not pool:
         raise NoContentAvailable(f"intent {intent.key!r} has an empty variant pool")
 
-    variant = pool[0] if rng is None else pool[rng.randrange(len(pool))]
+    # a repeat REPHRASES where the pool allows it — hearing the identical sentence twice
+    # teaches nothing about understanding it, and the second phrasing is often the one that
+    # lands. Falls back to the whole pool when every phrasing has been used.
+    said = _already_said(db, session, intent.id)
+    fresh = [v for v in pool if v.text not in said] or pool
+
+    variant = fresh[0] if rng is None else fresh[rng.randrange(len(fresh))]
     seq = int(
         db.scalar(
             select(func.coalesce(func.max(Turn.seq), 0)).where(Turn.session_id == session.id)

@@ -71,6 +71,19 @@ const answerAudio = ref(null);
 let socket = null;
 let recorder = null;
 let chunks = [];
+// AI-CONTEXT: the conversation CARRIES ITSELF. Requiring a tap between every question
+// turned a roadside stop into a form — a real officer does not wait to be asked for the
+// next question. The beat is long enough to read what was heard and short enough that the
+// exchange still feels like one, and ANY interaction cancels it: a driver who reaches for
+// the replay is engaging, not idling, and yanking the screen away mid-tap is the rudest
+// thing an auto-advance can do. The button stays for anyone who wants to move now.
+const AUTO_ADVANCE_MS = 3200;
+let advanceTimer = null;
+
+function cancelAutoAdvance() {
+  if (advanceTimer) clearTimeout(advanceTimer);
+  advanceTimer = null;
+}
 
 function send(frame) {
   if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(frame));
@@ -82,6 +95,7 @@ function askForNextLine() {
 }
 
 function pause() {
+  cancelAutoAdvance();
   stopRecording();
   phase.value = Phase.PAUSED;
 }
@@ -111,6 +125,8 @@ onMounted(() => {
       heardText.value = frame.transcript || "";
       heardUnclear.value = Boolean(frame.review_needed);
       phase.value = Phase.HEARD;
+      cancelAutoAdvance();
+      advanceTimer = setTimeout(nextQuestion, AUTO_ADVANCE_MS);
     } else if (frame.type === "complete") {
       router.replace({ name: "roadside-result", params: { sessionId: route.params.sessionId } });
     }
@@ -159,6 +175,7 @@ async function sendAnswer() {
 }
 
 function nextQuestion() {
+  cancelAutoAdvance();
   releaseAnswerAudio();
   heardText.value = "";
   heardUnclear.value = false;
@@ -171,12 +188,14 @@ function releaseAnswerAudio() {
 }
 
 function end() {
+  cancelAutoAdvance();
   releaseAnswerAudio();
   send({ type: "bye" });
   router.replace({ name: "roadside-result", params: { sessionId: route.params.sessionId } });
 }
 
 onBeforeUnmount(() => {
+  cancelAutoAdvance();
   releaseAnswerAudio();
   stopRecording();
   if (socket && socket.readyState === WebSocket.OPEN) socket.close();
@@ -213,7 +232,7 @@ onBeforeUnmount(() => {
         <p v-if="heardUnclear" class="session__unclear">{{ t("roadside.session.unclear") }}</p>
 
         <audio v-if="answerAudio" :src="answerAudio" controls class="session__replay"
-               :aria-label="t('roadside.session.replay')" />
+               :aria-label="t('roadside.session.replay')" @play="cancelAutoAdvance" />
 
         <button class="session__next" type="button" @click="nextQuestion">
           {{ t("roadside.session.next") }}

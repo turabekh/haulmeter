@@ -352,3 +352,143 @@ def test_a_slot_the_scenario_has_no_fact_for_is_dropped_not_left_unanswerable(db
     )
     assert turn.expected_slots == {}
     assert turn.scores["answer_completeness"] == 100
+
+
+# --- the officer asks again (M15-FR2/FR3) ---------------------------------------------
+
+
+def _driver_turn(db, session, officer, *, tags, transcript="..."):
+    """A driver turn with chosen tags — the scorer's own output is exercised elsewhere;
+    what these tests are about is what the LOOP does with it."""
+    from app.modules.m15_roadside.domain.models import Speaker
+
+    intent = db.query(m.Intent).filter(m.Intent.key == officer.intent_key).first()
+    turn = m.Turn(
+        session_id=session.id,
+        seq=officer.seq + 1,
+        speaker=Speaker.driver,
+        intent_id=intent.id,
+        transcript=transcript,
+        failure_tags=list(tags),
+    )
+    db.add(turn)
+    db.flush()
+    return turn
+
+
+def test_asking_the_officer_to_repeat_gets_the_question_again(db):
+    """THE ONE THIS EXISTS FOR.
+
+    The scorer already recognises "sorry, could you say that again?" and tags it
+    REPETITION_REQUIRED — diagnostic, never a failure. The loop then asked something else
+    entirely, which taught a driver that asking for a repeat makes things worse.
+    """
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination", "hos_hours_driven"])
+    session = _open(db, scenario)
+
+    first = loop.next_officer_turn(db, session)
+    _driver_turn(db, session, first, tags=["REPETITION_REQUIRED"])
+    second = loop.next_officer_turn(db, session)
+
+    assert second.intent_key == first.intent_key, "the officer moved on instead of repeating"
+
+
+def test_a_repeat_rephrases_rather_than_echoing(db):
+    """Hearing the identical sentence twice teaches nothing about understanding it, and
+    the second phrasing is often the one that lands.
+
+    Needs TWO teachable phrasings — `_content` seeds one plus a holdout, and a holdout can
+    never be spoken (Q-5). With a single-phrasing pool the loop correctly falls back to
+    saying it again, which is the behaviour asserted one test down.
+    """
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination"])
+    intent = db.query(m.Intent).filter(m.Intent.key == "destination").first()
+    db.add(
+        m.PhraseVariant(
+            intent_id=intent.id,
+            text="a second way of asking where you are headed",
+            difficulty=m.Difficulty.clear,
+            status=m.ContentStatus.released,
+            version=2,
+        )
+    )
+    db.flush()
+    session = _open(db, scenario)
+
+    first = loop.next_officer_turn(db, session)
+    _driver_turn(db, session, first, tags=["UNINTELLIGIBLE"])
+    second = loop.next_officer_turn(db, session)
+
+    assert second.intent_key == first.intent_key
+    assert second.text != first.text, "the officer said the same words again"
+
+
+def test_a_repeat_says_it_again_when_there_is_no_other_phrasing(db):
+    """The fallback. An intent with one released line must still be repeatable — refusing
+    to repeat because the pool is thin would drop the driver's request on the floor."""
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination"])
+    session = _open(db, scenario)
+
+    first = loop.next_officer_turn(db, session)
+    _driver_turn(db, session, first, tags=["REPETITION_REQUIRED"])
+    second = loop.next_officer_turn(db, session)
+
+    assert second.intent_key == first.intent_key
+    assert second.text == first.text
+
+
+def test_silence_also_gets_the_question_again(db):
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination", "hos_hours_driven"])
+    session = _open(db, scenario)
+
+    first = loop.next_officer_turn(db, session)
+    _driver_turn(db, session, first, tags=["NO_RESPONSE"], transcript="")
+
+    assert loop.next_officer_turn(db, session).intent_key == first.intent_key
+
+
+def test_a_wrong_answer_does_NOT_get_the_question_again(db):
+    """An officer who re-asks until you get it right is running a quiz. E3's taxonomy
+    carries 'misunderstood' as a FINDING, not as something to drill on the spot."""
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination", "hos_hours_driven"])
+    session = _open(db, scenario)
+
+    first = loop.next_officer_turn(db, session)
+    _driver_turn(db, session, first, tags=["INTENT_MISUNDERSTOOD"])
+
+    assert loop.next_officer_turn(db, session).intent_key != first.intent_key
+
+
+def test_the_officer_moves_on_after_one_repeat(db):
+    """A dead microphone must not trap a driver in a loop forever — and a real officer
+    at a real window moves on too."""
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination", "hos_hours_driven"])
+    session = _open(db, scenario)
+
+    first = loop.next_officer_turn(db, session)
+    _driver_turn(db, session, first, tags=["NO_RESPONSE"])
+    second = loop.next_officer_turn(db, session)
+    assert second.intent_key == first.intent_key
+
+    _driver_turn(db, session, second, tags=["NO_RESPONSE"])
+    third = loop.next_officer_turn(db, session)
+    assert third.intent_key != first.intent_key, "the officer asked a third time"
+
+
+def test_a_good_answer_moves_the_conversation_on(db):
+    """The control. Without it every assertion above would also pass on a loop that
+    repeats the first question forever."""
+    _content(db, status=m.ContentStatus.released)
+    scenario = _scenario(db, keys=["destination", "hos_hours_driven"])
+    session = _open(db, scenario)
+
+    first = loop.next_officer_turn(db, session)
+    _driver_turn(db, session, first, tags=[])
+
+    assert loop.next_officer_turn(db, session).intent_key != first.intent_key
