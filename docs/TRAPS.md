@@ -475,6 +475,15 @@ session*; this file records what is permanently true.
     the missing install line before touching anything else.** Cost five wasted runs across
     four sessions. *(126, 127, 129)*
 
+69a. **`exec` into the long-lived `ui` container is not exempt, and it fails in a shape
+    that argues against 69.** The browser BINARY survives — it lives in the `playwright`
+    named volume, mounted precisely so `make down` cannot throw away 111 MB. The system
+    LIBRARIES do not: they were `apt` packages inside the container filesystem, and
+    `make up --build` replaced it. So the cache looks warm, the binary is present, and
+    Chromium still dies on `libglib-2.0.so.0`. **A rebuilt container needs
+    `npx playwright install-deps chromium` again even though nothing re-downloaded.**
+    Hit on the first browser probe after a cold `make up`. *(135)*
+
 70. **A probe hitting the real API from inside the container needs `page.route` to rewrite
     `localhost:8008` → `api:8008`**, must `route.abort()` on failure so one stalled
     background write cannot kill the page, and **must not use `waitUntil: "networkidle"`** —
@@ -518,6 +527,19 @@ nobody re-runs decays into a screenshot in an old handoff. Its screenshots are o
     *(133)*
 
 ---
+
+77. **`make ci` cannot be run twice in a row — the second run fails on ports the FIRST run
+    bound.** `ci` opens with `preflight`, which requires every published host port free,
+    and it ends with `ui-layout`/`ui-image`, which do `compose up -d ui` and leave it
+    running; `test-api`'s `compose run` leaves its postgres and redis dependencies up too.
+    So back-to-back runs produce `PREFLIGHT FAILED: UI_PORT=9008 BUSY` and a red result
+    that says nothing about the code.
+
+    This matters because the thing most likely to be run repeatedly is a **repeatability
+    check**, and four identical failures in runs 2–5 look exactly like a finding.
+    **`make down` between runs is part of the harness, not tidying up** — the comment above
+    the `ci` target already says preflight runs "while everything is still down", and that
+    is a precondition each run has to re-establish for itself. *(135)*
 
 ## 10 · Live-fire, and things that reach the outside world
 
