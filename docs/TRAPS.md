@@ -559,6 +559,27 @@ nobody re-runs decays into a screenshot in an old handoff. Its screenshots are o
     the `ci` target already says preflight runs "while everything is still down", and that
     is a precondition each run has to re-establish for itself. *(135)*
 
+78. **A browser walking the REAL app must run where BOTH locked ports are `localhost`** —
+    which means the host, not a container. Cost four attempts and three dead ends, each of
+    which looked like a different bug:
+
+    · Served from `ui:9008`, every API call dies `net::ERR_FAILED`. That is **CORS**, not a
+      network fault: `main.py` allows `http://localhost:9008` and `http://localhost:3008`,
+      and the page's origin is neither. The surface renders its OFFLINE state, so the
+      screenshot shows a working screen and says "No connection" — which reads as a bug in
+      the app.
+    · `page.route` rewriting `localhost:8008` → `api:8008` fixes XHR and **cannot touch a
+      WebSocket**. If the socket is the thing you are proving, this fix hides the problem
+      until the moment it matters.
+    · `--host-resolver-rules=MAP localhost …` is **ignored**: Chromium special-cases
+      loopback below the resolver.
+    · Sharing the API's network namespace (`--network container:longhaul-api-1`) gets
+      `localhost:8008` right and `localhost:9008` wrong, so it just moves the origin
+      problem.
+
+    **Install Playwright on the host and point it at `localhost:9008`.** The layout harness
+    is exempt from all of this because it mocks the API rather than talking to it. *(136)*
+
 ## 10 · Live-fire, and things that reach the outside world
 
 73. **Every environment is live-fire for email.** Dev and production both point at the same

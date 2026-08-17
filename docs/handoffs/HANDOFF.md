@@ -3,15 +3,16 @@
 This file is a **pointer, not content**, and as of 2026-08-16 it is one again: it had grown
 to 45 KB of inline summary, which every session read to find one filename.
 
-➡️ **[HANDOFF-135.md](HANDOFF-135.md)** — read this first, every session. It holds the current state,
+➡️ **[HANDOFF-136.md](HANDOFF-136.md)** — read this first, every session. It holds the current state,
 the decisions, the exact next task and the blockers. **[HANDOFF-134.md](HANDOFF-134.md)** is
-its companion: 135 is a short session on top of 134's full platform snapshot, and 134 §9's
-owner questions all still stand.
+its companions: **136** is M15 Session C, **135** is the pilot-day preflight from the same
+sitting, and **134** is the full platform snapshot underneath both. 134 §9's owner questions
+all still stand.
 
 - **[SUMMARIES.md](SUMMARIES.md)** — the narrative arc across recent sessions, moved here
   verbatim from this file. Read it when you want the story rather than the state.
 - **[../decisions/](../decisions/README.md)** — design-prd §23, the append-only decision log.
-- **[../TRAPS.md](../TRAPS.md)** — 76 things that have already cost this project time.
+- **[../TRAPS.md](../TRAPS.md)** — 92 things that have already cost this project time.
   Read the relevant section before touching something; add new ones there, not here.
 
 Every session ends by writing the next `HANDOFF-<n>.md` here and pointing this file at it.
@@ -21,6 +22,7 @@ The full history below is never deleted; a handoff is a dated record.
 
 | # | Session |
 |---|---|
+| [136](HANDOFF-136.md) | M15 Session C: a person can reach it |
 | [135](HANDOFF-135.md) | the pilot day, checked before the pilot day |
 | [134](HANDOFF-134.md) | the state of the platform at the break |
 | [133](HANDOFF-133.md) | M15 Session B: the loop runs on real speech, and two things it found |

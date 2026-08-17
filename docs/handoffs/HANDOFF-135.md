@@ -116,10 +116,21 @@ they ran.
 Run from a clean tree at **`c2cb6aa`**, committed first, with `make down` before each run
 (§4, TRAPS 77) and the stack restored by `make up` at the end.
 
-> **RESULT: see the table appended at the close of this session.** It is written from the
-> raw per-run logs in the session scratchpad (`ci-run-1.log` … `ci-run-5.log`), never from
-> memory, and a single red run in five is the answer to the question — not a reason to
-> re-run.
+**RESULT: one run of five. `exit=0` in 8m38s** (`ci-run-1.log`). The owner needed the box
+back, so the loop was stopped after run 1 rather than left to finish — run 1 had completed
+clean moments before, so the data point survives rather than being lost.
+
+So the count is now **two independent clean runs** (`0d11a8c` and `c2cb6aa`), not one, and
+not the five. **"Repeatably green" is still not a claim anyone may make.** Runs 2–5 would
+now sit at a later commit; the intervening commits are docs-only and nothing in `ci` reads
+`docs/`, so the set stays comparable — but the two commits should be named rather than
+quietly merged into one number.
+
+**Interrupting the loop orphaned a container.** A `compose run --rm api pytest -q` from
+run 2 outlived its parent `make`, held `longhaul_default` open, and made the first
+`make down` report *"Network Resource is still in use"*. It self-removed a moment later
+and the second `down` cleaned up — but a `make up` racing that state fails for a reason
+that looks nothing like its cause.
 
 ---
 
