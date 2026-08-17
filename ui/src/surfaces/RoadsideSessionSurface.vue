@@ -155,15 +155,29 @@ onMounted(() => {
       officerText.value = frame.text;
       officerAudio.value = frame.audio_url ? `${API_BASE}${frame.audio_url}` : null;
       phase.value = Phase.OFFICER;
+      // AI-CONTEXT: a stop OPENS. The greeting rides the first officer frame rather than
+      // the session-create response, because the surface that creates a session is the
+      // consent screen and a driver must not hear "Afternoon" while still deciding
+      // whether to consent. One source, one place to play it.
+      if (frame.opening) {
+        officerText.value = `${frame.opening}\n\n${frame.text}`;
+        if (frame.opening_audio_url) {
+          playInOrder([frame.opening_audio_url, frame.audio_url]);
+          officerAudio.value = null; // played by the queue, not by the <audio> element
+        }
+      }
       // no audio to wait for means the question is already "said" — open the mic now
       if (!officerAudio.value && handsFree.value) openMic();
     } else if (frame.type === "scored") {
       heardText.value = frame.transcript || "";
       heardUnclear.value = Boolean(frame.review_needed);
+      echoText.value = frame.echo || "";
       ackText.value = frame.ack || "";
       phase.value = Phase.HEARD;
-      // the officer acknowledges before moving on — that is the difference between an
-      // interview and an interrogation by a machine
+      // the officer says your own answer back, THEN acknowledges — "Chicago." then
+      // "Okay." Queued rather than fired together: `Audio` plays immediately, so both at
+      // once makes him talk over himself, which is worse than saying neither.
+      playInOrder([frame.echo_audio_url, frame.ack_audio_url]);
       cancelAutoAdvance();
       advanceTimer = setTimeout(nextQuestion, AUTO_ADVANCE_MS);
     } else if (frame.type === "complete") {

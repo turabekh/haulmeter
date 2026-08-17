@@ -27,6 +27,7 @@ import time
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db, require_module
@@ -118,15 +119,8 @@ def open_session(
     except loop.RefusedInMotion as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
-    opening = loop.pick_line(db, "opening")
     db.commit()
-    return {
-        "session_id": str(session.id),
-        "consent_at": session.consent_at.isoformat(),
-        # a real stop begins with the officer saying something before he asks anything
-        "opening": opening.text if opening else None,
-        "opening_audio_url": _audio_url(opening.audio_ref) if opening else None,
-    }
+    return {"session_id": str(session.id), "consent_at": session.consent_at.isoformat()}
 
 
 @router.get("/session/{session_id}/result")
@@ -429,12 +423,30 @@ async def _officer_frame(websocket: WebSocket, session_id, message) -> bool:
             })
             return True
 
+        # AI-CONTEXT: the greeting rides the FIRST officer frame. It used to come back from
+        # `POST /session`, which is answered on the CONSENT screen — so a driver would have
+        # heard "Afternoon" while still deciding whether to agree to be recorded, and the
+        # session surface never received it at all. One source, and it is the one the
+        # driver is looking at.
+        first = (
+            db.scalar(
+                select(func.count(m15.Turn.id)).where(
+                    m15.Turn.session_id == session_id,
+                    m15.Turn.speaker == m15.Speaker.officer,
+                )
+            )
+            or 0
+        ) <= 1
+        opening = loop.pick_line(db, "opening") if first else None
+
         db.commit()
         await websocket.send_json({
             "type": "officer",
             "seq": officer.seq,
             "intent_key": officer.intent_key,
             "text": officer.text,
+            "opening": opening.text if opening else None,
+            "opening_audio_url": _audio_url(opening.audio_ref) if opening else None,
             # AI-CONTEXT: cached audio is referenced, never streamed through this socket.
             # E3 §E3.1.2 is explicit that pre-synthesized officer audio is what holds the
             # simulation to sub-1.3s and ~$0.10 COGS; pushing bytes down the control

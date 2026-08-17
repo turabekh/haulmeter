@@ -17,6 +17,7 @@ import RoadsideSurface from "../src/surfaces/RoadsideSurface.vue";
 import RoadsideResultSurface from "../src/surfaces/RoadsideResultSurface.vue";
 import RoadsideConsentSurface from "../src/surfaces/RoadsideConsentSurface.vue";
 import RoadsideCoachSurface from "../src/surfaces/RoadsideCoachSurface.vue";
+import RoadsideSessionSurface from "../src/surfaces/RoadsideSessionSurface.vue";
 import { routes } from "../src/router.js";
 import { setToken, logout } from "../src/core/api.js";
 import { DriverState, useDriverState, __resetStateForTests } from "../src/core/state.js";
@@ -333,5 +334,103 @@ describe("Roadside — the teaching loop (FR5)", () => {
     await flushPromises();
 
     expect(w.find(".coach__mic").exists()).toBe(false);
+  });
+});
+
+describe("Roadside — the session surface renders what the socket sends", () => {
+  // AI-CONTEXT: THIS EXISTS BECAUSE AN EDIT SILENTLY DID NOTHING. `playInOrder` was
+  // defined and never called and `echoText` was declared and never assigned, because a
+  // string replacement's anchor had already been changed by an earlier one. Every server
+  // test passed, the frame carried the fields, and the driver heard silence between
+  // questions. A frame the surface does not read is a feature that does not exist.
+  let socket;
+
+  function stubSocket() {
+    class FakeSocket {
+      static OPEN = 1;
+      constructor() {
+        this.readyState = 1;
+        this.sent = [];
+        socket = this;
+      }
+      send(data) {
+        this.sent.push(JSON.parse(data));
+      }
+      close() {}
+    }
+    vi.stubGlobal("WebSocket", FakeSocket);
+    vi.stubGlobal("Audio", class {
+      play() {
+        return Promise.resolve();
+      }
+    });
+    // AI-CONTEXT: the surface opens the mic itself when a question has no audio to wait
+    // for — that is the hands-free behaviour, not a test artifact. Without a stubbed
+    // `mediaDevices` it correctly renders MIC_DENIED and the assertion measures that
+    // screen instead of the one under test.
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: () => Promise.resolve({ getTracks: () => [] }) },
+    });
+    vi.stubGlobal("MediaRecorder", class {
+      constructor() {
+        this.state = "inactive";
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        this.state = "inactive";
+      }
+    });
+  }
+
+  function frame(payload) {
+    socket.onmessage({ data: JSON.stringify(payload) });
+  }
+
+  it("shows the officer's greeting on the first question", async () => {
+    stubSocket();
+    const w = mount(RoadsideSessionSurface, {
+      global: { plugins: [await at("roadside-session", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    frame({
+      type: "officer",
+      text: "Where are you headed?",
+      audio_url: null,
+      opening: "Afternoon. Just a routine check.",
+      opening_audio_url: null,
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain("Afternoon. Just a routine check.");
+    expect(w.text()).toContain("Where are you headed?");
+  });
+
+  it("says the driver's own answer back, then acknowledges", async () => {
+    stubSocket();
+    const w = mount(RoadsideSessionSurface, {
+      global: { plugins: [await at("roadside-session", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    frame({ type: "officer", text: "Where are you headed?", audio_url: null });
+    await flushPromises();
+    frame({
+      type: "scored",
+      transcript: "i am headed to chicago",
+      review_needed: false,
+      echo: "Chicago",
+      echo_audio_url: null,
+      ack: "Okay.",
+      ack_audio_url: null,
+      tags: [],
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain("Chicago");
+    expect(w.text()).toContain("Okay.");
+    expect(w.text()).toContain("i am headed to chicago");
   });
 });

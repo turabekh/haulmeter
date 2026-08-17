@@ -410,3 +410,44 @@ def test_an_answer_that_landed_still_gets_acknowledged(client, db, monkeypatch):
 
     assert "INTENT_MISUNDERSTOOD" not in frame["tags"]
     assert frame["ack"] == "Okay."
+
+
+def test_the_first_officer_frame_carries_the_greeting(client, db, monkeypatch):
+    """A stop OPENS. This lived on `POST /session` — answered by the CONSENT screen, which
+    meant a driver would have heard "Afternoon" while still deciding whether to agree to be
+    recorded, and the session surface never received it at all."""
+    _module_on(db)
+    intent = _draft_content(db)
+    db.add(m.PhraseVariant(
+        intent_id=intent.id, text="Where are you headed?",
+        difficulty=m.Difficulty.clear, status=m.ContentStatus.released, version=2,
+    ))
+    db.add(m.OfficerAck(
+        text="Afternoon. Just a routine check.", kind="opening", status=m.ContentStatus.released
+    ))
+    db.flush()
+    session = _session(db)
+
+    with client.websocket_connect(f"/roadside/session/{session.id}/stream") as ws:
+        ws.send_json({"type": "ready", "driver_state": "IDLE"})
+        first = ws.receive_json()
+        ws.send_json({"type": "ready", "driver_state": "IDLE"})
+        second = ws.receive_json()
+        ws.send_json({"type": "bye"})
+
+    assert first["opening"] == "Afternoon. Just a routine check."
+    # and only once — an officer who greets you before every question is a machine
+    assert second.get("opening") is None
+
+
+def test_the_scored_frame_carries_the_echo_and_the_ack(client, db, monkeypatch):
+    """The fields the surface plays back. A frame that stopped carrying them would leave
+    the officer silent between questions and nothing would fail — which is exactly what
+    happened when a UI edit silently no-opped."""
+    monkeypatch.setattr(m15_api, "F9Rubric", _rubric_saying(True))
+    session = _answering_session(db)
+
+    frame = _scored_frame(client, session, "I am headed to Chicago")
+
+    assert "echo" in frame and "echo_audio_url" in frame
+    assert "ack" in frame and "ack_audio_url" in frame
