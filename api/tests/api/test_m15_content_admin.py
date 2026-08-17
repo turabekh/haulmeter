@@ -128,22 +128,28 @@ def test_the_full_path_makes_content_reachable(client, db):
     assert content.teachable_variants(db, intent.id) == [variant]
 
 
-def test_a_second_release_without_a_bump_is_refused(client, db):
-    """The bump keeps "which text was this driver scored against" answerable, and the
-    server computes `previous_version` from what is already RELEASED — a client that
-    could supply it could pass 0 and defeat the rule."""
+def test_two_phrasings_of_one_question_can_both_be_released(client, db):
+    """THE POOL, and the reason this endpoint does not compute a bump from siblings.
+
+    An intent is meant to hold several released variants at once — `teachable_variants`
+    returns a pool and Q-5 needs holdouts beside taught lines. The first version of this
+    endpoint took `previous_version` to be the highest released version among siblings,
+    which made two alternative phrasings mutually exclusive at version 1 and would have
+    left every intent with exactly one line. Found by trying to release the seeded
+    scenario, not by reading the code.
+    """
     _auth(db, client)
     intent = _intent(db)
-    first = _variant(db, intent, "first line", version=2)
-    client.post(f"/admin/roadside/content/variant/{first.id}/review")
-    client.post(f"/admin/roadside/content/variant/{first.id}/release")
+    first = _variant(db, intent, "How many hours have you driven?")
+    second = _variant(db, intent, "How long have you been driving today?")
 
-    second = _variant(db, intent, "second line at the same version", version=2)
-    client.post(f"/admin/roadside/content/variant/{second.id}/review")
-    resp = client.post(f"/admin/roadside/content/variant/{second.id}/release")
+    for variant in (first, second):
+        client.post(f"/admin/roadside/content/variant/{variant.id}/review")
+        assert client.post(f"/admin/roadside/content/variant/{variant.id}/release").status_code == 200
 
-    assert resp.status_code == 422
-    assert second.status is m.ContentStatus.reviewed
+    from app.modules.m15_roadside.domain import content
+
+    assert set(content.teachable_variants(db, intent.id)) == {first, second}
 
 
 def test_a_scenario_moves_through_the_same_pipeline(client, db):

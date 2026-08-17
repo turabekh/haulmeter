@@ -1872,38 +1872,31 @@ def roadside_release(
     _admin: identity.Account = Depends(current_admin),  # noqa: ARG001 — the actor, audited
     db: Session = Depends(get_db),
 ) -> dict:
-    """Promote reviewed -> released. The bump is checked against what is ALREADY released.
+    """Promote reviewed -> released.
 
-    AI-CONTEXT: `previous_version` is computed here rather than accepted, and it is the
-    highest version already released among the item's siblings — the other variants of the
-    same intent, or the other versions of the same scenario. That is what "which text was
-    the driver scored against" actually means; a per-item counter would let two different
-    released texts share a version, which is the question the bump exists to keep
-    answerable.
+    AI-CONTEXT: `previous_version` IS 0 HERE, and that is a limitation stated rather than
+    disguised.
+
+    The domain's bump rule is about SUPERSESSION — a version 2 replacing the version 1 a
+    driver was previously scored against, so "which text did they hear" stays answerable.
+    The schema records no supersession link: variants are independent rows, and an intent
+    is MEANT to hold several at once (`teachable_variants` returns a pool, and Q-5 needs
+    holdouts sitting beside taught lines). Computing the bump from the highest released
+    SIBLING — which this endpoint did first — makes two alternative phrasings of one
+    question mutually exclusive at version 1, which breaks the pool the module is built on.
+    Found by trying to release the seeded scenario, not by reading the code.
+
+    So this surface releases items that have never been released, and 0 is the honest
+    predecessor for that. `content.release` still refuses anything not `reviewed`, and no
+    route moves a released item back — so re-releasing an edited text is not reachable from
+    here at all. A real supersession path needs a schema link and is not this session's.
     """
     from app.modules.m15_roadside.domain import content as m15content
-    from app.modules.m15_roadside.domain import enums as m15enums
-    from app.modules.m15_roadside.domain import models as m15m
 
-    if kind == "variant":
-        item = _m15_variant(db, item_id)
-        previous = db.scalar(
-            select(func.max(m15m.PhraseVariant.version)).where(
-                m15m.PhraseVariant.intent_id == item.intent_id,
-                m15m.PhraseVariant.status == m15enums.ContentStatus.released,
-            )
-        )
-    else:
-        item = _m15_scenario(db, item_id)
-        previous = db.scalar(
-            select(func.max(m15m.ScenarioVersion.version)).where(
-                m15m.ScenarioVersion.status == m15enums.ContentStatus.released
-            )
-        )
-
+    item = _m15_variant(db, item_id) if kind == "variant" else _m15_scenario(db, item_id)
     was = item.status.value
     try:
-        m15content.release(item, previous_version=previous or 0)
+        m15content.release(item, previous_version=0)
     except m15content.ContentNotReviewed as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     admin.record_action(
@@ -1912,7 +1905,7 @@ def roadside_release(
         actor_account_id=_admin.id,
         target_kind=f"m15_{kind}",
         target_key=str(item.id),
-        detail={"kind": kind, "previous_version": previous or 0},
+        detail={"kind": kind},
         before={"status": was},
         after={"status": item.status.value, "version": item.version},
     )
