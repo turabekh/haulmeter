@@ -131,12 +131,15 @@ is signed out. Nothing lost, no password touched.
 ## 5. The state of the local box, deliberately
 
 - **`m15_roadside` is ON in the local dev database.** My own kickoff DoD said it would be
-  left OFF; I left it on so the owner can walk J13b without setting anything up. Production
-  is untouched — **m15 does not exist there at all**, no flag row, no migrations 0084–0087.
+  left OFF; I left it on so the owner can walk J13b without setting anything up. **On
+  production it is OFF**, which is the state that matters.
 - Scenario `1ed32eea…` and five phrase variants are **released locally**, reviewed by
   `m15-walk-admin@haulmeter.online` (a platform-admin account this session created).
   Holdouts were deliberately **not** released — Q-5.
-- Nothing was pushed. Nothing was deployed.
+- **§4b supersedes what this section said before the deploy.** Written while production had
+  no m15 at all, it read "production is untouched · nothing was deployed"; both were true
+  when written and neither is now. Left visible rather than silently rewritten, because a
+  handoff is a dated record and the next session should see which claim moved.
 
 ---
 
