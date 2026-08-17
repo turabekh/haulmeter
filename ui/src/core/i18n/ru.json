@@ -975,6 +975,8 @@
   "roadside.session.paused_driving_hint": "Тренировка продолжится, когда вы остановитесь.",
   "roadside.session.replay": "Прослушать мой ответ",
   "roadside.session.scoring": "Проверяю ваш ответ…",
+  "roadside.session.speak_now": "Отвечайте, когда будете готовы",
+  "roadside.session.tap_instead": "Не расслышали — нажмите и удерживайте, чтобы ответить.",
   "roadside.session.unclear": "Это прозвучало недостаточно чётко для оценки — против вас это не засчитается.",
   "roadside.start": "Начать тренировку",
   "roadside.subtitle": "Тренировочная дорожная проверка на английском.",

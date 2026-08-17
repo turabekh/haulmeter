@@ -331,6 +331,36 @@ class ModelAnswer(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class OfficerAck(Base):
+    """What an officer says BETWEEN questions — "okay", "alright, thank you".
+
+    AI-CONTEXT: deliberately not an `Intent`. As an intent, the scenario engine could ask
+    "alright?" as a question and the drill's `unseen_variants` — which walks every intent —
+    would set a driver practising how to answer "okay". A separate table cannot be reached
+    by either, by construction.
+    """
+
+    __tablename__ = "officer_ack"
+    __table_args__ = (
+        Index("ix_officer_ack_status", "status"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    text: Mapped[str] = mapped_column(Text)
+    locale: Mapped[str] = mapped_column(String(12), default="en", server_default="en")
+    audio_ref: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("f06.document.id"), nullable=True
+    )
+    status: Mapped[ContentStatus] = mapped_column(
+        Enum(ContentStatus, name="content_status", schema=SCHEMA),
+        default=ContentStatus.draft,
+        server_default=ContentStatus.draft.value,
+    )
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class SkillState(Base):
     """Spaced repetition per driver per variant."""
 

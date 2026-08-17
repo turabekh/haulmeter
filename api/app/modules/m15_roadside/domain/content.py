@@ -27,6 +27,7 @@ from .models import (
     CoachingContent,
     Intent,
     ModelAnswer,
+    OfficerAck,
     PhraseVariant,
     ScenarioVersion,
     SignItem,
@@ -45,7 +46,9 @@ class HoldoutLeak(AssertionError):
 
 
 # every kind of content this module publishes; the transitions below are the same for all
-Publishable = PhraseVariant | SignItem | CoachingContent | ScenarioVersion | ModelAnswer
+Publishable = (
+    PhraseVariant | SignItem | CoachingContent | ScenarioVersion | ModelAnswer | OfficerAck
+)
 
 
 def mark_reviewed(item: Publishable, reviewer: str | None) -> None:

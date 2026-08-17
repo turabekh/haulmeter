@@ -975,6 +975,8 @@
   "roadside.session.paused_driving_hint": "Practice starts again once you have stopped.",
   "roadside.session.replay": "Play my answer",
   "roadside.session.scoring": "Checking your answer…",
+  "roadside.session.speak_now": "Answer when you're ready",
+  "roadside.session.tap_instead": "Didn't hear you — hold to answer instead.",
   "roadside.session.unclear": "That wasn't clear enough to score — it won't count against you.",
   "roadside.start": "Start a practice check",
   "roadside.subtitle": "A practice roadside inspection, in English.",

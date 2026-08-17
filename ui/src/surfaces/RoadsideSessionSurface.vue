@@ -30,6 +30,7 @@ import { Mic } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import { roadsideStreamUrl, API_BASE } from "../core/api.js";
+import { listenForSpeech } from "../core/listen.js";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -42,6 +43,7 @@ const Phase = {
   RECORDING: "recording",
   SCORING: "scoring",
   HEARD: "heard",
+  WAITING: "waiting",
   PAUSED: "paused",
   FAILED: "failed",
   MIC_DENIED: "mic_denied",
@@ -67,10 +69,19 @@ const heardUnclear = ref(false);
 // the driver's own recording, kept in the browser for the length of the turn so they can
 // hear themselves. Nothing is uploaded for this — it is the blob that was just sent.
 const answerAudio = ref(null);
+// AI-CONTEXT: hands-free is the DEFAULT and the button is the fallback, not the other way
+// round. Nobody holds a button while answering a police officer, and a driver at a window
+// has their hands on paperwork. `handsFree` goes false the moment the detector cannot hear
+// anything — a loud cab, a dead mic — and the surface offers the button instead of leaving
+// someone talking into a screen that is not listening.
+const handsFree = ref(true);
+const ackText = ref("");
 
 let socket = null;
 let recorder = null;
 let chunks = [];
+let listener = null;
+let micStream = null;
 // AI-CONTEXT: the conversation CARRIES ITSELF. Requiring a tap between every question
 // turned a roadside stop into a form — a real officer does not wait to be asked for the
 // next question. The beat is long enough to read what was heard and short enough that the
@@ -97,6 +108,7 @@ function askForNextLine() {
 function pause() {
   cancelAutoAdvance();
   stopRecording();
+  releaseMic();
   phase.value = Phase.PAUSED;
 }
 
@@ -121,10 +133,16 @@ onMounted(() => {
       officerText.value = frame.text;
       officerAudio.value = frame.audio_url ? `${API_BASE}${frame.audio_url}` : null;
       phase.value = Phase.OFFICER;
+      // no audio to wait for means the question is already "said" — open the mic now
+      if (!officerAudio.value && handsFree.value) openMic();
     } else if (frame.type === "scored") {
       heardText.value = frame.transcript || "";
       heardUnclear.value = Boolean(frame.review_needed);
+      ackText.value = frame.ack || "";
       phase.value = Phase.HEARD;
+      // the officer acknowledges before moving on — that is the difference between an
+      // interview and an interrogation by a machine
+      if (frame.ack_audio_url) new Audio(`${API_BASE}${frame.ack_audio_url}`).play().catch(() => {});
       cancelAutoAdvance();
       advanceTimer = setTimeout(nextQuestion, AUTO_ADVANCE_MS);
     } else if (frame.type === "complete") {
@@ -138,6 +156,53 @@ watch(isDriving, (driving) => {
   if (driving) pause();
   else if (phase.value === Phase.PAUSED) askForNextLine();
 });
+
+async function openMic() {
+  if (isDriving.value) return pause();
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    phase.value = Phase.MIC_DENIED;
+    return;
+  }
+  phase.value = Phase.WAITING;
+  recorder = new MediaRecorder(micStream);
+  chunks = [];
+  recorder.ondataavailable = (e) => chunks.push(e.data);
+  recorder.onstop = () => {
+    releaseMic();
+    sendAnswer();
+  };
+  recorder.start();
+
+  listener = listenForSpeech(micStream, {
+    onSpeechStart: () => {
+      phase.value = Phase.RECORDING;
+    },
+    onSpeechEnd: () => stopRecording(),
+    // AI-CONTEXT: heard nothing at all. Rather than sit forever with an open microphone,
+    // the surface admits it and hands the driver the button — §12.4's rule that an error
+    // states what happened AND what to do.
+    onTimeout: () => {
+      handsFree.value = false;
+      listener = null;
+      stopRecording();
+      releaseMic();
+      phase.value = Phase.OFFICER;
+    },
+  });
+}
+
+function releaseMic() {
+  if (listener) {
+    listener.stop();
+    listener = null;
+  }
+  if (micStream) {
+    micStream.getTracks().forEach((track) => track.stop());
+    micStream = null;
+  }
+}
 
 async function startRecording() {
   if (isDriving.value) return pause();
@@ -160,6 +225,10 @@ async function startRecording() {
 function stopRecording() {
   if (recorder && recorder.state === "recording") recorder.stop();
   recorder = null;
+}
+
+function officerFinishedSpeaking() {
+  if (handsFree.value && phase.value === Phase.OFFICER) openMic();
 }
 
 async function sendAnswer() {
@@ -198,6 +267,7 @@ onBeforeUnmount(() => {
   cancelAutoAdvance();
   releaseAnswerAudio();
   stopRecording();
+  releaseMic();
   if (socket && socket.readyState === WebSocket.OPEN) socket.close();
 });
 </script>
@@ -224,9 +294,16 @@ onBeforeUnmount(() => {
     <template v-else>
       <p class="session__who">{{ t("roadside.session.officer") }}</p>
       <p class="session__line">{{ officerText }}</p>
-      <audio v-if="officerAudio" :src="officerAudio" autoplay class="session__audio" />
+      <audio
+        v-if="officerAudio"
+        :src="officerAudio"
+        autoplay
+        class="session__audio"
+        @ended="officerFinishedSpeaking"
+      />
 
       <template v-if="phase === Phase.HEARD">
+        <p v-if="ackText" class="session__ack">{{ ackText }}</p>
         <p class="session__heard-label">{{ t("roadside.session.heard") }}</p>
         <p class="session__heard">{{ heardText || "—" }}</p>
         <p v-if="heardUnclear" class="session__unclear">{{ t("roadside.session.unclear") }}</p>
@@ -243,11 +320,15 @@ onBeforeUnmount(() => {
       <p class="session__status">
         {{ phase === Phase.RECORDING ? t("roadside.session.listening")
            : phase === Phase.SCORING ? t("roadside.session.scoring")
-           : t("roadside.session.answer") }}
+           : phase === Phase.WAITING ? t("roadside.session.speak_now")
+           : handsFree ? t("roadside.session.speak_now")
+           : t("roadside.session.tap_instead") }}
       </p>
 
       <button
+        v-if="!handsFree || phase === Phase.RECORDING || phase === Phase.WAITING"
         class="session__mic"
+        :data-live="phase === Phase.WAITING || phase === Phase.RECORDING"
         type="button"
         :aria-label="t('roadside.session.answer')"
         :aria-pressed="phase === Phase.RECORDING"
@@ -326,8 +407,17 @@ onBeforeUnmount(() => {
   background: var(--accent-fill);
   color: var(--on-accent);
 }
-.session__mic[aria-pressed="true"] {
+.session__mic[aria-pressed="true"],
+.session__mic[data-live="true"] {
   background: var(--flare-500);
+}
+/* what the officer said back, in his voice's place on the screen */
+.session__ack {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--type-title-size);
+  line-height: var(--type-title-line);
+  text-align: center;
 }
 /* what the recogniser heard — the driver's own words, so they read at body size and not
    as a caption. `--text-1` because this is content, not chrome. */

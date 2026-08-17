@@ -494,9 +494,16 @@ async def _answer_frame(websocket: WebSocket, session_id, message) -> bool:
             )
         db.commit()
 
+        # AI-CONTEXT: the acknowledgement rides the SCORED frame rather than getting one
+        # of its own. A separate frame would need its own ordering guarantee against the
+        # next officer line, and the client would have to sequence two sounds it received
+        # independently — the ack belongs to the answer that earned it.
+        ack = loop.pick_acknowledgement(db)
         await websocket.send_json({
             "type": "scored",
             "seq": turn.seq,
+            "ack": ack.text if ack else None,
+            "ack_audio_url": _audio_url(ack.audio_ref) if ack else None,
             "transcript": transcript,
             "confidence": confidence,
             "tags": turn.failure_tags or [],

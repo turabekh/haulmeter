@@ -975,6 +975,8 @@
   "roadside.session.paused_driving_hint": "To‘xtaganingizdan so‘ng mashq davom etadi.",
   "roadside.session.replay": "Javobimni eshitish",
   "roadside.session.scoring": "Javobingiz tekshirilmoqda…",
+  "roadside.session.speak_now": "Tayyor bo‘lsangiz javob bering",
+  "roadside.session.tap_instead": "Eshitilmadi — javob berish uchun bosib turing.",
   "roadside.session.unclear": "Bu baholash uchun yetarlicha aniq bo‘lmadi — sizga qarshi hisoblanmaydi.",
   "roadside.start": "Mashqni boshlash",
   "roadside.subtitle": "Ingliz tilida mashq uchun yo‘l nazorati.",

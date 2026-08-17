@@ -26,7 +26,12 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.modules.m15_roadside.domain.enums import ContentStatus, Difficulty
-from app.modules.m15_roadside.domain.models import Intent, ModelAnswer, PhraseVariant
+from app.modules.m15_roadside.domain.models import (
+    Intent,
+    ModelAnswer,
+    OfficerAck,
+    PhraseVariant,
+)
 from db_registry import import_all_models
 
 # officer phrasings, in the register an officer actually uses at a window — including the
@@ -60,6 +65,21 @@ MODEL_ANSWERS = {
     "hos_hours_driven": "I've been driving six hours today.",
     "logbook_request": "Yes sir, here is my logbook.",
 }
+
+
+# AI-CONTEXT: what an officer says BETWEEN questions. Short, flat, and unremarkable on
+# purpose — an officer at a window is processing you, not encouraging you, and an
+# acknowledgement that sounds pleased ("Great!") teaches a driver to expect warmth that a
+# real stop will not supply. Neutral is the accurate register and also the kind one: it
+# does not tell a nervous driver they did well when they did not.
+ACKS = [
+    "Okay.",
+    "Alright.",
+    "Thank you.",
+    "Got it.",
+    "Mm-hm.",
+    "Okay, thank you.",
+]
 
 
 def main() -> None:
@@ -110,7 +130,15 @@ def main() -> None:
         db.add(ModelAnswer(intent_id=intent.id, text=text, status=ContentStatus.draft))
         added_answers += 1
 
+    added_acks = 0
+    for text in ACKS:
+        if db.scalar(select(OfficerAck).where(OfficerAck.text == text)) is not None:
+            continue
+        db.add(OfficerAck(text=text, status=ContentStatus.draft))
+        added_acks += 1
+
     db.commit()
+    print(f"  + {added_acks} officer acknowledgements")
     print(
         f"m15 content drafted: +{added_variants} phrasings, +{added_answers} model answers "
         f"— ALL `draft`. Review and release them in /admin/roadside (Q-6)."

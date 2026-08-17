@@ -377,15 +377,19 @@ With the flag on (`/admin/flags`, an operator decision — not a step to take ca
    refuses it and a button that always 422s teaches an operator to distrust the surface.
    Review it → **Release** appears → release it. **Holdouts are labelled** in the list.
 3. Back on the driver app, reload **Roadside Ready** → the check is now offered.
-4. **Start** → the consent screen states three things: the voice recording, the **30-day
+4. **Hands-free is the point.** The officer finishes speaking and **the mic opens by
+   itself** — do not reach for a button. Answer normally; a pause of about a second ends
+   your turn. Then the officer says something ("Alright.") before the next question.
+   **If it never hears you** (loud cab, denied mic) it says so and gives you the button.
+5. **Start** → the consent screen states three things: the voice recording, the **30-day
    deletion** with scores kept, and the microphone prompt. **"Not now" is a full-size
    button beside "I agree"** — check that, it is the whole value of the record.
-5. **Agree** → the session opens. The officer's line is the largest thing on the screen;
+6. **Agree** → the session opens. The officer's line is the largest thing on the screen;
    the mic is 56 dp. Hold it, answer, release.
-6. **The pause:** with the session open, put the app in DRIVING (`/dev`, or drive). The
+7. **The pause:** with the session open, put the app in DRIVING (`/dev`, or drive). The
    session says **"Paused — the truck is moving"** and stops recording. It does **not**
    redirect — a driver bounced to the map mid-sentence learns nothing.
-7. Finish → the **result**: a band, the word **provisional**, the skills worth practising
+8. Finish → the **result**: a band, the word **provisional**, the skills worth practising
    named as skills, and **no percentage anywhere**.
 
 ## J13c — The teaching loop `[M15-FR5]`

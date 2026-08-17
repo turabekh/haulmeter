@@ -41,7 +41,7 @@ from app.foundation.f09_ai_gateway import public as ai
 
 from .content import teachable_variants
 from .enums import ContentStatus
-from .models import Intent, ModelAnswer
+from .models import Intent, ModelAnswer, OfficerAck
 
 # AI-CONTEXT: a mailbox nobody reads on a domain the owner controls. It exists to satisfy
 # an ownership column, never to receive anything, and it holds no credential — F1 will not
@@ -84,14 +84,15 @@ def variants_needing_audio(db: DbSession) -> list:
     out: list = []
     for intent in db.scalars(select(Intent)):
         out.extend(v for v in teachable_variants(db, intent.id) if v.audio_ref is None)
-    out.extend(
-        db.scalars(
-            select(ModelAnswer).where(
-                ModelAnswer.status == ContentStatus.released,
-                ModelAnswer.audio_ref.is_(None),
+    for table in (ModelAnswer, OfficerAck):
+        out.extend(
+            db.scalars(
+                select(table).where(
+                    table.status == ContentStatus.released,
+                    table.audio_ref.is_(None),
+                )
             )
         )
-    )
     return out
 
 

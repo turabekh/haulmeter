@@ -975,6 +975,8 @@
   "roadside.session.paused_driving_hint": "La práctica continúa cuando te detengas.",
   "roadside.session.replay": "Escuchar mi respuesta",
   "roadside.session.scoring": "Comprobando tu respuesta…",
+  "roadside.session.speak_now": "Responde cuando estés listo",
+  "roadside.session.tap_instead": "No te oímos: mantén pulsado para responder.",
   "roadside.session.unclear": "No se oyó con claridad suficiente para puntuar; no contará en tu contra.",
   "roadside.start": "Empezar una práctica",
   "roadside.subtitle": "Una inspección en carretera de práctica, en inglés.",

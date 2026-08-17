@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session as DbSession
 from .content import teachable_variants
 from .diagnosis import band_for
 from .enums import ContentStatus, SessionMode, Speaker, TurnReviewStatus
-from .models import Intent, PhraseVariant, ScenarioVersion, Session, Turn
+from .models import Intent, OfficerAck, PhraseVariant, ScenarioVersion, Session, Turn
 from .scoring import ASR_CONFIDENCE_FLOOR, FailureTag, Rubric, score_turn
 
 
@@ -174,6 +174,33 @@ REASK_TRIGGERS = frozenset({
 # ONE repeat, then the officer moves on — which is also what happens at a real window, and
 # what stops a driver in a dead microphone from being trapped in a loop forever.
 MAX_REASKS_PER_INTENT = 1
+
+
+def pick_acknowledgement(db: DbSession, *, rng=None) -> OfficerAck | None:
+    """What the officer says before moving on. None when no ack has been released.
+
+    AI-CONTEXT: this is the difference between an interview and a form, and it is the
+    thing the owner named when they said the product felt robotic. A real officer says
+    "alright" before the next question; the absence of that is most of what makes a
+    question-answer-question loop feel like a machine.
+
+    RANDOM, so a driver does not hear the same syllable six times in one stop — the same
+    argument as the phrase-variant pool, applied to the smallest possible utterance.
+
+    None is a legitimate answer and the socket simply omits the frame: an ack is content
+    and content that has not been reviewed does not reach a driver (Q-6), even when it is
+    one word long.
+    """
+    pool = list(
+        db.scalars(select(OfficerAck).where(OfficerAck.status == ContentStatus.released))
+    )
+    if not pool:
+        return None
+    if rng is None:
+        import random
+
+        return random.choice(pool)
+    return pool[rng.randrange(len(pool))]
 
 
 def _intent_to_reask(db: DbSession, session: Session) -> Intent | None:
