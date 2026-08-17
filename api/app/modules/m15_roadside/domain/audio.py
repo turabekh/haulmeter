@@ -40,7 +40,8 @@ from app.foundation.f06_documents import public as documents
 from app.foundation.f09_ai_gateway import public as ai
 
 from .content import teachable_variants
-from .models import Intent, PhraseVariant
+from .enums import ContentStatus
+from .models import Intent, ModelAnswer
 
 # AI-CONTEXT: a mailbox nobody reads on a domain the owner controls. It exists to satisfy
 # an ownership column, never to receive anything, and it holds no credential — F1 will not
@@ -66,16 +67,31 @@ def content_account(db: DbSession):
     return account
 
 
-def variants_needing_audio(db: DbSession) -> list[PhraseVariant]:
-    """Released, teachable lines that have no voice yet.
+def variants_needing_audio(db: DbSession) -> list:
+    """Released content that has no voice yet — officer lines AND model answers.
 
-    Goes through `teachable_variants` per intent rather than querying variants directly —
-    see the module docstring. An intent with nothing released contributes nothing, which is
-    why this returns an empty list on a box where no content has been reviewed.
+    Officer lines go through `teachable_variants` per intent rather than being queried
+    directly (see the module docstring), so Q-5 and Q-6 are enforced in one place.
+
+    MODEL ANSWERS NEED A VOICE FOR THE SAME REASON THE QUESTIONS DO, and arguably more:
+    FR5's step is "hear a clear model answer, repeat it". A model answer a driver can only
+    READ cannot be shadowed — shadowing is an ear-and-mouth exercise, and text turns it
+    into a reading test, which is the one thing this module is not.
+
+    An intent with nothing released contributes nothing, which is why this returns an empty
+    list on a box where no content has been reviewed.
     """
-    out: list[PhraseVariant] = []
+    out: list = []
     for intent in db.scalars(select(Intent)):
         out.extend(v for v in teachable_variants(db, intent.id) if v.audio_ref is None)
+    out.extend(
+        db.scalars(
+            select(ModelAnswer).where(
+                ModelAnswer.status == ContentStatus.released,
+                ModelAnswer.audio_ref.is_(None),
+            )
+        )
+    )
     return out
 
 
@@ -115,7 +131,7 @@ def synthesize_missing(db: DbSession, *, limit: int = 25, storage=None) -> dict:
             owner.id,
             documents.DocType.other,
             audio,
-            filename=f"officer-{variant.id}.mp3",
+            filename=f"m15-{variant.id}.mp3",
             content_type=AUDIO_CONTENT_TYPE,
             storage=storage,
         )

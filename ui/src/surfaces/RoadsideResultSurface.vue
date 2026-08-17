@@ -90,9 +90,21 @@ onMounted(load);
 
       <p v-if="!isAuthenticated" class="result__claim">{{ t("roadside.result.claim") }}</p>
 
+      <!-- AI-CONTEXT: the way into FR5's loop, and it is the PRIMARY action when there is
+           something to practise. "Practise again" restarts the same check; this teaches
+           what was missed first, which is the difference between a test and a course. -->
+      <button
+        v-if="!isDriving && result.failure_tags.length"
+        class="result__again"
+        type="button"
+        @click="router.push({ name: 'roadside-coach', params: { sessionId: route.params.sessionId } })"
+      >
+        {{ t("roadside.result.practice_cta") }}
+      </button>
+
       <button
         v-if="!isDriving"
-        class="result__again"
+        class="result__retry"
         type="button"
         @click="router.replace({ name: 'roadside' })"
       >

@@ -2,7 +2,7 @@ COMPOSE = docker compose -f infra/docker-compose.yml
 .DEFAULT_GOAL := help
 
 .PHONY: help env preflight build up down logs migrate test test-api test-ui lint fmt ci vapid-keys \
-        seed seed-where seed-wallet purge-demo m15-tg-draft m15-key-smoke m15-session-probe ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
+        seed seed-where seed-wallet purge-demo m15-draft-content m15-tg-draft m15-key-smoke m15-session-probe ingest-ntad ingest-tpims ingest-osm osm-extract repair-scales \
         repair-fuel repair-contact repair-duplicates osm-publish ingest-remote ui-layout ui-layout-only \
         ratecon-eval
 
@@ -140,6 +140,9 @@ m15-session-probe:
 
 m15-key-smoke:
 	$(COMPOSE) run --rm -v $(PWD):/repo -e SMOKE_OUT=/repo/docs/voice-samples api python -m scripts.m15_key_smoke
+
+m15-draft-content:
+	$(COMPOSE) exec -T api python -m scripts.m15_draft_content
 
 m15-tg-draft:
 	$(COMPOSE) run --rm --no-deps -v $(PWD):/repo -e REPO_ROOT=/repo api python -m scripts.i18n_draft_tg

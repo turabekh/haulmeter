@@ -388,6 +388,23 @@ With the flag on (`/admin/flags`, an operator decision — not a step to take ca
 7. Finish → the **result**: a band, the word **provisional**, the skills worth practising
    named as skills, and **no percentage anywhere**.
 
+## J13c — The teaching loop `[M15-FR5]`
+Follows J13b. Answer at least one question **wrongly** — say "I am delivering furniture" to
+an hours question — so there is something to teach.
+
+1. On the result, **Practise what you missed** is the primary action, and it only appears
+   when something was actually missed.
+2. The coaching screen shows, in order: **the question you missed** (with playback), the
+   explanation, **other ways an officer asks this**, and **a clear answer** to shadow.
+3. **The Q-9 check, and it is the one that matters.** With no released Uzbek coaching, an
+   `uz` driver must read *"The explanation isn't in your language yet."* — **never the
+   English explanation**. Switch the language in More and confirm it.
+4. Hold the mic and answer the retest. It says what it heard and whether that answered it.
+   Passing here is a weaker claim than passing a real session — the retest scores
+   comprehension only, because slots come from a scenario's facts and there is no scenario.
+5. **Signed in**, a `m15.skill_state` row appears and its `srs_due_at` moves. As a
+   **guest**, nothing is recorded and the screen says so rather than pretending.
+
 ## J14 — Evidence share links `[F4 sharing]`
 1. Export PDF and Share are real 48 dp controls.
 2. Create link → open incognito (no session) → renders from **pinned bytes**.

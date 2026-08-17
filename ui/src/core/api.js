@@ -2390,3 +2390,20 @@ export const reviewRoadsideContent = (kind, id) =>
   adminSend(`/roadside/content/${kind}/${id}/review`, "POST");
 export const releaseRoadsideContent = (kind, id) =>
   adminSend(`/roadside/content/${kind}/${id}/release`, "POST");
+
+// AI-CONTEXT: `locale` is a QUERY PARAM rather than an account preference, because the
+// driver who most needs coaching in their own language is the one who has not made an
+// account yet. The client already knows what it is rendering in.
+export async function fetchRoadsideCoaching(sessionId, locale) {
+  return apiGet(`/roadside/session/${sessionId}/coaching?locale=${encodeURIComponent(locale)}`);
+}
+
+export async function submitCoachingAttempt(variantId, audioB64) {
+  const resp = await fetch(`${API_BASE}/roadside/coaching/${variantId}/attempt`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ audio_b64: audioB64 }),
+  });
+  if (!resp.ok) throw new Error(`coaching attempt ${resp.status}`);
+  return resp.json();
+}

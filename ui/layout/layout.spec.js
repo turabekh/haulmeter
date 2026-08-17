@@ -733,6 +733,38 @@ const ROADSIDE_SCENARIO = {
   difficulty: "clear",
   intents: ["destination", "hos_hours_driven"],
 };
+// AI-CONTEXT: FR5's loop, at its LONGEST — explanation, a four-line phrase family, a model
+// answer and a retest all on one screen. That is the shape most likely to reflow badly
+// under +40% in Gurmukhi, and the one worth measuring.
+const ROADSIDE_COACHING = {
+  coaching: [
+    {
+      intent_key: "hos_hours_driven",
+      missed_question: "How many hours have you been driving today?",
+      missed_question_audio: null,
+      explanation: "'clock' — bu soat emas, qolgan haydash vaqti.",
+      glosses: { clock: "qolgan haydash vaqti" },
+      phrase_family: [
+        { text: "How long you been behind the wheel?", audio_url: null },
+        { text: "How much drive time do you have today?", audio_url: null },
+        { text: "How many hours are on your clock today?", audio_url: null },
+        { text: "What have you got for hours today?", audio_url: null },
+      ],
+      model_answer: "I've been driving six hours today.",
+      model_answer_audio: null,
+      retest_variant_id: "00000000-0000-0000-0000-0000000000d3",
+      retest_question: "How long you been behind the wheel?",
+    },
+  ],
+};
+
+// the Q-9 state: no coaching released in this driver's language. Measured separately
+// because "not yet in your language" is a SENTENCE where the other state has a paragraph,
+// and an absent explanation changes the whole page's rhythm.
+const ROADSIDE_COACHING_Q9 = {
+  coaching: [{ ...ROADSIDE_COACHING.coaching[0], explanation: null, glosses: {} }],
+};
+
 const ROADSIDE_RESULT = {
   session_id: ROADSIDE_SESSION,
   band: "yellow",
@@ -1051,6 +1083,14 @@ const SURFACES = [
   }],
   ["roadside-consent", "/roadside/consent/00000000-0000-0000-0000-0000000000d1", {
     ready: ".consent__agree",
+  }],
+  ["roadside-coach", `/roadside/coach/${ROADSIDE_SESSION}`, {
+    mocks: { [`/roadside/session/${ROADSIDE_SESSION}/coaching`]: ROADSIDE_COACHING },
+    ready: ".coach__line",
+  }],
+  ["roadside-coach-no-locale", `/roadside/coach/${ROADSIDE_SESSION}`, {
+    mocks: { [`/roadside/session/${ROADSIDE_SESSION}/coaching`]: ROADSIDE_COACHING_Q9 },
+    ready: ".coach__note",
   }],
   ["roadside-result", `/roadside/result/${ROADSIDE_SESSION}`, {
     mocks: { [`/roadside/session/${ROADSIDE_SESSION}/result`]: ROADSIDE_RESULT },

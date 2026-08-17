@@ -254,3 +254,91 @@ def test_me_says_whether_roadside_is_on(client, db):
     flag.enabled = True
     db.flush()
     assert client.get("/auth/me", headers=headers).json()["roadside_enabled"] is True
+
+
+# --- the teaching loop over HTTP (M15-FR5) ---------------------------------------------
+
+
+def _coachable_session(db):
+    """A session with one missed intent, and two released phrasings so a retest exists."""
+    intent = m.Intent(
+        key="hos", domain="paperwork", canonical_meaning="hours driven", required_slots={}
+    )
+    db.add(intent)
+    db.flush()
+    asked = m.PhraseVariant(
+        intent_id=intent.id, text="How many hours have you been driving today?",
+        difficulty=m.Difficulty.clear, status=m.ContentStatus.released,
+    )
+    other = m.PhraseVariant(
+        intent_id=intent.id, text="How long you been behind the wheel?",
+        difficulty=m.Difficulty.clear, status=m.ContentStatus.released, version=2,
+    )
+    scenario = m.ScenarioVersion(
+        version=1, difficulty=m.Difficulty.clear,
+        allowed_intents=["hos"], status=m.ContentStatus.released,
+    )
+    db.add_all([asked, other, scenario])
+    db.flush()
+    session = loop.start_session(
+        db, scenario=scenario, account_id=_account(db).id, consented=True
+    )
+    db.add_all([
+        m.Turn(session_id=session.id, seq=1, speaker=m.Speaker.officer,
+               intent_id=intent.id, transcript=asked.text),
+        m.Turn(session_id=session.id, seq=2, speaker=m.Speaker.driver,
+               intent_id=intent.id, transcript="uh, furniture",
+               failure_tags=["INTENT_MISUNDERSTOOD"]),
+    ])
+    db.flush()
+    return session, intent, other
+
+
+def test_the_coaching_route_returns_the_loop_for_each_miss(client, db):
+    _module_on(db)
+    session, _intent, other = _coachable_session(db)
+
+    body = client.get(f"/roadside/session/{session.id}/coaching?locale=uz").json()
+
+    assert len(body["coaching"]) == 1
+    plan = body["coaching"][0]
+    assert plan["missed_question"] == "How many hours have you been driving today?"
+    assert [p["text"] for p in plan["phrase_family"]] == ["How long you been behind the wheel?"]
+    assert plan["retest_variant_id"] == str(other.id)
+
+
+def test_the_route_carries_Q9_rather_than_falling_back_to_english(client, db):
+    """`explanation: null` is the honest state, and the surface renders it as "not yet in
+    your language". A route that substituted the English row would defeat Q-9 in a place
+    no domain test would see."""
+    _module_on(db)
+    session, intent, _other = _coachable_session(db)
+    db.add(m.CoachingContent(
+        intent_id=intent.id, locale="en", explanation="AN ENGLISH EXPLANATION",
+        review_status=m.ContentStatus.released,
+    ))
+    db.flush()
+
+    plan = client.get(f"/roadside/session/{session.id}/coaching?locale=uz").json()["coaching"][0]
+
+    assert plan["explanation"] is None
+
+
+def test_an_audio_url_is_signed_when_a_line_has_a_voice(client, db):
+    """The officer-audio URL bug (entry 183) again, one layer over: a hand-built path here
+    would 422 in the player exactly as it did in the socket."""
+    _module_on(db)
+    session, intent, other = _coachable_session(db)
+    from app.foundation.f06_documents import public as documents
+
+    doc = documents.store_document(
+        db, _account(db).id, documents.DocType.other, b"ID3x",
+        filename="x.mp3", content_type="audio/mpeg",
+    )
+    other.audio_ref = doc.id
+    db.flush()
+
+    plan = client.get(f"/roadside/session/{session.id}/coaching?locale=uz").json()["coaching"][0]
+    url = plan["phrase_family"][0]["audio_url"]
+
+    assert "sig=" in url and "exp=" in url, "an unsigned media URL is a 422 in the player"

@@ -16,6 +16,7 @@ import { createRouter, createMemoryHistory } from "vue-router";
 import RoadsideSurface from "../src/surfaces/RoadsideSurface.vue";
 import RoadsideResultSurface from "../src/surfaces/RoadsideResultSurface.vue";
 import RoadsideConsentSurface from "../src/surfaces/RoadsideConsentSurface.vue";
+import RoadsideCoachSurface from "../src/surfaces/RoadsideCoachSurface.vue";
 import { routes } from "../src/router.js";
 import { setToken, logout } from "../src/core/api.js";
 import { DriverState, useDriverState, __resetStateForTests } from "../src/core/state.js";
@@ -253,5 +254,84 @@ describe("Roadside — the result", () => {
     expect(w.find(".result__review").text()).toContain("2");
     // and the placeholder actually substituted — a visible {n} is the entry-74 defect
     expect(w.text()).not.toContain("{n}");
+  });
+});
+
+describe("Roadside — the teaching loop (FR5)", () => {
+  const PLAN = {
+    intent_key: "hos_hours_driven",
+    missed_question: "How many hours have you been driving today?",
+    missed_question_audio: null,
+    explanation: null,
+    glosses: {},
+    phrase_family: [{ text: "How long you been behind the wheel?", audio_url: null }],
+    model_answer: "I've been driving six hours today.",
+    model_answer_audio: null,
+    retest_variant_id: "v-1",
+    retest_question: "How long you been behind the wheel?",
+  };
+
+  it("says the coaching is not in your language yet, rather than showing English", async () => {
+    // Q-9. The server sends `explanation: null`; a surface that filled that gap from an
+    // English row would defeat the law in the one place a domain test cannot see.
+    stubFetch({ "/roadside/session/sess-1/coaching": jsonOk({ coaching: [PLAN] }) });
+    const w = mount(RoadsideCoachSurface, {
+      global: { plugins: [await at("roadside-coach", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain(messages["roadside.coach.no_explanation"]);
+  });
+
+  it("shows the explanation when the driver's language has one", async () => {
+    stubFetch({
+      "/roadside/session/sess-1/coaching": jsonOk({
+        coaching: [{ ...PLAN, explanation: "'clock' — qolgan haydash vaqti" }],
+      }),
+    });
+    const w = mount(RoadsideCoachSurface, {
+      global: { plugins: [await at("roadside-coach", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain("'clock' — qolgan haydash vaqti");
+    expect(w.text()).not.toContain(messages["roadside.coach.no_explanation"]);
+  });
+
+  it("walks the loop: the miss, the family, the model answer, the retest", async () => {
+    stubFetch({ "/roadside/session/sess-1/coaching": jsonOk({ coaching: [PLAN] }) });
+    const w = mount(RoadsideCoachSurface, {
+      global: { plugins: [await at("roadside-coach", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    const text = w.text();
+    expect(text).toContain("How many hours have you been driving today?");
+    expect(text).toContain("How long you been behind the wheel?");
+    expect(text).toContain("I've been driving six hours today.");
+    expect(text).toContain(messages["roadside.coach.shadow"]);
+  });
+
+  it("says there is nothing to practise when nothing was missed", async () => {
+    stubFetch({ "/roadside/session/sess-1/coaching": jsonOk({ coaching: [] }) });
+    const w = mount(RoadsideCoachSurface, {
+      global: { plugins: [await at("roadside-coach", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain(messages["roadside.coach.empty"]);
+  });
+
+  it("withdraws the retest microphone at speed", async () => {
+    stubFetch({ "/roadside/session/sess-1/coaching": jsonOk({ coaching: [PLAN] }) });
+    const w = mount(RoadsideCoachSurface, {
+      global: { plugins: [await at("roadside-coach", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    useDriverState().setState(DriverState.DRIVING);
+    await flushPromises();
+
+    expect(w.find(".coach__mic").exists()).toBe(false);
   });
 });

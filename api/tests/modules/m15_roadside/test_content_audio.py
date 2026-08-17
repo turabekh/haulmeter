@@ -190,3 +190,40 @@ def test_the_synthesized_bytes_are_actually_served(db, monkeypatch):
 
     doc = db.get(documents.Document, variant.audio_ref)
     assert storage.get(doc.storage_key) == b"ID3May I see your logbook?"
+
+
+def test_a_released_model_answer_gets_a_voice_too(db, monkeypatch):
+    """FR5's step is "hear a clear model answer, repeat it". A model answer a driver can
+    only READ cannot be shadowed — that turns an ear-and-mouth exercise into a reading
+    test, which is the one thing this module is not."""
+    tts = _Tts()
+    storage = _Storage()
+    monkeypatch.setattr(m15_audio.ai, "resolve_tts", lambda: tts)
+    intent = _intent(db)
+    answer = m.ModelAnswer(
+        intent_id=intent.id,
+        text="I have been driving six hours today.",
+        status=m.ContentStatus.released,
+    )
+    db.add(answer)
+    db.flush()
+
+    summary = m15_audio.synthesize_missing(db, storage=storage)
+
+    assert summary["synthesized"] == 1
+    assert answer.audio_ref is not None
+
+
+def test_a_draft_model_answer_gets_no_voice(db, monkeypatch):
+    """Q-6 reaches spending here too — paying to synthesize unreviewed text is money for
+    something that must not be heard."""
+    tts = _Tts()
+    monkeypatch.setattr(m15_audio.ai, "resolve_tts", lambda: tts)
+    intent = _intent(db)
+    db.add(m.ModelAnswer(
+        intent_id=intent.id, text="a drafted answer", status=m.ContentStatus.draft
+    ))
+    db.flush()
+
+    assert m15_audio.synthesize_missing(db, storage=_Storage())["synthesized"] == 0
+    assert tts.calls == []

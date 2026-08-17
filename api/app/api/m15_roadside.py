@@ -150,6 +150,120 @@ def session_result(
     }
 
 
+@router.get("/session/{session_id}/coaching")
+def session_coaching(
+    session_id: uuid.UUID,
+    locale: str = "en",
+    db: Session = Depends(get_db),
+) -> dict:
+    """The teaching loop's material for every miss in a session (M15-FR5).
+
+    AI-CONTEXT: `locale` is a QUERY PARAMETER rather than an account preference, because
+    the driver who most needs coaching in Uzbek is the one who has not made an account
+    yet — a guest. The client already knows which language it is rendering in.
+
+    `explanation: null` is Q-9 and the surface must render it as "not yet in your
+    language", never by falling back to the English row. That decision is made in
+    `coaching.py`; this route only carries it.
+    """
+    from app.modules.m15_roadside.domain import coaching
+
+    session = db.get(m15.Session, session_id)
+    if session is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such session")
+
+    plans = []
+    for turn in _driver_turns(db, session_id):
+        plan = coaching.coaching_for(db, turn=turn, locale=locale)
+        if plan is None:
+            continue
+        plans.append({
+            "intent_key": plan.intent_key,
+            "missed_question": plan.missed_question,
+            "missed_question_audio": _audio_url(plan.missed_question_audio),
+            "explanation": plan.explanation,
+            "glosses": plan.glosses,
+            "phrase_family": [
+                {"text": v.text, "audio_url": _audio_url(v.audio_ref)} for v in plan.phrase_family
+            ],
+            "model_answer": plan.model_answer,
+            "model_answer_audio": _audio_url(plan.model_answer_audio),
+            "retest_variant_id": str(plan.retest_variant_id) if plan.retest_variant_id else None,
+            "retest_question": plan.retest_question,
+        })
+    return {"coaching": plans}
+
+
+@router.post("/coaching/{variant_id}/attempt")
+def coaching_attempt(
+    variant_id: uuid.UUID,
+    body: dict,
+    db: Session = Depends(get_db),
+    account: identity.Account | None = Depends(current_account),
+) -> dict:
+    """The retest at the end of the loop. Scores one spoken attempt and records practice.
+
+    AI-CONTEXT: NO SLOT CHECKING, and that is not laziness. Slots are resolved from a
+    scenario's hidden state — "six hours" is correct because THIS scenario says so — and a
+    retest happens outside any scenario. Asking whether the driver produced a fact nobody
+    gave them would fail every attempt. What is being retested is the thing that was
+    missed: did they understand the question and answer it.
+
+    A GUEST GETS SCORED AND RECORDS NOTHING (`record_practice` returns None). That is the
+    schema being honest — skill state belongs to a person — and the result surface already
+    offers the claim that turns their work into a record.
+    """
+    from app.modules.m15_roadside.domain import coaching
+    from app.modules.m15_roadside.domain.scoring import score_turn
+
+    variant = db.get(m15.PhraseVariant, variant_id)
+    if variant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such phrasing")
+
+    audio = base64.b64decode(body.get("audio_b64") or "")
+    if audio:
+        stt = speech.resolve_stt()
+        transcript, confidence = stt.transcribe(audio, locale="en")
+        speech.record_audio_minutes(db, "m15", AiTask.stt, max(len(audio) / 320_000.0, 0.02))
+    else:
+        transcript = body.get("transcript") or ""
+        confidence = float(body.get("confidence", 0.9))
+
+    intent = db.get(m15.Intent, variant.intent_id)
+    try:
+        rubric = F9Rubric(db, account_id=account.id if account else None)
+        scored = score_turn(
+            officer_line=variant.text,
+            transcript=transcript,
+            intent_key=intent.key,
+            expected_slots={},
+            asr_confidence=confidence,
+            rubric=rubric,
+        )
+    except RubricUnavailable:
+        # the same refusal the session makes: no verdict is invented about a driver
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "scoring unavailable") from None
+
+    passed = bool(scored.scores) and scored.scores.get("comprehension", 0) > 0
+    coaching.record_practice(
+        db,
+        account_id=account.id if account else None,
+        variant_id=variant.id,
+        success=passed,
+    )
+    db.commit()
+    return {
+        "transcript": transcript,
+        "passed": passed,
+        "review_needed": scored.review_needed,
+        "recorded": account is not None,
+    }
+
+
+def _audio_url(ref):
+    return media_url(KIND_DOCUMENT, ref, size=SIZE_FULL) if ref else None
+
+
 def _driver_turns(db: Session, session_id):
     from sqlalchemy import select
 

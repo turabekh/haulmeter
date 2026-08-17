@@ -23,7 +23,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .enums import ContentStatus
-from .models import CoachingContent, Intent, PhraseVariant, ScenarioVersion, SignItem
+from .models import (
+    CoachingContent,
+    Intent,
+    ModelAnswer,
+    PhraseVariant,
+    ScenarioVersion,
+    SignItem,
+)
 
 
 class ContentNotReviewed(ValueError):
@@ -37,9 +44,11 @@ class HoldoutLeak(AssertionError):
 # --- Q-6: draft -> reviewed -> released ---------------------------------------------
 
 
-def mark_reviewed(
-    item: PhraseVariant | SignItem | CoachingContent | ScenarioVersion, reviewer: str | None
-) -> None:
+# every kind of content this module publishes; the transitions below are the same for all
+Publishable = PhraseVariant | SignItem | CoachingContent | ScenarioVersion | ModelAnswer
+
+
+def mark_reviewed(item: Publishable, reviewer: str | None) -> None:
     """A human says they read it. `reviewer` is required and is the whole point.
 
     AI-CONTEXT: F9 may DRAFT content — that is what the classify/draft prompts are for —
@@ -55,9 +64,7 @@ def mark_reviewed(
     _set_status(item, ContentStatus.reviewed)
 
 
-def release(
-    item: PhraseVariant | SignItem | CoachingContent | ScenarioVersion, *, previous_version: int
-) -> None:
+def release(item: Publishable, *, previous_version: int) -> None:
     """Promote reviewed -> released. Refuses from draft, and refuses without a bump.
 
     The version bump is not bookkeeping: released content is what a driver is scored

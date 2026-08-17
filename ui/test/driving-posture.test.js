@@ -49,6 +49,7 @@ const SOURCE = {
   "roadside-consent": "RoadsideConsentSurface",
   "roadside-session": "RoadsideSessionSurface",
   "roadside-result": "RoadsideResultSurface",
+  "roadside-coach": "RoadsideCoachSurface",
 };
 
 // the driver app: everything that is not a §18 portal and not a public page

@@ -1773,6 +1773,24 @@ def _m15_variant(db: Session, item_id: uuid.UUID):
     return item
 
 
+def _m15_model_answer(db: Session, item_id: uuid.UUID):
+    from app.modules.m15_roadside.domain import models as m15m
+
+    item = db.get(m15m.ModelAnswer, item_id)
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such model answer")
+    return item
+
+
+# AI-CONTEXT: three content kinds, one dispatch. Adding a fourth means adding a row here
+# rather than another `if kind == ...` in two endpoints that could then disagree.
+_M15_KINDS = {"variant": _m15_variant, "model_answer": _m15_model_answer}
+
+
+def _m15_item(db: Session, kind: str, item_id: uuid.UUID):
+    return _M15_KINDS.get(kind, _m15_scenario)(db, item_id)
+
+
 def _m15_scenario(db: Session, item_id: uuid.UUID):
     from app.modules.m15_roadside.domain import models as m15m
 
@@ -1796,6 +1814,11 @@ def roadside_content(
     by_intent: dict = {}
     for variant in variants:
         by_intent.setdefault(variant.intent_id, []).append(variant)
+
+    model_answers = list(db.scalars(select(m15m.ModelAnswer)))
+    by_intent_answers: dict = {}
+    for answer in model_answers:
+        by_intent_answers.setdefault(answer.intent_id, []).append(answer)
 
     return {
         "scenarios": [
@@ -1826,6 +1849,18 @@ def roadside_content(
                     }
                     for v in sorted(by_intent.get(intent.id, []), key=lambda v: v.version)
                 ],
+                # AI-CONTEXT: model answers ride the same row as the phrasings because a
+                # reviewer needs to see them TOGETHER — an answer is only fit for shadowing
+                # if it answers the question above it.
+                "model_answers": [
+                    {
+                        "id": str(a.id),
+                        "text": a.text,
+                        "status": a.status.value,
+                        "version": a.version,
+                    }
+                    for a in sorted(by_intent_answers.get(intent.id, []), key=lambda a: a.version)
+                ],
             }
             for intent in intents
         ],
@@ -1841,7 +1876,7 @@ def roadside_review(
 ) -> dict:
     from app.modules.m15_roadside.domain import content as m15content
 
-    item = _m15_variant(db, item_id) if kind == "variant" else _m15_scenario(db, item_id)
+    item = _m15_item(db, kind, item_id)
     was = item.status.value
     try:
         m15content.mark_reviewed(item, actor.email)
@@ -1893,7 +1928,7 @@ def roadside_release(
     """
     from app.modules.m15_roadside.domain import content as m15content
 
-    item = _m15_variant(db, item_id) if kind == "variant" else _m15_scenario(db, item_id)
+    item = _m15_item(db, kind, item_id)
     was = item.status.value
     try:
         m15content.release(item, previous_version=0)

@@ -1,0 +1,121 @@
+"""AI-CONTEXT: draft the English content FR5's loop needs, for a human to review.
+
+WHY THIS IS A SCRIPT AND NOT A SEED. `seed_demo` is dev-only and plants demo facilities;
+this content belongs on production, where the driver is. It writes `draft` rows and
+nothing else — Q-6 means a human reviews and releases them in `/admin/roadside`, and
+until that happens not one line here can reach a driver.
+
+WHAT IT DRAFTS AND WHY EACH IS NEEDED:
+
+  · **more phrasings per intent.** FR5 asks a driver to "hear 3–6 equivalents"; the pool
+    stood at two released phrasings per intent, so the phrase family was one line long.
+    A family of one teaches nothing about the shape of a question.
+  · **a model answer per intent.** FR5's shadowing step — "hear a clear model answer,
+    repeat it" — had nowhere to draw from at all.
+
+IT IS IDEMPOTENT ON TEXT. The job runs again after content is released; re-inserting the
+same sentence as a fresh draft would give a reviewer the same line to approve forever.
+
+NOT DRAFTED HERE: the native-language explanations. Drafting Uzbek nobody has reviewed is
+cheap and worthless — Q-9 already specifies what a driver sees while that content does not
+exist, and an unreviewed draft in the table would be a thing waiting to be released by
+mistake.
+"""
+
+from sqlalchemy import select
+
+from app.core.db import SessionLocal
+from app.modules.m15_roadside.domain.enums import ContentStatus, Difficulty
+from app.modules.m15_roadside.domain.models import Intent, ModelAnswer, PhraseVariant
+from db_registry import import_all_models
+
+# officer phrasings, in the register an officer actually uses at a window — including the
+# clipped, ungrammatical ones ("Where you delivering to?"), because those are the hardest
+# to follow and are exactly what a driver needs to have heard before.
+PHRASINGS = {
+    "destination": [
+        "Where are you going with this load?",
+        "What's your final stop?",
+        "Where you delivering to?",
+        "Where's this load headed?",
+    ],
+    "hos_hours_driven": [
+        "How much drive time do you have today?",
+        "How many hours are on your clock today?",
+        "How many hours since you started?",
+        "What have you got for hours today?",
+    ],
+    "logbook_request": [
+        "Let me see your log for today.",
+        "I need to see your ELD.",
+        "Pull up your logs for me.",
+        "Show me your record of duty status.",
+    ],
+}
+
+# what a competent answer sounds like. Short, complete, and ordinary — a model answer that
+# sounds like a textbook teaches a driver to sound like a textbook at a truck window.
+MODEL_ANSWERS = {
+    "destination": "I'm headed to Chicago, Illinois.",
+    "hos_hours_driven": "I've been driving six hours today.",
+    "logbook_request": "Yes sir, here is my logbook.",
+}
+
+
+def main() -> None:
+    # AI-CONTEXT: the WHOLE registry, not just m15's models — `model_answer.audio_ref` is
+    # a foreign key to `f06.document`, and SQLAlchemy cannot resolve the mapper if only
+    # this module's models were imported. Same shape as trap 4: a partial import fails
+    # somewhere that looks unrelated to the omission.
+    import_all_models()
+    db = SessionLocal()
+    added_variants = added_answers = 0
+
+    for key, texts in PHRASINGS.items():
+        intent = db.scalar(select(Intent).where(Intent.key == key))
+        if intent is None:
+            print(f"  skip {key}: no such intent on this box")
+            continue
+        rows = list(
+            db.scalars(select(PhraseVariant).where(PhraseVariant.intent_id == intent.id))
+        )
+        existing = {v.text for v in rows}
+        # version numbers continue the intent's own sequence so a reviewer sees an ordered
+        # list rather than four rows all claiming to be version 1
+        top = max([v.version for v in rows] or [0])
+        for text in texts:
+            if text in existing:
+                continue
+            top += 1
+            db.add(PhraseVariant(
+                intent_id=intent.id,
+                text=text,
+                difficulty=Difficulty.clear,
+                status=ContentStatus.draft,
+                version=top,
+            ))
+            added_variants += 1
+
+    for key, text in MODEL_ANSWERS.items():
+        intent = db.scalar(select(Intent).where(Intent.key == key))
+        if intent is None:
+            continue
+        already = db.scalar(
+            select(ModelAnswer).where(
+                ModelAnswer.intent_id == intent.id, ModelAnswer.text == text
+            )
+        )
+        if already is not None:
+            continue
+        db.add(ModelAnswer(intent_id=intent.id, text=text, status=ContentStatus.draft))
+        added_answers += 1
+
+    db.commit()
+    print(
+        f"m15 content drafted: +{added_variants} phrasings, +{added_answers} model answers "
+        f"— ALL `draft`. Review and release them in /admin/roadside (Q-6)."
+    )
+
+
+if __name__ == "__main__":
+    main()
