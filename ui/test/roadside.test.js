@@ -18,6 +18,7 @@ import RoadsideResultSurface from "../src/surfaces/RoadsideResultSurface.vue";
 import RoadsideConsentSurface from "../src/surfaces/RoadsideConsentSurface.vue";
 import RoadsideCoachSurface from "../src/surfaces/RoadsideCoachSurface.vue";
 import RoadsideSessionSurface from "../src/surfaces/RoadsideSessionSurface.vue";
+import RoadsideDrillSurface from "../src/surfaces/RoadsideDrillSurface.vue";
 import { routes } from "../src/router.js";
 import { setToken, logout } from "../src/core/api.js";
 import { DriverState, useDriverState, __resetStateForTests } from "../src/core/state.js";
@@ -547,6 +548,33 @@ describe("Roadside — the session surface renders what the socket sends", () =>
     expect(w.find("audio").attributes("src")).toContain("/media/document/abc");
   });
 
+  it("plays the bytes off the socket rather than fetching them", async () => {
+    // AI-CONTEXT: measured from a distant client, fetching the mp3 from `audio_url` cost
+    // 1050ms AFTER the frame arrived — a fresh TLS round trip for 17KB — so the real time
+    // to first speech was a second worse than every server-side number said. The socket
+    // already carried the sentence; it now carries the sound. `audio_url` still rides
+    // along, so this asserts which one the surface actually PLAYS.
+    stubSocket();
+    const w = mount(RoadsideSessionSurface, {
+      global: { plugins: [await at("roadside-session", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    frame({ type: "officer", text: "Where to?", audio_url: null, audio_pending: true });
+    await flushPromises();
+    frame({
+      type: "officer_audio",
+      seq: 1,
+      audio_url: "/media/document/abc?sig=x",
+      audio_b64: "QUJD",
+    });
+    await flushPromises();
+
+    const src = w.find("audio").attributes("src");
+    expect(src).toBe("data:audio/mpeg;base64,QUJD");
+    expect(src).not.toContain("/media/document");
+  });
+
   it("releases the driver to answer when the officer's voice fails to synthesize", async () => {
     // A voice that never arrives must not become a mic that never opens: the question is
     // readable, so the driver can answer it. Silence beats a dead screen.
@@ -566,5 +594,111 @@ describe("Roadside — the session surface renders what the socket sends", () =>
     await flushPromises();
 
     expect(getUserMedia).toHaveBeenCalled();
+  });
+});
+
+describe("Roadside — today's practice", () => {
+  // AI-CONTEXT: THIS SURFACE HAD NO TESTS AT ALL, which is most of why it was still on the
+  // interaction entry 187 removed from the stop: hold-to-talk, and a question that waited
+  // to be tapped. Nothing failed when the rest of the module moved on, because nothing was
+  // watching. These cover the behaviour a driver meets first.
+  const PLAN = {
+    plan: {
+      id: "p-1",
+      day: 3,
+      completed: false,
+      items: [
+        { variant_id: "v-1", text: "How much drive time do you have today?",
+          audio_url: "/media/document/a?sig=x" },
+        { variant_id: "v-2", text: "Where's this load headed?", audio_url: null },
+      ],
+    },
+  };
+
+  function stubMedia() {
+    const getUserMedia = vi.fn(() => Promise.resolve({ getTracks: () => [] }));
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    vi.stubGlobal("MediaRecorder", class {
+      constructor() {
+        this.state = "inactive";
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        this.state = "inactive";
+      }
+    });
+    return getUserMedia;
+  }
+
+  it("asks the question out loud and opens the mic when it finishes — no taps", async () => {
+    const getUserMedia = stubMedia();
+    const clips = [];
+    vi.stubGlobal("Audio", class {
+      constructor(src) {
+        this.src = src;
+        clips.push(this);
+      }
+      play() {
+        return Promise.resolve();
+      }
+      pause() {}
+    });
+    stubFetch({ "/roadside/drill/today": jsonOk(PLAN) });
+
+    const w = mount(RoadsideDrillSurface, {
+      global: { plugins: [await at("roadside-drill", {})] },
+    });
+    await flushPromises();
+
+    // the question plays itself
+    expect(clips.some((c) => String(c.src).includes("/media/document/a"))).toBe(true);
+    // ...and the microphone is NOT open while he is still asking
+    expect(getUserMedia).not.toHaveBeenCalled();
+
+    clips[0].onended();
+    await flushPromises();
+
+    expect(getUserMedia).toHaveBeenCalled();
+    expect(w.text()).toContain("How much drive time do you have today?");
+  });
+
+  it("opens the mic anyway when the question has no audio to wait for", async () => {
+    const getUserMedia = stubMedia();
+    vi.stubGlobal("Audio", class {
+      play() {
+        return Promise.resolve();
+      }
+      pause() {}
+    });
+    const noAudio = {
+      plan: { ...PLAN.plan, items: [{ variant_id: "v-2", text: "Where's this load headed?", audio_url: null }] },
+    };
+    stubFetch({ "/roadside/drill/today": jsonOk(noAudio) });
+
+    mount(RoadsideDrillSurface, { global: { plugins: [await at("roadside-drill", {})] } });
+    await flushPromises();
+
+    // a silent question must not leave the driver waiting for a mic that never opens
+    expect(getUserMedia).toHaveBeenCalled();
+  });
+
+  it("says nothing is due rather than showing an empty screen", async () => {
+    stubMedia();
+    vi.stubGlobal("Audio", class {
+      play() {
+        return Promise.resolve();
+      }
+      pause() {}
+    });
+    stubFetch({ "/roadside/drill/today": jsonOk({ plan: null }) });
+
+    const w = mount(RoadsideDrillSurface, {
+      global: { plugins: [await at("roadside-drill", {})] },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain(messages["roadside.drill.none"]);
   });
 });

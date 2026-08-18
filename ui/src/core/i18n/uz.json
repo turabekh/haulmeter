@@ -1268,5 +1268,7 @@
   "voice.stop": "To‘xtatish",
   "voice.title": "Kopilot",
   "voice.unavailable": "Hozircha ovoz Xarita bo'limida.",
-  "voice.unsupported": "Bu yerda ovoz ishlamaydi — savolingizni yozing."
+  "voice.unsupported": "Bu yerda ovoz ishlamaydi — savolingizni yozing.",
+  "roadside.session.speaking": "Xodim gapirmoqchi",
+  "roadside.coach.checking": "Javobingiz tekshirilmoqda"
 }

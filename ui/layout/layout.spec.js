@@ -1105,9 +1105,13 @@ const SURFACES = [
     ready: ".consent__agree",
   }],
   /* AI-CONTEXT: the drill's two states. `roadside-drill` is a live item — the display-step
-   * question, the play control and the 56 dp mic — and `roadside-drill-none` is the one a
-   * driver meets most often at the start, because practice only exists after a check.
-   * An empty state has a layout spec like anything else (§15.3). */
+   * question, with the play control and the 56 dp mic now CONDITIONAL: practice went
+   * hands-free, so the question asks itself and the button is the fallback for a cab too
+   * loud for the detector. In a headless browser the microphone is refused, which is
+   * exactly the fallback branch, so this state measures the button-and-notice layout.
+   * `roadside-drill-none` is the one a driver meets most often at the start, because
+   * practice only exists after a check. An empty state has a layout spec like anything
+   * else (§15.3). */
   ["roadside-drill", "/roadside/drill", {
     mocks: { "/roadside/drill/today": ROADSIDE_DRILL },
     ready: ".drill__line",

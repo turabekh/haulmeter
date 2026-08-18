@@ -1268,5 +1268,7 @@
   "voice.stop": "ਰੋਕੋ",
   "voice.title": "ਕੋਪਾਇਲਟ",
   "voice.unavailable": "ਫਿਲਹਾਲ ਆਵਾਜ਼ ਨਕਸ਼ਾ ਟੈਬ ਉੱਤੇ ਹੈ।",
-  "voice.unsupported": "ਇੱਥੇ ਆਵਾਜ਼ ਉਪਲਬਧ ਨਹੀਂ — ਆਪਣਾ ਸਵਾਲ ਲਿਖੋ।"
+  "voice.unsupported": "ਇੱਥੇ ਆਵਾਜ਼ ਉਪਲਬਧ ਨਹੀਂ — ਆਪਣਾ ਸਵਾਲ ਲਿਖੋ।",
+  "roadside.session.speaking": "ਅਫ਼ਸਰ ਬੋਲਣ ਵਾਲਾ ਹੈ",
+  "roadside.coach.checking": "ਤੁਹਾਡੇ ਜਵਾਬ ਦੀ ਜਾਂਚ ਹੋ ਰਹੀ ਹੈ"
 }

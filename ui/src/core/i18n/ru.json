@@ -1268,5 +1268,7 @@
   "voice.stop": "Стоп",
   "voice.title": "Копилот",
   "voice.unavailable": "Пока голос доступен на вкладке «Карта».",
-  "voice.unsupported": "Голос здесь недоступен — напишите вопрос."
+  "voice.unsupported": "Голос здесь недоступен — напишите вопрос.",
+  "roadside.session.speaking": "Инспектор сейчас заговорит",
+  "roadside.coach.checking": "Проверяем ваш ответ"
 }

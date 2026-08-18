@@ -1268,5 +1268,7 @@
   "voice.stop": "Detener",
   "voice.title": "Copiloto",
   "voice.unavailable": "Por ahora, la voz está en la pestaña Mapa.",
-  "voice.unsupported": "La voz no está disponible aquí: escribe tu pregunta."
+  "voice.unsupported": "La voz no está disponible aquí: escribe tu pregunta.",
+  "roadside.session.speaking": "El agente va a hablar",
+  "roadside.coach.checking": "Comprobando tu respuesta"
 }

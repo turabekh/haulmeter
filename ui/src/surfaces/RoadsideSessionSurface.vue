@@ -31,6 +31,7 @@ import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import { roadsideStreamUrl, API_BASE } from "../core/api.js";
 import { listenForSpeech } from "../core/listen.js";
+import SpeakingIndicator from "../core/components/SpeakingIndicator.vue";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -204,8 +205,15 @@ onMounted(() => {
       // that failed: the question is on the screen, so the driver is released to answer
       // it rather than left waiting for a sound that is never coming.
       awaitingAudio.value = false;
-      if (frame.audio_url) {
-        officerAudio.value = `${API_BASE}${frame.audio_url}`;
+      // AI-CONTEXT: THE BYTES, IF THEY CAME. Measured from a client on the other side of
+      // the world, fetching the mp3 from `audio_url` cost 1050ms AFTER this frame arrived
+      // — a fresh DNS/TCP/TLS round trip and a signed-URL check for 17KB — so real time to
+      // first speech was ~3.0s while every server number said 1.9s. The socket already
+      // carried the sentence; now it carries the sound. `audio_url` remains the fallback,
+      // and is still what replay and retention are built on.
+      const inline = frame.audio_b64 ? `data:audio/mpeg;base64,${frame.audio_b64}` : null;
+      if (inline || frame.audio_url) {
+        officerAudio.value = inline || `${API_BASE}${frame.audio_url}`;
       } else if (handsFree.value && phase.value === Phase.OFFICER) {
         openMic();
       }
@@ -440,6 +448,12 @@ onBeforeUnmount(() => {
            The officer's spoken echo ("Dallas.") is the receipt, so the WRITTEN one appears
            only when the recogniser did not understand — the one case a driver cannot infer
            from his reply, and the case Q-2 says must be stated rather than hidden. -->
+      <!-- AI-CONTEXT: the ~2s where the officer is choosing and voicing his next line. The
+           listening noise covers it for the ear; nothing covered it for the EYE, so a
+           driver watching a still screen had no reason to believe anything was happening.
+           Owner's request, logged as a decision — §22.2 reserves new component patterns. -->
+      <SpeakingIndicator v-if="phase === Phase.SCORING" />
+
       <template v-if="phase === Phase.HEARD">
         <p v-if="echoText || ackText" class="session__ack">
           {{ [echoText, ackText].filter(Boolean).join(" ") }}

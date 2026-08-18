@@ -26,8 +26,9 @@ import {
   API_BASE,
 } from "../core/api.js";
 import { LoadState, Failure, failureOf } from "../core/load-state.js";
+import { listenForSpeech } from "../core/listen.js";
 import SkeletonCard from "../core/components/SkeletonCard.vue";
-import Spinner from "../core/components/Spinner.vue";
+import SpeakingIndicator from "../core/components/SpeakingIndicator.vue";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -43,8 +44,23 @@ const busy = ref(false);
 const item = computed(() => plan.value?.items[index.value] || null);
 const remaining = computed(() => (plan.value ? plan.value.items.length - index.value : 0));
 
+// AI-CONTEXT: THE PRACTICE SCREEN NEVER GOT THE TREATMENT THE STOP DID. It was still
+// hold-to-talk — the interaction entry 187 called "the robot" and removed from the session
+// because nobody holds a button while answering a police officer. The same argument applies
+// harder here: this is the screen a driver opens every day, and a daily habit that needs a
+// thumb held down for every answer is a habit that stops.
+//
+// So it now behaves like the stop: the question plays itself, the microphone opens when the
+// officer stops speaking, and about a second of silence ends the turn. The button remains
+// as the fallback for a cab too loud to hear over, exactly as it does there.
+const handsFree = ref(true);
+const listening = ref(false);
+const micDenied = ref(false);
+
 let recorder = null;
 let chunks = [];
+let micStream = null;
+let listener = null;
 
 async function load() {
   state.value = LoadState.LOADING;
@@ -52,33 +68,115 @@ async function load() {
     const body = await fetchTodaysDrill();
     plan.value = body.plan;
     state.value = LoadState.LOADED;
+    ask();
   } catch (err) {
     failure.value = failureOf(err);
     state.value = LoadState.FAILED;
   }
 }
 
-onMounted(load);
-
-function play(url) {
-  if (url) new Audio(`${API_BASE}${url}`).play().catch(() => {});
+// AI-CONTEXT: the question ASKS ITSELF and the microphone follows it, which is the whole
+// difference between practice and a worksheet. A driver who has to tap play, then hold a
+// button, is reading questions off a screen; a driver who hears one and answers it is
+// practising the thing a roadside stop actually tests.
+function ask() {
+  if (!item.value || isDriving.value) return;
+  play(item.value.audio_url, { thenListen: true });
 }
 
+onMounted(load);
+
+let questionAudio = null;
+
+function play(url, { thenListen = false } = {}) {
+  if (!url) {
+    if (thenListen) openMic();
+    return;
+  }
+  questionAudio = new Audio(`${API_BASE}${url}`);
+  if (thenListen) {
+    questionAudio.onended = () => openMic();
+    // a clip that fails to play must not leave the driver waiting for a mic that never
+    // opens — the question is on screen, so let them answer it
+    questionAudio.onerror = () => openMic();
+  }
+  questionAudio.play().catch(() => {
+    if (thenListen) openMic();
+  });
+}
+
+function stopQuestionAudio() {
+  if (questionAudio) {
+    questionAudio.onended = null;
+    questionAudio.onerror = null;
+    questionAudio.pause();
+    questionAudio = null;
+  }
+}
+
+function releaseMic() {
+  if (listener) {
+    listener.stop();
+    listener = null;
+  }
+  if (micStream) {
+    micStream.getTracks().forEach((track) => track.stop());
+    micStream = null;
+  }
+}
+
+async function openMic() {
+  if (isDriving.value || !handsFree.value || attempt.value) return;
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    micDenied.value = true;
+    handsFree.value = false;
+    return;
+  }
+  recorder = new MediaRecorder(micStream);
+  chunks = [];
+  recorder.ondataavailable = (e) => chunks.push(e.data);
+  recorder.onstop = () => {
+    releaseMic();
+    listening.value = false;
+    send();
+  };
+  recorder.start();
+  listening.value = true;
+
+  listener = listenForSpeech(micStream, {
+    onSpeechEnd: () => stop(),
+    // AI-CONTEXT: heard nothing at all. Says so and hands back the button rather than
+    // sitting with an open microphone (§12.4: state what happened AND what to do).
+    onTimeout: () => {
+      handsFree.value = false;
+      listener = null;
+      stop();
+      releaseMic();
+      listening.value = false;
+    },
+  });
+}
+
+// the fallback, for a cab too loud for the detector — press and hold, as before
 async function start() {
   if (isDriving.value) return;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    recorder = new MediaRecorder(stream);
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recorder = new MediaRecorder(micStream);
     chunks = [];
     recorder.ondataavailable = (e) => chunks.push(e.data);
     recorder.onstop = () => {
-      stream.getTracks().forEach((track) => track.stop());
+      releaseMic();
+      listening.value = false;
       send();
     };
     recorder.start();
+    listening.value = true;
     attempt.value = null;
   } catch {
-    failure.value = Failure.SERVER;
+    micDenied.value = true;
   }
 }
 
@@ -104,8 +202,10 @@ async function send() {
 
 async function next() {
   attempt.value = null;
+  micDenied.value = false;
   if (index.value < plan.value.items.length - 1) {
     index.value += 1;
+    ask();
     return;
   }
   try {
@@ -117,7 +217,11 @@ async function next() {
   router.replace({ name: "roadside" });
 }
 
-onBeforeUnmount(stop);
+onBeforeUnmount(() => {
+  stop();
+  stopQuestionAudio();
+  releaseMic();
+});
 </script>
 
 <template>
@@ -141,30 +245,56 @@ onBeforeUnmount(stop);
       </p>
 
       <p class="drill__line">{{ item.text }}</p>
-      <button
-        v-if="item.audio_url"
-        class="drill__play"
-        type="button"
-        @click="play(item.audio_url)"
-      >
-        <Play :size="18" aria-hidden="true" />
-        <span>{{ t("roadside.coach.play") }}</span>
-      </button>
 
       <p v-if="isDriving" class="drill__note">{{ t("roadside.session.paused_driving") }}</p>
-      <button
-        v-else
-        class="drill__mic"
-        type="button"
-        :aria-label="t('roadside.session.answer')"
-        :disabled="busy"
-        @pointerdown="start"
-        @pointerup="stop"
-        @pointercancel="stop"
-      >
-        <Spinner v-if="busy" />
-        <Mic v-else :size="28" aria-hidden="true" />
-      </button>
+
+      <template v-else-if="busy">
+        <!-- AI-CONTEXT: the verdict takes seconds. Nothing stood here, so the screen
+             looked frozen at the one moment a driver most wants to know something is
+             happening.
+
+             THE COPY SAYS "your answer", NOT "how you said it", and the difference is
+             Q-1. The first draft read "Checking how you said it" — which tells a driver
+             we are marking the WAY they speak, and Q-1's whole point is that accent is
+             never scored. The rubric judges whether the answer was intelligible and
+             landed, and the words a driver reads have to say that and nothing more.
+             Caught by the i18n audit before it shipped, in all six locales at once,
+             because a translated violation is six violations. -->
+        <SpeakingIndicator :label="t('roadside.coach.checking')" />
+      </template>
+
+      <template v-else-if="!attempt">
+        <p class="drill__note">
+          {{ listening ? t("roadside.session.speak_now") : t("roadside.session.tap_instead") }}
+        </p>
+        <!-- hands-free is the default; the button is the fallback for a cab too loud for
+             the detector, or a driver whose microphone was refused -->
+        <button
+          v-if="!handsFree || listening"
+          class="drill__mic"
+          :data-live="listening"
+          type="button"
+          :aria-label="t('roadside.session.answer')"
+          :aria-pressed="listening"
+          @pointerdown="start"
+          @pointerup="stop"
+          @pointercancel="stop"
+        >
+          <Mic :size="28" aria-hidden="true" />
+        </button>
+        <p v-if="micDenied" class="drill__note" role="alert">
+          {{ t("roadside.session.mic_denied") }}
+        </p>
+        <button
+          v-if="item.audio_url"
+          class="drill__play"
+          type="button"
+          @click="play(item.audio_url)"
+        >
+          <Play :size="18" aria-hidden="true" />
+          <span>{{ t("roadside.coach.play") }}</span>
+        </button>
+      </template>
 
       <template v-if="attempt">
         <p class="drill__heard">{{ attempt.transcript }}</p>
@@ -240,6 +370,10 @@ onBeforeUnmount(stop);
   border-radius: var(--r-pill);
   background: var(--accent-fill);
   color: var(--on-accent);
+}
+/* live, so a driver can see the microphone is open — same signal the stop uses */
+.drill__mic[data-live="true"] {
+  background: var(--flare-500);
 }
 .drill__verdict {
   margin: 0;

@@ -34,6 +34,7 @@ from app.api.deps import current_account, get_db, require_module
 from app.api.media import KIND_DOCUMENT, SIZE_FULL, media_url
 from app.core.db import SessionLocal
 from app.foundation.f01_identity import public as identity
+from app.foundation.f06_documents import public as documents
 from app.foundation.f09_ai_gateway.domain import speech
 from app.foundation.f09_ai_gateway.domain.enums import AiTask
 from app.modules.m15_roadside import public as m15
@@ -336,6 +337,34 @@ def _audio_url(ref):
     return media_url(KIND_DOCUMENT, ref, size=SIZE_FULL) if ref else None
 
 
+def _audio_inline(db, ref) -> str | None:
+    """The audio BYTES, base64, for a socket that is already open.
+
+    AI-CONTEXT: THE LARGEST REMAINING LATENCY WAS NOT ON THE SERVER AT ALL. Measured from a
+    client on the other side of the world: the `officer_audio` frame arrived at 1.93s, and
+    the browser then spent **1050ms fetching the mp3** — a fresh DNS/TCP/TLS/HTTP round
+    trip, plus signed-URL validation, for 17KB — before a single sound came out. Real time
+    to first speech was ~3.0s while every server-side number said 1.9s.
+
+    The WebSocket is already open, already authenticated and already carrying the sentence.
+    Sending the bytes down it costs ~23KB of base64 and removes the round trip completely.
+    `audio_url` still rides along: it is what the retention story and the replay affordances
+    are built on, and a client that cannot decode inline audio still has something to fetch.
+    """
+    if ref is None:
+        return None
+    try:
+        document = db.get(documents.Document, ref)
+        if document is None:
+            return None
+        blob = documents.get_document_bytes(db, document)
+    except Exception:
+        # a voice that cannot be read inline is not worth failing a turn over — the frame
+        # still carries `audio_url`, which is the path that already worked
+        return None
+    return base64.b64encode(blob).decode() if blob else None
+
+
 def _thinking_urls(db, seq: int) -> list[str] | None:
     """The officer's listening noises, handed over ONCE at the start of the stop.
 
@@ -501,6 +530,9 @@ async def _officer_frame(websocket: WebSocket, session_id, message) -> bool:
                     "type": "officer_audio",
                     "seq": turn.seq,
                     "audio_url": audio_url,
+                    # the bytes themselves, so the browser does not spend a second
+                    # fetching them over a fresh connection before it can make a sound
+                    "audio_b64": _audio_inline(db, audio_ref) if audio_url else None,
                 })
                 return True
 

@@ -282,10 +282,13 @@ def test_the_improvised_line_arrives_before_the_voice_does(client, db, monkeypat
     )
     monkeypatch.setattr(m15_api.conversation, "officer_mode", lambda db_: "llm")
     synthesized = []
+    # a REAL F6 document, because the frame now carries the bytes and a bare UUID has
+    # none behind it — the assertion below would pass on a mock and fail on production
+    doc = _stored_audio(db, b"\x00\x01\x02")
 
     def _synth(db_, text):
         synthesized.append(text)
-        return uuid.uuid4()
+        return doc
 
     monkeypatch.setattr(m15_api.m15_audio, "fragment_audio", _synth)
 
@@ -301,10 +304,16 @@ def test_the_improvised_line_arrives_before_the_voice_does(client, db, monkeypat
     assert first["audio_url"] is None
     assert first["audio_pending"] is True
 
-    # then the voice, on its own frame, tied to the same turn
+    # then the voice, on its own frame, tied to the same turn — and carrying the BYTES,
+    # because a client that has to go and fetch them spends a second doing it (measured
+    # from a distant client: 1050ms after this frame, for 17KB, over a fresh connection)
     assert second["type"] == "officer_audio"
     assert second["seq"] == first["seq"]
     assert second["audio_url"] is not None
+    assert second["audio_b64"], "the socket carried a URL but not the sound"
+    import base64 as _b64
+
+    assert _b64.b64decode(second["audio_b64"])  # decodable, not a placeholder
     assert synthesized == ["Let me see your logbook."]
 
 
@@ -445,6 +454,20 @@ def test_the_listening_noises_are_handed_over_once_at_the_start(client, db, monk
 
     assert first["thinking_audio_urls"], "the client has nothing to play while it waits"
     assert all(u.startswith("/media/") for u in first["thinking_audio_urls"])
+
+
+def _stored_audio(db, blob: bytes):
+    """An F6 audio document, returned by id — what a real synthesis produces."""
+    from app.foundation.f06_documents import public as documents
+    from app.modules.m15_roadside.domain import audio as m15_audio
+
+    owner = m15_audio.content_account(db)
+    document = documents.store_document(
+        db, owner.id, documents.DocType.other, blob,
+        filename="line.mp3", content_type="audio/mpeg",
+    )
+    db.flush()
+    return document.id
 
 
 def _released_thinking_line(db, text):
