@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.foundation.f13_flags import public as flags
 
-from . import diagnosis, officer_prompt, prompts
+from . import conversation, diagnosis, officer_prompt, prompts
 
 # AI-CONTEXT: `m15_roadside` is the master flag. Turning it ON opens the free Roadside
 # Check platform-wide; the sponsored surfaces additionally require entitlements, which is
@@ -64,6 +64,9 @@ def register_module(db: Session) -> None:
     # the band thresholds and the calibration gate, tunable without a deploy —
     # they decide what a driver is told they are, so they are the owner's numbers
     diagnosis.register_config(db)
+    # the officer kill switch, DECLARED so it appears in /admin — entry 189's "stop it in
+    # seconds" is only true for a knob an operator can find (see conversation.py)
+    conversation.register_config(db)
 
 
 def is_enabled(db: Session) -> bool:

@@ -172,6 +172,35 @@ def conversational_officer(db: DbSession, session: Session) -> ImprovisedTurn:
 
 
 OFFICER_MODE_KEY = "m15.officer_mode"
+OFFICER_MODE_DEFAULT = "llm"
+
+
+def register_config(db: DbSession) -> None:
+    """DECLARE the kill switch, so an operator can find it.
+
+    AI-CONTEXT: `set_config` writes whether or not a key is declared, so the revert always
+    worked mechanically — and it was still the wrong kind of broken. `declared_configs`
+    walks `ConfigDeclaration`, which is what /admin lists, so an undeclared key is a knob
+    that exists and cannot be found. Entry 189 promises an operator can stop unreviewed
+    officer lines "in seconds without shipping anything"; that promise was only true for
+    someone who already knew the key existed and had a database shell. Caught on the box
+    by querying the registry rather than trusting the sentence.
+
+    This is the same failure `register_module` already records for m11 — a prompt that was
+    registered lazily and so was absent from /admin until an unrelated endpoint happened
+    to be called. A knob nobody can find is not a control.
+    """
+    from app.foundation.f13_flags import public as flags
+
+    flags.register_config(
+        db,
+        OFFICER_MODE_KEY,
+        OFFICER_MODE_DEFAULT,
+        description=(
+            "Roadside officer: 'llm' improvises each line (unreviewed text, Q-6 amended "
+            "by entry 189); 'scripted' reverts to reviewed content only. The kill switch."
+        ),
+    )
 
 
 def officer_mode(db: DbSession) -> str:
@@ -184,4 +213,4 @@ def officer_mode(db: DbSession) -> str:
     """
     from app.foundation.f13_flags import public as flags
 
-    return str(flags.get_config(db, OFFICER_MODE_KEY, "llm"))
+    return str(flags.get_config(db, OFFICER_MODE_KEY, OFFICER_MODE_DEFAULT))

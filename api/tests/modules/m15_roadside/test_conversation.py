@@ -189,6 +189,31 @@ def test_the_schema_and_effort_reach_the_wire_not_just_the_call_site(monkeypatch
     assert "output_config" not in sent
 
 
+def test_the_kill_switch_is_DECLARED_so_an_operator_can_find_it(db):
+    """RED-FIRST, and found on the box rather than in the tree.
+
+    AI-CONTEXT: `set_config` writes whether or not a key is declared, so flipping this
+    always worked — and production still had no row and no DECLARATION. /admin lists
+    `declared_configs`, which walks `ConfigDeclaration`, so an undeclared key is a knob
+    that exists and cannot be found. Entry 189 promises an operator can stop unreviewed
+    officer lines "in seconds without shipping anything"; that was only true for someone
+    who already knew the key and had a database shell. The test that would have caught it
+    is this one — asserting the knob is REACHABLE, not merely that the getter works.
+    """
+    from app.foundation.f13_flags import public as flags
+    from app.modules.m15_roadside import public as m15
+
+    m15.register_module(db)
+    db.flush()
+
+    declared = flags.declared_configs(db)
+    assert conversation.OFFICER_MODE_KEY in declared, (
+        "the kill switch is not in /admin's list — an operator cannot find it"
+    )
+    assert declared[conversation.OFFICER_MODE_KEY]["default"] == "llm"
+    assert "scripted" in declared[conversation.OFFICER_MODE_KEY]["description"]
+
+
 def test_the_kill_switch_is_a_config_key(db):
     """AI-CONTEXT: the control that makes an unreviewed officer survivable. Q-6 was amended
     for the live simulation, and the compensating control is an operator who can revert to
