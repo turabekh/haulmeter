@@ -50,7 +50,7 @@ async function mountHome({ scenarios = [], progress = EMPTY_PROGRESS, sessions =
 beforeEach(() => __resetStateForTests());
 afterEach(() => vi.restoreAllMocks());
 
-describe("the tab bar after decision 207", () => {
+describe("the tab bar after decisions 207 and 213", () => {
   const tabStub = {
     global: {
       stubs: {
@@ -62,19 +62,21 @@ describe("the tab bar after decision 207", () => {
     },
   };
 
-  it("still has exactly five tabs — NAV-1 was not reversed", () => {
+  it("has exactly six tabs — the count NAV-1 was amended to (213)", () => {
+    // 207 displaced Docs to keep five; 213 brought it back and made the bar six, after
+    // D7's measured sweep. The number is asserted because it is the law, not the layout.
     const w = mount(TabBar, tabStub);
 
-    expect(w.findAll(".tab")).toHaveLength(5);
+    expect(w.findAll(".tab")).toHaveLength(6);
   });
 
-  it("offers Roadside in the fourth slot and no longer offers Docs", () => {
+  it("offers Roadside and Docs side by side, in that order", () => {
     const w = mount(TabBar, tabStub);
 
     const hrefs = w.findAll(".tab").map((a) => a.attributes("href"));
-    expect(hrefs).toEqual(["/map", "/load", "/money", "/roadside", "/more"]);
+    expect(hrefs).toEqual(["/map", "/load", "/money", "/docs", "/roadside", "/more"]);
     expect(w.text()).toContain(en["nav.roadside"]);
-    expect(hrefs).not.toContain("/docs");
+    expect(w.text()).toContain(en["nav.docs"]);
   });
 });
 
@@ -87,7 +89,6 @@ describe("§10.4 — inspection mode stays within two taps of a cold start", () 
   it("is reachable from a tab root by exactly one more tap", () => {
     const sources = {
       "/load": read("src/surfaces/LoadSurface.vue"),
-      "/more": read("src/surfaces/MoreSurface.vue"),
     };
     const opensInspection = Object.entries(sources)
       .filter(([, src]) => src.includes("/docs?inspection=1"))
@@ -98,7 +99,12 @@ describe("§10.4 — inspection mode stays within two taps of a cold start", () 
   });
 
   it("is on Load, which is the tab the state machine foregrounds at a stop", () => {
+    // AI-CONTEXT: KEPT after 213 restored the Docs tab, even though §10.4's two taps are
+    // satisfied without it. §5 foregrounds Load when ON_SITE — which is where a driver is
+    // when an officer walks up — and the row sits above the fold there. The More rows
+    // added at 207 were removed instead: with Docs on the bar they were a third path.
     expect(read("src/surfaces/LoadSurface.vue")).toContain("/docs?inspection=1");
+    expect(read("src/surfaces/MoreSurface.vue")).not.toContain("inspection=1");
   });
 
   it("opens the sheet rather than merely landing on the wallet", () => {

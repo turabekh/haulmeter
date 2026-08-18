@@ -72,18 +72,22 @@ Environment constants for all three: bright sun glare AND night dark (dark-first
 | 1 | **Map** | Where am I going; what's around | M1, M2, M6, M7 (layers) |
 | 2 | **Load** | Current work: stop, clock, evidence, protection | M3, M4, M5, F5 |
 | 3 | **Money** | Owed, recovered, saved; claims pipeline | M3, M4, M9, M7 savings |
-| 4 | **Roadside** | Practice a roadside inspection; the readiness program | M15 |
-| 5 | **More** | Profile, fleet, points, settings, help, **the document wallet** | M10, M12, F1, M5, F6 |
+| 4 | **Docs** | Wallet, inspection mode, uploads | M5, F6, M9 exports |
+| 5 | **Roadside** | Practice a roadside inspection; the readiness program | M15 |
+| 6 | **More** | Profile, fleet, points, settings, help | M10, M12, F1 |
 
-> **Amended 2026-08-18 (decision 207).** Slot 4 was **Docs**; Roadside Ready took it and the
-> wallet moved to a More row. This reversed E3.1.6 ("no new bottom-nav tab") and D16. **NAV-1
-> was NOT reversed** — the bar is still exactly five tabs, which is why D7's mandatory six-tab
-> measurement is not owed here and is still owed to anyone proposing a sixth. D7 had reserved
-> the next free slot for Parking (A8); A8 is not resolved, it has one fewer option.
+> **Amended twice on 2026-08-18.** **Decision 207** gave slot 4 to Roadside and displaced Docs
+> to a More row, keeping five. **Decision 213 restored Docs and made the bar SIX** — the owner
+> authorised the count, and **D7's condition was met rather than waived**: a real six-tab bar
+> was built and run through the full 409-check sweep in all six locales, xx-XL and 200% text.
+> It failed first, on every 200% state in every locale, and the cause was a real bug (a flex
+> item's default `min-width: auto` refusing to shrink a `nowrap` label). Fixed, re-measured,
+> green. **A seventh tab owes the same measurement.** A8 (Parking) is no longer blocked on a
+> free slot and returns to the queue on its own merits.
 
 **Navigation laws:**
 
-- **NAV-1.** Bottom tab bar, always visible on tab roots, icons **with labels** (never icon-only), 5 tabs exactly. No hamburger menu. No navigation drawer. Anywhere. Ever.
+- **NAV-1.** Bottom tab bar, always visible on tab roots, icons **with labels** (never icon-only), **6 tabs exactly** (five until decision 213). No hamburger menu. No navigation drawer. Anywhere. Ever. **At 360 dp a cell is 60 dp, so tab labels are their own short strings** — Russian and Somali set the width, not English — and every tab label must survive the 200% sweep.
 - **NAV-2. Two-tap depth:** every feature is reachable in ≤2 taps from its tab root. If a design needs depth 3, restructure it (usually into a bottom sheet).
 - **NAV-3. Sheets over screens:** secondary tasks (detail views, filters, quick actions, confirmations with context) open as bottom sheets over the current screen. Full-screen pushes are reserved for linear flows (claim review, booking checkout, onboarding).
 - **NAV-4.** Android hardware/gesture **back always works** and always does the obvious thing (close sheet → previous screen → tab root). iOS swipe-back equivalently. Back never loses entered data (drafts persist).
@@ -245,16 +249,16 @@ Each spec: purpose · anatomy at 360 dp · primary action · session type · DRI
 - Primary action: per-receivable "Next action" (nudge / escalate / mark paid).
 - Sessions: S3. DRIVING: read-only; actions deferred with "tonight" queue.
 
-### 10.4 Docs — reached from More, not a tab (amended: decision 207)
+### 10.4 Docs — a tab again (207 moved it to More; 213 brought it back)
 - Purpose: wallet + capture inbox.
 - Anatomy: Inspection mode button (top, 56 dp) → expiring-soon strip (marker pills) → document grid by type → capture FAB-chip.
 - Primary action: Inspection mode. Sessions: S2. DRIVING: inspection mode reachable but confirms vehicle stopped.
-- **The ≤2-tap law survived the move and did not move with the screen.** Inspection mode must be reachable **offline in ≤2 taps from cold start**, and Docs is no longer a tab root, so the law binds its ENTRY POINTS rather than this screen: a direct entry on **Load** (§5 foregrounds Load when ON_SITE — where a driver is when an officer walks up) and a second on More. Both open inspection mode itself via `?inspection=1`; neither is the wallet with inspection behind it. `layout/inspection.spec.js` counts the taps in a real browser with the network cut and is the only acceptable proof.
+- **Inspection mode must be reachable offline in ≤2 taps from cold start.** With Docs on the bar that is satisfied here (Docs tab → Inspection). **The second door on Load is kept anyway**: §5 foregrounds Load when ON_SITE, which is where a driver is when an officer walks up, and the row sits above the fold there. The More rows added at 207 were removed — with Docs on the bar they were a third path to one screen. `layout/inspection.spec.js` counts the taps in a real browser with the network cut and is the only acceptable proof.
 - The Load entry is **unconditional** — every other control on that screen is gated on a live load, and an inspection is not; a driver stopped between loads needs their credentials exactly as much.
 
 ### 10.5 More
-- Purpose: identity, fleet, points, settings, help, **and the document wallet** (decision 207). Deliberately boring; a plain 64 dp row list. No cards, no promos, no badges. Sessions: S3.
-- The wallet arrives here as **two rows, not one**: Documents, and Inspection mode beside it. The second is §10.4's tap budget, not a convenience — nesting inspection behind the wallet row is three taps and breaks the law.
+- Purpose: identity, fleet, points, settings, help. Deliberately boring; a plain 64 dp row list. No cards, no promos, no badges. Sessions: S3.
+- The wallet rows added at decision 207 were **removed at 213** when Docs returned to the tab bar. More is boring again, which is its whole specification.
 
 ## 11. Map design spec
 

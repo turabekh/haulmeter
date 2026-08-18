@@ -840,3 +840,22 @@ recorded the trap, or all of them where it was carried forward.
     Before improving a fallback, check the platform matrix of the thing it falls back
     from. And when the primary is retired, **delete the fallback with it** — its only
     remaining callers were its own tests, which is how dead code gets wired back in.
+
+95. **A flex item will not shrink below its content unless you say `min-width: 0`.**
+    `flex: 1 1 0` looks like it grants full shrinkage and does not: the default
+    `min-width: auto` makes a `nowrap` label a floor. The six-tab bar ran past 360 dp at
+    200% text in every locale because of it, and the tell was geometry, not text —
+    `a.tab @374` on a 360 dp viewport.
+
+    **A five-item row will not reveal this; a six-item row will.** Whenever a flex row
+    gains an item, re-run the 200% sweep before believing the spacing.
+
+96. **`logging.getLogger(__name__).info(...)` writes to NOTHING under uvicorn.**
+    uvicorn configures `uvicorn.*` and leaves the root logger alone, so this codebase's
+    three module loggers emitted into a void for its whole life — discovered when a
+    diagnostic added to investigate a live defect produced no output at all.
+
+    `logging.basicConfig` is not sufficient on its own either: it is a **no-op once the
+    root has handlers**, which is true under pytest, so a test can pass while production
+    stays silent. Set the app namespace's level explicitly as well. **Before trusting a
+    log line to diagnose anything, prove the line appears.**

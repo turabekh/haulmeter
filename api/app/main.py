@@ -104,8 +104,35 @@ def _report_ungated_activations(db) -> None:
         )
 
 
+def _configure_logging() -> None:
+    """Give the application's own loggers somewhere to go.
+
+    AI-CONTEXT: THERE WAS NO LOGGING CONFIG AT ALL, so every `log.info` / `log.warning` in
+    this codebase went nowhere. uvicorn configures its OWN loggers (`uvicorn.*`) and leaves
+    the root logger untouched, so a module doing `logging.getLogger(__name__)` — which
+    `core/events.py`, `f04/sharing.py` and `api/m11_voice.py` all do — emitted into a void.
+
+    Found the hard way: a diagnostic added to the copilot to settle a live "not working"
+    report produced no output on production, because the diagnostic was itself wired to
+    nothing. That is the same defect it was written to investigate.
+
+    `basicConfig` alone was not enough and the test caught it: it is a no-op once the root
+    has handlers, which is true under pytest, so the level stayed at WARNING and an
+    "it works" would have been measured in the one environment that did not need it. The
+    app's own namespace is set explicitly.
+    """
+    import logging
+
+    # gives the root somewhere to write under uvicorn, where it has no handlers; a no-op
+    # wherever a real logging setup already exists
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+    # and the level our own modules are judged at, regardless of who owns the root
+    logging.getLogger("app").setLevel(logging.INFO)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    _configure_logging()
     _wire_object_storage()
     _register_module_flags()
     yield

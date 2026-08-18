@@ -394,33 +394,6 @@ function signOut() {
       </button>
     </section>
 
-    <!-- AI-CONTEXT: THE WALLET'S NEW HOME (decision 207). Roadside took the fourth tab
-         slot and Docs came here — composed from the inbox row above, because §10.5 keeps
-         More a plain row list with no cards, no promos and no badges.
-
-         TWO ROWS, NOT ONE, AND THE SECOND IS A DESIGN LAW. §10.4 requires inspection mode
-         within 2 taps of a cold start; More → Documents → Inspection is three. So
-         inspection mode gets its own row that opens it directly (`?inspection=1`, the
-         same query precedent `?doc=` set), and it lives on Load as well — a driver with
-         an officer at the window is on Load, not in a settings list.
-
-         M15's old row is GONE from here: it is a tab now, and two front doors to one
-         module is the thing decision 207 exists to remove. -->
-    <section class="card">
-      <h2 class="card__title">{{ t("more.documents") }}</h2>
-      <button class="alerts alerts--link" type="button" @click="router.push('/docs')">
-        <span class="alerts__name">{{ t("more.documents") }}</span>
-      </button>
-      <button
-        class="alerts alerts--link"
-        type="button"
-        @click="router.push('/docs?inspection=1')"
-      >
-        <span class="alerts__name">{{ t("docs.inspection") }}</span>
-      </button>
-      <p class="equip__note">{{ t("more.documents_caption") }}</p>
-    </section>
-
     <section class="card">
       <h2 class="card__title">{{ t("more.account") }}</h2>
       <p v-if="email" class="more__email">{{ email }}</p>

@@ -96,15 +96,16 @@ function testRouter() {
 }
 
 describe("TabBar (design-prd §4 NAV-1)", () => {
-  it("renders exactly 5 labeled tabs and no hamburger", () => {
+  it("renders exactly 6 labeled tabs and no hamburger", () => {
+    // AI-CONTEXT: SIX since decision 213, and the count is still the law this guards.
+    // NAV-1 said five; D7 priced the change at a measured six-tab sweep across every
+    // locale and xx-XL; that sweep was run and passed, and the owner authorised six.
+    // Docs is back on the bar beside Roadside — 207 had displaced it to keep five.
     const w = mount(TabBar, routerStub);
     const tabs = w.findAll(".tab");
-    expect(tabs).toHaveLength(5);
+    expect(tabs).toHaveLength(6);
     const text = w.text();
-    // "Roadside" replaced "Docs" in slot 4 at decision 207; the wallet moved to a More
-    // row and inspection mode gained its own entries (§10.4's tap budget). The COUNT is
-    // the law this test guards and it is unchanged — NAV-1 was not reversed.
-    for (const label of ["Map", "Load", "Money", "Roadside", "More"]) {
+    for (const label of ["Map", "Load", "Money", "Docs", "Roadside", "More"]) {
       expect(text).toContain(label);
     }
     expect(w.html().toLowerCase()).not.toContain("hamburger");
