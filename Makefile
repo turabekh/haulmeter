@@ -25,6 +25,7 @@ help:
 
 env:
 	@test -f infra/.env || (cp infra/.env.example infra/.env && echo "created infra/.env from example")
+	@bash scripts/gen_signing_secret.sh
 
 preflight:
 	@bash scripts/check_ports.sh
@@ -154,6 +155,12 @@ m15-draft-coaching-uz:
 
 m15-revoice:
 	$(COMPOSE) exec -T api python -m scripts.m15_revoice
+
+# when a play button has gone quiet: clear the audio_ref of every released line whose
+# bytes are not actually in object storage, so the worker re-renders it. Safe on a healthy
+# box — it probes each object and reports 0. See TRAPS 85.
+m15-heal-audio:
+	$(COMPOSE) exec -T api python -m scripts.m15_heal_audio
 
 m15-tg-draft:
 	$(COMPOSE) run --rm --no-deps -v $(PWD):/repo -e REPO_ROOT=/repo api python -m scripts.i18n_draft_tg

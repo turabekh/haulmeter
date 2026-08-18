@@ -656,6 +656,14 @@ nobody re-runs decays into a screenshot in an old handoff. Its screenshots are o
     refuses to run rather than writing to nowhere. And **when audio 404s, check the object
     is in MinIO before checking anything else**:
 
+    **There is now a repair: `make m15-heal-audio`.** It asks storage for the bytes behind
+    every released `audio_ref` and clears the ref where they are missing, which is exactly
+    what the synthesis worker looks for — so the next pass re-renders them properly. It
+    probes each object rather than clearing everything, so it is safe on a healthy box and
+    reports `healed: 0`. **Run it on any box where a play button has gone quiet**, and note
+    that the local dev stack needed it too: the trap was written after production hit it
+    and nobody thought to check dev, which then wasted an afternoon of its own.
+
     ```
     m.get(db.get(documents.Document, ref).storage_key)   # KeyError == written to memory
     ```
@@ -743,3 +751,30 @@ recorded the trap, or all of them where it was carried forward.
     unless the tap changes something on screen. Give playback a `data-playing` state and
     one-at-a-time semantics; the transcript surface already had it, the coach surface did
     not, and only the second one got reported.
+
+88. **An empty `MEDIA_SIGNING_SECRET` plus `uvicorn --reload` means every media URL on
+    screen dies the moment you edit a source file.** The API mints a per-process signing
+    key when the secret is unset and says so at boot, and that was documented as fine:
+    URLs only break across a restart, and "the next render mints fresh ones".
+
+    **That reasoning assumes a surface that re-renders.** M15's coaching screen mints its
+    audio URLs on load and then sits there while a driver taps them. In dev, `--reload`
+    respawns the app process on EVERY FILE EDIT — so during an active session every play
+    button on the owner's screen was 403ing with `{"detail":"bad signature"}`, silently,
+    while the code being edited was fine. It reads exactly like a broken button.
+
+    `make env` now generates a per-box secret (`scripts/gen_signing_secret.sh`); it is
+    generated rather than committed to `.env.example` because a shared signing secret is
+    one anyone can mint URLs with. **When media 403s, check the secret before the code;
+    when it 404s, check the object is in MinIO before the code (TRAPS 85).** The two look
+    identical from the driver's side and neither is a bug in the surface.
+
+89. **Diagnose the environment before the defect — the owner's screen may not be the box
+    you are probing.** A coaching screen was reported broken while showing a released
+    Uzbek explanation; production had those rows as `draft`, which cannot render at all.
+    That contradiction was the finding: the screenshot was the LOCAL stack, whose seeded
+    content is released and whose audio had never been written to MinIO. An hour went into
+    proving production healthy — which it was, and which was never the question.
+
+    A screenshot carries no hostname. Before probing anything, establish which box is on
+    screen: a state that cannot coexist (released here, draft there) settles it instantly.

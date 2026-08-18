@@ -27,6 +27,7 @@ from app.core.db import SessionLocal
 from app.modules.m15_roadside.domain.audio import officer_voice
 from app.modules.m15_roadside.domain.enums import ContentStatus
 from app.modules.m15_roadside.domain.models import (
+    CoachingContent,
     ModelAnswer,
     OfficerAck,
     PhraseVariant,
@@ -58,6 +59,22 @@ def main() -> None:
             for row in rows:
                 row.audio_ref = None
             cleared[table.__name__] = len(rows)
+        # AI-CONTEXT: THE COACH WAS LEFT OUT, and its column is why. `CoachingContent`
+        # gates on `review_status` rather than `status`, so it falls out of any sweep
+        # written as a loop over tables — the same reason `variants_needing_audio` has to
+        # name it separately. The consequence was that changing a voice re-recorded the
+        # officer and left every explanation in the old one.
+        coaching = list(
+            db.scalars(
+                select(CoachingContent).where(
+                    CoachingContent.review_status == ContentStatus.released,
+                    CoachingContent.audio_ref.isnot(None),
+                )
+            )
+        )
+        for row in coaching:
+            row.audio_ref = None
+        cleared["CoachingContent"] = len(coaching)
         db.commit()
         print(
             f"voice now: {settings['voice']} "

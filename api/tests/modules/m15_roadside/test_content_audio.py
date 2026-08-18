@@ -301,3 +301,77 @@ def test_a_language_with_no_voice_keeps_its_text_and_is_not_a_failure(db, monkey
     summary = m15_audio.synthesize_missing(db)
 
     assert summary["failed"] == 0
+
+
+# --- the repair for a synthesis pass that wrote its bytes to nowhere (TRAPS 85) ---------
+
+
+def test_a_row_whose_bytes_are_gone_is_queued_again(db, monkeypatch):
+    """THE WORST STATE THIS MODULE CAN BE IN, and it has happened twice.
+
+    A synthesis pass run without object storage wired writes its mp3s into an in-memory
+    dict that dies with the process, and commits the `audio_ref` regardless. The database
+    then says every line is voiced, so `variants_needing_audio` returns nothing and the
+    worker has no work forever — while every play button fetches a key that was never
+    written. Nothing is red; a person has to tap a button to find it.
+    """
+    tts = _Tts()
+    storage = _Storage()
+    monkeypatch.setattr(m15_audio.ai, "resolve_tts", lambda: tts)
+    intent = _intent(db)
+    variant = _variant(db, intent, "How many hours have you been driving today?")
+    m15_audio.synthesize_missing(db, storage=storage)
+    assert variant.audio_ref is not None
+
+    # the bytes vanish; the row still claims a voice
+    storage.objects.clear()
+    assert m15_audio.variants_needing_audio(db) == []
+
+    summary = m15_audio.heal_missing_audio(db, storage=storage)
+
+    assert summary == {"checked": 1, "healed": 1}
+    assert variant.audio_ref is None
+    assert variant in m15_audio.variants_needing_audio(db)
+
+
+def test_healing_leaves_a_healthy_row_alone(db, monkeypatch):
+    """Safe to run on a good box: a blunt "clear everything released" would re-spend TTS
+    on every line that is perfectly fine."""
+    tts = _Tts()
+    storage = _Storage()
+    monkeypatch.setattr(m15_audio.ai, "resolve_tts", lambda: tts)
+    intent = _intent(db)
+    variant = _variant(db, intent, "How many hours have you been driving today?")
+    m15_audio.synthesize_missing(db, storage=storage)
+    ref = variant.audio_ref
+
+    summary = m15_audio.heal_missing_audio(db, storage=storage)
+
+    assert summary == {"checked": 1, "healed": 0}
+    assert variant.audio_ref == ref
+
+
+def test_a_coaching_explanation_is_healed_too(db, monkeypatch):
+    """The row that `m15_revoice` forgot. Its column is `review_status` rather than
+    `status`, which is exactly how it gets left out of sweeps."""
+    tts = _Tts()
+    storage = _Storage()
+    monkeypatch.setattr(m15_audio.ai, "resolve_tts", lambda: tts)
+    intent = _intent(db)
+    row = m.CoachingContent(
+        intent_id=intent.id,
+        locale="uz",
+        explanation="faqat bugungi haydash soatlari",
+        review_status=m.ContentStatus.released,
+        version=1,
+    )
+    db.add(row)
+    db.flush()
+    m15_audio.synthesize_missing(db, storage=storage)
+    assert row.audio_ref is not None
+
+    storage.objects.clear()
+    summary = m15_audio.heal_missing_audio(db, storage=storage)
+
+    assert summary["healed"] == 1
+    assert row.audio_ref is None

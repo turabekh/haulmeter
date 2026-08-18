@@ -336,6 +336,72 @@ def _speech_for(db: DbSession, item) -> tuple[str, str, dict] | None:
     return item.text, "en", officer_voice(db)
 
 
+def voiced_rows(db: DbSession) -> list:
+    """Every released row that CLAIMS to have a voice — the mirror of
+    `variants_needing_audio`, over the same tables and the same release rules."""
+    out: list = []
+    for intent in db.scalars(select(Intent)):
+        out.extend(v for v in teachable_variants(db, intent.id) if v.audio_ref is not None)
+    for table in (ModelAnswer, OfficerAck, RepairLine):
+        out.extend(
+            db.scalars(
+                select(table).where(
+                    table.status == ContentStatus.released,
+                    table.audio_ref.is_not(None),
+                )
+            )
+        )
+    out.extend(
+        db.scalars(
+            select(CoachingContent).where(
+                CoachingContent.review_status == ContentStatus.released,
+                CoachingContent.audio_ref.is_not(None),
+            )
+        )
+    )
+    return out
+
+
+def heal_missing_audio(db: DbSession, *, storage=None) -> dict:
+    """Un-claim the voice of every row whose bytes are not actually in storage.
+
+    AI-CONTEXT: THE REPAIR FOR TRAPS 85, WHICH NOTHING COULD REPAIR BEFORE. A synthesis
+    pass run without object storage wired writes its mp3s into an in-memory dict that dies
+    with the process, and commits the `audio_ref` anyway. What is left is the worst state
+    this module can be in: the database says every line is voiced, so
+    `variants_needing_audio` returns nothing and the worker has no work forever, while
+    every play button fetches a key that was never written. **Nothing is red. The rows are
+    valid. The suite passes.** It was found both times by a person tapping a button.
+
+    Clearing the ref is the whole repair, because "released and unvoiced" is precisely
+    what the existing worker job looks for — so the next pass re-renders it properly. The
+    F6 document row is left alone: audio is retention-managed, and orphaning a row is not
+    the same as deciding to destroy it (the same rule `m15_revoice` follows).
+
+    ONLY ROWS WHOSE BYTES ARE GONE. A blunt "clear everything released" would also re-spend
+    TTS on every line that is perfectly fine, so this asks storage about each one and is
+    safe to run on a healthy box, where it changes nothing.
+    """
+    healed = 0
+    checked = 0
+    for row in voiced_rows(db):
+        document = db.get(documents.Document, row.audio_ref)
+        checked += 1
+        if document is None:
+            row.audio_ref = None
+            healed += 1
+            continue
+        try:
+            documents.get_document_bytes(db, document, storage)
+        except Exception:
+            # any failure to produce the bytes means the button is dead, whether the key
+            # was never written or the object has since gone
+            row.audio_ref = None
+            healed += 1
+    db.flush()
+    return {"checked": checked, "healed": healed}
+
+
 def synthesize_missing(db: DbSession, *, limit: int = 25, storage=None) -> dict:
     """Give every released line a voice. Returns a summary the worker logs.
 
