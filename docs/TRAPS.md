@@ -611,6 +611,35 @@ nobody re-runs decays into a screenshot in an old handoff. Its screenshots are o
     cheaper model is an owner decision with a driver-facing consequence, not a tuning
     knob — and if one is ever taken, the eval fixtures are what has to be re-run. *(138)*
 
+83. **A pytest run you kill leaves a backend `idle in transaction`, and every later run
+    then hangs with NO OUTPUT.** The next `pytest` blocks in `create_all`/`DROP TABLE`
+    waiting on the lock the dead run still holds — before it prints a single line, so it
+    looks like a wedged container or a broken import, not a database problem. It cost most
+    of an afternoon and produced two confident wrong diagnoses on the way. **Symptom:
+    `--collect-only` finishes in a second while a plain run produces an empty log.** Check
+    for it before touching any code:
+
+    ```
+    docker compose -f infra/docker-compose.yml exec -T api python -c "
+    from app.core.db import engine; from sqlalchemy import text
+    with engine.connect() as c:
+        print(c.execute(text(\"select pid, state, left(query,50), \"
+          \"extract(epoch from now()-state_change)::int from pg_stat_activity \"
+          \"where pid <> pg_backend_pid() and datname is not null order by 4 desc\")).fetchall())"
+    ```
+
+    Anything `idle in transaction` is the culprit; `pg_terminate_backend(pid)` on it frees
+    every run queued behind. Killing the *containers* does not do this — the backend
+    survives them. *(138)*
+
+84. **`ui-components.test.js` → MapSurface "refetches (debounced) on bounds change" is
+    load-flaky.** It failed once in a full `vitest run`, then passed in isolation (189/189)
+    and passed again on a second full run. It asserts on a debounce timer, so it is
+    sensitive to how loaded the machine is rather than to anything in the diff. **Do not
+    "fix" it in response to a single red run** — reproduce it first, and if it needs
+    fixing, the fix is fake timers rather than a longer wait. Recorded so a later session
+    does not spend an hour attributing it to their own change. *(138)*
+
 78. **A browser walking the REAL app must run where BOTH locked ports are `localhost`** —
     which means the host, not a container. Cost four attempts and three dead ends, each of
     which looked like a different bug:

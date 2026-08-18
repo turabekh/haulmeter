@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.foundation.f13_flags import public as flags
 
+from . import audio as m15_audio
 from . import conversation, diagnosis, officer_prompt, prompts
 
 # AI-CONTEXT: `m15_roadside` is the master flag. Turning it ON opens the free Roadside
@@ -67,6 +68,9 @@ def register_module(db: Session) -> None:
     # the officer kill switch, DECLARED so it appears in /admin — entry 189's "stop it in
     # seconds" is only true for a knob an operator can find (see conversation.py)
     conversation.register_config(db)
+    # how the officer SOUNDS — voice, speaking style and pace, tunable without a deploy
+    # because a voice is settled by listening rather than by reasoning
+    m15_audio.register_config(db)
 
 
 def is_enabled(db: Session) -> bool:

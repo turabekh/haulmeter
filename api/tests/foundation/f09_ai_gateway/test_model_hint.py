@@ -11,7 +11,6 @@ one — one reads a contract a driver builds a money claim from, the other decid
 driver is told about their English.
 """
 
-import httpx
 import pytest
 
 from app.foundation.f09_ai_gateway import public as ai
@@ -31,14 +30,23 @@ class _Resp:
 
 @pytest.fixture
 def sent(monkeypatch):
+    """The request body that would have gone to Anthropic.
+
+    AI-CONTEXT: patches the POOLED CLIENT rather than `httpx.post`. The gateway keeps one
+    `httpx.Client` so it stops paying a TLS handshake on every call (0.082s each, measured
+    on the box, and the roadside officer makes two calls per spoken turn). A test still
+    patching the module function would sail past green while asserting on a code path
+    nothing uses.
+    """
     captured = {}
 
-    def _post(url, headers=None, json=None, timeout=None):
-        captured.clear()
-        captured.update(json)
-        return _Resp()
+    class _Client:
+        def post(self, url, headers=None, json=None):
+            captured.clear()
+            captured.update(json)
+            return _Resp()
 
-    monkeypatch.setattr(httpx, "post", _post)
+    monkeypatch.setattr(prov, "_http", lambda: _Client())
     return captured
 
 

@@ -47,6 +47,24 @@ TTS_COST_PER_MINUTE_MICROS = 16_000
 ANOMALY_MINUTES_PER_CALL = 30.0
 
 
+# AI-CONTEXT: ONE CONNECTION POOL FOR SPEECH, for the same reason the model gateway has
+# one. Measured on the box, a fresh connection costs ~0.08s of TCP and TLS over a pooled
+# one — and the roadside officer pays it twice per spoken turn, once to transcribe the
+# driver and once to speak back. Lazy and module-level: `httpx.Client` is thread-safe, and
+# building it at import time would make importing this module do network setup that the
+# test suite and every CLI script would pay for without making a request.
+_HTTP = None
+
+
+def _http():
+    global _HTTP
+    if _HTTP is None:
+        import httpx
+
+        _HTTP = httpx.Client(timeout=60.0, limits=httpx.Limits(max_keepalive_connections=8))
+    return _HTTP
+
+
 class SpeechUnavailable(RuntimeError):
     """No speech key is configured — this deployment cannot transcribe or synthesize.
 
@@ -74,7 +92,15 @@ class TtsAdapter(Protocol):
 
     name: str
 
-    def synthesize(self, text: str, *, locale: str, voice: str | None = None) -> bytes: ...
+    def synthesize(
+        self,
+        text: str,
+        *,
+        locale: str,
+        voice: str | None = None,
+        style: str | None = None,
+        rate: str | None = None,
+    ) -> bytes: ...
 
 
 class FakeSttAdapter:
@@ -97,7 +123,18 @@ class FakeSttAdapter:
 class FakeTtsAdapter:
     name = "fake"
 
-    def synthesize(self, text: str, *, locale: str, voice: str | None = None) -> bytes:
+    def synthesize(
+        self,
+        text: str,
+        *,
+        locale: str,
+        voice: str | None = None,
+        style: str | None = None,
+        rate: str | None = None,
+    ) -> bytes:
+        # AI-CONTEXT: accepts the full signature deliberately. Callers wrap synthesis in
+        # `except Exception: return None`, so an adapter that rejects a keyword does not
+        # raise anywhere a human sees — it silently produces an officer with no voice.
         return b"FAKEAUDIO:" + text.encode()
 
 
@@ -128,9 +165,7 @@ class DeepgramSttAdapter:
     ENDPOINT = "https://api.deepgram.com/v1/listen"
 
     def transcribe(self, audio: bytes, *, locale: str) -> tuple[str, float]:
-        import httpx
-
-        resp = httpx.post(
+        resp = _http().post(
             self.ENDPOINT,
             params={"model": "nova-2", "language": locale, "punctuate": "false"},
             headers={
@@ -138,7 +173,6 @@ class DeepgramSttAdapter:
                 "Content-Type": "audio/wav",
             },
             content=audio,
-            timeout=60.0,
         )
         resp.raise_for_status()
         payload = resp.json()
@@ -174,21 +208,51 @@ class AzureTtsAdapter:
     # officer line does not sound like a telephone.
     OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3"
 
-    def synthesize(self, text: str, *, locale: str, voice: str | None = None) -> bytes:
-        import html
+    def synthesize(
+        self,
+        text: str,
+        *,
+        locale: str,
+        voice: str | None = None,
+        style: str | None = None,
+        rate: str | None = None,
+    ) -> bytes:
+        """AI-CONTEXT: SSML, not a bare string — the difference between speaking and
+        reading aloud.
 
-        import httpx
+        The owner's words were "now it is reading a text", and the plain-text path was
+        most of why. Two things are sent now that were not:
+
+          · **`<mstts:express-as style=…>`** — a speaking style, where the voice has one.
+            `en-US-KaiNeural` ships a `conversation` style and `en-US-DavisNeural` a
+            `chat` style; without it every voice defaults to its neutral read-aloud
+            register, which is exactly the complaint.
+          · **`<prosody rate=…>`** — Azure's default pace is a shade brisk for someone
+            standing at a window with a clipboard, and a small slowdown reads as
+            deliberate rather than as slow.
+
+        Both are OPTIONAL and the SSML degrades to what it used to be when they are not
+        given, because not every voice supports a style and sending one that a voice does
+        not have is a 400 rather than a shrug.
+        """
+        import html
 
         voice_name = voice or "en-US-GuyNeural"
         # AI-CONTEXT: the text is ESCAPED into the SSML. Officer lines and coach
         # explanations are authored content today, but they will one day carry a slot
         # fragment built from a driver's own words — and an unescaped apostrophe or
         # ampersand in that position is a malformed request at best.
+        body = html.escape(text)
+        if rate:
+            body = f'<prosody rate="{html.escape(rate)}">{body}</prosody>'
+        if style:
+            body = f'<mstts:express-as style="{html.escape(style)}">{body}</mstts:express-as>'
         ssml = (
-            f'<speak version="1.0" xml:lang="{locale}">'
-            f'<voice name="{voice_name}">{html.escape(text)}</voice></speak>'
+            f'<speak version="1.0" xml:lang="{locale}" '
+            f'xmlns:mstts="https://www.w3.org/2001/mstts">'
+            f'<voice name="{voice_name}">{body}</voice></speak>'
         )
-        resp = httpx.post(
+        resp = _http().post(
             f"https://{self._region}.tts.speech.microsoft.com/cognitiveservices/v1",
             headers={
                 "Ocp-Apim-Subscription-Key": self._key,
@@ -197,7 +261,6 @@ class AzureTtsAdapter:
                 "User-Agent": "haulmeter-m15",
             },
             content=ssml.encode("utf-8"),
-            timeout=60.0,
         )
         resp.raise_for_status()
         if not resp.content:

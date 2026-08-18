@@ -105,6 +105,24 @@ CLOSINGS = [
     "That's everything. Thanks for your time.",
 ]
 
+# AI-CONTEXT: THE SOUND A PERSON MAKES WHILE THEY ARE STILL LISTENING — played the moment
+# the driver stops speaking, over the ~1.5s the machine needs to transcribe and think.
+#
+# DELIBERATELY NON-COMMITTAL, and this is the whole design of the list. The owner suggested
+# "mmm thanks" and "ok mmm I see"; both of those CLAIM SOMETHING — that the answer landed,
+# that it was understood — and they are spoken before anything has been transcribed. When
+# the next thing out of the officer's mouth is "Sorry, I didn't catch that", an "I see" in
+# front of it is the machine having pretended. These claim nothing at all, which is exactly
+# why people use them: a real officer fills the same gap the same way while still deciding.
+#
+# They are also never EVALUATIVE (Q-1). "Good." and "Got it." are absent on purpose.
+THINKING = [
+    "Mm-hm.",
+    "Mm.",
+    "Uh-huh.",
+    "Right.",
+]
+
 ACKS = [
     "Okay.",
     "Alright.",
@@ -164,9 +182,22 @@ def main() -> None:
         added_answers += 1
 
     added_acks = 0
-    for kind, texts in (("ack", ACKS), ("opening", OPENINGS), ("closing", CLOSINGS)):
+    for kind, texts in (
+        ("ack", ACKS),
+        ("opening", OPENINGS),
+        ("closing", CLOSINGS),
+        ("thinking", THINKING),
+    ):
         for text in texts:
-            if db.scalar(select(OfficerAck).where(OfficerAck.text == text)) is not None:
+            # AI-CONTEXT: (text, KIND), not text alone. The same words legitimately serve
+            # two roles — "Mm-hm." is both an acknowledgement after an answer and a noise
+            # made while still listening — and a text-only check silently dropped the
+            # second one, so the thinking pool lost its most natural member without
+            # anything reporting a skip.
+            existing = db.scalar(
+                select(OfficerAck).where(OfficerAck.text == text, OfficerAck.kind == kind)
+            )
+            if existing is not None:
                 continue
             db.add(OfficerAck(text=text, kind=kind, status=ContentStatus.draft))
             added_acks += 1

@@ -565,6 +565,24 @@ def run_m14_poll(db: Session, commit: bool = True, client_factory=None) -> dict:
     }
 
 
+def run_m15_score_turns(db: Session, commit: bool = True) -> dict:
+    """Settle turns the conversation deliberately did not wait for.
+
+    AI-CONTEXT: THE FAST PATH, NOT THE CORRECT ONE. `complete_session` and the result
+    endpoint both settle before deriving a band, so if this job never ran a driver would
+    still get a right answer — just after a wait at the end of the stop. What this buys is
+    that the wait is usually already over by the time they finish talking. Unflagged on
+    purpose, unlike the audio job beside it: leaving a queue of pending turns undrained
+    because a flag is off would make every result screen slow rather than saving anything.
+    """
+    from app.modules.m15_roadside.domain import deferred_scoring
+
+    summary = deferred_scoring.sweep(db)
+    if commit:
+        db.commit()
+    return summary
+
+
 def run_m15_content_audio(db: Session, commit: bool = True) -> dict:
     """Give released officer lines a voice (E3 §E3.1.2).
 

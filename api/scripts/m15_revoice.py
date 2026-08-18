@@ -1,0 +1,69 @@
+"""AI-CONTEXT: re-record every released officer line in the CURRENT voice.
+
+WHY THIS EXISTS. The voice used to be a constant inside the adapter; it is now an operator
+setting chosen by ear (`m15.officer_voice`). Runtime fragments handle a change on their own
+— migration 0092 put the voice in their cache key, so a new voice simply misses and
+re-synthesizes. **Released CONTENT does not**: openings, closings, acknowledgements, phrase
+variants, model answers and repair lines all carry an `audio_ref` to a file that was
+rendered once, by whichever voice was current that day. Change the voice and a stop opens
+in one man's voice and continues in another's.
+
+Nothing fails. The rows are valid, the audio plays, the suite is green — and a driver hears
+two people. That is the shape of every defect this module has had to be told about by a
+person rather than by a test.
+
+WHAT IT DOES: clears `audio_ref` on RELEASED content, which is precisely the condition
+`audio.variants_needing_audio` looks for, so the existing `m15_content_audio` worker job
+re-renders everything on its next pass. It does not delete the old F6 documents — audio is
+retention-managed and orphaning a row is not the same as deciding to destroy it.
+
+DRAFT CONTENT IS LEFT ALONE: it has no audio yet and Q-6 keeps it that way until a human
+releases it.
+"""
+
+from sqlalchemy import select
+
+from app.core.db import SessionLocal
+from app.modules.m15_roadside.domain.audio import officer_voice
+from app.modules.m15_roadside.domain.enums import ContentStatus
+from app.modules.m15_roadside.domain.models import (
+    ModelAnswer,
+    OfficerAck,
+    PhraseVariant,
+    RepairLine,
+)
+from db_registry import import_all_models
+
+
+def main() -> None:
+    import_all_models()
+    db = SessionLocal()
+    try:
+        settings = officer_voice(db)
+        cleared = {}
+        for table in (PhraseVariant, ModelAnswer, OfficerAck, RepairLine):
+            rows = list(
+                db.scalars(
+                    select(table).where(
+                        table.status == ContentStatus.released,
+                        table.audio_ref.isnot(None),
+                    )
+                )
+            )
+            for row in rows:
+                row.audio_ref = None
+            cleared[table.__name__] = len(rows)
+        db.commit()
+        print(
+            f"voice now: {settings['voice']} "
+            f"style={settings['style']!r} rate={settings['rate']!r}"
+        )
+        for name, n in cleared.items():
+            print(f"  {name}: {n} lines queued for re-recording")
+        print("the m15_content_audio worker job re-renders them on its next pass (15 min).")
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    main()

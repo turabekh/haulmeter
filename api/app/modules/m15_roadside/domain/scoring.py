@@ -208,6 +208,57 @@ class TurnScore:
     failure_tags: list[str]
     review_needed: bool
     slots: SlotResult
+    # AI-CONTEXT: "the model still owes this turn a judgement", and it is NOT the same
+    # question as `scores == {}`. Q-2's exclusions (unheard, nothing said) also carry no
+    # scores and are FINISHED. Only a turn that got past those needs the rubric.
+    needs_rubric: bool = False
+
+
+def score_turn_deterministic(
+    *,
+    transcript: str | None,
+    expected_slots: dict[str, str],
+    asr_confidence: float | None,
+) -> TurnScore:
+    """Everything about a turn that does NOT need the model — computed on the hot path.
+
+    AI-CONTEXT: THE LATENCY FIX'S OTHER HALF. The rubric was 3.41s of a ~5.5s exchange
+    (measured on the box), and the conversation only ever needed two things from scoring:
+    the slots the driver actually filled — which is how the officer says "Dallas." back —
+    and whether Q-2 already excludes the turn. Both are deterministic. So they stay here
+    and the model's judgement of the driver's ENGLISH, which nobody sees until the result
+    screen, moves off the path.
+
+    The two early returns are the SAME Q-2 rules `score_turn` applies, in the same order,
+    and they are terminal: a turn nobody could hear is not waiting on an opinion. Anything
+    that survives them is `needs_rubric=True` with no scores yet — and `scoring_state`
+    rather than `scores` is what says so, because `{}` already means something here.
+    """
+    if transcript is None or not transcript.strip():
+        return TurnScore(
+            scores={},
+            failure_tags=[FailureTag.NO_RESPONSE.value],
+            review_needed=False,
+            slots=SlotResult(missing=list(expected_slots)),
+        )
+
+    if asr_confidence is not None and asr_confidence < ASR_CONFIDENCE_FLOOR:
+        return TurnScore(
+            scores={},
+            failure_tags=[FailureTag.UNINTELLIGIBLE.value],
+            review_needed=True,
+            slots=SlotResult(missing=list(expected_slots)),
+        )
+
+    # past Q-2's gates: the driver said something audible, so the slots are real and the
+    # model owes this turn a verdict on how it was said
+    return TurnScore(
+        scores={},
+        failure_tags=[],
+        review_needed=False,
+        slots=validate_slots(expected_slots, transcript),
+        needs_rubric=True,
+    )
 
 
 def score_turn(

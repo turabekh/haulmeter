@@ -285,6 +285,12 @@ class Turn(Base):
     expected_slots: Mapped[dict] = mapped_column(JSONB, default=dict)
     observed_slots: Mapped[dict] = mapped_column(JSONB, default=dict)
     scores: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # AI-CONTEXT: which KIND of "no scores" this is. `{}` already means "excluded from the
+    # band" under Q-2 (unheard, no response, asked-to-repeat) — so without this column a
+    # turn still queued for the rubric and a turn deliberately excluded look identical, and
+    # a band computed over "whatever has finished" is a wrong number wearing a right one's
+    # clothes. `not_required` | `pending` | `done`.
+    scoring_state: Mapped[str] = mapped_column(String(16), default="done", server_default="done")
     failure_tags: Mapped[list[str]] = mapped_column(
         ARRAY(String), default=list, server_default="{}"
     )
@@ -369,18 +375,25 @@ class AudioFragment(Base):
 
     AI-CONTEXT: this is what lets the officer say "Chicago." back to a driver without
     paying Azure every time anyone mentions Chicago. E3 budgets runtime TTS for exactly
-    this ("only small dynamic slot fragments touch TTS at runtime"); the unique index on
-    text is what turns per-turn into once-ever.
+    this ("only small dynamic slot fragments touch TTS at runtime"); the unique index is
+    what turns per-turn into once-ever.
+
+    KEYED BY VOICE AS WELL AS TEXT (migration 0092). The voice used to be a constant in the
+    adapter and is now an operator setting chosen by ear — so a text-only key serves every
+    older sentence in the PREVIOUS voice while new ones arrive in the current one, and the
+    officer changes voice halfway through a traffic stop. Nothing fails; the cache works
+    exactly as designed and a driver hears two people.
     """
 
     __tablename__ = "audio_fragment"
     __table_args__ = (
-        UniqueConstraint("text", "locale", name="uq_audio_fragment_text_locale"),
+        UniqueConstraint("text", "locale", "voice", name="uq_audio_fragment_text_locale_voice"),
         {"schema": SCHEMA},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     text: Mapped[str] = mapped_column(String(200))
+    voice: Mapped[str] = mapped_column(String(64), default="", server_default="en-US-GuyNeural")
     locale: Mapped[str] = mapped_column(String(12), default="en", server_default="en")
     audio_ref: Mapped[uuid.UUID] = mapped_column(ForeignKey("f06.document.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

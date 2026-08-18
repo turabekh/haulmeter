@@ -33,6 +33,22 @@ from app.modules.m15_roadside.domain import models as m
 from app.modules.m15_roadside.domain import session_loop as loop
 
 
+def session_db(session):
+    """The Session object's own db session — the tests share one."""
+    from sqlalchemy import inspect as _inspect
+
+    return _inspect(session).session
+
+
+def _scripted(db):
+    """Turn the improvising officer off, so the scripted loop is under test."""
+    from app.foundation.f13_flags import public as flags
+    from app.modules.m15_roadside.domain import conversation
+
+    flags.set_config(db, conversation.OFFICER_MODE_KEY, "scripted")
+    db.flush()
+
+
 @pytest.fixture
 def client(db, monkeypatch):
     """A client whose socket talks to the TEST database.
@@ -390,6 +406,134 @@ def test_a_lost_voice_on_the_closing_line_does_not_eat_the_verdict(client, db, m
     assert frame["band"]
 
 
+def test_the_listening_noises_are_handed_over_once_at_the_start(client, db, monkeypatch):
+    """AI-CONTEXT: sent with the FIRST officer frame and not again.
+
+    These cover the ~1.5s between a driver falling silent and the officer speaking. A clip
+    fetched at the moment it is needed would arrive exactly too late to be the thing that
+    covers the wait — so the pool travels up front and the client picks one itself. Sending
+    it on every frame would be re-sending a list that cannot have changed.
+    """
+    from app.modules.m15_roadside.domain import conversation
+
+    _module_on(db)
+    intent = _draft_content(db)
+    db.add(
+        m.PhraseVariant(
+            intent_id=intent.id, text="RELEASED LINE", difficulty=m.Difficulty.clear,
+            status=m.ContentStatus.released, version=2,
+        )
+    )
+    doc = _released_thinking_line(db, "Mm-hm.")
+    db.flush()
+    session = _session(db)
+
+    monkeypatch.setattr(
+        m15_api.conversation, "conversational_officer",
+        lambda db_, s: conversation.ImprovisedTurn(
+            line="Where are you headed?", intent_key="destination", done=False
+        ),
+    )
+    monkeypatch.setattr(m15_api.conversation, "officer_mode", lambda db_: "llm")
+    monkeypatch.setattr(m15_api.m15_audio, "fragment_audio", lambda db_, text: doc)
+
+    with client.websocket_connect(f"/roadside/session/{session.id}/stream") as ws:
+        ws.send_json({"type": "ready", "driver_state": "IDLE"})
+        first = ws.receive_json()
+        ws.receive_json()  # officer_audio
+        ws.send_json({"type": "bye"})
+
+    assert first["thinking_audio_urls"], "the client has nothing to play while it waits"
+    assert all(u.startswith("/media/") for u in first["thinking_audio_urls"])
+
+
+def _released_thinking_line(db, text):
+    """A released 'thinking' utterance WITH A VOICE — the audio_ref is what makes it real.
+
+    Stored through the same F6 path the synthesis job uses, because `thinking_lines`
+    filters on `audio_ref IS NOT NULL` and a line nobody can hear is not a line.
+    """
+    from app.foundation.f06_documents import public as documents
+    from app.modules.m15_roadside.domain import audio as m15_audio
+
+    owner = m15_audio.content_account(db)
+    document = documents.store_document(
+        db,
+        owner.id,
+        documents.DocType.other,
+        b"\x00\x01",
+        filename="mm.mp3",
+        content_type="audio/mpeg",
+    )
+    db.add(m.OfficerAck(text=text, kind="thinking", status=m.ContentStatus.released,
+                        audio_ref=document.id))
+    db.flush()
+    return document.id
+
+
+def test_the_officer_answers_in_the_same_breath_as_the_score(client, db, monkeypatch):
+    """AI-CONTEXT: THE ROUND TRIP THAT USED TO SIT BETWEEN EVERY EXCHANGE.
+
+    The client received `scored`, waited out a beat, then sent `ready` — so the model was
+    not even asked for the next line until a client-side pause and a full round trip had
+    passed. At a window nobody prompts the officer to continue. One `answer` now yields the
+    score AND the next question, with no second request from the client.
+
+    Asserted at the socket because it is a PROTOCOL change: the client stopped asking, and
+    if the server ever stopped answering unprompted the conversation would simply stop —
+    a stall no domain test could see.
+    """
+    from app.modules.m15_roadside.domain import conversation
+
+    _module_on(db)
+    intent = _draft_content(db)
+    db.add(
+        m.PhraseVariant(
+            intent_id=intent.id, text="RELEASED LINE", difficulty=m.Difficulty.clear,
+            status=m.ContentStatus.released, version=2,
+        )
+    )
+    db.flush()
+    session = _session(db)
+    lines = iter(["Where are you headed?", "Let me see your logbook."])
+
+    monkeypatch.setattr(
+        m15_api.conversation, "conversational_officer",
+        lambda db_, s: conversation.ImprovisedTurn(
+            line=next(lines), intent_key="destination", done=False
+        ),
+    )
+    monkeypatch.setattr(m15_api.conversation, "officer_mode", lambda db_: "llm")
+    monkeypatch.setattr(m15_api.m15_audio, "fragment_audio", lambda db_, text: None)
+
+    with client.websocket_connect(f"/roadside/session/{session.id}/stream") as ws:
+        ws.send_json({"type": "ready", "driver_state": "IDLE"})
+        assert ws.receive_json()["type"] == "officer"
+        assert ws.receive_json()["type"] == "officer_audio"
+
+        # ONE request from the client...
+        ws.send_json({
+            "type": "answer", "driver_state": "IDLE",
+            "transcript": "i am headed to dallas", "confidence": 0.95,
+        })
+        # AI-CONTEXT: a COUNTED read, and the limitation is stated rather than hidden. If
+        # the server ever stopped answering unprompted this blocks instead of failing —
+        # a hang, not a red test. Draining to the close instead was tried and blocks too
+        # (`receive_json` past a server close does not surface as a disconnect here), so
+        # the counted read is the honest option: it is right when the code is right, and
+        # a stuck run on this test means exactly one thing, which is written here.
+        kinds = [ws.receive_json() for _ in range(3)]
+        ws.send_json({"type": "bye"})
+
+    # ...and the score AND the next question both come back
+    assert [f["type"] for f in kinds] == ["scored", "officer", "officer_audio"]
+    assert kinds[1]["text"] == "Let me see your logbook."
+    # and the officer does not say the fact back twice: his own line carries it, so the
+    # separate spoken echo is not sent while he is improvising
+    assert kinds[0]["echo"] is None
+    assert kinds[0]["ack"] is None
+
+
 # --- the client's own condition for showing the entry ---------------------------------
 
 
@@ -538,6 +682,15 @@ def _answering_session(db):
 
 
 def _scored_frame(client, session, transcript):
+    """The scored frame for one answer, in SCRIPTED mode.
+
+    AI-CONTEXT: the mode is named because the socket now answers an `answer` with the
+    officer's next line in the same handler. Left on the improvising path these tests would
+    reach `conversational_officer` — whose subject is not the scored frame — and, on a box
+    with a real key, spend a minute per test waiting on a live model. The scripted officer
+    is local, fast, and the thing these assertions are actually about.
+    """
+    _scripted(session_db(session))
     with client.websocket_connect(f"/roadside/session/{session.id}/stream") as ws:
         ws.send_json({"type": "answer", "transcript": transcript, "driver_state": "IDLE"})
         frame = ws.receive_json()
@@ -546,6 +699,11 @@ def _scored_frame(client, session, transcript):
 
 
 def test_no_acknowledgement_when_a_clarification_is_coming(client, db, monkeypatch):
+    # AI-CONTEXT: THE SCRIPTED PATH, named rather than assumed. The rubric is deferred off
+    # the conversation while the officer improvises, so INTENT_MISUNDERSTOOD — which this
+    # rule reads — is not available there and there is no separate ack to suppress anyway.
+    # This rule belongs to the fallback, so the test says which officer it is testing.
+    _scripted(db)
     """AI-CONTEXT: measured on a live session, not reasoned about. The officer said
     "Thank you." and then "I'm asking how long you've been driving today, not where you're
     headed." Nobody thanks you and then corrects you in the same breath — when the answer
@@ -562,6 +720,11 @@ def test_no_acknowledgement_when_a_clarification_is_coming(client, db, monkeypat
 
 
 def test_an_answer_that_landed_still_gets_acknowledged(client, db, monkeypatch):
+    # AI-CONTEXT: THE SCRIPTED PATH, named rather than assumed. The rubric is deferred off
+    # the conversation while the officer improvises, so INTENT_MISUNDERSTOOD — which this
+    # rule reads — is not available there and there is no separate ack to suppress anyway.
+    # This rule belongs to the fallback, so the test says which officer it is testing.
+    _scripted(db)
     """The control. Without it the assertion above would also pass on a socket that had
     quietly stopped acknowledging anything at all."""
     monkeypatch.setattr(m15_api, "F9Rubric", _rubric_saying(True))

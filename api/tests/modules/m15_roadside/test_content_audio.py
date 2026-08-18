@@ -20,7 +20,7 @@ class _Tts:
         self.calls: list[str] = []
         self.fail_on = fail_on
 
-    def synthesize(self, text: str, *, locale: str, voice: str | None = None) -> bytes:
+    def synthesize(self, text, **kw) -> bytes:
         self.calls.append(text)
         if self.fail_on and self.fail_on in text:
             raise RuntimeError("azure said no")

@@ -56,6 +56,12 @@ const officerAudio = ref(null);
 // frames). True between them — the question is readable, but he has not said it yet, so
 // the mic stays shut.
 const awaitingAudio = ref(false);
+// AI-CONTEXT: THE SOUND A PERSON MAKES WHILE THEY ARE STILL LISTENING. Handed over once
+// with the first officer frame and played the instant the microphone closes, over the
+// ~1.5s the machine needs to transcribe and think. Fetching one at the moment it is needed
+// would arrive exactly too late to be the thing that covers the wait, which is why the
+// client holds the pool and chooses.
+const thinkingUrls = ref([]);
 // AI-CONTEXT: what the RECOGNISER heard, shown back before the next question.
 //
 // The `scored` frame has always carried `transcript`, `confidence` and `review_needed`,
@@ -96,13 +102,12 @@ let micStream = null;
 // exchange still feels like one, and ANY interaction cancels it: a driver who reaches for
 // the replay is engaging, not idling, and yanking the screen away mid-tap is the rudest
 // thing an auto-advance can do. The button stays for anyone who wants to move now.
-// AI-CONTEXT: a beat after the officer stops speaking, not a window to be waited out. The
-// old 3.2s existed because a review panel had to be readable; with the panel gone the only
-// job left is to not tread on the end of his own sentence.
-const ACK_BEAT_MS = 450;
-// and a ceiling, for when the acknowledgement has no audio at all or it fails to play —
-// a conversation that stalls silently is worse than one that moves on a little early
-const ADVANCE_FALLBACK_MS = 3200;
+// AI-CONTEXT: NOT the mechanism — the stall guard. The server sends the officer's next
+// line unprompted, immediately after the score, so nothing here paces the conversation any
+// more. This exists only so a dropped frame does not leave a driver looking at a screen
+// that will never speak again. Generous on purpose: firing it early would ask for a second
+// question while the first is still in flight.
+const STALL_GUARD_MS = 12000;
 let advanceTimer = null;
 
 function cancelAutoAdvance() {
@@ -170,6 +175,7 @@ onMounted(() => {
       officerText.value = frame.text;
       officerAudio.value = frame.audio_url ? `${API_BASE}${frame.audio_url}` : null;
       phase.value = Phase.OFFICER;
+      cancelAutoAdvance(); // the officer spoke; the stall guard has nothing to guard
       // AI-CONTEXT: a stop OPENS. The greeting rides the first officer frame rather than
       // the session-create response, because the surface that creates a session is the
       // consent screen and a driver must not hear "Afternoon" while still deciding
@@ -186,6 +192,10 @@ onMounted(() => {
       // "he has already spoken" and opens the mic on top of him — recording a driver
       // answering a question they have not heard yet. TRAPS 80 in the other direction:
       // the server grew a frame, so the surface has to grow the reading of it.
+      if (Array.isArray(frame.thinking_audio_urls)) {
+        thinkingUrls.value = frame.thinking_audio_urls;
+        preloadThinkingNoises(frame.thinking_audio_urls);
+      }
       awaitingAudio.value = Boolean(frame.audio_pending);
       // no audio to wait for means the question is already "said" — open the mic now
       if (!officerAudio.value && !awaitingAudio.value && handsFree.value) openMic();
@@ -217,13 +227,12 @@ onMounted(() => {
       // one only appears when the recogniser did NOT understand, which is the one case a
       // driver genuinely cannot infer from the officer's reply.
       cancelAutoAdvance();
-      // the ceiling first, so a voice that never plays cannot stall the stop; the callback
-      // replaces it with a short beat once he has actually finished speaking
-      advanceTimer = setTimeout(nextQuestion, ADVANCE_FALLBACK_MS);
-      playInOrder([frame.echo_audio_url, frame.ack_audio_url], () => {
-        cancelAutoAdvance();
-        advanceTimer = setTimeout(nextQuestion, ACK_BEAT_MS);
-      });
+      playInOrder([frame.echo_audio_url, frame.ack_audio_url]);
+      // AI-CONTEXT: THE CLIENT NO LONGER ASKS FOR THE NEXT LINE. The server answers in the
+      // same breath as the score, so asking would draw a SECOND question and show the
+      // driver only one of them. The timer that remains is a stall guard, not the
+      // mechanism: if no officer frame arrives at all, the stop must not sit there.
+      advanceTimer = setTimeout(nextQuestion, STALL_GUARD_MS);
     } else if (frame.type === "complete") {
       // a stop ENDS — the officer lets you go rather than the screen simply changing
       closingText.value = frame.closing || "";
@@ -323,8 +332,43 @@ function officerFinishedSpeaking() {
   if (handsFree.value && phase.value === Phase.OFFICER) openMic();
 }
 
+// AI-CONTEXT: PRELOADED, which is the difference between this working and this being
+// pointless. The clips exist to land in the silence the moment a driver stops talking —
+// and an `Audio` constructed at that moment must first FETCH the file, so on a truck-stop
+// connection the sound arrives somewhere in the middle of the gap it was meant to cover,
+// or after it. They are fetched when the pool arrives instead, while the officer is still
+// asking his question and nobody is waiting.
+let thinkingClips = [];
+
+function preloadThinkingNoises(urls) {
+  thinkingClips = urls.map((url) => {
+    const audio = new Audio(`${API_BASE}${url}`);
+    audio.preload = "auto";
+    audio.load();
+    return audio;
+  });
+}
+
+function makeThinkingNoise() {
+  // a different one each time — the same noise four times in a stop is a machine again
+  if (!thinkingClips.length) return;
+  const clip = thinkingClips[Math.floor(Math.random() * thinkingClips.length)];
+  try {
+    clip.currentTime = 0;
+  } catch {
+    // a clip still loading has no seekable timeline yet; playing from wherever it is
+    // beats not making a sound at all
+  }
+  clip.play().catch(() => {});
+}
+
 async function sendAnswer() {
   phase.value = Phase.SCORING;
+  // AI-CONTEXT: BEFORE the upload, not after. The whole value of this sound is that it
+  // lands in the silence a person leaves when they stop talking; playing it once the
+  // request is away would put it a round trip late, in the middle of the gap it exists
+  // to fill rather than at the start of it.
+  makeThinkingNoise();
   const blob = new Blob(chunks, { type: "audio/webm" });
   const buffer = await blob.arrayBuffer();
   let binary = "";

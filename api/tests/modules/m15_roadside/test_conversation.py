@@ -154,8 +154,6 @@ def test_the_schema_and_effort_reach_the_wire_not_just_the_call_site(monkeypatch
     anyone — TRAPS 79, which cost this module a release. So this builds the real request
     and reads `output_config` out of the JSON that would have gone to Anthropic.
     """
-    import httpx
-
     from app.foundation.f09_ai_gateway.domain import provider as prov
 
     sent = {}
@@ -170,11 +168,16 @@ def test_the_schema_and_effort_reach_the_wire_not_just_the_call_site(monkeypatch
                 "usage": {"input_tokens": 1, "output_tokens": 1},
             }
 
-    def _post(url, headers=None, json=None, timeout=None):
-        sent.update(json)
-        return _Resp()
+    class _Client:
+        def post(self, url, headers=None, json=None):
+            sent.clear()
+            sent.update(json)
+            return _Resp()
 
-    monkeypatch.setattr(httpx, "post", _post)
+    # the POOLED client, not `httpx.post` — the gateway keeps one open so it stops paying
+    # a TLS handshake per call, and a test patching the old seam would assert on a path
+    # nothing takes any more
+    monkeypatch.setattr(prov, "_http", lambda: _Client())
 
     provider = prov.AnthropicModelProvider("k", "claude-opus-5")
     provider.parse_structured("say something", {"json_schema": conversation.OFFICER_SCHEMA})

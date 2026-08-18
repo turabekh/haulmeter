@@ -54,6 +54,82 @@ CONTENT_ACCOUNT_EMAIL = "content@haulmeter.online"
 AUDIO_CONTENT_TYPE = "audio/mpeg"
 
 
+# AI-CONTEXT: HOW THE OFFICER SOUNDS, as operator config rather than a constant.
+#
+# The owner's complaint was "now it is reading a text", and a voice is a matter of taste
+# that nobody settles by reasoning — it is settled by listening. So these are three F13
+# keys and they are DECLARED (see `register_config`), which is the lesson from the officer
+# kill switch: `set_config` writes whether or not a key is declared, so an undeclared knob
+# works and cannot be found, and a knob nobody can find is not a control.
+#
+# THE OWNER CHOSE `en-US-Ethan:MAI-Voice-2-Flash` BY EAR, from every voice this
+# subscription offers. Two things measured on the box afterwards, both of which matter more
+# than they look:
+#
+#   · **it is faster to LISTEN TO, which beats being faster to synthesize.** Ethan takes
+#     0.54s to render against Guy's 0.24s — and produces 3.0s of speech where Guy produced
+#     5.3s for the same sentence. The driver hears a finished line ~2s sooner. Synthesis
+#     latency is the number that is easy to measure and the wrong one to optimise.
+#   · **it has NO conversational style, and sending one is a 502.** Its style list is
+#     emotional only (angry, excited, whispering…); `conversation`, `chat` and even
+#     `general` are absent, and `general` was tried and returned 502 rather than being
+#     ignored. So the style default is EMPTY here, where a Kai or Davis default would carry
+#     one. This is exactly why the three are separate keys rather than one "voice" setting:
+#     they are not independent, and a voice swap that leaves a stale style behind is a
+#     silent outage of every officer line.
+#
+# The rate default is empty too: Ethan already speaks at a natural clip, and the owner asked
+# for speed. `-4%` renders correctly on it (3.0s → 3.2s) if a slower register is ever wanted.
+VOICE_KEY = "m15.officer_voice"
+STYLE_KEY = "m15.officer_style"
+RATE_KEY = "m15.officer_rate"
+VOICE_DEFAULT = "en-US-Ethan:MAI-Voice-2-Flash"
+STYLE_DEFAULT = ""
+RATE_DEFAULT = ""
+
+
+def officer_voice(db: DbSession) -> dict:
+    """The voice, style and pace to synthesize an officer line with.
+
+    Returned as kwargs so a caller cannot pass some of them and forget the rest — the
+    three travel together or the register is wrong in a way nobody notices until a driver
+    says it sounds like a machine again.
+    """
+    from app.foundation.f13_flags import public as flags
+
+    style = flags.get_config(db, STYLE_KEY, STYLE_DEFAULT)
+    rate = flags.get_config(db, RATE_KEY, RATE_DEFAULT)
+    return {
+        "voice": str(flags.get_config(db, VOICE_KEY, VOICE_DEFAULT)),
+        # empty string is a real answer meaning "this voice has no style" — sending a
+        # style a voice does not support is a 400, not a shrug
+        "style": str(style) or None,
+        "rate": str(rate) or None,
+    }
+
+
+def register_config(db: DbSession) -> None:
+    """Declare the three, so an operator can hear a change without a deploy."""
+    from app.foundation.f13_flags import public as flags
+
+    flags.register_config(
+        db, VOICE_KEY, VOICE_DEFAULT,
+        description="Azure voice for the officer, e.g. en-US-KaiNeural, en-US-DavisNeural.",
+    )
+    flags.register_config(
+        db, STYLE_KEY, STYLE_DEFAULT,
+        description=(
+            "Speaking style for that voice — EMPTY unless the voice actually lists one. "
+            "Kai has 'conversation', Davis has 'chat'; the MAI voices list only emotional "
+            "styles and reject anything else with a 502, which silences every line."
+        ),
+    )
+    flags.register_config(
+        db, RATE_KEY, RATE_DEFAULT,
+        description="SSML prosody rate, e.g. '-4%'. Negative is slower and more deliberate.",
+    )
+
+
 def content_account(db: DbSession):
     """The system account that owns synthesized content. Idempotent."""
     existing = db.scalar(
@@ -111,15 +187,26 @@ def fragment_audio(db: DbSession, text: str, *, locale: str = "en", storage=None
     text = (text or "").strip()
     if not text or len(text) > 200:
         return None
+    # AI-CONTEXT: THE VOICE IS PART OF THE KEY (migration 0092). It used to be a constant
+    # in the adapter, and is now an operator setting chosen by ear — so looking up on text
+    # alone serves every older sentence in the PREVIOUS voice while new ones arrive in the
+    # current one, and the officer changes voice halfway through a stop. Nothing fails; the
+    # cache does exactly what it was told and a driver hears two people.
+    settings = officer_voice(db)
+    voice = settings["voice"]
     existing = db.scalar(
-        select(AudioFragment).where(AudioFragment.text == text, AudioFragment.locale == locale)
+        select(AudioFragment).where(
+            AudioFragment.text == text,
+            AudioFragment.locale == locale,
+            AudioFragment.voice == voice,
+        )
     )
     if existing is not None:
         return existing.audio_ref
 
     try:
         tts = ai.resolve_tts()
-        audio = tts.synthesize(text, locale=locale)
+        audio = tts.synthesize(text, locale=locale, **settings)
     except Exception:
         return None
 
@@ -133,7 +220,7 @@ def fragment_audio(db: DbSession, text: str, *, locale: str = "en", storage=None
         content_type=AUDIO_CONTENT_TYPE,
         storage=storage,
     )
-    db.add(AudioFragment(text=text, locale=locale, audio_ref=document.id))
+    db.add(AudioFragment(text=text, locale=locale, voice=voice, audio_ref=document.id))
     ai.record_audio_minutes(db, "m15", ai.AiTask.tts, max(len(audio) / 320_000.0, 0.02))
     db.flush()
     return document.id
@@ -166,7 +253,7 @@ def synthesize_missing(db: DbSession, *, limit: int = 25, storage=None) -> dict:
     made = failed = 0
     for variant in pending:
         try:
-            audio = tts.synthesize(variant.text, locale="en")
+            audio = tts.synthesize(variant.text, locale="en", **officer_voice(db))
         except Exception:
             failed += 1
             continue

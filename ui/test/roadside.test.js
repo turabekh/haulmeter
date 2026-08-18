@@ -440,6 +440,61 @@ describe("Roadside — the session surface renders what the socket sends", () =>
     expect(w.find("audio[controls]").exists()).toBe(false);
   });
 
+  it("makes a listening noise the moment the driver stops talking", async () => {
+    // AI-CONTEXT: THE GAP-FILLER, asserted on WHEN it plays rather than that it exists.
+    // Its entire value is landing in the silence a person leaves when they stop speaking —
+    // ~1.5s before the officer can answer. Played after the upload it would arrive a round
+    // trip late, in the middle of the gap instead of at the start of it. So the assertion
+    // is that the sound is constructed during sendAnswer, before anything is sent.
+    stubSocket();
+    // records PLAYS, not constructions — the clips are preloaded when the pool arrives, so
+    // counting `new Audio()` would count the preload and prove nothing about timing
+    const played = [];
+    vi.stubGlobal("Audio", class {
+      constructor(src) {
+        this.src = src;
+      }
+      load() {}
+      play() {
+        played.push(this.src);
+        return Promise.resolve();
+      }
+    });
+    const w = mount(RoadsideSessionSurface, {
+      global: { plugins: [await at("roadside-session", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    frame({
+      type: "officer",
+      text: "Where are you headed?",
+      audio_url: null,
+      thinking_audio_urls: ["/media/document/mm?sig=x"],
+    });
+    await flushPromises();
+
+    expect(played).toHaveLength(0); // preloaded, but not yet sounded
+    expect(socket.sent.some((f) => f.type === "answer")).toBe(false);
+
+    // record how many noises had played AT THE MOMENT the answer went up, so this
+    // asserts the ORDER rather than merely that both eventually happened
+    let playedWhenSent = null;
+    const realSend = socket.send.bind(socket);
+    socket.send = (data) => {
+      if (JSON.parse(data).type === "answer" && playedWhenSent === null) {
+        playedWhenSent = played.length;
+      }
+      realSend(data);
+    };
+
+    await w.vm.sendAnswer();
+    await flushPromises();
+
+    expect(socket.sent.some((f) => f.type === "answer")).toBe(true);
+    expect(played.some((src) => src.includes("/media/document/mm"))).toBe(true);
+    expect(playedWhenSent).toBe(1); // the noise was already out before the upload
+  });
+
   it("shows what it heard ONLY when it did not understand", async () => {
     // The one case a driver cannot infer from the officer's reply, and the case Q-2 says
     // must be stated rather than hidden — so the receipt survives exactly here.

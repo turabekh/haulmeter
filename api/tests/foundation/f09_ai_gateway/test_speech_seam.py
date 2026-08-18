@@ -132,3 +132,57 @@ def test_an_implausible_call_is_refused_before_it_is_billed(db):
     with pytest.raises(speech.SpeechAnomaly):
         speech.record_audio_minutes(db, MODULE, AiTask.stt, 45.0)
     assert ai.budget_used(db, MODULE) == 0, "a refused call must not be billed"
+
+
+def test_the_officer_is_SPOKEN_not_read_aloud(monkeypatch):
+    """AI-CONTEXT: the owner said "now it is reading a text", and the bare-string SSML was
+    most of the reason.
+
+    A voice with no speaking style renders in its neutral read-aloud register. This asserts
+    on the SSML BODY that actually goes to Azure — not on the arguments the caller passed —
+    because a style that never reaches the request is indistinguishable from no style at
+    all, and the symptom is a complaint about the product rather than an error.
+    """
+    from app.foundation.f09_ai_gateway.domain import speech as _speech
+    from app.foundation.f09_ai_gateway.domain.speech import AzureTtsAdapter
+
+    sent = {}
+
+    class _Resp:
+        content = b"AUDIO"
+
+        def raise_for_status(self):
+            return None
+
+    class _Client:
+        def post(self, url, headers=None, content=None):
+            sent["ssml"] = content.decode()
+            return _Resp()
+
+    # the POOLED client — speech keeps one open so it stops paying a TLS handshake on
+    # every call, twice per spoken turn
+    monkeypatch.setattr(_speech, "_http", lambda: _Client())
+    monkeypatch.setattr(
+        "app.foundation.f09_ai_gateway.domain.speech.get_settings",
+        lambda: type("S", (), {"azure_speech_key": "k", "azure_speech_region": "r"})(),
+    )
+
+    adapter = AzureTtsAdapter()
+    adapter.synthesize(
+        "Six hours. Let me see your logbook.",
+        locale="en-US",
+        voice="en-US-KaiNeural",
+        style="conversation",
+        rate="-4%",
+    )
+
+    assert 'name="en-US-KaiNeural"' in sent["ssml"]
+    assert '<mstts:express-as style="conversation">' in sent["ssml"]
+    assert '<prosody rate="-4%">' in sent["ssml"]
+    # the namespace, without which Azure rejects express-as outright
+    assert 'xmlns:mstts="https://www.w3.org/2001/mstts"' in sent["ssml"]
+
+    # ...and a voice with no style degrades to plain speech rather than a 400
+    adapter.synthesize("Plain.", locale="en-US", voice="en-US-GuyNeural")
+    assert "express-as" not in sent["ssml"]
+    assert "prosody" not in sent["ssml"]

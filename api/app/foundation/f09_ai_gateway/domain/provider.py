@@ -124,6 +124,27 @@ def _supports_effort(model: str) -> bool:
     return model not in _MODELS_WITHOUT_EFFORT
 
 
+# AI-CONTEXT: ONE CONNECTION POOL, NOT ONE CONNECTION PER CALL. Measured on the box: a
+# fresh `httpx.post` costs 0.573s against 0.491s on a pooled client for the same request —
+# 0.082s of TCP and TLS handshake thrown away every time. The roadside officer makes two
+# such calls per spoken turn (the model and then the voice), so it is ~0.16s of every
+# exchange, and every other module pays it too on every extraction.
+#
+# Module-level and lazy: `httpx.Client` is thread-safe and safe to share, but constructing
+# it at import time would make importing this module do network setup, which the test suite
+# and every CLI script would pay for without ever making a request.
+_HTTP: "object | None" = None
+
+
+def _http():
+    global _HTTP
+    if _HTTP is None:
+        import httpx
+
+        _HTTP = httpx.Client(timeout=60.0, limits=httpx.Limits(max_keepalive_connections=8))
+    return _HTTP
+
+
 def _anthropic_messages(
     api_key: str,
     model: str,
@@ -143,8 +164,6 @@ def _anthropic_messages(
     # model and got back a form of nulls that the screen then called "read from your
     # rate con". A photographed contract has to travel as an image or a PDF; naming it
     # is not reading it.
-    import httpx
-
     content: list | str = user
     if document is not None:
         media_type, data = document
@@ -171,7 +190,7 @@ def _anthropic_messages(
         output_config["effort"] = effort
     if output_config:
         body["output_config"] = output_config
-    resp = httpx.post(
+    resp = _http().post(
         _ANTHROPIC_URL,
         headers={
             "x-api-key": api_key,
@@ -179,7 +198,6 @@ def _anthropic_messages(
             "content-type": "application/json",
         },
         json=body,
-        timeout=60.0,
     )
     resp.raise_for_status()
     data = resp.json()

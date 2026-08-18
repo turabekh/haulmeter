@@ -135,7 +135,16 @@ def session_result(
     if session is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such session")
 
+    from app.modules.m15_roadside.domain.deferred_scoring import settle_session_scores
     from app.modules.m15_roadside.domain.diagnosis import band_for
+
+    # AI-CONTEXT: the result screen is the reader that MUST NOT see a partial set. Turns
+    # are scored off the conversation path (3.41s of every exchange, measured), so a
+    # session can reach this endpoint with the model's judgement still owed on some of
+    # them. Settling here rather than trusting the worker is what makes the deferral safe:
+    # a worker that is down makes this slower, never wrong.
+    if settle_session_scores(db, session):
+        db.commit()
 
     turns = [t for t in _driver_turns(db, session_id)]
     verdict = band_for(db, [t.scores for t in turns if t.scores])
@@ -327,6 +336,21 @@ def _audio_url(ref):
     return media_url(KIND_DOCUMENT, ref, size=SIZE_FULL) if ref else None
 
 
+def _thinking_urls(db, seq: int) -> list[str] | None:
+    """The officer's listening noises, handed over ONCE at the start of the stop.
+
+    AI-CONTEXT: sent with the FIRST officer frame only. These cover the ~1.5s between a
+    driver falling silent and the officer speaking, so a clip fetched at the moment it is
+    needed would arrive exactly too late to be the thing that covers the wait. The client
+    holds the pool and picks one itself the instant the microphone closes.
+    """
+    if seq > 1:
+        return None
+    return [
+        url for url in (_audio_url(line.audio_ref) for line in loop.thinking_lines(db)) if url
+    ]
+
+
 def _driver_turns(db: Session, session_id):
     from sqlalchemy import select
 
@@ -460,6 +484,7 @@ async def _officer_frame(websocket: WebSocket, session_id, message) -> bool:
                     "audio_pending": True,
                     "opening": None,
                     "opening_audio_url": None,
+                    "thinking_audio_urls": _thinking_urls(db, turn.seq),
                 })
                 try:
                     audio_ref = m15_audio.fragment_audio(db, improvised.line)
@@ -597,21 +622,46 @@ async def _answer_frame(websocket: WebSocket, session_id, message) -> bool:
             transcript = message.get("transcript") or ""
             confidence = float(message.get("confidence", 0.9))
 
-        # AI-CONTEXT: a rubric that cannot answer produces REVIEW_NEEDED, not a verdict.
-        # `RubricUnavailable` is raised for an outage, an exhausted budget or unreadable
-        # output — and every one of those would otherwise become a statement about this
-        # driver's English invented by an accident.
-        try:
-            rubric = F9Rubric(db, account_id=session.account_id)
+        # AI-CONTEXT: THE RUBRIC IS NOT ON THIS PATH ANY MORE, and that is the single
+        # biggest thing this module did to stop feeling slow. Measured on the box it was
+        # 3.41s of a ~5.5s exchange — the largest cost in a spoken conversation, spent
+        # computing what a driver reads on the RESULT screen. Nobody was waiting for it;
+        # every driver was.
+        #
+        # `rubric=None` writes the turn with everything the CONVERSATION needs — the slots
+        # are deterministic, so the officer can still say "Dallas." back — and marks it
+        # `pending`. `deferred_scoring.settle_session_scores` finishes it before any band
+        # is derived, so a driver waits once, at the end, where waiting is what you do.
+        #
+        # DEFERRED ONLY WHILE THE OFFICER IMPROVISES, and the reason is the ack rule below
+        # rather than caution. The scripted path suppresses its acknowledgement when the
+        # answer missed the question — measured on a live session, where the officer said
+        # "Thank you." and then corrected the driver in the same breath — and that rule
+        # reads INTENT_MISUNDERSTOOD, which is the rubric's verdict. Defer it there and the
+        # tag is simply absent, so the ack would come back on a schedule and the fallback
+        # would get WORSE at the moment it is being relied on. The improvising officer has
+        # no separate ack to suppress: his own line opens by saying the fact back.
+        improvising = conversation.officer_mode(db) == "llm"
+        if improvising:
             turn = loop.record_driver_turn(
                 db, session, officer=officer, transcript=transcript,
-                asr_confidence=confidence, rubric=rubric,
+                asr_confidence=confidence, rubric=None,
             )
-        except RubricUnavailable:
-            turn = loop.record_driver_turn(
-                db, session, officer=officer, transcript=transcript,
-                asr_confidence=0.0, rubric=_ReviewOnly(),
-            )
+        else:
+            # AI-CONTEXT: a rubric that cannot answer produces REVIEW_NEEDED, not a
+            # verdict — an outage or an exhausted budget must never become a statement
+            # about this driver's English invented by an accident.
+            try:
+                turn = loop.record_driver_turn(
+                    db, session, officer=officer, transcript=transcript,
+                    asr_confidence=confidence,
+                    rubric=F9Rubric(db, account_id=session.account_id),
+                )
+            except RubricUnavailable:
+                turn = loop.record_driver_turn(
+                    db, session, officer=officer, transcript=transcript,
+                    asr_confidence=0.0, rubric=_ReviewOnly(),
+                )
         db.commit()
 
         # AI-CONTEXT: the acknowledgement rides the SCORED frame rather than getting one
@@ -623,14 +673,28 @@ async def _answer_frame(websocket: WebSocket, session_id, message) -> bool:
         # you've been driving today, not where you're headed" — nobody thanks you and then
         # corrects you in the same breath. When the answer missed the question, the REPAIR
         # is the response; an ack in front of it is a machine being polite on a schedule.
+        # AI-CONTEXT: NO SEPARATE ACKNOWLEDGEMENT WHILE THE OFFICER IMPROVISES. Two
+        # reasons, and the second is the one that matters. (1) The suppression rule this
+        # replaced read INTENT_MISUNDERSTOOD, which the rubric produces — and the rubric
+        # is no longer on this path, so the tag is not here to read. (2) It is redundant:
+        # the improvising officer's prompt now REQUIRES him to open by saying the fact
+        # back ("Six hours. Let me see your logbook."), so a separate "Okay." in front of
+        # that is the machine acknowledging twice. The scripted path still uses its acks.
         misunderstood = "INTENT_MISUNDERSTOOD" in (turn.failure_tags or [])
-        ack = None if misunderstood else loop.pick_acknowledgement(db)
+        ack = None if (improvising or misunderstood) else loop.pick_acknowledgement(db)
         # AI-CONTEXT: THE OFFICER SAYS YOUR ANSWER BACK. "Chicago. Okay." is a different
         # experience from "Okay." — it is the difference between a machine that scored you
         # and a person who heard you, and E3 budgets the runtime TTS for exactly this. The
         # fragment is cached by text, so the first driver to say Chicago pays one call and
         # every later one pays nothing.
-        echo_text = next(iter((turn.observed_slots or {}).values()), None)
+        # AI-CONTEXT: NO SEPARATE ECHO WHILE THE OFFICER IMPROVISES — he already says it.
+        # His prompt requires him to open with the fact the driver just gave ("Six hours.
+        # Let me see your logbook."), so a spoken "Six hours." in front of that is the
+        # officer saying it twice, and it costs a synthesis and a playback gap to do it.
+        # The scripted officer has no such opening, so it keeps its echo.
+        echo_text = (
+            None if improvising else next(iter((turn.observed_slots or {}).values()), None)
+        )
         echo_ref = (
             m15_audio.fragment_audio(db, str(echo_text)) if echo_text else None
         )
@@ -647,9 +711,17 @@ async def _answer_frame(websocket: WebSocket, session_id, message) -> bool:
             "review_needed": turn.review_status.value == "review_needed",
             "latency_ms": round((time.perf_counter() - started) * 1000, 1),
         })
-        return True
     finally:
         db.close()
+
+    # AI-CONTEXT: THE OFFICER ANSWERS IN THE SAME BREATH, rather than waiting to be asked.
+    # The client used to receive `scored`, wait out a beat, and send `ready` — so every
+    # exchange paid a client-side pause plus a full round trip before the model was even
+    # asked for the next line. At a window nobody prompts the officer to continue.
+    #
+    # Opens its own DB session (the `finally` above closed this one) for the same reason
+    # every frame does: a talking driver must never pin a pooled connection for minutes.
+    return await _officer_frame(websocket, session_id, message)
 
 
 class _ReviewOnly:

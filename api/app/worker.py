@@ -100,6 +100,9 @@ def _jobs() -> list[Job]:
         # newly released line before its voice exists simply reads it — the surface
         # already treats text as the simulation when audio is absent.
         Job("m15_content_audio", "m15_roadside", 900, runners.run_m15_content_audio),
+        # every 10s: the conversation defers the rubric, and this is what keeps the queue
+        # short enough that the settle at the end of a stop has nothing left to do
+        Job("m15_score_turns", None, 10, runners.run_m15_score_turns),
         # AI-CONTEXT: the 30-day audio retention sweep (E3 §E3.4.3, D14). UNFLAGGED for
         # the same reason `outbound_mail` is, and the runner argues it at length: a
         # retention promise a feature flag can revoke was never a promise. Hourly because

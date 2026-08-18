@@ -179,3 +179,40 @@ def flush_push(db):
         return summary
 
     return _flush
+
+
+@pytest.fixture(autouse=True)
+def _no_live_model_calls(monkeypatch):
+    """NO TEST EVER TALKS TO A REAL MODEL PROVIDER.
+
+    AI-CONTEXT: added after a change made it possible without anyone deciding to. The
+    roadside socket started answering an `answer` frame with the officer's next line in the
+    same handler — correct, and it meant every test that sent an answer now reached
+    `conversational_officer`, which resolves the LIVE provider. On a developer box with a
+    real key in `infra/.env` that is an HTTP call with a 60-second timeout, so the suite did
+    not fail: it HUNG, one minute per test, and looked like a wedged container.
+
+    Two properties this holds, and the second is why it is autouse rather than opt-in:
+      · **CI parity** — CI has no key, so `resolve_provider` returns the fake there and the
+        same suite behaves differently on the two boxes. A test that passes only where no
+        credentials exist is not a test anyone can trust.
+      · **live-fire discipline** — this repo's rule is that activated transports are real in
+        every environment. A suite that can spend money and reach a vendor by accident is
+        the same class of mistake as a mail test that can reach a stranger's inbox.
+
+    A test that genuinely wants a provider monkeypatches its own, exactly as before; this
+    only removes the DEFAULT path to the network.
+    """
+    from app.foundation.f09_ai_gateway import public as _ai
+    from app.foundation.f09_ai_gateway.domain import provider as _provider
+
+    def _fake():
+        return _provider.FakeModelProvider()
+
+
+    # ONLY the public binding, which is the one every real caller holds — `public.py`
+    # re-exports by value, so a module patch would not reach them anyway. Deliberately NOT
+    # patching `provider.resolve_provider`: that function is itself under test in
+    # `test_ai_gateway.py`, and a guard that rewrites the subject of a test is not a guard,
+    # it is a false pass waiting to happen.
+    monkeypatch.setattr(_ai, "resolve_provider", _fake)

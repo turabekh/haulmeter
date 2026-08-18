@@ -47,7 +47,13 @@ from .models import (
     Session,
     Turn,
 )
-from .scoring import ASR_CONFIDENCE_FLOOR, FailureTag, Rubric, score_turn
+from .scoring import (
+    ASR_CONFIDENCE_FLOOR,
+    FailureTag,
+    Rubric,
+    score_turn,
+    score_turn_deterministic,
+)
 
 
 class DriverState(enum.Enum):
@@ -228,6 +234,30 @@ def repair_for(db: DbSession, intent_id, *, rng=None) -> RepairLine | None:
 
         return random.choice(pool)
     return pool[rng.randrange(len(pool))]
+
+
+def thinking_lines(db: DbSession) -> list[OfficerAck]:
+    """The sounds the officer makes while he is still listening.
+
+    AI-CONTEXT: SENT UP FRONT, NOT PER TURN, and that is the point of them. They exist to
+    cover the ~1.5s between a driver falling silent and the officer speaking — so a clip
+    fetched at the moment it is needed would arrive exactly too late to be the thing that
+    covers the wait. The client is given the whole released pool once, at the start, and
+    picks one itself the instant the driver stops talking.
+
+    A pool rather than one line because the same noise four times in a stop is a machine
+    again; picking client-side because the server is not in the loop at that moment, which
+    is the entire reason this exists.
+    """
+    return list(
+        db.scalars(
+            select(OfficerAck).where(
+                OfficerAck.kind == "thinking",
+                OfficerAck.status == ContentStatus.released,
+                OfficerAck.audio_ref.isnot(None),
+            )
+        )
+    )
 
 
 def pick_acknowledgement(db: DbSession, *, rng=None) -> OfficerAck | None:
@@ -495,28 +525,46 @@ def record_driver_turn(
     officer: OfficerTurn,
     transcript: str | None,
     asr_confidence: float | None,
-    rubric: Rubric,
+    rubric: Rubric | None,
     audio_ref=None,
     driver_state: DriverState = DriverState.IDLE,
 ) -> Turn:
-    """Score the driver's answer and write the turn.
+    """Write the turn. Score it now, or mark it to be scored off the conversation.
 
     A turn below the ASR floor is written as `REVIEW_NEEDED` with no scores — Q-2, and the
     place it actually takes effect.
+
+    AI-CONTEXT: `rubric=None` DEFERS the model's judgement and is the whole latency fix.
+    Measured on the box, the rubric was 3.41s of a ~5.5s exchange — the largest single cost
+    in a spoken conversation, spent computing something the driver does not see until the
+    result screen. What is still computed inline is everything the CONVERSATION needs:
+    `validate_slots` is deterministic, so `observed_slots` — and therefore the officer
+    saying "Dallas." back — is available immediately and costs nothing.
+
+    The turn is written `pending` and settled later (`settle_session_scores`). It is NOT
+    written with empty scores and left to look finished: `{}` means "excluded from the
+    band" under Q-2, and a pending turn is not a Q-2 exclusion. See migration 0091.
     """
     assert_may_continue(driver_state)
 
     intent = db.scalar(select(Intent).where(Intent.key == officer.intent_key))
     scenario = db.get(ScenarioVersion, session.scenario_version_id)
     expected = expected_slots_for(intent, scenario) if intent and scenario else {}
-    result = score_turn(
-        officer_line=officer.text,
-        transcript=transcript,
-        intent_key=officer.intent_key,
-        expected_slots=expected,
-        asr_confidence=asr_confidence,
-        rubric=rubric,
-    )
+    if rubric is None:
+        result = score_turn_deterministic(
+            transcript=transcript,
+            expected_slots=expected,
+            asr_confidence=asr_confidence,
+        )
+    else:
+        result = score_turn(
+            officer_line=officer.text,
+            transcript=transcript,
+            intent_key=officer.intent_key,
+            expected_slots=expected,
+            asr_confidence=asr_confidence,
+            rubric=rubric,
+        )
 
     turn = Turn(
         session_id=session.id,
@@ -533,6 +581,11 @@ def record_driver_turn(
         review_status=(
             TurnReviewStatus.review_needed if result.review_needed else TurnReviewStatus.not_needed
         ),
+        scoring_state=(
+            # a deterministic early return (Q-2) is FINISHED, not queued — the rubric has
+            # nothing to add to a turn nobody could hear
+            "pending" if (rubric is None and result.needs_rubric) else "done"
+        ),
     )
     db.add(turn)
     db.flush()
@@ -540,7 +593,21 @@ def record_driver_turn(
 
 
 def complete_session(db: DbSession, session: Session, *, now: datetime | None = None):
-    """Close the session and compute its band. The band always carries `provisional`."""
+    """Close the session and compute its band. The band always carries `provisional`.
+
+    AI-CONTEXT: SETTLES DEFERRED SCORING FIRST, and that call is the correctness half of
+    the latency fix. Turns are written `pending` so the rubric does not stand in the middle
+    of the conversation (3.41s of every exchange, measured); a band derived here while some
+    of them were still queued would be computed over "whichever ones happened to have
+    finished" — a wrong number presented as a right one, and exactly the shape of failure
+    this module keeps finding. The wait moves to the end of the stop, once, where a person
+    is done talking anyway; the worker sweep usually means there is nothing left to wait
+    for. Import is local because `deferred_scoring` reads the rubric, and the rubric reads
+    scoring — a module-level import here would close that loop.
+    """
+    from .deferred_scoring import settle_session_scores
+
+    settle_session_scores(db, session)
     scores = list(
         db.scalars(
             select(Turn.scores).where(
