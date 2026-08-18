@@ -1270,5 +1270,6 @@
   "voice.unavailable": "Hozircha ovoz Xarita bo'limida.",
   "voice.unsupported": "Bu yerda ovoz ishlamaydi — savolingizni yozing.",
   "roadside.session.speaking": "Xodim gapirmoqchi",
-  "roadside.coach.checking": "Javobingiz tekshirilmoqda"
+  "roadside.coach.checking": "Javobingiz tekshirilmoqda",
+  "roadside.result.working": "Aytganlaringiz ko'rib chiqilmoqda. Bu bir necha soniya oladi."
 }

@@ -100,9 +100,15 @@ def _jobs() -> list[Job]:
         # newly released line before its voice exists simply reads it — the surface
         # already treats text as the simulation when audio is absent.
         Job("m15_content_audio", "m15_roadside", 900, runners.run_m15_content_audio),
-        # every 10s: the conversation defers the rubric, and this is what keeps the queue
-        # short enough that the settle at the end of a stop has nothing left to do
-        Job("m15_score_turns", None, 10, runners.run_m15_score_turns),
+        # AI-CONTEXT: EVERY 2s, and the number is the fix for a 13-second result screen.
+        # The conversation defers the rubric (~3.4s a turn) so the officer can answer in
+        # ~2s — which means a driver who leaves a 3-turn stop early used to arrive at the
+        # result screen with THREE unsettled turns and wait 13.2s, measured, in front of
+        # anonymous skeletons. At 2s the sweep settles each turn while the driver is
+        # speaking the next answer, so by the end there is usually nothing left to do.
+        # The query is a partial-indexed `where scoring_state = 'pending' limit 50`; the
+        # tick costs approximately nothing and buys back most of that wait.
+        Job("m15_score_turns", None, 2, runners.run_m15_score_turns),
         # AI-CONTEXT: the 30-day audio retention sweep (E3 §E3.4.3, D14). UNFLAGGED for
         # the same reason `outbound_mail` is, and the runner argues it at length: a
         # retention promise a feature flag can revoke was never a promise. Hourly because

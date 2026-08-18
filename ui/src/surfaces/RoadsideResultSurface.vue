@@ -32,6 +32,7 @@ import { useDriverState } from "../core/state.js";
 import { fetchRoadsideResult, isAuthenticated } from "../core/api.js";
 import { LoadState, Failure, failureOf } from "../core/load-state.js";
 import SkeletonCard from "../core/components/SkeletonCard.vue";
+import SpeakingIndicator from "../core/components/SpeakingIndicator.vue";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -62,7 +63,17 @@ onMounted(load);
   <div class="result">
     <h1 class="result__title">{{ t("roadside.result.title") }}</h1>
 
-    <SkeletonCard v-if="state === LoadState.LOADING" :count="2" />
+    <!-- AI-CONTEXT: A SKELETON IS A LIE WHEN THE WAIT IS LONG AND EXPLAINABLE. Scoring
+         moved off the conversation so the officer could answer in ~2s (entry 194), which
+         means the model's judgement of every turn is now owed HERE — and a driver who left
+         the stop early could sit in front of anonymous grey blocks for 13 seconds with
+         nothing telling them anything was happening. §15.3: a loading state says what is
+         being waited for when it knows, and this one knows. -->
+    <template v-if="state === LoadState.LOADING">
+      <p class="result__working">{{ t("roadside.result.working") }}</p>
+      <SpeakingIndicator :label="t('roadside.result.working')" />
+      <SkeletonCard :count="2" />
+    </template>
 
     <p v-else-if="state === LoadState.FAILED" class="result__failed" role="alert">
       {{ failure === Failure.OFFLINE ? t("system.load_offline") : t("roadside.failed") }}
@@ -130,6 +141,12 @@ onMounted(load);
 }
 /* the band is the figure on this screen — §11.1's Meter treatment, applied to the one
    thing the driver came back for */
+.result__working {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
 .result__band {
   margin: 0;
   color: var(--text-1);

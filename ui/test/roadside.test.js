@@ -182,6 +182,21 @@ describe("Roadside — the result", () => {
     failure_tags: [],
   };
 
+  it("says what it is waiting for instead of showing anonymous skeletons", async () => {
+    // AI-CONTEXT: scoring moved off the conversation so the officer could answer in ~2s,
+    // which means the model's judgement of every turn is owed on THIS screen. Measured on
+    // production: a driver who left a 3-turn stop early waited 13.2s in front of grey
+    // blocks with nothing telling them anything was happening.
+    stubFetch({ "/roadside/session/sess-1/result": new Promise(() => {}) });
+
+    const w = mount(RoadsideResultSurface, {
+      global: { plugins: [await at("roadside-result", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain(messages["roadside.result.working"]);
+  });
+
   it("renders the band the server named, provisional word included", async () => {
     stubFetch({ "/roadside/session/sess-1/result": jsonOk(RESULT) });
     const w = mount(RoadsideResultSurface, {
