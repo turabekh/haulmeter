@@ -559,6 +559,30 @@ nobody re-runs decays into a screenshot in an old handoff. Its screenshots are o
     the `ci` target already says preflight runs "while everything is still down", and that
     is a precondition each run has to re-establish for itself. *(135)*
 
+79. **A scripted string replacement that finds no anchor CHANGES NOTHING AND REPORTS
+    SUCCESS** — and the second edit to the same region is where it happens. M15's session
+    surface got `playInOrder` defined and never called, and `echoText` declared and never
+    assigned, because an earlier replacement in the same handler had already rewritten the
+    text the later one was matching on. The file compiled, lint passed, **2350 python tests
+    and 1053 vitest passed**, the server frame carried the fields faithfully, and the
+    driver heard silence between questions.
+
+    **`assert OLD in t` before every replace, and re-read the file after.** Both are one
+    line. The failure is otherwise invisible: nothing errors, nothing is red, and the only
+    symptom is a person saying "it still does not do that".
+
+    **The check that actually found it was grepping the DEPLOYED BUNDLE for the field
+    names** — `grep -c echo_audio_url` on what the CDN serves. That is the only artifact a
+    driver's browser ever sees, and the only one no local green can lie about. *(137)*
+
+80. **A frame the surface does not read is a feature that does not exist, and no server
+    test can see the difference.** M15's socket was tested to carry `echo`, `ack` and
+    `opening`; every one of those tests passed while the UI ignored all three. **When a
+    server field exists to be RENDERED, the test that matters mounts the surface, pushes
+    the frame, and asserts the text appears.** Stub `WebSocket`, `Audio`, `MediaRecorder`
+    and `navigator.mediaDevices` — the last one matters because a hands-free surface opens
+    the mic itself and without it the test measures the mic-denied screen instead. *(137)*
+
 78. **A browser walking the REAL app must run where BOTH locked ports are `localhost`** —
     which means the host, not a container. Cost four attempts and three dead ends, each of
     which looked like a different bug:
