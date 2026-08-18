@@ -54,6 +54,7 @@ let recorder = null;
 let listener = null;
 let chunks = [];
 let current = null;
+let recordedMime = null;
 
 function releaseMic() {
   if (listener) { listener.stop(); listener = null; }
@@ -90,6 +91,7 @@ async function startListening() {
     send();
   };
   recorder.start();
+  recordedMime = recorder.mimeType;
   listening.value = true;
   listener = listenForSpeech(micStream, {
     onSpeechEnd: () => stopRecorder(),
@@ -114,11 +116,14 @@ async function send() {
   asking.value = true;
   hint.value = "";
   try {
-    const blob = new Blob(chunks, { type: "audio/webm" });
+    // the recorder's OWN mime, not a guess: Chrome gives webm/opus and iOS Safari mp4,
+    // and the server tells the vendor which it is rather than trusting it to sniff
+    const mime = recordedMime || "audio/webm";
+    const blob = new Blob(chunks, { type: mime });
     const bytes = new Uint8Array(await blob.arrayBuffer());
     let binary = "";
     for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
-    answer.value = await listenVoice(btoa(binary), props.driving, locale.value);
+    answer.value = await listenVoice(btoa(binary), props.driving, locale.value, mime);
     play(answer.value);
     // heard, but not confidently enough to act on — the server says so rather than
     // routing a guess, and the driver is shown what it thought it heard

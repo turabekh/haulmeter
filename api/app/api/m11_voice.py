@@ -40,6 +40,9 @@ class ListenIn(BaseModel):
     """
 
     audio_b64: str
+    # what MediaRecorder actually produced: Chrome `audio/webm;codecs=opus`, iOS Safari
+    # `audio/mp4`. Declared rather than assumed — see `service.listen`.
+    mime: str | None = None
     driving: bool = False
     context: dict = {}
     locale: str | None = None
@@ -129,7 +132,9 @@ def listen(
     try:
         resp, transcript = m11.handle_utterance(
             db, _PROVIDER, account.id, audio,
-            locale=locale, context={**body.context, "locale": locale}, driving=body.driving,
+            locale=locale,
+            context={**body.context, "locale": locale, "content_type": body.mime},
+            driving=body.driving,
         )
     except Exception as exc:
         # AI-CONTEXT: a recogniser that failed is not a driver who said nothing. M15 paid

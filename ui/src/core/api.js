@@ -1582,11 +1582,11 @@ export async function askVoice(text, driving = false, locale = undefined) {
 // the M15 coaching attempt: the client holds a `MediaRecorder` blob and one JSON body is
 // what the F12 offline queue can carry unchanged. A 503 is speech being unavailable — a
 // different thing from the driver having said nothing, and the sheet says so.
-export async function listenVoice(audioB64, driving = false, locale = undefined) {
+export async function listenVoice(audioB64, driving = false, locale = undefined, mime = undefined) {
   const resp = await fetch(`${API_BASE}/voice/listen`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ audio_b64: audioB64, driving, locale }),
+    body: JSON.stringify({ audio_b64: audioB64, driving, locale, mime }),
   });
   if (!resp.ok) throw new Error(`voice listen failed: ${resp.status}`);
   return resp.json();

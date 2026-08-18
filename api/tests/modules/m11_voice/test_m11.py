@@ -305,7 +305,7 @@ def test_handle_utterance_transcribes_then_routes(db, monkeypatch):
 
     driver = _driver(db)
     # (text, confidence) — the seam's real contract; a bare string is what broke it
-    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en": ("what am I owed", 0.95))
+    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en", content_type=None: ("what am I owed", 0.95))
 
     resp, transcript = m11.handle_utterance(
         db, ai.FakeModelProvider(), driver.id, b"\x00fake-webm-bytes",
@@ -475,7 +475,7 @@ def test_a_low_confidence_transcript_is_never_routed_as_a_command(db, monkeypatc
     from app.modules.m11_voice.domain import service
 
     driver = _driver(db)
-    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en": ("send my claim", 0.20))
+    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en", content_type=None: ("send my claim", 0.20))
 
     resp, transcript = m11.handle_utterance(
         db, ai.FakeModelProvider(), driver.id, b"\x00audio", locale="en", driving=False
@@ -492,7 +492,7 @@ def test_a_confident_transcript_routes_normally(db, monkeypatch):
     from app.modules.m11_voice.domain import service
 
     driver = _driver(db)
-    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en": ("what am I owed", 0.97))
+    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en", content_type=None: ("what am I owed", 0.97))
 
     resp, _ = m11.handle_utterance(
         db, ai.FakeModelProvider(), driver.id, b"\x00audio", locale="en", driving=False

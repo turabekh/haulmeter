@@ -321,7 +321,9 @@ def speak(db: Session, text: str, *, locale: str = "en") -> bytes | None:
 ASR_CONFIDENCE_FLOOR = 0.55
 
 
-def listen(db: Session, audio: bytes, *, locale: str = "en") -> tuple[str, float]:
+def listen(
+    db: Session, audio: bytes, *, locale: str = "en", content_type: str | None = None
+) -> tuple[str, float]:
     """Driver audio to text, through the same Deepgram seam M15 uses.
 
     AI-CONTEXT: the ears the copilot never had. Recognition was the BROWSER's
@@ -329,7 +331,14 @@ def listen(db: Session, audio: bytes, *, locale: str = "en") -> tuple[str, float
     there was no microphone button that did anything, while a paid Deepgram key sat in the
     same settings object serving M15.
     """
-    transcript, confidence = ai.resolve_stt(locale).transcribe(audio, locale=locale)
+    adapter = ai.resolve_stt(locale)
+    # AI-CONTEXT: the browser knows what it recorded — Chrome gives `audio/webm;codecs=opus`
+    # and iOS Safari `audio/mp4` — so it is passed through rather than guessed at. Both
+    # vendors sniff the container in practice (measured: Azure accepts mp4 labelled webm),
+    # but a second vendor inheriting the first's "it works because they guess" habit is how
+    # that stops being harmless. Deepgram takes no such argument and ignores the header.
+    kwargs = {"content_type": content_type} if content_type and adapter.name == "azure_stt" else {}
+    transcript, confidence = adapter.transcribe(audio, locale=locale, **kwargs)
     ai.record_audio_minutes(db, MODULE, ai.AiTask.stt, max(len(audio) / 320_000.0, 0.02))
     return transcript, confidence
 
@@ -356,7 +365,9 @@ def handle_utterance(
     surface shows them what it heard. That is the same argument Q-2 makes in M15 for
     showing a driver their own transcript.
     """
-    transcript, confidence = listen(db, audio, locale=locale)
+    transcript, confidence = listen(
+        db, audio, locale=locale, content_type=(context or {}).get("content_type")
+    )
     ctx = {**(context or {}), "locale": locale}
 
     # AI-CONTEXT: A LOW-CONFIDENCE TRANSCRIPT IS NOT A COMMAND. §14.5 says never pretend
