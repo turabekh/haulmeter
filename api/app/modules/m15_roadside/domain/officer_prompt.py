@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from app.foundation.f09_ai_gateway import public as ai
 
 PROMPT_KEY = "m15_officer_turn"
-PROMPT_VERSION = 4
+PROMPT_VERSION = 5
 
 # AI-CONTEXT: THE OFFICER SPEAKS ON THE FAST MODEL, by owner instruction — a stop that
 # takes 3-4s to answer you is not a conversation, and this line is the only lever that
@@ -85,6 +85,11 @@ HOW YOU SPEAK:
 - Follow up naturally when an answer opens something obvious ("Six hours — when was your
   last break?").
 - Plain, flat, professional. Not chatty, not stern, never sarcastic.
+- NEVER thank them and then correct them in the same breath. If what they said does not
+  match the facts of this stop, the correction IS your reply — no "Thank you." in front of
+  it. Nobody at a real window says "Thanks. That's not what your paperwork says."
+- When they give you a fact that contradicts the facts above, say what you have and ask
+  them again. Do not announce their own trip back to them as though you already knew it.
 
 WHAT YOU MUST NEVER DO:
 - NEVER state a rule, an hours limit, a weight limit, or any regulation as fact. You may
