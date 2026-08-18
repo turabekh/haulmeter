@@ -563,6 +563,7 @@ def record_driver_turn(
             officer_line=officer.text,
             transcript=transcript,
             intent_key=officer.intent_key,
+            canonical_meaning=intent.canonical_meaning if intent else "",
             expected_slots=expected,
             asr_confidence=asr_confidence,
             rubric=rubric,

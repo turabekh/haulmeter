@@ -50,3 +50,90 @@ def test_intelligible_defaults_TRUE_when_omitted():
 def test_unknown_terms_survive_as_strings():
     v = parse_verdict('{"intent_matched": true, "unknown_terms": ["tandem", "BOL"]}')
     assert v.unknown_terms == ["tandem", "BOL"]
+
+
+# --- what the model is actually TOLD about the question ------------------------------
+#
+# AI-CONTEXT: two fields the prompt template asks for and the call site never supplied.
+# Found 2026-08-18 while authoring 49 intents (entry 208), when the probe scored "I do not
+# understand" as a perfect answer to "Wait here while I run these."
+#
+# `PROMPT_TEMPLATE` renders "The intent behind it: {canonical_meaning}" and
+# "Required pieces of information: {required_slots}". The call site passed the snake_case
+# INTENT KEY for the first and a hardcoded EMPTY STRING for the second — so the model was
+# told the intent behind the question was `wait_instruction`, and was asked which required
+# pieces of information were present without being told what any of them were.
+#
+# `Intent.canonical_meaning` is authored on every intent, reviewed by a human under Q-6,
+# and reached nothing. It is the same defect as every row in HANDOFF-138 §2: written,
+# wired to nothing, believed. These tests were watched failing before the fix.
+
+
+class _Recorder:
+    """A stand-in provider that keeps the rendered prompt."""
+
+    def __init__(self):
+        self.rendered = None
+
+    def __call__(self, *, template: str, values: dict) -> str:
+        self.rendered = template.format(**values)
+        return (
+            '{"intent_matched": true, "slots_filled": [], '
+            '"slots_missing": [], "intelligible": true}'
+        )
+
+
+def test_the_rubric_is_told_the_intents_MEANING_not_its_key(monkeypatch):
+    from app.modules.m15_roadside.domain import prompts, rubric_f9
+
+    captured = {}
+
+    def fake_complete(db, provider, module, key, values, account_id=None):
+        captured.update(values)
+        return (
+            '{"intent_matched": true, "slots_filled": [], '
+            '"slots_missing": [], "intelligible": true}'
+        )
+
+    monkeypatch.setattr(rubric_f9.ai, "complete", fake_complete)
+    monkeypatch.setattr(rubric_f9.ai, "resolve_provider", lambda: "fake")
+
+    rubric_f9.F9Rubric(db=None).judge(
+        officer_line="Wait here while I run these.",
+        transcript="I do not understand",
+        intent_key="wait_instruction",
+        canonical_meaning="the driver acknowledges an instruction to wait",
+        required_slots={"acknowledgement": "required"},
+    )
+
+    assert captured["canonical_meaning"] == "the driver acknowledges an instruction to wait"
+    assert captured["canonical_meaning"] != "wait_instruction"
+    # the template renders this field; an empty string asks the model which of nothing
+    assert captured["required_slots"].strip() != ""
+    assert "acknowledgement" in captured["required_slots"]
+    # and the rendered prompt must actually carry them
+    assert "{" not in prompts.PROMPT_TEMPLATE.format(**captured)
+
+
+def test_a_meaningless_key_still_works_when_no_meaning_is_supplied(monkeypatch):
+    """Callers that have no Intent row must degrade to the old behaviour, not crash."""
+    from app.modules.m15_roadside.domain import rubric_f9
+
+    captured = {}
+
+    def fake_complete(db, provider, module, key, values, account_id=None):
+        captured.update(values)
+        return (
+            '{"intent_matched": true, "slots_filled": [], '
+            '"slots_missing": [], "intelligible": true}'
+        )
+
+    monkeypatch.setattr(rubric_f9.ai, "complete", fake_complete)
+    monkeypatch.setattr(rubric_f9.ai, "resolve_provider", lambda: "fake")
+
+    rubric_f9.F9Rubric(db=None).judge(
+        officer_line="Where are you headed?", transcript="Chicago", intent_key="destination"
+    )
+
+    assert captured["canonical_meaning"] == "destination"
+    assert captured["required_slots"] == "none"

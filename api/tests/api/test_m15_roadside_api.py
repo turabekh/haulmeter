@@ -862,7 +862,8 @@ def _rubric_saying(intent_matched: bool):
         def __init__(self, *a, **kw):
             pass
 
-        def judge(self, *, officer_line, transcript, intent_key):
+        def judge(self, *, officer_line, transcript, intent_key,
+                  canonical_meaning="", required_slots=None):
             from app.modules.m15_roadside.domain.scoring import RubricVerdict
 
             return RubricVerdict(intent_matched=intent_matched, intelligible=True)

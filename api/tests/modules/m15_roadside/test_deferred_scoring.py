@@ -23,7 +23,10 @@ class _Rubric:
     def __init__(self):
         self.calls = 0
 
-    def judge(self, *, officer_line, transcript, intent_key):
+    def judge(self, *, officer_line, transcript, intent_key,
+              canonical_meaning="", required_slots=None):
+        # the meaning and the slots are what the model is judged against (entry 208)
+        self.last_meaning = canonical_meaning
         self.calls += 1
         return RubricVerdict(
             intent_matched=True, intelligible=True, unknown_terms=[], asked_for_repeat=False

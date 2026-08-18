@@ -804,3 +804,17 @@ recorded the trap, or all of them where it was carried forward.
 
     Use `optional_account` when a caller may genuinely be anonymous, and **write the
     no-token test** — an annotation is not a behaviour, and a docstring is not a test.
+
+92. **`m15_session_probe` prints SCORES that no judge produced.** Its docstring sells it as
+    the Session-B DoD observation with "both real providers", and the speech half is true —
+    Azure synthesizes, Deepgram transcribes. But it builds `DeterministicRubric()`, which
+    returns `intent_matched=True` for every turn, so every `scores:` line it prints is a
+    stub saying yes.
+
+    This cost a wrong diagnosis on 2026-08-18: the probe scored "I do not understand" as
+    100/100/100/100 against "Wait here while I run these", which read as the rubric being
+    far too lenient and sent a session looking for a scoring defect. Calling `F9Rubric`
+    directly on the same case returned `intent_matched=False` — correctly — in one call.
+
+    **The probe proves branch selection and latency. It proves nothing about scoring.**
+    When a score looks wrong, ask the real rubric before believing the probe.

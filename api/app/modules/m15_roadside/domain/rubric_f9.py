@@ -46,7 +46,29 @@ class F9Rubric:
         self._db = db
         self._account_id = account_id
 
-    def judge(self, *, officer_line: str, transcript: str, intent_key: str) -> RubricVerdict:
+    def judge(
+        self,
+        *,
+        officer_line: str,
+        transcript: str,
+        intent_key: str,
+        canonical_meaning: str = "",
+        required_slots: dict | None = None,
+    ) -> RubricVerdict:
+        """AI-CONTEXT: TWO FIELDS THE TEMPLATE ASKS FOR THAT THIS NEVER SUPPLIED.
+
+        `PROMPT_TEMPLATE` renders "The intent behind it: {canonical_meaning}" and
+        "Required pieces of information: {required_slots}". This passed the snake_case
+        INTENT KEY for the first and a hardcoded `""` for the second — so the model was
+        told the intent behind "Wait here while I run these." was `wait_instruction`, and
+        was asked which required pieces of information appeared without being told what
+        any of them were. `Intent.canonical_meaning` is authored on every intent and
+        reviewed by a human under Q-6, and reached nothing.
+
+        Found by a probe scoring "I do not understand" as a perfect answer, not by a test
+        (entry 208). The fallbacks keep callers with no `Intent` row working: the key is a
+        poor meaning but it is what the model used to get, and "none" is at least true.
+        """
         try:
             raw = ai.complete(
                 self._db,
@@ -55,8 +77,8 @@ class F9Rubric:
                 PROMPT_KEY,
                 {
                     "officer_line": officer_line,
-                    "canonical_meaning": intent_key,
-                    "required_slots": "",
+                    "canonical_meaning": canonical_meaning or intent_key,
+                    "required_slots": ", ".join(required_slots or {}) or "none",
                     "transcript": transcript,
                 },
                 account_id=self._account_id,

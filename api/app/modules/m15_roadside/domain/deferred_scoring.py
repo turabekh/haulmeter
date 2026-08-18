@@ -77,6 +77,7 @@ def settle_turn(db: DbSession, turn: Turn, *, rubric=None, account_id=None) -> T
             officer_line=_officer_line_before(db, turn),
             transcript=turn.transcript,
             intent_key=intent.key if intent else "",
+            canonical_meaning=intent.canonical_meaning if intent else "",
             expected_slots=turn.expected_slots or {},
             asr_confidence=turn.asr_confidence,
             rubric=rubric,

@@ -319,6 +319,7 @@ def coaching_attempt(
             officer_line=variant.text,
             transcript=transcript,
             intent_key=intent.key,
+            canonical_meaning=intent.canonical_meaning,
             expected_slots={},
             asr_confidence=confidence,
             rubric=rubric,
@@ -928,7 +929,8 @@ async def _answer_frame(websocket: WebSocket, session_id, message) -> bool:
 class _ReviewOnly:
     """Forces a turn into REVIEW_NEEDED without opining about the driver."""
 
-    def judge(self, *, officer_line, transcript, intent_key):
+    def judge(self, *, officer_line, transcript, intent_key,
+              canonical_meaning="", required_slots=None):
         from app.modules.m15_roadside.domain.scoring import RubricVerdict
 
         return RubricVerdict(intent_matched=False, intelligible=True)

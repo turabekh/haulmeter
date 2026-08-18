@@ -97,7 +97,15 @@ class Rubric(Protocol):
     changes what a driver is told about themselves.
     """
 
-    def judge(self, *, officer_line: str, transcript: str, intent_key: str) -> RubricVerdict: ...
+    def judge(
+        self,
+        *,
+        officer_line: str,
+        transcript: str,
+        intent_key: str,
+        canonical_meaning: str = "",
+        required_slots: dict | None = None,
+    ) -> RubricVerdict: ...
 
 
 class DeterministicRubric:
@@ -122,7 +130,15 @@ class DeterministicRubric:
             unknown_terms=unknown_terms or [],
         )
 
-    def judge(self, *, officer_line: str, transcript: str, intent_key: str) -> RubricVerdict:
+    def judge(
+        self,
+        *,
+        officer_line: str,
+        transcript: str,
+        intent_key: str,
+        canonical_meaning: str = "",
+        required_slots: dict | None = None,
+    ) -> RubricVerdict:
         return self._verdict
 
 
@@ -284,6 +300,7 @@ def score_turn(
     expected_slots: dict[str, str],
     asr_confidence: float | None,
     rubric: Rubric,
+    canonical_meaning: str = "",
     is_sign_turn: bool = False,
     is_dynamic_sign: bool = False,
 ) -> TurnScore:
@@ -320,7 +337,12 @@ def score_turn(
         )
 
     verdict = rubric.judge(
-        officer_line=officer_line, transcript=transcript, intent_key=intent_key
+        officer_line=officer_line,
+        transcript=transcript,
+        intent_key=intent_key,
+        # the authored meaning, not the key — see `F9Rubric.judge`
+        canonical_meaning=canonical_meaning,
+        required_slots=expected_slots,
     )
     # AI-CONTEXT: a REPEAT REQUEST IS NOT A WRONG ANSWER, and until this existed it was
     # scored as one. `DIAGNOSTIC_ONLY` named REPETITION_REQUIRED as "never a failure" and

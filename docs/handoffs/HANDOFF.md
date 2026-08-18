@@ -12,7 +12,7 @@ all still stand.
 - **[SUMMARIES.md](SUMMARIES.md)** — the narrative arc across recent sessions, moved here
   verbatim from this file. Read it when you want the story rather than the state.
 - **[../decisions/](../decisions/README.md)** — design-prd §23, the append-only decision log.
-- **[../TRAPS.md](../TRAPS.md)** — 94 things that have already cost this project time.
+- **[../TRAPS.md](../TRAPS.md)** — 95 things that have already cost this project time.
   Read the relevant section before touching something; add new ones there, not here.
 
 Every session ends by writing the next `HANDOFF-<n>.md` here and pointing this file at it.
