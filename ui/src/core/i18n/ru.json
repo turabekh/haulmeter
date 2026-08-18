@@ -1271,5 +1271,6 @@
   "voice.unsupported": "Голос здесь недоступен — напишите вопрос.",
   "roadside.session.speaking": "Инспектор сейчас заговорит",
   "roadside.coach.checking": "Проверяем ваш ответ",
-  "roadside.result.working": "Разбираем ваши ответы. Это займёт несколько секунд."
+  "roadside.result.working": "Разбираем ваши ответы. Это займёт несколько секунд.",
+  "roadside.coach.play_explanation": "Послушать на вашем языке"
 }

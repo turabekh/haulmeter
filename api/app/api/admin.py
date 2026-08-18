@@ -1782,9 +1782,33 @@ def _m15_model_answer(db: Session, item_id: uuid.UUID):
     return item
 
 
-# AI-CONTEXT: three content kinds, one dispatch. Adding a fourth means adding a row here
-# rather than another `if kind == ...` in two endpoints that could then disagree.
-_M15_KINDS = {"variant": _m15_variant, "model_answer": _m15_model_answer}
+def _m15_by_type(attr: str, label: str):
+    """A resolver for one publishable kind, by model attribute name."""
+
+    def _resolve(db: Session, item_id: uuid.UUID):
+        from app.modules.m15_roadside.domain import models as m15m
+
+        item = db.get(getattr(m15m, attr), item_id)
+        if item is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"no such {label}")
+        return item
+
+    return _resolve
+
+
+# AI-CONTEXT: ONE DISPATCH, and it was missing four of the seven publishable kinds — most
+# importantly `coaching`, which is every driver's explanation in their own language. Q-6
+# says content ships reviewed or not at all, and Q-9 says a driver never sees English in
+# its place; both are enforced in the domain, and neither is reachable by a human if the
+# review surface cannot open the row. The acknowledgements released earlier had to go out
+# by script for exactly this reason, which is not a review path, it is a workaround.
+_M15_KINDS = {
+    "variant": _m15_variant,
+    "model_answer": _m15_model_answer,
+    "coaching": _m15_by_type("CoachingContent", "coaching explanation"),
+    "ack": _m15_by_type("OfficerAck", "officer line"),
+    "repair": _m15_by_type("RepairLine", "repair line"),
+}
 
 
 def _m15_item(db: Session, kind: str, item_id: uuid.UUID):
@@ -1819,6 +1843,16 @@ def roadside_content(
     by_intent_answers: dict = {}
     for answer in model_answers:
         by_intent_answers.setdefault(answer.intent_id, []).append(answer)
+
+    # AI-CONTEXT: THE COACHING EXPLANATIONS, which a reviewer could not see at all. This is
+    # the text a driver reads in their OWN language explaining why an answer missed — the
+    # single place in the module where a mistranslation teaches something false rather than
+    # merely reading badly. Q-9 keeps English out of that slot; Q-6 keeps unreviewed text
+    # out of it; and neither is reachable by a human if the review queue does not list it.
+    coaching = list(db.scalars(select(m15m.CoachingContent)))
+    by_intent_coaching: dict = {}
+    for row in coaching:
+        by_intent_coaching.setdefault(row.intent_id, []).append(row)
 
     return {
         "scenarios": [
@@ -1861,6 +1895,22 @@ def roadside_content(
                     }
                     for a in sorted(by_intent_answers.get(intent.id, []), key=lambda a: a.version)
                 ],
+                # the explanation a driver reads in their own language, per locale
+                "coaching": [
+                    {
+                        "id": str(c.id),
+                        "locale": c.locale,
+                        "text": c.explanation,
+                        "status": c.review_status.value,
+                        "version": c.version,
+                        # so a reviewer can tell "written but silent" from "spoken", which
+                        # are different things to hand a driver
+                        "has_audio": c.audio_ref is not None,
+                    }
+                    for c in sorted(
+                        by_intent_coaching.get(intent.id, []), key=lambda c: (c.locale, c.version)
+                    )
+                ],
             }
             for intent in intents
         ],
@@ -1877,7 +1927,10 @@ def roadside_review(
     from app.modules.m15_roadside.domain import content as m15content
 
     item = _m15_item(db, kind, item_id)
-    was = item.status.value
+    # AI-CONTEXT: through the module, not `item.status` — `CoachingContent` keeps its
+    # status in `review_status`, and reading the wrong attribute raises on precisely the
+    # kind that carries a driver's own language.
+    was = m15content.status_of(item).value
     try:
         m15content.mark_reviewed(item, actor.email)
     except m15content.ContentNotReviewed as exc:
@@ -1894,10 +1947,14 @@ def roadside_review(
         target_key=str(item.id),
         detail={"kind": kind, "reviewer": actor.email},
         before={"status": was},
-        after={"status": item.status.value},
+        after={"status": m15content.status_of(item).value},
     )
     db.commit()
-    return {"id": str(item.id), "status": item.status.value, "reviewer": actor.email}
+    return {
+        "id": str(item.id),
+        "status": m15content.status_of(item).value,
+        "reviewer": actor.email,
+    }
 
 
 @router.post("/roadside/content/{kind}/{item_id}/release")
@@ -1929,7 +1986,10 @@ def roadside_release(
     from app.modules.m15_roadside.domain import content as m15content
 
     item = _m15_item(db, kind, item_id)
-    was = item.status.value
+    # AI-CONTEXT: through the module, not `item.status` — `CoachingContent` keeps its
+    # status in `review_status`, and reading the wrong attribute raises on precisely the
+    # kind that carries a driver's own language.
+    was = m15content.status_of(item).value
     try:
         m15content.release(item, previous_version=0)
     except m15content.ContentNotReviewed as exc:
@@ -1942,7 +2002,11 @@ def roadside_release(
         target_key=str(item.id),
         detail={"kind": kind},
         before={"status": was},
-        after={"status": item.status.value, "version": item.version},
+        after={"status": m15content.status_of(item).value, "version": item.version},
     )
     db.commit()
-    return {"id": str(item.id), "status": item.status.value, "version": item.version}
+    return {
+        "id": str(item.id),
+        "status": m15content.status_of(item).value,
+        "version": item.version,
+    }

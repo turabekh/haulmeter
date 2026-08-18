@@ -149,7 +149,29 @@ onBeforeUnmount(stopRetest);
 
       <!-- Q-9: an honest absence, never the English row -->
       <p v-if="!plan.explanation" class="coach__note">{{ t("roadside.coach.no_explanation") }}</p>
-      <p v-else class="coach__explanation">{{ plan.explanation }}</p>
+      <template v-else>
+        <p class="coach__explanation">{{ plan.explanation }}</p>
+        <!-- AI-CONTEXT: THE EXPLANATION SPOKEN, in the driver's own language. This module
+             teaches English to people whose READING — in any language, including their
+             own — may be weaker than their listening, so an Uzbek paragraph they cannot
+             comfortably read leaves the whole Q-9 apparatus protecting something still
+             unusable. E3 §E3.4.2 budgets for an Uzbek coach voice by name.
+
+             Its absence is NOT the same absence as `explanation` being null. That one
+             means "not yet in your language"; this one means "here, but only in writing",
+             which is what a language we can print and cannot speak looks like. The surface
+             says nothing about the second — a missing button is not a claim — because
+             there is no action a driver could take about it. -->
+        <button
+          v-if="plan.explanation_audio"
+          class="coach__play"
+          type="button"
+          @click="play(plan.explanation_audio)"
+        >
+          <Play :size="18" aria-hidden="true" />
+          <span>{{ t("roadside.coach.play_explanation") }}</span>
+        </button>
+      </template>
 
       <section v-if="plan.phrase_family.length" class="coach__block">
         <h2 class="coach__label">{{ t("roadside.coach.family") }}</h2>

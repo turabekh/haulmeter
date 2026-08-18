@@ -21,6 +21,7 @@ from .domain.content import (
     mark_reviewed,
     reassessment_variants,
     release,
+    status_of,
     teachable_variants,
 )
 from .domain.enums import (
@@ -62,6 +63,7 @@ __all__ = [
     "ContentNotReviewed",
     "HoldoutLeak",
     "mark_reviewed",
+    "status_of",
     "reassessment_variants",
     "release",
     "teachable_variants",

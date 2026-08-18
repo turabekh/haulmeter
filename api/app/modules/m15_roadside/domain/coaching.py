@@ -60,6 +60,12 @@ class CoachingPlan:
     missed_question_audio: object | None
     # None means NOT YET IN YOUR LANGUAGE (Q-9) — never a silent English substitute
     explanation: str | None
+    # the explanation SPOKEN, in the driver's own language. None when the text exists but
+    # the voice has not been synthesized, or when we have no voice for that language at
+    # all — a separate absence from `explanation is None`, and the surface must not
+    # conflate them: "not yet in your language" and "here, but only in writing" are
+    # different things to tell a driver.
+    explanation_audio: object | None = None
     glosses: dict = field(default_factory=dict)
     phrase_family: list = field(default_factory=list)
     model_answer: str | None = None
@@ -111,6 +117,7 @@ def coaching_for(db: DbSession, *, turn: Turn, locale: str) -> CoachingPlan | No
         missed_question=asked_text,
         missed_question_audio=asked_variant.audio_ref if asked_variant else None,
         explanation=_explanation(db, intent.id, locale),
+        explanation_audio=_explanation_audio(db, intent.id, locale),
         glosses=_glosses(db, intent.id, locale),
         phrase_family=family,
         model_answer=model.text if model else None,
@@ -131,6 +138,12 @@ def _released_coaching(db: DbSession, intent_id, locale: str) -> CoachingContent
         .order_by(CoachingContent.version.desc())
         .limit(1)
     )
+
+
+def _explanation_audio(db: DbSession, intent_id, locale: str):
+    """The explanation's voice, if it has been synthesized."""
+    row = _released_coaching(db, intent_id, locale)
+    return row.audio_ref if row else None
 
 
 def _explanation(db: DbSession, intent_id, locale: str) -> str | None:

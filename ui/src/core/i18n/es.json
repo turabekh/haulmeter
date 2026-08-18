@@ -1271,5 +1271,6 @@
   "voice.unsupported": "La voz no está disponible aquí: escribe tu pregunta.",
   "roadside.session.speaking": "El agente va a hablar",
   "roadside.coach.checking": "Comprobando tu respuesta",
-  "roadside.result.working": "Revisando tus respuestas. Tarda unos segundos."
+  "roadside.result.working": "Revisando tus respuestas. Tarda unos segundos.",
+  "roadside.coach.play_explanation": "Escúchalo en tu idioma"
 }

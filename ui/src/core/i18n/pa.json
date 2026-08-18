@@ -1271,5 +1271,6 @@
   "voice.unsupported": "ਇੱਥੇ ਆਵਾਜ਼ ਉਪਲਬਧ ਨਹੀਂ — ਆਪਣਾ ਸਵਾਲ ਲਿਖੋ।",
   "roadside.session.speaking": "ਅਫ਼ਸਰ ਬੋਲਣ ਵਾਲਾ ਹੈ",
   "roadside.coach.checking": "ਤੁਹਾਡੇ ਜਵਾਬ ਦੀ ਜਾਂਚ ਹੋ ਰਹੀ ਹੈ",
-  "roadside.result.working": "ਤੁਹਾਡੇ ਜਵਾਬ ਵੇਖੇ ਜਾ ਰਹੇ ਹਨ। ਇਸ ਵਿੱਚ ਕੁਝ ਸਕਿੰਟ ਲੱਗਦੇ ਹਨ।"
+  "roadside.result.working": "ਤੁਹਾਡੇ ਜਵਾਬ ਵੇਖੇ ਜਾ ਰਹੇ ਹਨ। ਇਸ ਵਿੱਚ ਕੁਝ ਸਕਿੰਟ ਲੱਗਦੇ ਹਨ।",
+  "roadside.coach.play_explanation": "ਇਸਨੂੰ ਆਪਣੀ ਭਾਸ਼ਾ ਵਿੱਚ ਸੁਣੋ"
 }

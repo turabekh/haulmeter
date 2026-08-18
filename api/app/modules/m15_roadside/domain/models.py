@@ -197,6 +197,13 @@ class CoachingContent(Base):
     )
     locale: Mapped[str] = mapped_column(String(12))
     explanation: Mapped[str] = mapped_column(Text)
+    # AI-CONTEXT: the explanation SPOKEN, in the driver's own language and not the
+    # officer's voice (migration 0093). This module teaches English to people whose
+    # reading may be weaker than their listening, so an Uzbek paragraph nobody can
+    # comfortably read leaves Q-9 protecting something still unusable.
+    audio_ref: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("f06.document.id"), nullable=True
+    )
     glosses: Mapped[dict] = mapped_column(JSONB, default=dict)
     version: Mapped[int] = mapped_column(Integer, default=1)
     review_status: Mapped[ContentStatus] = mapped_column(

@@ -227,3 +227,77 @@ def test_a_draft_model_answer_gets_no_voice(db, monkeypatch):
 
     assert m15_audio.synthesize_missing(db, storage=_Storage())["synthesized"] == 0
     assert tts.calls == []
+
+
+def test_the_coach_speaks_the_drivers_language_not_the_officers(db, monkeypatch):
+    """AI-CONTEXT: the one place this module stops speaking English, and it must.
+
+    The officer speaks US English at a driver. The coaching explanation explains, in the
+    DRIVER'S language, why an answer missed. Reading an Uzbek paragraph in `en-US-Ethan` is
+    not accented Uzbek — it is English phonemes applied to Uzbek words, which is worse than
+    silence because it teaches a pronunciation nobody uses.
+
+    Asserted on the VOICE ARGUMENT actually passed to the adapter, because the failure is
+    silent: a wrong voice still returns valid mp3, still sets `audio_ref`, and still reports
+    `synthesized: 1`. Nothing anywhere would go red.
+    """
+    from app.modules.m15_roadside.domain import audio as m15_audio
+    from app.modules.m15_roadside.domain import models as m
+
+    intent = m.Intent(key="destination", domain="stop", canonical_meaning="where to")
+    db.add(intent)
+    db.flush()
+    db.add(
+        m.CoachingContent(
+            intent_id=intent.id, locale="uz",
+            explanation="Bu savolda inspektor qayerga ketayotganingizni so'rayapti.",
+            review_status=m.ContentStatus.released,
+        )
+    )
+    db.flush()
+
+    seen = []
+
+    class _Tts:
+        def synthesize(self, text, **kw):
+            seen.append((text, kw.get("locale"), kw.get("voice")))
+            return b"AUDIO"
+
+    monkeypatch.setattr(m15_audio.ai, "resolve_tts", lambda: _Tts())
+    m15_audio.synthesize_missing(db)
+
+    uz = [s for s in seen if s[1] == "uz"]
+    assert uz, "the released Uzbek explanation was never offered to the synthesizer"
+    assert uz[0][2] == "uz-UZ-SardorNeural"
+    assert uz[0][2] != m15_audio.VOICE_DEFAULT, "the coach borrowed the officer's voice"
+
+
+def test_a_language_with_no_voice_keeps_its_text_and_is_not_a_failure(db, monkeypatch):
+    """Tajik has NO Azure voice at all — checked against the vendor, not assumed.
+
+    A locale we cannot speak must leave its explanation as text rather than counting as a
+    synthesis failure, or the job would report a fault on every tick forever and the real
+    failures would be lost in it.
+    """
+    from app.modules.m15_roadside.domain import audio as m15_audio
+    from app.modules.m15_roadside.domain import models as m
+
+    intent = m.Intent(key="destination", domain="stop", canonical_meaning="where to")
+    db.add(intent)
+    db.flush()
+    db.add(
+        m.CoachingContent(
+            intent_id=intent.id, locale="tg", explanation="matni tojiki",
+            review_status=m.ContentStatus.released,
+        )
+    )
+    db.flush()
+
+    class _Tts:
+        def synthesize(self, text, **kw):
+            raise AssertionError("a language with no voice must never reach the synthesizer")
+
+    monkeypatch.setattr(m15_audio.ai, "resolve_tts", lambda: _Tts())
+    summary = m15_audio.synthesize_missing(db)
+
+    assert summary["failed"] == 0

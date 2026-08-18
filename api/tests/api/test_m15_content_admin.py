@@ -200,3 +200,46 @@ def test_the_review_is_recorded_against_a_name(client, db):
     assert entry.detail["reviewer"] == email
     assert entry.before["status"] == "draft"
     assert entry.after["status"] == "reviewed"
+
+
+def test_coaching_explanations_can_be_reviewed_at_all(client, db):
+    """THE KIND THE REVIEW SURFACE COULD NOT OPEN, and the one Q-9 exists for.
+
+    AI-CONTEXT: `_M15_KINDS` carried `variant` and `model_answer` only. Coaching content is
+    the text a driver reads in their OWN language explaining why an answer missed — the one
+    place in the module where a mistranslation teaches something false rather than merely
+    reading badly. Q-6 says it ships reviewed or not at all and Q-9 says English may never
+    stand in for it; both are enforced in the domain, and NEITHER IS REACHABLE BY A HUMAN
+    if the review endpoint 404s on the kind. It also keeps its status in `review_status`
+    rather than `status`, so the endpoints raised on it even once dispatch was fixed.
+    """
+    from app.modules.m15_roadside.domain import models as m15m
+
+    _auth(db, client)
+    intent = m15m.Intent(key="destination", domain="stop", canonical_meaning="where to")
+    db.add(intent)
+    db.flush()
+    row = m15m.CoachingContent(
+        intent_id=intent.id, locale="uz", explanation="Bu savol qayerga ketayotganingizni soraydi.",
+    )
+    db.add(row)
+    db.flush()
+
+    listing = client.get("/admin/roadside/content").json()
+    shown = [
+        c for i in listing["intents"] for c in i.get("coaching", []) if c["id"] == str(row.id)
+    ]
+    assert shown, "a reviewer cannot release what the queue does not list"
+    assert shown[0]["locale"] == "uz"
+    assert shown[0]["status"] == "draft"
+    assert shown[0]["has_audio"] is False
+
+    assert client.post(f"/admin/roadside/content/coaching/{row.id}/review").status_code == 200
+    db.refresh(row)
+    assert row.review_status.value == "reviewed"
+
+    row.version = 2
+    db.flush()
+    assert client.post(f"/admin/roadside/content/coaching/{row.id}/release").status_code == 200
+    db.refresh(row)
+    assert row.review_status.value == "released"

@@ -41,7 +41,14 @@ from app.foundation.f09_ai_gateway import public as ai
 
 from .content import teachable_variants
 from .enums import ContentStatus
-from .models import AudioFragment, Intent, ModelAnswer, OfficerAck, RepairLine
+from .models import (
+    AudioFragment,
+    CoachingContent,
+    Intent,
+    ModelAnswer,
+    OfficerAck,
+    RepairLine,
+)
 
 # AI-CONTEXT: a mailbox nobody reads on a domain the owner controls. It exists to satisfy
 # an ownership column, never to receive anything, and it holds no credential — F1 will not
@@ -108,8 +115,38 @@ def officer_voice(db: DbSession) -> dict:
     }
 
 
+# AI-CONTEXT: THE COACH IS NOT THE OFFICER, and the difference is not decoration. The
+# officer speaks US English at a driver; the coach explains, in the DRIVER'S language, why
+# an answer missed. An Uzbek explanation read by `en-US-Ethan` is not accented Uzbek — it is
+# English phonemes applied to Uzbek words, which is worse than silence because it teaches a
+# pronunciation nobody uses.
+#
+# A map rather than a key per locale, because the set grows one language at a time and a
+# new locale should be an operator edit rather than a deploy. Checked against Azure before
+# shipping: uz-UZ has two native voices, ru-RU seven, es-MX twenty-three, pa-IN and so-SO
+# two each — and tg-TJ has NONE, which is why Tajik coaching would be text-only and why the
+# owner dropped it. A locale absent from this map has no coach voice and its explanation
+# stays text, which is a degradation and not a failure.
+COACH_VOICES_KEY = "m15.coach_voices"
+COACH_VOICES_DEFAULT = {"uz": "uz-UZ-SardorNeural"}
+
+
+def coach_voice(db: DbSession, locale: str) -> dict | None:
+    """The voice for a coaching explanation in `locale`, or None if we cannot speak it."""
+    from app.foundation.f13_flags import public as flags
+
+    voices = flags.get_config(db, COACH_VOICES_KEY, COACH_VOICES_DEFAULT) or {}
+    name = voices.get((locale or "").split("-")[0])
+    if not name:
+        return None
+    # no style, no rate: the emotional-style lists differ per locale and a style a voice
+    # lacks is a 502 (see the officer's note above). Plain speech is the safe default for
+    # a language whose voice inventory we have not individually verified.
+    return {"voice": str(name), "style": None, "rate": None}
+
+
 def register_config(db: DbSession) -> None:
-    """Declare the three, so an operator can hear a change without a deploy."""
+    """Declare them, so an operator can hear a change without a deploy."""
     from app.foundation.f13_flags import public as flags
 
     flags.register_config(
@@ -127,6 +164,14 @@ def register_config(db: DbSession) -> None:
     flags.register_config(
         db, RATE_KEY, RATE_DEFAULT,
         description="SSML prosody rate, e.g. '-4%'. Negative is slower and more deliberate.",
+    )
+    flags.register_config(
+        db, COACH_VOICES_KEY, COACH_VOICES_DEFAULT,
+        description=(
+            "Voice per coaching language, e.g. {\"uz\": \"uz-UZ-SardorNeural\"}. The coach "
+            "speaks the DRIVER'S language, not the officer's. A locale missing here has no "
+            "coach voice and its explanation stays text — tg-TJ has no Azure voice at all."
+        ),
     )
 
 
@@ -169,6 +214,20 @@ def variants_needing_audio(db: DbSession) -> list:
                 )
             )
         )
+    # AI-CONTEXT: COACHING EXPLANATIONS TOO, and they are the odd one out twice over — the
+    # column is `review_status` rather than `status`, and the text is in the DRIVER'S
+    # language rather than English. Both differences are handled at synthesis time
+    # (`_speech_for`), not here; what matters here is that a released explanation with no
+    # voice is work, exactly like every other line. Without this entry the migration that
+    # added the column would have been a promise nothing kept.
+    out.extend(
+        db.scalars(
+            select(CoachingContent).where(
+                CoachingContent.review_status == ContentStatus.released,
+                CoachingContent.audio_ref.is_(None),
+            )
+        )
+    )
     return out
 
 
@@ -226,6 +285,23 @@ def fragment_audio(db: DbSession, text: str, *, locale: str = "en", storage=None
     return document.id
 
 
+def _speech_for(db: DbSession, item) -> tuple[str, str, dict] | None:
+    """What to say, in which language, in whose voice — or None if we cannot say it.
+
+    AI-CONTEXT: the one place the coach and the officer diverge. Everything else in this
+    module is the officer speaking US English; a `CoachingContent` row is an explanation in
+    the DRIVER'S language, and reading it in the officer's voice would be English phonemes
+    applied to Uzbek words — worse than silence, because it teaches a pronunciation nobody
+    uses. A locale with no configured voice returns None and keeps its text.
+    """
+    if isinstance(item, CoachingContent):
+        settings = coach_voice(db, item.locale)
+        if settings is None:
+            return None
+        return item.explanation, item.locale, settings
+    return item.text, "en", officer_voice(db)
+
+
 def synthesize_missing(db: DbSession, *, limit: int = 25, storage=None) -> dict:
     """Give every released line a voice. Returns a summary the worker logs.
 
@@ -252,8 +328,15 @@ def synthesize_missing(db: DbSession, *, limit: int = 25, storage=None) -> dict:
     owner = content_account(db)
     made = failed = 0
     for variant in pending:
+        spoken = _speech_for(db, variant)
+        if spoken is None:
+            # a language we have no voice for — its explanation stays text, which is a
+            # degradation and not a failure, and must not be counted as one or the job
+            # would report a fault on every tick forever
+            continue
+        text, locale, settings = spoken
         try:
-            audio = tts.synthesize(variant.text, locale="en", **officer_voice(db))
+            audio = tts.synthesize(text, locale=locale, **settings)
         except Exception:
             failed += 1
             continue

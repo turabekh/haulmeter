@@ -104,6 +104,18 @@ def _status(item) -> ContentStatus:
     return item.review_status if isinstance(item, CoachingContent) else item.status
 
 
+def status_of(item: Publishable) -> ContentStatus:
+    """The publish status, whichever column this kind keeps it in.
+
+    AI-CONTEXT: PUBLIC because the admin layer needs it and was reading `item.status`
+    directly — which works for six of the seven publishable kinds and raises
+    `AttributeError` on `CoachingContent`, whose column is `review_status`. That is the
+    kind carrying every driver's coaching in their own language, so the one type the review
+    surface could not handle was the one Q-9 exists for.
+    """
+    return _status(item)
+
+
 def _set_status(item, status: ContentStatus) -> None:
     if isinstance(item, CoachingContent):
         item.review_status = status

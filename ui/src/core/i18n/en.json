@@ -1271,5 +1271,6 @@
   "voice.unsupported": "Voice isn't available here — type your question.",
   "roadside.session.speaking": "The officer is about to speak",
   "roadside.coach.checking": "Checking your answer",
-  "roadside.result.working": "Going back over what you said. This takes a few seconds."
+  "roadside.result.working": "Going back over what you said. This takes a few seconds.",
+  "roadside.coach.play_explanation": "Listen to this in your language"
 }

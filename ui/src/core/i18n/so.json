@@ -1271,5 +1271,6 @@
   "voice.unsupported": "Codku halkan lama heli karo — su'aashaada qor.",
   "roadside.session.speaking": "Saraakiishu wuu hadli doonaa",
   "roadside.coach.checking": "Waxaan hubinaynaa jawaabtaada",
-  "roadside.result.working": "Waxaan dib u eegaynaa jawaabahaaga. Tani waxay qaadanaysaa dhowr ilbiriqsi."
+  "roadside.result.working": "Waxaan dib u eegaynaa jawaabahaaga. Tani waxay qaadanaysaa dhowr ilbiriqsi.",
+  "roadside.coach.play_explanation": "Ku dhagayso luqaddaada"
 }

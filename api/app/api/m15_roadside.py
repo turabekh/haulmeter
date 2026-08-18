@@ -195,6 +195,11 @@ def session_coaching(
             "missed_question": plan.missed_question,
             "missed_question_audio": _audio_url(plan.missed_question_audio),
             "explanation": plan.explanation,
+            # AI-CONTEXT: a SEPARATE absence from `explanation: null`. That one is Q-9 —
+            # "not yet in your language". This one is "here, but only in writing", which is
+            # what a driver gets in a language we can print but not speak. The surface must
+            # not collapse the two.
+            "explanation_audio": _audio_url(plan.explanation_audio),
             "glosses": plan.glosses,
             "phrase_family": [
                 {"text": v.text, "audio_url": _audio_url(v.audio_ref)} for v in plan.phrase_family
