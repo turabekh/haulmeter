@@ -640,6 +640,31 @@ nobody re-runs decays into a screenshot in an old handoff. Its screenshots are o
     fixing, the fix is fake timers rather than a longer wait. Recorded so a later session
     does not spend an hour attributing it to their own change. *(138)*
 
+85. **`docker compose exec … python` DOES NOT WIRE OBJECT STORAGE, and anything you write
+    from it goes to memory and dies with the process.** The servers call
+    `wire_object_storage` at startup; a one-off exec imports the app and runs, so
+    `default_storage()` is still `InMemoryObjectStorage`. The database row survives,
+    pointing at a storage key that was never written.
+
+    **It reports success the whole way.** Re-recording M15's content this way printed
+    `{'synthesized': 25, 'failed': 0}`, gave every row an `audio_ref`, and left **all 31
+    audio objects missing from MinIO** — every play button on production 404'd with
+    `{"detail":"no image"}` and nothing was red anywhere. The owner found it by tapping one.
+
+    Two rules. **Never run a document-writing job through a bare exec** — let the worker do
+    it, or call `wiring.require_object_storage()` first, which scripts now do and which
+    refuses to run rather than writing to nowhere. And **when audio 404s, check the object
+    is in MinIO before checking anything else**:
+
+    ```
+    m.get(db.get(documents.Document, ref).storage_key)   # KeyError == written to memory
+    ```
+
+    A `KeyError` from storage is a dict lookup — that is the in-memory store, and the
+    tell that a process wrote bytes nobody kept. Note also that a fresh exec always
+    *reports* in-memory, so it cannot tell you what the running server is using; that
+    measurement fooled this session for several minutes. *(138)*
+
 78. **A browser walking the REAL app must run where BOTH locked ports are `localhost`** —
     which means the host, not a container. Cost four attempts and three dead ends, each of
     which looked like a different bug:

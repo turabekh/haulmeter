@@ -25,6 +25,31 @@ import sys
 from app.core.config import get_settings
 
 
+def require_object_storage(role: str = "script") -> None:
+    """Wire real object storage or refuse to run. For SCRIPTS and one-off jobs.
+
+    AI-CONTEXT: THE FAILURE THIS EXISTS FOR IS SILENT AND COST A PRODUCTION OUTAGE. The
+    long-running processes call `wire_object_storage` at startup; a `docker compose exec
+    ... python -m scripts.x` does NOT — it imports the app and runs, and `default_storage()`
+    is still the in-memory fallback. Anything that writes a document from such a process
+    therefore writes the bytes into that process's memory and they die with it, while the
+    database row survives pointing at a storage key that was never written.
+
+    It reports success the whole way. The job printed `{'synthesized': 25, 'failed': 0}`,
+    every row got an `audio_ref`, and every play button on production 404'd — 31 audio
+    objects, all of them, with nothing red anywhere. Falling back is right for a SERVER
+    (a driver's session should not die because MinIO is down); it is wrong for a script,
+    whose entire purpose is to leave something behind.
+    """
+    if not wire_object_storage(role):
+        raise SystemExit(
+            f"[{role}] refusing to run: object storage is unavailable, so anything this "
+            "writes would go to memory and vanish when the process exits — while leaving "
+            "database rows pointing at bytes that never existed. Check MINIO_* in "
+            "infra/.env and that the minio service is up."
+        )
+
+
 def wire_object_storage(role: str = "api") -> bool:
     """True when real object storage is in place. `role` names the process in the
     warning, because "which one of them lost the photograph" is the first question."""

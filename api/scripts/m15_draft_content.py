@@ -33,6 +33,7 @@ from app.modules.m15_roadside.domain.models import (
     PhraseVariant,
     RepairLine,
 )
+from app.wiring import require_object_storage
 from db_registry import import_all_models
 
 # officer phrasings, in the register an officer actually uses at a window — including the
@@ -139,6 +140,10 @@ def main() -> None:
     # this module's models were imported. Same shape as trap 4: a partial import fails
     # somewhere that looks unrelated to the omission.
     import_all_models()
+    # AI-CONTEXT: a script is not a server. Without this, `default_storage()` is the
+    # in-memory fallback and anything written here dies with the process while its
+    # database row survives — see `wiring.require_object_storage`.
+    require_object_storage("m15_draft_content")
     db = SessionLocal()
     added_variants = added_answers = 0
 

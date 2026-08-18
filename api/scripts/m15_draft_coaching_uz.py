@@ -29,6 +29,7 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.modules.m15_roadside.domain.enums import ContentStatus
 from app.modules.m15_roadside.domain.models import CoachingContent, Intent
+from app.wiring import require_object_storage
 from db_registry import import_all_models
 
 LOCALE = "uz"
@@ -73,6 +74,10 @@ EXPLANATIONS = {
 
 def main() -> None:
     import_all_models()
+    # AI-CONTEXT: a script is not a server. Without this, `default_storage()` is the
+    # in-memory fallback and anything written here dies with the process while its
+    # database row survives — see `wiring.require_object_storage`.
+    require_object_storage("m15_draft_coaching_uz")
     db = SessionLocal()
     try:
         added = skipped = replaced = 0

@@ -32,11 +32,16 @@ from app.modules.m15_roadside.domain.models import (
     PhraseVariant,
     RepairLine,
 )
+from app.wiring import require_object_storage
 from db_registry import import_all_models
 
 
 def main() -> None:
     import_all_models()
+    # AI-CONTEXT: a script is not a server. Without this, `default_storage()` is the
+    # in-memory fallback and anything written here dies with the process while its
+    # database row survives — see `wiring.require_object_storage`.
+    require_object_storage("m15_revoice")
     db = SessionLocal()
     try:
         settings = officer_voice(db)
