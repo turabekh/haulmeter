@@ -20,8 +20,31 @@ amendment, and the thing that makes that survivable is being able to stop it in 
 without shipping anything. A deploy-gated revert would mean the first bad line stays up for
 as long as a build takes.
 
-**LATENCY IS WORSE AND THAT IS THE TRADE.** E3 budgets ≤1.3s p75 on cached audio; a model
-call plus synthesis is roughly 1.5–3s. The owner accepted it after hearing the alternative.
+**LATENCY, AND WHERE IT ACTUALLY WENT.** E3 budgets ≤1.3s p75 on cached audio; a model
+call plus synthesis cannot meet that, and the owner accepted the trade. What was not
+acceptable was the first live measurement — 2.0–6.8s per turn, long enough that a driver
+stops believing they are talking to anyone. The obvious diagnosis was wrong, and it is
+written down here so nobody spends the afternoon on it again:
+
+  · **it is NOT thinking depth.** Claude Opus 5 thinks by default at `high` effort, and a
+    two-sentence in-character line is plainly not a reasoning task — so `effort=low` looked
+    like free seconds. Measured against the live API, five calls each: no effort 2.91s
+    median, `effort=low` 3.07s. Inside the noise. ~2.8–3.0s is simply this model's
+    round-trip floor for this prompt, and no request-shaping recovers it.
+  · **it IS the second leg.** Azure takes ~1.2s to say the line. `audio_fragment` caches
+    by text, but an improvised line is usually novel — so where the scripted officer drew
+    from a finite reviewed pool that converged toward free, this one mostly MISSES and
+    pays the 1.2s again. ~3.0s + ~1.2s serialized behind one frame is the 4.2s that was
+    observed. **The fix is in `_officer_frame`, not here**: the text ships the moment it
+    exists and the voice follows on its own frame.
+
+The schema below stays regardless, earned on robustness rather than speed: it makes the
+reply an object instead of a fenced-JSON hunt, so a stray code fence can no longer end a
+driver's turn. `parse_structured` sends `effort=low` with it, which is right for the task
+and costs nothing — shallow thinking, not none. Disabling thinking on this model is
+documented to emit tool calls as plain prose and leak `<thinking>` into the text, and this
+text is read aloud to a driver.
+
 Runtime audio is cached by TEXT (`audio.fragment_audio`), so the officer's common lines
 converge toward free as the same sentences recur.
 """
@@ -45,6 +68,34 @@ MODULE = "m15"
 # conversation; a prompt that carries all of it grows without bound and costs per token, so
 # this is the working memory of a short stop rather than a transcript archive.
 HISTORY_TURNS = 12
+
+# AI-CONTEXT: the shape of a spoken turn, as a GUARANTEE rather than a plea — the reply is
+# the object, so no fence-hunting and no turn lost to a stray ```. It buys robustness, not
+# speed; the latency note in the module docstring says where the seconds actually were.
+# `line` is read aloud, so it is a sentence and never a field dump; `intent_key` is what
+# keeps SCORING deterministic, and "" is a real value meaning the officer is closing
+# rather than asking.
+OFFICER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "line": {
+            "type": "string",
+            "description": "What the officer says next, out loud. One or two short sentences.",
+        },
+        "intent_key": {
+            "type": "string",
+            "description": (
+                "Which remaining topic key this line asks about, or \"\" when closing the stop."
+            ),
+        },
+        "done": {
+            "type": "boolean",
+            "description": "True only when every topic is covered and the driver may go.",
+        },
+    },
+    "required": ["line", "intent_key", "done"],
+    "additionalProperties": False,
+}
 
 
 class OfficerUnavailable(RuntimeError):
@@ -91,7 +142,7 @@ def conversational_officer(db: DbSession, session: Session) -> ImprovisedTurn:
     )
 
     try:
-        raw = ai.complete(
+        payload = ai.parse_structured(
             db,
             ai.resolve_provider(),
             MODULE,
@@ -102,11 +153,13 @@ def conversational_officer(db: DbSession, session: Session) -> ImprovisedTurn:
                 "history": history or "(the stop has just begun)",
                 "last_answer": last_answer or "(nothing yet)",
             },
+            required_keys=["line", "intent_key", "done"],
+            schema=OFFICER_SCHEMA,
         )
-    except Exception as exc:  # provider outage, budget, timeout
+    # provider outage, budget, timeout, or a reply that would not parse against the schema
+    except Exception as exc:
         raise OfficerUnavailable(str(exc)) from exc
 
-    payload = _parse(raw)
     line = (payload.get("line") or "").strip()
     if not line:
         raise OfficerUnavailable("the model returned no line")
@@ -116,23 +169,6 @@ def conversational_officer(db: DbSession, session: Session) -> ImprovisedTurn:
         intent_key=(payload.get("intent_key") or "").strip(),
         done=bool(payload.get("done")),
     )
-
-
-def _parse(raw: str) -> dict:
-    """AI-CONTEXT: fenced JSON survives, because models emit it and a stop should not end
-    over a code fence. Anything else raises rather than being guessed at."""
-    text = (raw or "").strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
-    try:
-        payload = json.loads(text.strip())
-    except (ValueError, IndexError) as exc:
-        raise OfficerUnavailable("unparseable officer turn") from exc
-    if not isinstance(payload, dict):
-        raise OfficerUnavailable("officer turn was not an object")
-    return payload
 
 
 OFFICER_MODE_KEY = "m15.officer_mode"

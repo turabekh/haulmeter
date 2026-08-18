@@ -399,32 +399,81 @@ async def _officer_frame(websocket: WebSocket, session_id, message) -> bool:
                 if improvised.done:
                     verdict = loop.complete_session(db, session)
                     db.commit()
+                    # AI-CONTEXT: A SYNTHESIS FAILURE HERE USED TO EAT THE VERDICT. The
+                    # closing frame is the only thing that sends a driver to their result
+                    # screen, and it was built with an unguarded `fragment_audio` call
+                    # inline in the dict — so Azure failing on the last line of the stop
+                    # raised out of the handler, the frame never went, and the socket
+                    # closed. The surface reads an unexpected close as FAILED. Their score
+                    # was already committed one line above: a finished stop, a saved
+                    # verdict, and a failure screen. A missing voice costs the closing
+                    # words, never the result.
+                    #
+                    # This branch stays ONE frame deliberately, unlike the turn below.
+                    # The closing frame is what triggers navigation, so splitting it would
+                    # leave a driver on the closing screen if the audio frame never
+                    # arrived — trading ~1.2s once, at the end, for a way to strand
+                    # someone on the screen before their results. Not worth it.
+                    try:
+                        closing_audio_url = _audio_url(
+                            m15_audio.fragment_audio(db, improvised.line)
+                        )
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+                        closing_audio_url = None
                     await websocket.send_json({
                         "type": "complete",
                         "band": verdict.band.value,
                         "provisional": verdict.provisional,
                         "label_key": verdict.label_key,
                         "closing": improvised.line,
-                        "closing_audio_url": _audio_url(
-                            m15_audio.fragment_audio(db, improvised.line)
-                        ),
+                        "closing_audio_url": closing_audio_url,
                     })
-                    db.commit()
                     return True
 
                 turn = loop.record_improvised_officer_turn(db, session, improvised)
-                # runtime synthesis, cached by TEXT — the officer's common sentences
-                # converge toward free as the same lines recur across drivers
-                audio_ref = m15_audio.fragment_audio(db, improvised.line)
                 db.commit()
+                # AI-CONTEXT: THE LINE GOES BEFORE THE VOICE, and the two frames are the
+                # whole reason a turn stopped feeling slow. Measured, not guessed: the
+                # model takes ~3.0s to choose the line and Azure ~1.2s to say it, and
+                # those were SERIALIZED behind one frame — 4.2s of a screen where nobody
+                # had spoken and nothing had changed. `fragment_audio` caches by TEXT,
+                # but an improvised line is usually novel — so unlike the scripted
+                # officer, whose lines were a finite reviewed pool that converged toward
+                # free, this one mostly MISSES and pays the 1.2s again.
+                #
+                # So the text ships the moment it exists and the audio follows on its own
+                # frame. `audio_pending` is what stops the surface treating "no audio_url"
+                # as "he has finished speaking" and opening the mic over the top of him —
+                # a driver would be recorded answering a question they had not yet heard.
+                # (Short recurring lines like "Alright." do still hit the text cache; the
+                # long ones a driver actually waits on generally do not.)
                 await websocket.send_json({
                     "type": "officer",
                     "seq": turn.seq,
                     "intent_key": improvised.intent_key,
                     "text": improvised.line,
-                    "audio_url": _audio_url(audio_ref),
+                    "audio_url": None,
+                    "audio_pending": True,
                     "opening": None,
                     "opening_audio_url": None,
+                })
+                try:
+                    audio_ref = m15_audio.fragment_audio(db, improvised.line)
+                    db.commit()
+                    audio_url = _audio_url(audio_ref)
+                except Exception:
+                    # AI-CONTEXT: a voice that fails must not leave the driver waiting for
+                    # one. The line is already on their screen; sending this frame anyway
+                    # is what releases the mic. Silence with a question showing beats a
+                    # live mic that never opens.
+                    db.rollback()
+                    audio_url = None
+                await websocket.send_json({
+                    "type": "officer_audio",
+                    "seq": turn.seq,
+                    "audio_url": audio_url,
                 })
                 return True
 

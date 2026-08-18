@@ -52,6 +52,10 @@ const Phase = {
 const phase = ref(Phase.CONNECTING);
 const officerText = ref("");
 const officerAudio = ref(null);
+// AI-CONTEXT: the officer's line arrives before his voice does (the server sends two
+// frames). True between them — the question is readable, but he has not said it yet, so
+// the mic stays shut.
+const awaitingAudio = ref(false);
 // AI-CONTEXT: what the RECOGNISER heard, shown back before the next question.
 //
 // The `scored` frame has always carried `transcript`, `confidence` and `review_needed`,
@@ -166,8 +170,24 @@ onMounted(() => {
           officerAudio.value = null; // played by the queue, not by the <audio> element
         }
       }
+      // AI-CONTEXT: `audio_pending` means the voice is still being synthesized and will
+      // arrive on its own frame. Without this branch the surface reads "no audio_url" as
+      // "he has already spoken" and opens the mic on top of him — recording a driver
+      // answering a question they have not heard yet. TRAPS 80 in the other direction:
+      // the server grew a frame, so the surface has to grow the reading of it.
+      awaitingAudio.value = Boolean(frame.audio_pending);
       // no audio to wait for means the question is already "said" — open the mic now
-      if (!officerAudio.value && handsFree.value) openMic();
+      if (!officerAudio.value && !awaitingAudio.value && handsFree.value) openMic();
+    } else if (frame.type === "officer_audio") {
+      // AI-CONTEXT: the voice, catching up with the line. A null url is a synthesis
+      // that failed: the question is on the screen, so the driver is released to answer
+      // it rather than left waiting for a sound that is never coming.
+      awaitingAudio.value = false;
+      if (frame.audio_url) {
+        officerAudio.value = `${API_BASE}${frame.audio_url}`;
+      } else if (handsFree.value && phase.value === Phase.OFFICER) {
+        openMic();
+      }
     } else if (frame.type === "scored") {
       heardText.value = frame.transcript || "";
       heardUnclear.value = Boolean(frame.review_needed);

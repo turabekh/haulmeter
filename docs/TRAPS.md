@@ -583,6 +583,30 @@ nobody re-runs decays into a screenshot in an old handoff. Its screenshots are o
     and `navigator.mediaDevices` — the last one matters because a hands-free surface opens
     the mic itself and without it the test measures the mic-denied screen instead. *(137)*
 
+81. **The obvious latency lever on an LLM turn is usually not the latency.** M15's
+    improvising officer measured 2.0–6.8s per turn and the diagnosis picked itself: Claude
+    Opus 5 thinks by default at `high` effort, and a two-sentence in-character line is not
+    a reasoning task, so `effort=low` looked like free seconds. **Measured against the live
+    API, five calls each: no effort 2.91s median, `effort=low` 3.07s — inside the noise.**
+    ~2.8–3.0s is that model's round-trip floor for that prompt and no request-shaping
+    recovers it. The seconds were in the SECOND leg: TTS at ~1.2s, serialized behind the
+    same frame, and an improvised line is novel so it is a cache MISS *every turn* — the
+    thing that made the scripted officer cheap does not apply to an improvising one at all.
+    **Two rules fall out.** Measure each leg before shaping the request: a per-turn number
+    with two network calls inside it names neither. And where the legs are genuinely serial
+    (TTS needs the text), the fix is to stop making the DRIVER wait for both — ship the
+    text on its own frame and let the voice follow. *(138)*
+
+82. **A model swap is a content decision wearing a performance costume.** Haiku 4.5 answers
+    the same officer prompt in 1.4s against Opus 5's 3.0s, which is the whole latency
+    problem solved for free — except its line came back *"Good. I'll need to see your
+    logbook to verify…"*. "Good." marks the driver's answer, which is Q-1; "to verify"
+    edges toward stating what the law requires, which is the prompt's first prohibition.
+    **The prohibitions in `officer_prompt.py` are the review a human would otherwise have
+    done, and how reliably they hold is a property of the MODEL, not of the text.** A
+    cheaper model is an owner decision with a driver-facing consequence, not a tuning
+    knob — and if one is ever taken, the eval fixtures are what has to be re-run. *(138)*
+
 78. **A browser walking the REAL app must run where BOTH locked ports are `localhost`** —
     which means the host, not a container. Cost four attempts and three dead ends, each of
     which looked like a different bug:

@@ -433,4 +433,51 @@ describe("Roadside — the session surface renders what the socket sends", () =>
     expect(w.text()).toContain("Okay.");
     expect(w.text()).toContain("i am headed to chicago");
   });
+
+  it("shows the officer's line before his voice exists, and keeps the mic shut", async () => {
+    // AI-CONTEXT: THE LATENCY FIX, ASSERTED ON THE SCREEN. The model takes ~3.0s to
+    // choose the line and Azure ~1.2s to say it; serialized behind one frame that was
+    // 4.2s of a screen where nothing happened. The text now ships first — but the mic
+    // must NOT open on it, or the driver is recorded answering a question they have not
+    // heard. Both halves are the test.
+    stubSocket();
+    const getUserMedia = vi.fn(() => Promise.resolve({ getTracks: () => [] }));
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    const w = mount(RoadsideSessionSurface, {
+      global: { plugins: [await at("roadside-session", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    frame({ type: "officer", text: "Let me see your logbook.", audio_url: null, audio_pending: true });
+    await flushPromises();
+
+    expect(w.text()).toContain("Let me see your logbook.");
+    expect(getUserMedia).not.toHaveBeenCalled();
+
+    frame({ type: "officer_audio", seq: 1, audio_url: "/media/document/abc?sig=x" });
+    await flushPromises();
+
+    expect(w.find("audio").attributes("src")).toContain("/media/document/abc");
+  });
+
+  it("releases the driver to answer when the officer's voice fails to synthesize", async () => {
+    // A voice that never arrives must not become a mic that never opens: the question is
+    // readable, so the driver can answer it. Silence beats a dead screen.
+    stubSocket();
+    const getUserMedia = vi.fn(() => Promise.resolve({ getTracks: () => [] }));
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    mount(RoadsideSessionSurface, {
+      global: { plugins: [await at("roadside-session", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    frame({ type: "officer", text: "Let me see your logbook.", audio_url: null, audio_pending: true });
+    await flushPromises();
+    expect(getUserMedia).not.toHaveBeenCalled();
+
+    frame({ type: "officer_audio", seq: 1, audio_url: null });
+    await flushPromises();
+
+    expect(getUserMedia).toHaveBeenCalled();
+  });
 });

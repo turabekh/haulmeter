@@ -229,6 +229,167 @@ def test_released_content_is_served(client, db):
     assert frame["text"] == "RELEASED LINE — where are you headed?"
 
 
+def test_the_improvised_line_arrives_before_the_voice_does(client, db, monkeypatch):
+    """AI-CONTEXT: THE LATENCY FIX, ASSERTED AT THE SOCKET — which is the only level that
+    can see it. Measured on the live APIs: ~3.0s for the model to choose the line, ~1.2s
+    for Azure to say it. Serialized behind a single frame that was 4.2s of a screen where
+    nobody had spoken. An improvised line is novel every time, so the TTS leg is always a
+    cache MISS — it is paid on every turn and cannot be cached away.
+
+    So the text ships the moment it exists and the voice follows on its own frame. The
+    `audio_pending` flag is load-bearing rather than cosmetic: without it the surface
+    reads a null `audio_url` as "he has finished speaking" and opens the mic over the top
+    of him, recording a driver answering a question they have not heard.
+    """
+    from app.modules.m15_roadside.domain import conversation
+
+    _module_on(db)
+    intent = _draft_content(db)
+    db.add(
+        m.PhraseVariant(
+            intent_id=intent.id,
+            text="RELEASED LINE",
+            difficulty=m.Difficulty.clear,
+            status=m.ContentStatus.released,
+            version=2,
+        )
+    )
+    db.flush()
+    session = _session(db)
+
+    monkeypatch.setattr(
+        m15_api.conversation,
+        "conversational_officer",
+        lambda db_, s: conversation.ImprovisedTurn(
+            line="Let me see your logbook.", intent_key="destination", done=False
+        ),
+    )
+    monkeypatch.setattr(m15_api.conversation, "officer_mode", lambda db_: "llm")
+    synthesized = []
+
+    def _synth(db_, text):
+        synthesized.append(text)
+        return uuid.uuid4()
+
+    monkeypatch.setattr(m15_api.m15_audio, "fragment_audio", _synth)
+
+    with client.websocket_connect(f"/roadside/session/{session.id}/stream") as ws:
+        ws.send_json({"type": "ready", "driver_state": "IDLE"})
+        first = ws.receive_json()
+        second = ws.receive_json()
+        ws.send_json({"type": "bye"})
+
+    # the words, with nothing to wait for except a promise that the voice is coming
+    assert first["type"] == "officer"
+    assert first["text"] == "Let me see your logbook."
+    assert first["audio_url"] is None
+    assert first["audio_pending"] is True
+
+    # then the voice, on its own frame, tied to the same turn
+    assert second["type"] == "officer_audio"
+    assert second["seq"] == first["seq"]
+    assert second["audio_url"] is not None
+    assert synthesized == ["Let me see your logbook."]
+
+
+def test_a_voice_that_fails_to_synthesize_still_releases_the_driver(client, db, monkeypatch):
+    """The frame goes out with a null url rather than not going out at all. A driver whose
+    officer lost his voice can still read the question and answer it; one waiting on a
+    frame that never arrives has a hung screen and a mic that never opens."""
+    from app.modules.m15_roadside.domain import conversation
+
+    _module_on(db)
+    intent = _draft_content(db)
+    db.add(
+        m.PhraseVariant(
+            intent_id=intent.id,
+            text="RELEASED LINE",
+            difficulty=m.Difficulty.clear,
+            status=m.ContentStatus.released,
+            version=2,
+        )
+    )
+    db.flush()
+    session = _session(db)
+
+    monkeypatch.setattr(
+        m15_api.conversation,
+        "conversational_officer",
+        lambda db_, s: conversation.ImprovisedTurn(
+            line="Let me see your logbook.", intent_key="destination", done=False
+        ),
+    )
+    monkeypatch.setattr(m15_api.conversation, "officer_mode", lambda db_: "llm")
+
+    def _boom(db_, text):
+        raise RuntimeError("azure is down")
+
+    monkeypatch.setattr(m15_api.m15_audio, "fragment_audio", _boom)
+
+    with client.websocket_connect(f"/roadside/session/{session.id}/stream") as ws:
+        ws.send_json({"type": "ready", "driver_state": "IDLE"})
+        first = ws.receive_json()
+        second = ws.receive_json()
+        ws.send_json({"type": "bye"})
+
+    assert first["text"] == "Let me see your logbook."
+    assert second["type"] == "officer_audio"
+    assert second["audio_url"] is None
+
+
+def test_a_lost_voice_on_the_closing_line_does_not_eat_the_verdict(client, db, monkeypatch):
+    """RED-FIRST: this failed before the guard existed, and it failed by CRASHING.
+
+    AI-CONTEXT: the closing frame is the only thing that sends a driver to their result
+    screen, and it was built with an unguarded `fragment_audio` call inline in the dict.
+    Azure failing on the last line of a stop raised out of `_officer_frame`, so the frame
+    never went and the socket closed — and the surface reads an unexpected close as
+    FAILED. The verdict was already committed one line above. A finished stop, a saved
+    score, and a failure screen. A missing voice may cost the closing words; it may never
+    cost the result.
+    """
+    from app.modules.m15_roadside.domain import conversation
+
+    _module_on(db)
+    intent = _draft_content(db)
+    db.add(
+        m.PhraseVariant(
+            intent_id=intent.id,
+            text="RELEASED LINE",
+            difficulty=m.Difficulty.clear,
+            status=m.ContentStatus.released,
+            version=2,
+        )
+    )
+    db.flush()
+    session = _session(db)
+
+    monkeypatch.setattr(
+        m15_api.conversation,
+        "conversational_officer",
+        lambda db_, s: conversation.ImprovisedTurn(
+            line="Alright, you're good to go.", intent_key="", done=True
+        ),
+    )
+    monkeypatch.setattr(m15_api.conversation, "officer_mode", lambda db_: "llm")
+
+    def _boom(db_, text):
+        raise RuntimeError("azure is down")
+
+    monkeypatch.setattr(m15_api.m15_audio, "fragment_audio", _boom)
+
+    with client.websocket_connect(f"/roadside/session/{session.id}/stream") as ws:
+        ws.send_json({"type": "ready", "driver_state": "IDLE"})
+        frame = ws.receive_json()
+        ws.send_json({"type": "bye"})
+
+    # the stop ENDS, with words and a band, and only the voice is missing
+    assert frame["type"] == "complete"
+    assert frame["closing"] == "Alright, you're good to go."
+    assert frame["closing_audio_url"] is None
+    assert frame["band"]
+
+
 # --- the client's own condition for showing the entry ---------------------------------
 
 
