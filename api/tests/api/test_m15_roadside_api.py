@@ -682,6 +682,66 @@ def test_an_expired_recording_says_so_rather_than_offering_a_broken_play_button(
     assert turn["audio_url"] is None
 
 
+def test_a_recogniser_that_refuses_the_clip_does_not_end_the_stop(client, db, monkeypatch):
+    """RED-FIRST, and found by sending a malformed recording at PRODUCTION.
+
+    AI-CONTEXT: Deepgram answered 400, the exception left `_answer_frame`, the socket
+    closed, and the surface reads an unexpected close as FAILED — a driver's whole session
+    lost to one bad clip. Real drivers produce them: a tap that records half a second, a
+    silent cab, a codec the browser chose that the vendor rejects.
+
+    The right answer already existed and was unreachable from here. Q-2 says a turn we could
+    not make out carries no scores and is excluded from the band rather than marked wrong,
+    and the officer asks again. So the stop must CONTINUE, and the turn must be
+    review-needed — not a failure, and not a zero.
+    """
+    from app.modules.m15_roadside.domain import conversation
+
+    _module_on(db)
+    intent = _draft_content(db)
+    db.add(
+        m.PhraseVariant(
+            intent_id=intent.id, text="RELEASED LINE", difficulty=m.Difficulty.clear,
+            status=m.ContentStatus.released, version=2,
+        )
+    )
+    db.flush()
+    session = _session(db)
+
+    class _BrokenStt:
+        def transcribe(self, audio, locale):
+            raise RuntimeError("400 Bad Request from the vendor")
+
+    monkeypatch.setattr(m15_api.speech, "resolve_stt", lambda: _BrokenStt())
+    monkeypatch.setattr(
+        m15_api.conversation, "conversational_officer",
+        lambda db_, s: conversation.ImprovisedTurn(
+            line="Sorry, say that again?", intent_key="destination", done=False
+        ),
+    )
+    monkeypatch.setattr(m15_api.conversation, "officer_mode", lambda db_: "llm")
+    monkeypatch.setattr(m15_api.m15_audio, "fragment_audio", lambda db_, text: None)
+
+    import base64 as _b64
+
+    with client.websocket_connect(f"/roadside/session/{session.id}/stream") as ws:
+        ws.send_json({"type": "ready", "driver_state": "IDLE"})
+        ws.receive_json()
+        ws.receive_json()
+        ws.send_json({
+            "type": "answer", "driver_state": "IDLE",
+            "audio_b64": _b64.b64encode(b"not really audio").decode(),
+        })
+        scored = ws.receive_json()
+        # the stop CONTINUES — the officer asks again rather than the socket dying
+        following = ws.receive_json()
+        ws.send_json({"type": "bye"})
+
+    assert scored["type"] == "scored"
+    assert scored["review_needed"] is True
+    assert following["type"] == "officer"
+
+
 # --- the client's own condition for showing the entry ---------------------------------
 
 

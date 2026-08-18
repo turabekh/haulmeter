@@ -721,9 +721,27 @@ async def _answer_frame(websocket: WebSocket, session_id, message) -> bool:
 
         audio = base64.b64decode(message.get("audio_b64") or "")
         transcript, confidence = "", 0.0
+        # "there was a recording and we could not read it" — a different claim from "they
+        # said nothing", and the only one that is true when the vendor refuses the clip
+        unheard = False
         if audio:
-            stt = speech.resolve_stt()
-            transcript, confidence = stt.transcribe(audio, locale="en")
+            # AI-CONTEXT: A RECOGNISER THAT REFUSES THE CLIP MUST NOT END THE STOP. Found by
+            # sending a malformed recording at production: Deepgram answered 400, the
+            # exception left `_answer_frame`, the socket closed, and the surface read that
+            # as FAILED — a driver's whole session lost to one bad clip. Real drivers
+            # produce them: a tap that records half a second, a silent cab, a codec the
+            # browser chose that the vendor rejects.
+            #
+            # This module already has the right answer and it was simply unreachable from
+            # here. Q-2: a turn we could not make out is REVIEW_NEEDED with no scores —
+            # excluded from the band rather than marked wrong — and the officer asks again.
+            # An empty transcript at zero confidence IS that state, so an unusable clip
+            # becomes "sorry, I didn't catch that" instead of a dead screen.
+            try:
+                stt = speech.resolve_stt()
+                transcript, confidence = stt.transcribe(audio, locale="en")
+            except Exception:
+                transcript, confidence, unheard = "", 0.0, True
             speech.record_audio_minutes(db, "m15", AiTask.stt, max(len(audio) / 320_000.0, 0.02))
         else:
             transcript = message.get("transcript") or ""
@@ -761,6 +779,7 @@ async def _answer_frame(websocket: WebSocket, session_id, message) -> bool:
             turn = loop.record_driver_turn(
                 db, session, officer=officer, transcript=transcript,
                 asr_confidence=confidence, rubric=None, audio_ref=driver_audio,
+                unheard=unheard,
             )
         else:
             # AI-CONTEXT: a rubric that cannot answer produces REVIEW_NEEDED, not a

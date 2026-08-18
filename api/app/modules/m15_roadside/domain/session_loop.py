@@ -527,6 +527,7 @@ def record_driver_turn(
     asr_confidence: float | None,
     rubric: Rubric | None,
     audio_ref=None,
+    unheard: bool = False,
     driver_state: DriverState = DriverState.IDLE,
 ) -> Turn:
     """Write the turn. Score it now, or mark it to be scored off the conversation.
@@ -555,6 +556,7 @@ def record_driver_turn(
             transcript=transcript,
             expected_slots=expected,
             asr_confidence=asr_confidence,
+            unheard=unheard,
         )
     else:
         result = score_turn(

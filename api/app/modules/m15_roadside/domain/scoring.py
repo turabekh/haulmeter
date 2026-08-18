@@ -219,6 +219,7 @@ def score_turn_deterministic(
     transcript: str | None,
     expected_slots: dict[str, str],
     asr_confidence: float | None,
+    unheard: bool = False,
 ) -> TurnScore:
     """Everything about a turn that does NOT need the model — computed on the hot path.
 
@@ -234,6 +235,20 @@ def score_turn_deterministic(
     that survives them is `needs_rubric=True` with no scores yet — and `scoring_state`
     rather than `scores` is what says so, because `{}` already means something here.
     """
+    # AI-CONTEXT: "I could not make that out" BEFORE "you said nothing", and the order is
+    # the point. `unheard` means there WAS a recording and the recogniser could not read it
+    # — a vendor 400, an unusable clip. Both produce an empty transcript, and telling a
+    # driver who spoke that they were silent is a different and worse claim than telling
+    # them they were not understood. Q-2 puts the second in REVIEW_NEEDED, excluded from the
+    # band; the first is NO_RESPONSE, which is a statement about their behaviour.
+    if unheard:
+        return TurnScore(
+            scores={},
+            failure_tags=[FailureTag.UNINTELLIGIBLE.value],
+            review_needed=True,
+            slots=SlotResult(missing=list(expected_slots)),
+        )
+
     if transcript is None or not transcript.strip():
         return TurnScore(
             scores={},
