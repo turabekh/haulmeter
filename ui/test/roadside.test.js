@@ -431,7 +431,39 @@ describe("Roadside — the session surface renders what the socket sends", () =>
 
     expect(w.text()).toContain("Chicago");
     expect(w.text()).toContain("Okay.");
-    expect(w.text()).toContain("i am headed to chicago");
+    // AI-CONTEXT: and NOT a receipt. The spoken echo ("Chicago.") is how a driver knows
+    // they were understood; printing the transcript back with a replay scrubber and a
+    // "Next question" button is what made a working conversation read as a quiz. A real
+    // window does not show you what it thought you said.
+    expect(w.text()).not.toContain("i am headed to chicago");
+    expect(w.find(".session__next").exists()).toBe(false);
+    expect(w.find("audio[controls]").exists()).toBe(false);
+  });
+
+  it("shows what it heard ONLY when it did not understand", async () => {
+    // The one case a driver cannot infer from the officer's reply, and the case Q-2 says
+    // must be stated rather than hidden — so the receipt survives exactly here.
+    stubSocket();
+    const w = mount(RoadsideSessionSurface, {
+      global: { plugins: [await at("roadside-session", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    frame({ type: "officer", text: "Where are you headed?", audio_url: null });
+    await flushPromises();
+    frame({
+      type: "scored",
+      transcript: "mmff whrr",
+      review_needed: true,
+      echo: "",
+      echo_audio_url: null,
+      ack: "",
+      ack_audio_url: null,
+      tags: [],
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain("mmff whrr");
   });
 
   it("shows the officer's line before his voice exists, and keeps the mic shut", async () => {

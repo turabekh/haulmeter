@@ -203,6 +203,11 @@ def complete(
     if prompt is None:
         raise PromptNotFound(prompt_key)
     _check_budget(db, module)
+    # AI-CONTEXT: the hint has to reach the REQUEST, not just the cost row. Before this it
+    # was passed to `_record_call` alone, so a prompt with a hint logged a model that never
+    # ran while the deployment default answered.
+    if prompt.model_hint:
+        context = {**context, "model": prompt.model_hint}
     result = provider.complete(_render(prompt.template, context), context)
     _record_call(
         db,
@@ -244,6 +249,8 @@ def parse_structured(
     _check_budget(db, module)
     if schema is not None:
         context = {**context, "json_schema": schema}
+    if prompt.model_hint:
+        context = {**context, "model": prompt.model_hint}
     result = provider.parse_structured(_render(prompt.template, context), context)
     missing = [k for k in required_keys if k not in result.data]
     if missing:

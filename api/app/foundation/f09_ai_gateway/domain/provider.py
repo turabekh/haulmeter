@@ -112,6 +112,17 @@ class StubModelProvider:
 _ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 _ANTHROPIC_VERSION = "2023-06-01"
 
+# AI-CONTEXT: `output_config.effort` is not universal — Haiku 4.5 REJECTS it with a 400,
+# where the Opus and Sonnet tiers accept it. Named explicitly rather than caught, because
+# a swallowed 400 here would look exactly like a model that answered badly. Grep this list
+# when adding a model; the failure it prevents is a whole capability silently erroring for
+# one caller while every test that never sets a model hint keeps passing.
+_MODELS_WITHOUT_EFFORT = frozenset({"claude-haiku-4-5"})
+
+
+def _supports_effort(model: str) -> bool:
+    return model not in _MODELS_WITHOUT_EFFORT
+
 
 def _anthropic_messages(
     api_key: str,
@@ -156,7 +167,7 @@ def _anthropic_messages(
     output_config: dict = {}
     if schema is not None:
         output_config["format"] = {"type": "json_schema", "schema": schema}
-    if effort is not None:
+    if effort is not None and _supports_effort(model):
         output_config["effort"] = effort
     if output_config:
         body["output_config"] = output_config
@@ -224,8 +235,20 @@ class AnthropicModelProvider:
         self._model = model
         self._fallback = fallback or FakeModelProvider()
 
+    def _model_for(self, context: dict) -> str:
+        """The prompt's own model, falling back to the deployment's.
+
+        AI-CONTEXT: `Prompt.model_hint` existed from the start and reached NOTHING — the
+        service passed it to `_record_call` as the cost-accounting label and the request
+        was always built with `self._model`. So a hint did not merely fail to take effect:
+        it made `AiCall` report a model that never ran. Wired here so a prompt whose task
+        is genuinely different can say so — a spoken officer line is not a rate-con
+        extraction, and one deployment-wide model cannot be right for both.
+        """
+        return str(context.get("model") or self._model)
+
     def complete(self, prompt: str, context: dict) -> CompletionResult:
-        text, i, o = _anthropic_messages(self._key, self._model, None, prompt)
+        text, i, o = _anthropic_messages(self._key, self._model_for(context), None, prompt)
         return CompletionResult(text, i, o)
 
     def parse_structured(self, prompt: str, context: dict) -> StructuredResult:
@@ -247,7 +270,7 @@ class AnthropicModelProvider:
         # lever — raise it per prompt if a document type proves too hard to read
         text, i, o = _anthropic_messages(
             self._key,
-            self._model,
+            self._model_for(context),
             system,
             prompt,
             document=document,

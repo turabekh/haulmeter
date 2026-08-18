@@ -72,7 +72,6 @@ const heardText = ref("");
 const heardUnclear = ref(false);
 // the driver's own recording, kept in the browser for the length of the turn so they can
 // hear themselves. Nothing is uploaded for this — it is the blob that was just sent.
-const answerAudio = ref(null);
 // AI-CONTEXT: hands-free is the DEFAULT and the button is the fallback, not the other way
 // round. Nobody holds a button while answering a police officer, and a driver at a window
 // has their hands on paperwork. `handsFree` goes false the moment the detector cannot hear
@@ -97,7 +96,13 @@ let micStream = null;
 // exchange still feels like one, and ANY interaction cancels it: a driver who reaches for
 // the replay is engaging, not idling, and yanking the screen away mid-tap is the rudest
 // thing an auto-advance can do. The button stays for anyone who wants to move now.
-const AUTO_ADVANCE_MS = 3200;
+// AI-CONTEXT: a beat after the officer stops speaking, not a window to be waited out. The
+// old 3.2s existed because a review panel had to be readable; with the panel gone the only
+// job left is to not tread on the end of his own sentence.
+const ACK_BEAT_MS = 450;
+// and a ceiling, for when the acknowledgement has no audio at all or it fails to play —
+// a conversation that stalls silently is worse than one that moves on a little early
+const ADVANCE_FALLBACK_MS = 3200;
 let advanceTimer = null;
 
 function cancelAutoAdvance() {
@@ -108,12 +113,18 @@ function cancelAutoAdvance() {
 // AI-CONTEXT: two clips, in order, without stacking them on top of each other. `Audio`
 // plays immediately, so firing both at once makes the officer say "ChicagoOkay" over
 // himself — which is worse than saying neither.
-function playInOrder(urls) {
+function playInOrder(urls, onDone) {
   const queue = urls.filter(Boolean);
-  if (!queue.length) return;
+  if (!queue.length) {
+    if (onDone) onDone();
+    return;
+  }
   const next = () => {
     const url = queue.shift();
-    if (!url) return;
+    if (!url) {
+      if (onDone) onDone();
+      return;
+    }
     const audio = new Audio(`${API_BASE}${url}`);
     audio.onended = next;
     audio.onerror = next;
@@ -194,12 +205,25 @@ onMounted(() => {
       echoText.value = frame.echo || "";
       ackText.value = frame.ack || "";
       phase.value = Phase.HEARD;
-      // the officer says your own answer back, THEN acknowledges — "Chicago." then
-      // "Okay." Queued rather than fired together: `Audio` plays immediately, so both at
-      // once makes him talk over himself, which is worse than saying neither.
-      playInOrder([frame.echo_audio_url, frame.ack_audio_url]);
+      // AI-CONTEXT: THE STOP DOES NOT PAUSE TO BE MARKED. The officer says your own answer
+      // back, THEN acknowledges — "Dallas." then "Okay." — and the next question follows
+      // the moment he stops speaking. Queued rather than fired together: `Audio` plays
+      // immediately, so both at once makes him talk over himself.
+      //
+      // What this REPLACED is the thing that made a conversation read as a quiz: a 3.2s
+      // panel between every exchange with a transcript, a replay scrubber and a "Next
+      // question" button. None of that happens at a window. The echo IS the receipt —
+      // hearing "Dallas." back is how a driver knows they were understood — so the written
+      // one only appears when the recogniser did NOT understand, which is the one case a
+      // driver genuinely cannot infer from the officer's reply.
       cancelAutoAdvance();
-      advanceTimer = setTimeout(nextQuestion, AUTO_ADVANCE_MS);
+      // the ceiling first, so a voice that never plays cannot stall the stop; the callback
+      // replaces it with a short beat once he has actually finished speaking
+      advanceTimer = setTimeout(nextQuestion, ADVANCE_FALLBACK_MS);
+      playInOrder([frame.echo_audio_url, frame.ack_audio_url], () => {
+        cancelAutoAdvance();
+        advanceTimer = setTimeout(nextQuestion, ACK_BEAT_MS);
+      });
     } else if (frame.type === "complete") {
       // a stop ENDS — the officer lets you go rather than the screen simply changing
       closingText.value = frame.closing || "";
@@ -302,8 +326,6 @@ function officerFinishedSpeaking() {
 async function sendAnswer() {
   phase.value = Phase.SCORING;
   const blob = new Blob(chunks, { type: "audio/webm" });
-  releaseAnswerAudio();
-  answerAudio.value = URL.createObjectURL(blob);
   const buffer = await blob.arrayBuffer();
   let binary = "";
   const bytes = new Uint8Array(buffer);
@@ -312,28 +334,24 @@ async function sendAnswer() {
 }
 
 function nextQuestion() {
+  // AI-CONTEXT: two timers can race here — the fallback ceiling and the post-speech beat.
+  // Guarded on the phase rather than on the handles, because the cost of firing twice is
+  // asking the officer for two lines and showing the driver only the second.
+  if (phase.value !== Phase.HEARD) return;
   cancelAutoAdvance();
-  releaseAnswerAudio();
   heardText.value = "";
   heardUnclear.value = false;
   askForNextLine();
 }
 
-function releaseAnswerAudio() {
-  if (answerAudio.value) URL.revokeObjectURL(answerAudio.value);
-  answerAudio.value = null;
-}
-
 function end() {
   cancelAutoAdvance();
-  releaseAnswerAudio();
   send({ type: "bye" });
   router.replace({ name: "roadside-result", params: { sessionId: route.params.sessionId } });
 }
 
 onBeforeUnmount(() => {
   cancelAutoAdvance();
-  releaseAnswerAudio();
   stopRecording();
   releaseMic();
   if (socket && socket.readyState === WebSocket.OPEN) socket.close();
@@ -370,26 +388,27 @@ onBeforeUnmount(() => {
         @ended="officerFinishedSpeaking"
       />
 
+      <!-- AI-CONTEXT: THE STOP DOES NOT STOP TO MARK YOU. What stood here was a panel
+           between every exchange — "HEARD", the transcript, a replay scrubber and a "Next
+           question" button — and it is what made a working conversation read as a quiz.
+           None of it happens at a real window.
+
+           The officer's spoken echo ("Dallas.") is the receipt, so the WRITTEN one appears
+           only when the recogniser did not understand — the one case a driver cannot infer
+           from his reply, and the case Q-2 says must be stated rather than hidden. -->
       <template v-if="phase === Phase.HEARD">
         <p v-if="echoText || ackText" class="session__ack">
           {{ [echoText, ackText].filter(Boolean).join(" ") }}
         </p>
-        <p class="session__heard-label">{{ t("roadside.session.heard") }}</p>
-        <p class="session__heard">{{ heardText || "—" }}</p>
-        <p v-if="heardUnclear" class="session__unclear">{{ t("roadside.session.unclear") }}</p>
-
-        <audio v-if="answerAudio" :src="answerAudio" controls class="session__replay"
-               :aria-label="t('roadside.session.replay')" @play="cancelAutoAdvance" />
-
-        <button class="session__next" type="button" @click="nextQuestion">
-          {{ t("roadside.session.next") }}
-        </button>
+        <p v-if="heardUnclear" class="session__unclear">
+          {{ t("roadside.session.unclear") }}
+          <span v-if="heardText" class="session__heard">{{ heardText }}</span>
+        </p>
       </template>
 
       <template v-else>
-      <p class="session__status">
+      <p v-if="phase !== Phase.SCORING" class="session__status">
         {{ phase === Phase.RECORDING ? t("roadside.session.listening")
-           : phase === Phase.SCORING ? t("roadside.session.scoring")
            : phase === Phase.WAITING ? t("roadside.session.speak_now")
            : handsFree ? t("roadside.session.speak_now")
            : t("roadside.session.tap_instead") }}
@@ -489,22 +508,8 @@ onBeforeUnmount(() => {
   line-height: var(--type-title-line);
   text-align: center;
 }
-/* what the recogniser heard — the driver's own words, so they read at body size and not
-   as a caption. `--text-1` because this is content, not chrome. */
-.session__heard-label {
-  margin: 0;
-  color: var(--text-3);
-  font-size: var(--type-label-size);
-  line-height: var(--type-label-line);
-  text-transform: uppercase;
-}
-.session__heard {
-  margin: 0;
-  color: var(--text-1);
-  font-size: var(--type-title-size);
-  line-height: var(--type-title-line);
-  text-align: center;
-}
+/* only shown when the recogniser did NOT understand, so it reads as the officer's own
+   aside rather than as a mark against the driver */
 .session__unclear {
   margin: 0;
   color: var(--text-2);
@@ -512,21 +517,9 @@ onBeforeUnmount(() => {
   line-height: var(--type-body-line);
   text-align: center;
 }
-.session__replay {
-  width: 100%;
-  max-width: 100%;
-}
-.session__next {
-  min-height: var(--touch-primary);
-  padding: var(--s-3) var(--s-4);
-  border: 0;
-  border-radius: var(--r-control);
-  background: var(--accent-fill);
-  color: var(--on-accent);
-  font-family: var(--font-sans);
-  font-size: var(--type-label-size);
-  line-height: var(--type-label-line);
-  font-weight: var(--type-label-weight);
+.session__heard {
+  display: block;
+  color: var(--text-1);
 }
 .session__end {
   min-height: var(--touch-min);

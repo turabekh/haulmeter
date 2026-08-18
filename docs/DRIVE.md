@@ -385,7 +385,12 @@ With the flag on (`/admin/flags`, an operator decision — not a step to take ca
    repair branch and its validation line: reached, and recovered from.
 5. **Listen for yourself in his mouth.** Answer "Chicago" and he says *"Chicago. Okay."* —
    the fragment is synthesized once ever and cached by text. And he must NOT thank you for
-   an answer he is about to correct.
+   an answer he is about to correct. **This echo is now the ONLY confirmation you were
+   understood** — the written "HEARD" panel between questions is gone, because a receipt
+   and a "Next question" button between every exchange is a quiz, not a stop. So an
+   officer who moves on without saying your fact back is a DEFECT to report, not a style
+   preference. The written transcript appears in one case only: when he did not understand
+   you at all.
 6. **Hands-free is the point.** The officer finishes speaking and **the mic opens by
    itself** — do not reach for a button. Answer normally; a pause of about a second ends
    your turn. Then the officer says something ("Alright.") before the next question.
