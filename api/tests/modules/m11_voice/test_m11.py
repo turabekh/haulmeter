@@ -304,7 +304,8 @@ def test_handle_utterance_transcribes_then_routes(db, monkeypatch):
     from app.modules.m11_voice.domain import service
 
     driver = _driver(db)
-    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en": "what am I owed")
+    # (text, confidence) — the seam's real contract; a bare string is what broke it
+    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en": ("what am I owed", 0.95))
 
     resp, transcript = m11.handle_utterance(
         db, ai.FakeModelProvider(), driver.id, b"\x00fake-webm-bytes",
@@ -460,3 +461,63 @@ def test_every_launch_locale_has_a_voice_or_honestly_has_none(db):
         assert settings is not None, f"{locale} has no voice"
         assert settings["voice"].startswith(("en-", "es-", "ru-", "uz-", "pa-", "so-"))
     assert service.copilot_voice(db, "xx") is None
+
+
+def test_a_low_confidence_transcript_is_never_routed_as_a_command(db, monkeypatch):
+    """§14.5 — never pretend to understand, and this module can start things.
+
+    AI-CONTEXT: found by RUNNING it, not by reasoning. The first real round trip on
+    production returned `('one of my art', 0.73)` for "what am I owed". `_CONFIRM_INTENTS`
+    exists because some utterances commit an action, so routing a guess is the exact
+    failure §14.5 names — and it is worse here than in M15, where a misheard answer costs
+    a score rather than a claim.
+    """
+    from app.modules.m11_voice.domain import service
+
+    driver = _driver(db)
+    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en": ("send my claim", 0.20))
+
+    resp, transcript = m11.handle_utterance(
+        db, ai.FakeModelProvider(), driver.id, b"\x00audio", locale="en", driving=False
+    )
+
+    assert resp.intent == "unknown"
+    assert resp.data.get("unclear") is True
+    assert resp.needs_confirmation is False   # nothing is being proposed
+    # the driver is still shown what we heard — that is how they know to repeat it
+    assert transcript == "send my claim"
+
+
+def test_a_confident_transcript_routes_normally(db, monkeypatch):
+    from app.modules.m11_voice.domain import service
+
+    driver = _driver(db)
+    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en": ("what am I owed", 0.97))
+
+    resp, _ = m11.handle_utterance(
+        db, ai.FakeModelProvider(), driver.id, b"\x00audio", locale="en", driving=False
+    )
+
+    assert resp.intent == "money_owed"
+
+
+def test_listen_returns_the_confidence_the_floor_reads(db, monkeypatch):
+    """The seam's contract is `(text, confidence)`.
+
+    AI-CONTEXT: this is the test that would have caught the tuple. `listen` returned the
+    adapter's result straight through, so a tuple reached `classify_intent` and raised
+    `TypeError: expected string or bytes-like object, got 'tuple'` — on the real provider
+    only, because every unit test stubbed `listen` itself and never exercised the seam.
+    """
+    from app.foundation.f09_ai_gateway import public as gateway
+    from app.modules.m11_voice.domain import service
+
+    class _Stt:
+        def transcribe(self, audio, *, locale):
+            return ("hello", 0.91)
+
+    monkeypatch.setattr(gateway, "resolve_stt", lambda: _Stt())
+    text, confidence = service.listen(db, b"\x00audio", locale="en")
+
+    assert text == "hello"
+    assert confidence == 0.91

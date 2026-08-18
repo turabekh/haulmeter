@@ -314,7 +314,14 @@ def speak(db: Session, text: str, *, locale: str = "en") -> bytes | None:
     return audio
 
 
-def listen(db: Session, audio: bytes, *, locale: str = "en") -> str:
+# AI-CONTEXT: the same floor M15 scores against (`scoring.ASR_CONFIDENCE_FLOOR`). Stated
+# here rather than imported because a module may not reach into another module's domain,
+# and duplicating a number is cheaper than a public export nobody else needs. If one
+# moves, this comment is how the other is found.
+ASR_CONFIDENCE_FLOOR = 0.55
+
+
+def listen(db: Session, audio: bytes, *, locale: str = "en") -> tuple[str, float]:
     """Driver audio to text, through the same Deepgram seam M15 uses.
 
     AI-CONTEXT: the ears the copilot never had. Recognition was the BROWSER's
@@ -322,9 +329,9 @@ def listen(db: Session, audio: bytes, *, locale: str = "en") -> str:
     there was no microphone button that did anything, while a paid Deepgram key sat in the
     same settings object serving M15.
     """
-    transcript = ai.resolve_stt().transcribe(audio, locale=locale)
+    transcript, confidence = ai.resolve_stt().transcribe(audio, locale=locale)
     ai.record_audio_minutes(db, MODULE, ai.AiTask.stt, max(len(audio) / 320_000.0, 0.02))
-    return transcript
+    return transcript, confidence
 
 
 def handle_utterance(
@@ -349,8 +356,31 @@ def handle_utterance(
     surface shows them what it heard. That is the same argument Q-2 makes in M15 for
     showing a driver their own transcript.
     """
-    transcript = listen(db, audio, locale=locale)
+    transcript, confidence = listen(db, audio, locale=locale)
     ctx = {**(context or {}), "locale": locale}
+
+    # AI-CONTEXT: A LOW-CONFIDENCE TRANSCRIPT IS NOT A COMMAND. §14.5 says never pretend
+    # to understand, and this module can START THINGS — `_CONFIRM_INTENTS` exists because
+    # some of what a driver can say commits an action. Routing a guess is exactly the
+    # failure that rule names, and it is worse here than in M15: a misheard practice
+    # answer costs a score, a misheard copilot instruction costs a claim.
+    #
+    # Caught by running it: Deepgram returned `('one of my art', 0.73)` for "what am I
+    # owed" on the first real round trip. The answer is to say what we heard and ask
+    # again — never to act on it.
+    if confidence < ASR_CONFIDENCE_FLOOR:
+        spoken = _say(db, "unknown", locale)
+        return (
+            VoiceResponse(
+                "unknown",
+                spoken,
+                {"unclear": True, "confidence": round(confidence, 2)},
+                mode=interaction_mode(driving),
+                audio=speak(db, spoken, locale=locale) if driving else None,
+            ),
+            transcript,
+        )
+
     resp = route(db, account_id, transcript, ctx, driving=driving, provider=provider)
     return resp, transcript
 
