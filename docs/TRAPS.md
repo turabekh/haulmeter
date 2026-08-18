@@ -713,3 +713,33 @@ Distilled 2026-08-16 from the "things a later session will trip over" sections o
 `HANDOFF-119` through `HANDOFF-127` (25 KB, 9 sections, ~60% duplication). The originals are
 untouched — a handoff is a dated record. Numbers in *(italics)* name the handoff that first
 recorded the trap, or all of them where it was carried forward.
+
+86. **A lookup that matches content by its TEXT dies the day something starts improvising,
+    and it dies silently.** M15's coaching screen found the "replay the question you
+    missed" audio by matching the officer's transcript against the released
+    `PhraseVariant` rows. Correct while every line he spoke came out of that table.
+    The moment he composed his own (entry 194), the match never succeeded again,
+    `missed_question_audio` became structurally `None`, and the button stopped rendering
+    on every stop. **No error, no log, no red test** — `v-if` on a null is not a failure,
+    it is a button that was never there.
+
+    Grep for `.text ==`, `.transcript ==` and `next((x for x in pool if ...))` whenever
+    something upstream gains a generative path. The fix here was that the audio had been
+    sitting on the officer's own `Turn.audio_ref` the whole time — **the record of what
+    actually happened beats re-deriving it from the content library.**
+
+87. **"The play button doesn't work" is usually the app never admitting it was touched.**
+    `new Audio(src).play().catch(() => {})` is the pattern, and it has three faults at
+    once: the element is referenced by nothing, so a phone may collect it mid-clip; a
+    second tap talks over the first; and every rejection is swallowed, so a real bug
+    report arrives with **no evidence attached at all**.
+
+    Do not start by suspecting the URL. Drive the real screen with Playwright and
+    instrument `window.Audio` — record `created` / `playing` / `error` / resolved /
+    rejected per src. Here all seven buttons played correctly (HTTP 206, `playing`,
+    resolved) on desktop *and* a Pixel 5 profile, which is what redirected the search to
+    the buttons that were missing instead. A muted phone, a dead bluetooth route, an
+    expired signature and a broken URL are indistinguishable to a driver **and to you**
+    unless the tap changes something on screen. Give playback a `data-playing` state and
+    one-at-a-time semantics; the transcript surface already had it, the coach surface did
+    not, and only the second one got reported.

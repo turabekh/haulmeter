@@ -23,7 +23,7 @@
      DRIVING: `withdraws` — practice is talking out loud with a microphone, which is the
      same thing the session refuses at speed. -->
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Mic, Play } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
@@ -50,6 +50,8 @@ const isLast = computed(() => index.value >= plans.value.length - 1);
 
 let recorder = null;
 let chunks = [];
+let current = null;
+const playingUrl = ref(null);
 
 const audioSrc = (url) => (url ? `${API_BASE}${url}` : null);
 
@@ -67,9 +69,34 @@ async function load() {
 
 onMounted(load);
 
+// AI-CONTEXT: THE BUTTON THAT LOOKED BROKEN BECAUSE IT SAID NOTHING. This was
+// `new Audio(src).play().catch(() => {})` — fire-and-forget: the element was held by
+// nothing, so a phone was free to collect it mid-clip; two taps talked over each other;
+// and every failure was swallowed, which is why a driver reporting "the play buttons do
+// not work" left nothing behind to diagnose. Tapping now CHANGES THE BUTTON, so the tap
+// is acknowledged on screen whether or not sound reaches the ear — a muted phone and a
+// broken URL used to look identical, and neither looked like anything at all. Same
+// pattern as the transcript surface, deliberately: one clip at a time, a retained
+// reference, and playback that stops when the truck moves (Q-4).
+function stop() {
+  if (current) {
+    current.onended = null;
+    current.onerror = null;
+    current.pause();
+    current = null;
+  }
+  playingUrl.value = null;
+}
+
 function play(url) {
+  stop();
   const src = audioSrc(url);
-  if (src) new Audio(src).play().catch(() => {});
+  if (!src) return;
+  current = new Audio(src);
+  playingUrl.value = url;
+  current.onended = stop;
+  current.onerror = stop;
+  current.play().catch(stop);
 }
 
 async function startRetest() {
@@ -117,7 +144,14 @@ function next() {
   index.value += 1;
 }
 
-onBeforeUnmount(stopRetest);
+onBeforeUnmount(() => {
+  stopRetest();
+  stop();
+});
+
+watch(isDriving, (driving) => {
+  if (driving) stop();
+});
 </script>
 
 <template>
@@ -140,10 +174,13 @@ onBeforeUnmount(stopRetest);
           v-if="plan.missed_question_audio"
           class="coach__play"
           type="button"
-          @click="play(plan.missed_question_audio)"
+          :data-playing="playingUrl === plan.missed_question_audio"
+          @click="playingUrl === plan.missed_question_audio
+            ? stop() : play(plan.missed_question_audio)"
         >
           <Play :size="18" aria-hidden="true" />
-          <span>{{ t("roadside.coach.play") }}</span>
+          <span>{{ playingUrl === plan.missed_question_audio
+            ? t("roadside.transcript.stop") : t("roadside.coach.play") }}</span>
         </button>
       </section>
 
@@ -166,10 +203,13 @@ onBeforeUnmount(stopRetest);
           v-if="plan.explanation_audio"
           class="coach__play"
           type="button"
-          @click="play(plan.explanation_audio)"
+          :data-playing="playingUrl === plan.explanation_audio"
+          @click="playingUrl === plan.explanation_audio
+            ? stop() : play(plan.explanation_audio)"
         >
           <Play :size="18" aria-hidden="true" />
-          <span>{{ t("roadside.coach.play_explanation") }}</span>
+          <span>{{ playingUrl === plan.explanation_audio
+            ? t("roadside.transcript.stop") : t("roadside.coach.play_explanation") }}</span>
         </button>
       </template>
 
@@ -182,8 +222,10 @@ onBeforeUnmount(stopRetest);
               v-if="p.audio_url"
               class="coach__play"
               type="button"
-              :aria-label="t('roadside.coach.play')"
-              @click="play(p.audio_url)"
+              :data-playing="playingUrl === p.audio_url"
+              :aria-label="playingUrl === p.audio_url
+                ? t('roadside.transcript.stop') : t('roadside.coach.play')"
+              @click="playingUrl === p.audio_url ? stop() : play(p.audio_url)"
             >
               <Play :size="18" aria-hidden="true" />
             </button>
@@ -199,10 +241,13 @@ onBeforeUnmount(stopRetest);
           v-if="plan.model_answer_audio"
           class="coach__play"
           type="button"
-          @click="play(plan.model_answer_audio)"
+          :data-playing="playingUrl === plan.model_answer_audio"
+          @click="playingUrl === plan.model_answer_audio
+            ? stop() : play(plan.model_answer_audio)"
         >
           <Play :size="18" aria-hidden="true" />
-          <span>{{ t("roadside.coach.play") }}</span>
+          <span>{{ playingUrl === plan.model_answer_audio
+            ? t("roadside.transcript.stop") : t("roadside.coach.play") }}</span>
         </button>
       </section>
 
@@ -318,6 +363,10 @@ onBeforeUnmount(stopRetest);
   font-family: var(--font-sans);
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
+}
+.coach__play[data-playing="true"] {
+  border-color: var(--accent-fill);
+  color: var(--accent-fill);
 }
 .coach__mic {
   display: flex;

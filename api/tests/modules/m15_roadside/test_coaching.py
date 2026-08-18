@@ -51,11 +51,19 @@ def _session(db, account_id=None):
     )
 
 
-def _exchange(db, session, intent, asked, *, tags):
+def _recording(db):
+    """A real document: `Turn.audio_ref` is a foreign key, so a bare uuid4 asserts against
+    a row shape the database will not accept."""
+    from app.modules.m15_roadside.domain import audio as m15_audio
+
+    return m15_audio.store_driver_audio(db, b"officer-line-bytes")
+
+
+def _exchange(db, session, intent, asked, *, tags, officer_audio=None):
     """An officer turn and the driver turn that answered it."""
     officer = m.Turn(
         session_id=session.id, seq=1, speaker=m.Speaker.officer,
-        intent_id=intent.id, transcript=asked,
+        intent_id=intent.id, transcript=asked, audio_ref=officer_audio,
     )
     driver = m.Turn(
         session_id=session.id, seq=2, speaker=m.Speaker.driver,
@@ -81,6 +89,47 @@ def test_a_missed_intent_is_taught(db):
     assert plan is not None
     assert plan.missed_question == asked.text
     assert [v.text for v in plan.phrase_family] == ["How long you been behind the wheel?"]
+
+
+def test_the_improvised_question_is_still_replayable(db):
+    """FR5 step 1 is REPLAY THE MISSED QUESTION, and the improvising officer broke it.
+
+    The replay used to be found by matching the officer's words against the released
+    phrase variants — sound while every line the officer spoke came out of that table.
+    Since entry 194 he composes his own, so the match never succeeds and the button
+    silently stopped rendering: a driver reads the question they missed with no way to
+    hear it again. The audio was never missing — it is on the officer's own turn, the
+    exact recording the driver heard at the stop.
+    """
+    intent = _intent(db)
+    _variant(db, intent, "How many hours have you been driving today?")
+    session = _session(db)
+    spoken = _recording(db)
+    turn = _exchange(
+        db, session, intent,
+        "I understand the weather is nice. Now, how long have you been driving?",
+        tags=["INTENT_MISUNDERSTOOD"], officer_audio=spoken,
+    )
+
+    plan = coaching.coaching_for(db, turn=turn, locale="uz")
+
+    assert plan.missed_question_audio == spoken
+
+
+def test_a_scripted_question_replays_its_own_recording(db):
+    """The scripted officer speaks a released variant, and that variant's audio is what
+    the driver heard. Reading it off the turn keeps working for him too."""
+    intent = _intent(db)
+    asked = _variant(db, intent, "How many hours have you been driving today?")
+    spoken = _recording(db)
+    turn = _exchange(
+        db, _session(db), intent, asked.text,
+        tags=["INTENT_MISUNDERSTOOD"], officer_audio=spoken,
+    )
+
+    plan = coaching.coaching_for(db, turn=turn, locale="uz")
+
+    assert plan.missed_question_audio == spoken
 
 
 def test_what_could_not_be_heard_is_never_coached(db):

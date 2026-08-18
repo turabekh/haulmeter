@@ -102,6 +102,14 @@ def coaching_for(db: DbSession, *, turn: Turn, locale: str) -> CoachingPlan | No
         .limit(1)
     )
     asked_text = officer.transcript if officer is not None else ""
+    # AI-CONTEXT: FR5 STEP 1 IS REPLAY THE MISSED QUESTION, AND IT IS THE OFFICER'S OWN
+    # RECORDING. It used to be found by matching his words against the released variants,
+    # which held while every line he spoke came out of that table. Since entry 194 he
+    # composes his own, the match never succeeds, and the button silently stopped
+    # rendering — a driver reads the question they missed with no way to hear it. The
+    # audio was never absent; it is on his turn, the exact sound the driver heard at the
+    # stop, which is a better replay than a variant's rendering of the same sentence.
+    asked_audio = officer.audio_ref if officer is not None else None
 
     pool = teachable_variants(db, intent.id)
     family = [v for v in pool if v.text != asked_text][:PHRASE_FAMILY_MAX]
@@ -115,7 +123,7 @@ def coaching_for(db: DbSession, *, turn: Turn, locale: str) -> CoachingPlan | No
     return CoachingPlan(
         intent_key=intent.key,
         missed_question=asked_text,
-        missed_question_audio=asked_variant.audio_ref if asked_variant else None,
+        missed_question_audio=asked_audio or (asked_variant.audio_ref if asked_variant else None),
         explanation=_explanation(db, intent.id, locale),
         explanation_audio=_explanation_audio(db, intent.id, locale),
         glosses=_glosses(db, intent.id, locale),

@@ -289,6 +289,72 @@ describe("Roadside — the teaching loop (FR5)", () => {
     retest_question: "How long you been behind the wheel?",
   };
 
+  it("a tap changes the button, so the driver knows it registered", async () => {
+    // AI-CONTEXT: THE DEFECT THE OWNER REPORTED AS "the play buttons do not work". Every
+    // one of them did play — verified end to end against production, HTTP 206 and audible
+    // — but the screen said NOTHING back on tap, so a phone on silent, a dead bluetooth
+    // route and a genuinely broken URL were indistinguishable from each other and from a
+    // button that did nothing at all. The old handler additionally swallowed every
+    // rejection, which is why a real report left nothing behind to diagnose.
+    const played = [];
+    vi.stubGlobal("Audio", class {
+      constructor(src) { this.src = src; played.push(src); }
+      play() { return Promise.resolve(); }
+      pause() {}
+    });
+    stubFetch({
+      "/roadside/session/sess-1/coaching": jsonOk({
+        coaching: [{ ...PLAN, missed_question_audio: "/media/document/mq" }],
+      }),
+    });
+    const w = mount(RoadsideCoachSurface, {
+      global: { plugins: [await at("roadside-coach", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    const button = w.find(".coach__play");
+    expect(button.attributes("data-playing")).toBe("false");
+
+    await button.trigger("click");
+    await flushPromises();
+
+    expect(played).toHaveLength(1);
+    expect(w.find(".coach__play").attributes("data-playing")).toBe("true");
+    expect(w.find(".coach__play").text()).toContain(messages["roadside.transcript.stop"]);
+  });
+
+  it("plays one clip at a time — a second tap does not talk over the first", async () => {
+    const paused = [];
+    vi.stubGlobal("Audio", class {
+      constructor(src) { this.src = src; }
+      play() { return Promise.resolve(); }
+      pause() { paused.push(this.src); }
+    });
+    stubFetch({
+      "/roadside/session/sess-1/coaching": jsonOk({
+        coaching: [{
+          ...PLAN,
+          missed_question_audio: "/media/document/mq",
+          phrase_family: [{ text: "How long you been behind the wheel?", audio_url: "/media/document/pf" }],
+        }],
+      }),
+    });
+    const w = mount(RoadsideCoachSurface, {
+      global: { plugins: [await at("roadside-coach", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    const buttons = w.findAll(".coach__play");
+    await buttons[0].trigger("click");
+    await flushPromises();
+    await buttons[1].trigger("click");
+    await flushPromises();
+
+    expect(paused.some((src) => src.endsWith("/media/document/mq"))).toBe(true);
+    expect(w.findAll(".coach__play")[0].attributes("data-playing")).toBe("false");
+    expect(w.findAll(".coach__play")[1].attributes("data-playing")).toBe("true");
+  });
+
   it("says the coaching is not in your language yet, rather than showing English", async () => {
     // Q-9. The server sends `explanation: null`; a surface that filled that gap from an
     // English row would defeat the law in the one place a domain test cannot see.
