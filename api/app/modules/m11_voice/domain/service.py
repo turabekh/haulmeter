@@ -75,7 +75,10 @@ class VoiceResponse:
     data: dict = field(default_factory=dict)
     needs_confirmation: bool = False
     mode: str = "visual"  # voice while driving, visual when stopped
-    audio_ref: str | None = None
+    # AI-CONTEXT: BYTES, and the field was renamed from `audio_ref` on purpose. `audio_ref`
+    # named a thing that could be fetched, and for its whole life it held `audio://…`,
+    # which could not. A name that promises a resource is how a fake survives review.
+    audio: bytes | None = None
 
 
 @dataclass
@@ -220,7 +223,7 @@ def route(
             {"deferred": True},
             needs_confirmation=True,
             mode="voice",
-            audio_ref=_maybe_tts(db, provider, spoken, context),
+            audio=speak(db, spoken, locale=context.get("locale", "en")),
         )
     spoken, data = _dispatch(db, account_id, intent, context)
     return VoiceResponse(
@@ -229,29 +232,127 @@ def route(
         data,
         needs_confirmation=needs_conf,
         mode=interaction_mode(driving),
-        audio_ref=_maybe_tts(db, provider, spoken, context) if driving else None,
+        audio=speak(db, spoken, locale=context.get("locale", "en")) if driving else None,
     )
 
 
-def _maybe_tts(db: Session, provider, text: str, context: dict) -> str | None:
-    if provider is None:
+# AI-CONTEXT: the copilot's own voice map, and it is NOT M15's.
+#
+# `m15.coach_voices` carries `uz` alone, because M15 speaks the driver's language only to
+# explain a mistake; everything else it says is a US officer. The copilot answers the
+# driver in whatever language the driver asked in, so it needs all six — and a locale
+# missing from this map is silence, not English (§14.5, and the same argument Q-9 makes
+# for M15's coaching text).
+#
+# EVERY NAME HERE WAS VERIFIED AGAINST AZURE'S LIVE VOICE LIST, not remembered. A voice
+# name that does not exist is a 502 at the moment a driver asks a question, which is the
+# worst possible place to discover a typo — the officer voice's own comment records that
+# lesson about styles. Config, not a constant, so an operator can change a voice without
+# a deploy.
+COPILOT_VOICES_KEY = "m11.copilot_voices"
+COPILOT_VOICES_DEFAULT = {
+    "en": "en-US-AriaNeural",
+    # es-US rather than es-ES: the driver is in the United States and so is the Spanish
+    "es": "es-US-PalomaNeural",
+    "ru": "ru-RU-SvetlanaNeural",
+    # the same voice M15 coaches in, deliberately — one product, one Uzbek voice
+    "uz": "uz-UZ-SardorNeural",
+    "pa": "pa-IN-OjasNeural",
+    "so": "so-SO-MuuseNeural",
+}
+
+
+def copilot_voice(db: Session, locale: str) -> dict | None:
+    """The voice for an answer in `locale`, or None if we cannot speak it."""
+    from app.foundation.f13_flags import public as flags
+
+    voices = flags.get_config(db, COPILOT_VOICES_KEY, COPILOT_VOICES_DEFAULT) or {}
+    name = voices.get((locale or "").split("-")[0])
+    if not name:
         return None
-    return ai.synthesize(db, provider, MODULE, text, locale=context.get("locale", "en"))
+    # no style and no rate, for the reason M15's `coach_voice` records: the emotional-style
+    # inventory differs per voice and a style a voice lacks is a 502.
+    return {"voice": str(name), "style": None, "rate": None}
+
+
+def speak(db: Session, text: str, *, locale: str = "en") -> bytes | None:
+    """The answer as real audio, or None when we genuinely cannot say it.
+
+    AI-CONTEXT: THIS REPLACED A FAKE THAT WAS LIVE ON PRODUCTION. `_maybe_tts` called
+    `ai.synthesize`, which lands on `AnthropicModelProvider.synthesize` — and that
+    delegates to `self._fallback`, the `FakeModelProvider`, which returns
+    `audio://{locale}/{sha256[:12]}`. Every spoken answer this module ever produced was a
+    hash in a scheme nothing serves, nothing stores and nothing plays; the UI never read
+    the field, so it was never even visible as a broken link (entry 209).
+
+    RETURNS BYTES, NOT A REF, and that is the one place this diverges from M15. M15 stores
+    every clip in F6 because its content is authored once and heard by thousands — the
+    storage pays for itself on the second listen. A copilot answer is unique to one driver
+    and heard once, so storing it would add a document per question, a retention class and
+    a signed URL, all to serve a file nobody will ever request again. The bytes ride the
+    response.
+
+    None has one meaning only: we cannot speak this language. It is never a fake.
+    """
+    if not text or not text.strip():
+        return None
+    if not ai.tts_configured():
+        # a dev box without Azure is not a fault; the surface falls back to its own voice
+        return None
+    settings = copilot_voice(db, locale)
+    if settings is None:
+        return None
+    try:
+        audio = ai.resolve_tts().synthesize(text, locale=locale, **settings)
+    except Exception:
+        # a voice we could not fetch is silence, not an error a driver can act on — the
+        # answer is already on screen and the text is the product
+        return None
+    # metered against m11's own budget, not m15's: the copilot's audio is per-ask and
+    # uncached, which is exactly the spend worth watching separately
+    ai.record_audio_minutes(db, MODULE, ai.AiTask.tts, max(len(audio) / 320_000.0, 0.02))
+    return audio
+
+
+def listen(db: Session, audio: bytes, *, locale: str = "en") -> str:
+    """Driver audio to text, through the same Deepgram seam M15 uses.
+
+    AI-CONTEXT: the ears the copilot never had. Recognition was the BROWSER's
+    `SpeechRecognition`, which does not exist in Safari on iOS at all — so on an iPhone
+    there was no microphone button that did anything, while a paid Deepgram key sat in the
+    same settings object serving M15.
+    """
+    transcript = ai.resolve_stt().transcribe(audio, locale=locale)
+    ai.record_audio_minutes(db, MODULE, ai.AiTask.stt, max(len(audio) / 320_000.0, 0.02))
+    return transcript
 
 
 def handle_utterance(
     db: Session,
     provider,
     account_id,
-    audio_ref: str,
+    audio: bytes,
     locale: str = "en",
     context: dict | None = None,
     driving: bool = False,
-) -> VoiceResponse:
-    # M11-FR1/FR6: STT in the driver's locale, then route the transcript
-    transcript = ai.transcribe(db, provider, MODULE, audio_ref, locale=locale)
+) -> tuple[VoiceResponse, str]:
+    """Real driver audio in; the routed answer and what we heard, out.
+
+    AI-CONTEXT: THIS TOOK AN `audio_ref: str` AND HAD NO CALLER. It passed that ref to
+    `ai.transcribe`, which on the live provider delegates to `FakeModelProvider` and
+    returns the literal string `"[uz] transcript of <ref>"` — so the module's only STT path
+    produced a sentence describing itself, and nothing in production ever ran it. The
+    copilot's real ears were the browser's, which do not exist on iOS (entry 209).
+
+    RETURNS THE TRANSCRIPT ALONGSIDE THE ANSWER, deliberately. §14.5 says never pretend to
+    understand, and a driver cannot tell a wrong answer from a misheard question unless the
+    surface shows them what it heard. That is the same argument Q-2 makes in M15 for
+    showing a driver their own transcript.
+    """
+    transcript = listen(db, audio, locale=locale)
     ctx = {**(context or {}), "locale": locale}
-    return route(db, account_id, transcript, ctx, driving=driving, provider=provider)
+    resp = route(db, account_id, transcript, ctx, driving=driving, provider=provider)
+    return resp, transcript
 
 
 # --- Comms ghostwriter (M11-FR3) ---

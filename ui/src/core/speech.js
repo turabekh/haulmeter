@@ -19,110 +19,23 @@ const BCP47 = {
 export function localeTag(locale) {
   return BCP47[locale] || "en-US";
 }
-
-function RecognitionCtor() {
-  if (typeof window === "undefined") return null;
-  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
-}
-
-// AI-CONTEXT: a constructor that exists but can never start is NOT support.
+// AI-CONTEXT: THE RECOGNITION HALF OF THIS FILE IS GONE (decision 209).
 //
-// Chrome exposes `webkitSpeechRecognition` in insecure contexts and then refuses to
-// start one — so this returned true, the sheet opened, called start(), and failed.
-// That is the shape of "listening still not working at all": the app served over a
-// LAN IP (or any plain http:// host) rather than localhost or HTTPS. `isSecureContext`
-// is the browser's own answer to the question we were guessing at.
+// `recognitionSupported` / `createRecognizer` / `speechFailureKind` and their careful
+// error taxonomy were removed, not because the code was wrong — it was good, and it had
+// already been fixed twice for real defects (entries 90, 91) — but because
+// `SpeechRecognition` DOES NOT EXIST in Safari on iOS. Every one of those failure paths
+// was elaborate handling for a Chrome-only API on a product whose drivers carry iPhones.
 //
-// Reported as UNSUPPORTED rather than as an error, because the difference matters to
-// the driver: an error invites a retry, and this cannot succeed until the page is
-// served differently. §14.5 degrades to typing, and now says why.
-export function recognitionSupported() {
-  if (typeof window === "undefined") return false;
-  if (window.isSecureContext === false) return false;
-  return !!RecognitionCtor();
-}
-
-// why the mic is not on offer, for a sheet that would otherwise just hide it
-export function recognitionUnavailableReason() {
-  if (typeof window === "undefined") return "unavailable";
-  if (window.isSecureContext === false) return "insecure";
-  return RecognitionCtor() ? null : "unsupported";
-}
-
-// A single-utterance recognizer: start() listens, calls onResult with the final
-// transcript, onError once on failure (permission/no-match -> §14.5 re-ask),
-// onEnd when the mic closes. Returns null when unsupported so callers hide the mic.
-export function createRecognizer(locale, { onResult, onError, onEnd } = {}) {
-  const Ctor = RecognitionCtor();
-  if (!Ctor) return null;
-  const rec = new Ctor();
-  rec.lang = localeTag(locale);
-  rec.interimResults = false;
-  rec.maxAlternatives = 1;
-  rec.continuous = false;
-  rec.onresult = (e) => {
-    const transcript = e?.results?.[0]?.[0]?.transcript?.trim();
-    if (transcript && onResult) onResult(transcript);
-  };
-  rec.onerror = (e) => {
-    if (onError) onError(e?.error || "error");
-  };
-  // AI-CONTEXT: `nomatch` fires when the service heard audio and could not resolve
-  // it — the ONE case "didn't catch that" is literally true. It is not an error, so
-  // without this the sheet would show nothing and keep claiming to listen.
-  rec.onnomatch = () => {
-    if (onError) onError("no-match");
-  };
-  rec.onend = () => {
-    if (onEnd) onEnd();
-  };
-  return {
-    // AI-CONTEXT: a failed start must REACH the caller (§23 entry 90).
-    //
-    // This swallowed the throw with a comment claiming "the caller's error path
-    // handles it" — and it does not: `rec.start()` throwing synchronously means
-    // `onerror` never fires, so the sheet sat on "Listening…" forever with a dead
-    // mic. That is exactly what the owner reported. The catch is the caller's error
-    // path now, rather than a comment pointing at one.
-    start() {
-      try {
-        rec.start();
-        return true;
-      } catch {
-        if (onError) onError("start-failed");
-        return false;
-      }
-    },
-    stop() {
-      try {
-        rec.stop();
-      } catch {
-        /* not started */
-      }
-    },
-  };
-}
-
-// AI-CONTEXT: the Web Speech spec's error strings, sorted by what a DRIVER can do
-// about them. They were all collapsed into one re-ask — so a phone with no
-// microphone, and a device that cannot reach the recognition service, both told the
-// driver to "try again", forever, at something that could never work. §12.4 asks for
-// what happened and what to do; "try again" is only honest for the last group.
-export const SPEECH_FAILURE = {
-  "not-allowed": "blocked", // permission refused or never granted
-  "service-not-allowed": "blocked",
-  "audio-capture": "no_mic", // no microphone on the device
-  network: "network", // Chrome ships audio to a remote recogniser; it is unreachable
-  "start-failed": "unavailable", // start() threw — no gesture, or already running
-  "language-not-supported": "unavailable",
-  "no-speech": "retry", // heard nothing
-  "no-match": "retry", // heard something, could not resolve it
-  aborted: "retry",
-};
-
-export function speechFailureKind(error) {
-  return SPEECH_FAILURE[error] || "retry";
-}
+// The copilot records with `MediaRecorder` and transcribes on the server through the same
+// Deepgram seam M15 uses. It was deleted rather than left in place because its only
+// remaining callers were its own tests, and code kept alive by its tests is exactly what
+// a later session wires back in.
+//
+// WHAT SURVIVES IS SYNTHESIS, and only as a fallback: the answer's real voice is Azure
+// mp3 on the response, and this speaks when a box has no Azure key. It cannot speak
+// Uzbek, Somali or Punjabi on any mainstream handset — which is the whole reason the
+// server took over.
 
 export function synthesisSupported() {
   return (

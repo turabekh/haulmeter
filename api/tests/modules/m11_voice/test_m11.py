@@ -291,16 +291,31 @@ def test_claim_assistant_next_actions(db):
     assert by_kind["tonu"].next_action == "escalate with your GPS evidence"  # disputed
 
 
-def test_handle_utterance_transcribes_then_routes(db):
+def test_handle_utterance_transcribes_then_routes(db, monkeypatch):
+    """Real bytes in, routed answer plus the transcript out.
+
+    AI-CONTEXT: this used to pass `audio_ref="what am I owed"` and rely on the fake STT
+    echoing that string back as the transcript — so the test's own input was its expected
+    output, and the assertion held whether or not any recogniser existed. It could not
+    have failed when the module had no reachable STT path, which it did not (entry 209).
+    The recogniser is stubbed at the seam now; what is under test is that the transcript
+    reaches the router and comes back with the answer.
+    """
+    from app.modules.m11_voice.domain import service
+
     driver = _driver(db)
-    provider = ai.FakeModelProvider()
-    # the fake STT echoes the audio_ref into the transcript; drive a real intent
-    resp = m11.handle_utterance(
-        db, provider, driver.id, audio_ref="what am I owed", locale="es", driving=True
+    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en": "what am I owed")
+
+    resp, transcript = m11.handle_utterance(
+        db, ai.FakeModelProvider(), driver.id, b"\x00fake-webm-bytes",
+        locale="es", driving=True,
     )
+
+    assert transcript == "what am I owed"
     assert resp.intent == "money_owed"
     assert resp.mode == "voice"
-    assert resp.audio_ref is not None and resp.audio_ref.startswith("audio://")
+    # the answer is BYTES or nothing — never a `audio://` string
+    assert resp.audio is None or isinstance(resp.audio, bytes)
 
 
 # --- N-01: the copilot answers in the language it understood ---
@@ -384,3 +399,64 @@ def test_an_unregistered_catalogue_still_speaks(db):
     resp = m11.route(db, driver.id, "how many points do I have")
     assert resp.intent == "points_balance"
     assert resp.spoken == "You have 0 points."
+
+
+# --- the copilot's ears and mouth (decision 209) ---------------------------------------
+#
+# AI-CONTEXT: `audio_ref` WAS A FAKE ON PRODUCTION and nothing was red.
+#
+# `_maybe_tts` called `ai.synthesize`, which reaches the live provider's `synthesize` —
+# and `AnthropicModelProvider.synthesize` delegates to `self._fallback`, the
+# `FakeModelProvider`, whose implementation is:
+#
+#     return f"audio://{locale}/{hashlib.sha256(text.encode()).hexdigest()[:12]}"
+#
+# So every spoken answer the API ever returned was a hash in a scheme nothing serves. The
+# UI never read the field, so the fake was never even visible as a broken link — the
+# HANDOFF-138 §2 pattern once more. These were watched failing against that code.
+
+
+def test_a_spoken_answer_is_never_a_fake_uri(db):
+    """The single assertion that would have caught it: `audio://` is not audio."""
+    from app.modules.m11_voice.domain import service
+
+    spoken = service.speak(db, "Ikki soat kutdingiz.", locale="uz")
+
+    assert spoken is None or isinstance(spoken, bytes)
+    assert not (isinstance(spoken, str) and spoken.startswith("audio://"))
+
+
+def test_the_fake_provider_can_never_supply_a_voice(db):
+    """A fake is right for a test and is never a driver's answer.
+
+    The old path took whatever the provider returned. This one goes to the Azure adapter
+    or returns None — there is no third answer, and no provider can inject one.
+    """
+    import inspect
+
+    from app.foundation.f09_ai_gateway.domain.provider import FakeModelProvider
+    from app.modules.m11_voice.domain import service
+
+    fake = FakeModelProvider()
+    assert fake.synthesize("hello", "uz").startswith("audio://")  # unchanged, for tests
+
+    # ...and the copilot cannot consult it: `speak` takes no provider at all. This is a
+    # structural claim rather than a behavioural one on purpose — the old bug was that a
+    # provider COULD supply the voice, and the fix is that the parameter is gone.
+    assert "provider" not in inspect.signature(service.speak).parameters
+
+
+def test_every_launch_locale_has_a_voice_or_honestly_has_none(db):
+    """A locale we cannot speak returns None and keeps its text (§14.5).
+
+    Q: why assert the map rather than the synthesis? Because a WRONG Azure voice name is
+    a 502 at the moment a driver asks, and the names in this map were verified against
+    the live voice list rather than remembered.
+    """
+    from app.modules.m11_voice.domain import service
+
+    for locale in ("en", "es", "ru", "uz", "pa", "so"):
+        settings = service.copilot_voice(db, locale)
+        assert settings is not None, f"{locale} has no voice"
+        assert settings["voice"].startswith(("en-", "es-", "ru-", "uz-", "pa-", "so-"))
+    assert service.copilot_voice(db, "xx") is None

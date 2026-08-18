@@ -170,55 +170,12 @@ describe("PresetChips (design-prd §11.3)", () => {
 // Reported twice by the owner as "listening but not working" — first because a failed
 // start() left `listening` true forever, then because a mic that CANNOT work in an
 // insecure context still presented itself as one.
-describe("speech availability (§14.5 / §12.4)", () => {
-  it("does not call an unusable recogniser 'supported'", async () => {
-    // Chrome exposes webkitSpeechRecognition over plain http and then refuses to
-    // start one. A constructor that exists but can never run is not support.
-    const speech = await import("../src/core/speech.js");
-    const orig = Object.getOwnPropertyDescriptor(window, "isSecureContext");
-    Object.defineProperty(window, "isSecureContext", { value: false, configurable: true });
-    try {
-      expect(speech.recognitionSupported()).toBe(false);
-      expect(speech.recognitionUnavailableReason()).toBe("insecure");
-    } finally {
-      if (orig) Object.defineProperty(window, "isSecureContext", orig);
-    }
-  });
-
-  it("sorts failures by what the DRIVER can do about them", async () => {
-    const { speechFailureKind } = await import("../src/core/speech.js");
-    // every one of these used to say "didn't catch that — try again", which invited
-    // a retry at something that could not succeed
-    expect(speechFailureKind("audio-capture")).toBe("no_mic");
-    expect(speechFailureKind("network")).toBe("network");
-    expect(speechFailureKind("not-allowed")).toBe("blocked");
-    expect(speechFailureKind("service-not-allowed")).toBe("blocked");
-    expect(speechFailureKind("start-failed")).toBe("unavailable");
-    // and the two where re-asking IS the right answer
-    expect(speechFailureKind("no-speech")).toBe("retry");
-    expect(speechFailureKind("no-match")).toBe("retry");
-  });
-
-  it("reports a failed start instead of swallowing it", async () => {
-    // the defect behind "says listening but is not working": start() threw, the catch
-    // ate it, onerror never fired, and `listening` had already been set true
-    const { createRecognizer } = await import("../src/core/speech.js");
-    class Throwing {
-      start() { throw new Error("no gesture"); }
-      stop() {}
-    }
-    const prev = window.SpeechRecognition;
-    window.SpeechRecognition = Throwing;
-    try {
-      const errors = [];
-      const rec = createRecognizer("en", { onError: (e) => errors.push(e) });
-      expect(rec.start()).toBe(false);
-      expect(errors).toEqual(["start-failed"]);
-    } finally {
-      window.SpeechRecognition = prev;
-    }
-  });
-});
+// AI-CONTEXT: "speech availability" lived here — three tests over `recognitionSupported`,
+// `speechFailureKind` and `createRecognizer`'s start path, each written for a real defect
+// (entries 90, 91). They went with the code at decision 209: `SpeechRecognition` does not
+// exist in Safari on iOS, so the whole taxonomy was careful handling of a Chrome-only API
+// on a product whose drivers carry iPhones. The copilot's recognition is Deepgram's now
+// and is asserted in "VoiceSheet — copilot ask/answer" below.
 
 describe("FacilityCard (design-prd §10.1)", () => {
   // AI-CONTEXT: finding F10 — the detention badge's SAMPLE SIZE, which is rendered and
@@ -1259,22 +1216,10 @@ describe("FacilityProfileSurface — driver Q&A (M10-FR4)", () => {
 });
 
 describe("VoiceSheet — copilot ask/answer (M11-FR1)", () => {
-  // AI-CONTEXT: these mount a sheet that is meant to have a WORKING recogniser, and
-  // `recognitionSupported()` now also requires a secure context (§23 entry 91) —
-  // because Chrome exposes the constructor over plain http and then refuses to start
-  // it, which is what "listening but not working" turned out to be. The test runner
-  // is not a browsing context, so it has to say which case it is simulating. Three
-  // tests failed on this guard and they were RIGHT to: they had been asserting that a
-  // mic works without ever stating the condition under which one can.
-  let secureCtx;
-  beforeEach(() => {
-    secureCtx = Object.getOwnPropertyDescriptor(window, "isSecureContext");
-    Object.defineProperty(window, "isSecureContext", { value: true, configurable: true });
-  });
-  afterEach(() => {
-    if (secureCtx) Object.defineProperty(window, "isSecureContext", secureCtx);
-    else delete window.isSecureContext;
-  });
+  // AI-CONTEXT: the secure-context dance that used to sit here is gone with the
+  // recogniser (decision 209). `MediaRecorder` and `getUserMedia` need a secure context
+  // too, but the browser enforces that by refusing the mic — which the sheet already
+  // handles as a stated refusal rather than a puzzle, so nothing here has to simulate it.
 
   it("asks over /voice/ask and shows the intent-routed spoken answer", async () => {
     const fetchStub = vi.fn().mockResolvedValue({
@@ -1312,69 +1257,125 @@ describe("VoiceSheet — copilot ask/answer (M11-FR1)", () => {
     }
   });
 
-  function installSpeech() {
+  // AI-CONTEXT: these three drove `SpeechRecognition` — a Chrome-only API that does not
+  // exist in Safari on iOS, which is why the copilot did nothing on an iPhone and why
+  // decision 209 replaced it with `MediaRecorder` -> `/voice/listen` -> Deepgram. The
+  // stub is now a recorder and the assertions are about the SERVER path.
+  //
+  // `speechSynthesis` is stubbed only where the fallback is under test: the answer's real
+  // voice arrives as mp3 bytes on the response, and the browser voice is what a box with
+  // no Azure key degrades to.
+  function installRecorder() {
     const instances = [];
-    class FakeRecognition {
-      constructor() { instances.push(this); }
-      start() { this.started = true; }
-      stop() { if (this.onend) this.onend(); }
+    class FakeRecorder {
+      constructor() {
+        this.state = "inactive";
+        instances.push(this);
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        this.state = "inactive";
+        if (this.ondataavailable) this.ondataavailable({ data: new Blob(["x"]) });
+        if (this.onstop) this.onstop();
+      }
     }
     const speak = vi.fn();
-    vi.stubGlobal("SpeechRecognition", FakeRecognition);
+    vi.stubGlobal("MediaRecorder", FakeRecorder);
     vi.stubGlobal("speechSynthesis", { speak, cancel: vi.fn() });
     vi.stubGlobal("SpeechSynthesisUtterance", class { constructor(text) { this.text = text; } });
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [] }) },
+      configurable: true,
+    });
     return { instances, speak };
   }
 
-  it("on-device: captures speech via the mic and routes it to /voice/ask (§14)", async () => {
-    const { instances } = installSpeech();
+  it("records the driver and sends the audio to /voice/listen, not the browser recogniser", async () => {
+    const { instances } = installRecorder();
     const fetchStub = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ intent: "money_owed", spoken: "You're owed $150.00." }),
+      json: () => Promise.resolve({
+        intent: "money_owed", spoken: "You're owed $150.00.", transcript: "what am I owed",
+      }),
     });
     vi.stubGlobal("fetch", fetchStub);
     try {
       const w = mount(VoiceSheet);
       await flushPromises();
-      expect(w.find(".voice__mic").exists()).toBe(true); // mic shown when supported
-      expect(instances[0].started).toBe(true); // auto-listens on open (voice-first)
-      instances[0].onresult({ results: [[{ transcript: "what am I owed" }]] });
+      expect(w.find(".voice__mic").exists()).toBe(true);
+      // auto-listens on open: voice-first, and hands-free because nobody holds a button
+      // while driving
+      expect(instances[0].state).toBe("recording");
+      instances[0].stop();
       await flushPromises();
-      expect(callTo(fetchStub, "/voice/ask")[0]).toContain("/voice/ask");
+      expect(callTo(fetchStub, "/voice/listen")[0]).toContain("/voice/listen");
       expect(w.find(".voice__answer").text()).toContain("$150.00");
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it("on-device: speaks the answer aloud while DRIVING (§14.1 audio-first)", async () => {
-    const { instances, speak } = installSpeech();
-    const fetchStub = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ intent: "help", spoken: "Ask me anything." }),
+  it("plays the server's own voice while DRIVING, never the browser's (§14.1)", async () => {
+    const { instances, speak } = installRecorder();
+    const played = [];
+    vi.stubGlobal("Audio", class {
+      constructor(src) { played.push(src); }
+      play() { return Promise.resolve(); }
+      pause() {}
     });
-    vi.stubGlobal("fetch", fetchStub);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        intent: "help", spoken: "Ask me anything.", audio_b64: "SUQzBAA=",
+      }),
+    }));
     try {
       const w = mount(VoiceSheet, { props: { driving: true } });
       await flushPromises();
-      instances[0].onresult({ results: [[{ transcript: "help" }]] });
+      instances[0].stop();
       await flushPromises();
-      expect(speak).toHaveBeenCalled();
+      expect(played[0]).toContain("data:audio/mpeg;base64,SUQzBAA=");
+      // the whole point: the browser voice has no Uzbek and is not consulted
+      expect(speak).not.toHaveBeenCalled();
+      w.unmount();
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it("on-device: unrecognized speech shows one re-ask, then typing still works (§14.5)", async () => {
-    const { instances } = installSpeech();
-    vi.stubGlobal("fetch", vi.fn());
+  it("falls back to the browser voice only when the server sent no audio", async () => {
+    const { instances, speak } = installRecorder();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ intent: "help", spoken: "Ask me anything.", audio_b64: null }),
+    }));
+    try {
+      const w = mount(VoiceSheet, { props: { driving: true } });
+      await flushPromises();
+      instances[0].stop();
+      await flushPromises();
+      // a robot reading English beats silence on a box with no Azure key
+      expect(speak).toHaveBeenCalled();
+      w.unmount();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("a failed recognition says so and leaves typing working (§14.5)", async () => {
+    const { instances } = installRecorder();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
     try {
       const w = mount(VoiceSheet);
       await flushPromises();
-      instances[0].onerror({ error: "no-speech" });
+      instances[0].stop();
       await flushPromises();
-      expect(w.find(".voice__hint").text()).toBeTruthy(); // graceful re-ask
-      expect(w.find(".voice__input").exists()).toBe(true); // visual fallback available
+      // never pretend to understand: no answer is rendered, and the reason is stated
+      expect(w.find(".voice__answer").exists()).toBe(false);
+      expect(w.find(".voice__hint").text()).toBeTruthy();
+      expect(w.find(".voice__input").exists()).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }

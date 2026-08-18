@@ -5,7 +5,9 @@ model provider is a dev seam (FakeModelProvider) wired to a real STT/TTS/LLM at
 activation.
 """
 
-from fastapi import APIRouter, Depends
+import base64
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -29,20 +31,48 @@ class AskIn(BaseModel):
     locale: str | None = None
 
 
+class ListenIn(BaseModel):
+    """A recording from the driver's microphone.
+
+    AI-CONTEXT: base64 rather than multipart, matching M15's coaching attempt — the client
+    is a PWA holding a `MediaRecorder` blob, and one JSON body keeps the offline write
+    queue (F12) able to carry the request unchanged.
+    """
+
+    audio_b64: str
+    driving: bool = False
+    context: dict = {}
+    locale: str | None = None
+
+
 class DraftIn(BaseModel):
     kind: str
     facts: str
     tone: str = "neutral"
 
 
-def _response(resp: m11.VoiceResponse) -> dict:
+def _response(resp: m11.VoiceResponse, transcript: str | None = None) -> dict:
+    """AI-CONTEXT: `audio_b64` REPLACED `audio_ref`, and the rename is the fix.
+
+    `audio_ref` held `audio://{locale}/{sha256[:12]}` — a `FakeModelProvider` string in a
+    scheme nothing serves — on production, for the module's whole life. A field named
+    `_ref` promises something fetchable, which is precisely how the fake survived: no
+    consumer ever tried. `audio_b64` either carries mp3 bytes or is absent, and there is
+    no third state to mistake for one (entry 209).
+
+    The bytes ride the response rather than F6 because a copilot answer is heard once by
+    one driver — see `service.speak`.
+    """
     return {
         "intent": resp.intent,
         "spoken": resp.spoken,
         "data": resp.data,
         "needs_confirmation": resp.needs_confirmation,
         "mode": resp.mode,
-        "audio_ref": resp.audio_ref,
+        "audio_b64": base64.b64encode(resp.audio).decode() if resp.audio else None,
+        # what we heard, so a driver can tell a wrong answer from a misheard question
+        # (§14.5 — never pretend to understand)
+        "transcript": transcript,
     }
 
 
@@ -65,6 +95,49 @@ def ask(
         provider=_PROVIDER,
     )
     return _response(resp)
+
+
+@router.post("/listen")
+def listen(
+    body: ListenIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Microphone in, answer out — the copilot's ears (M11-FR1/FR6).
+
+    AI-CONTEXT: the module HAD no reachable STT path. `handle_utterance` existed, was
+    exported, was tested, and no endpoint called it — and it passed an `audio_ref` to a
+    provider method that on the live provider returns `"[uz] transcript of <ref>"`. The
+    real recognition was the browser's `SpeechRecognition`, which does not exist in Safari
+    on iOS, so an iPhone driver had a microphone button that did nothing. This routes the
+    same Deepgram seam M15 has used since Session A (entry 209).
+
+    Everything after the transcript is the EXISTING router, untouched: the same intents,
+    the same F15 locale precedence, the same M11-FR2 motion policy. Changing the ears was
+    never a reason to re-litigate the brain.
+    """
+    try:
+        audio = base64.b64decode(body.audio_b64, validate=True)
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "audio_b64 is not base64"
+        ) from exc
+    if not audio:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "empty recording")
+
+    locale = body.locale or body.context.get("locale") or f15.get_user_locale(db, account)
+    try:
+        resp, transcript = m11.handle_utterance(
+            db, _PROVIDER, account.id, audio,
+            locale=locale, context={**body.context, "locale": locale}, driving=body.driving,
+        )
+    except Exception as exc:
+        # AI-CONTEXT: a recogniser that failed is not a driver who said nothing. M15 paid
+        # for this distinction with a whole session dying on a vendor 400 (entry 203); the
+        # copilot answers with a status a surface can act on instead.
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "speech is unavailable") from exc
+    db.commit()
+    return _response(resp, transcript)
 
 
 @router.get("/claims")

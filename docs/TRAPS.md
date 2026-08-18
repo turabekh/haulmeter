@@ -818,3 +818,25 @@ recorded the trap, or all of them where it was carried forward.
 
     **The probe proves branch selection and latency. It proves nothing about scoring.**
     When a score looks wrong, ask the real rubric before believing the probe.
+
+93. **A field named `*_ref` is where a fake hides, because nobody dereferences it.**
+    M11's `audio_ref` held `audio://{locale}/{sha256[:12]}` — a `FakeModelProvider`
+    string in a scheme nothing serves — on production, for the module's entire life. It
+    survived because the UI never read the field: an unused value that LOOKS like a
+    handle is never tested by being followed.
+
+    The rename to `audio` (bytes) / `audio_b64` was half the fix. **When a response
+    carries a `_ref`, `_url` or `_id` that no consumer dereferences, fetch it once by
+    hand before believing it exists.** The other half of the family: `Prompt.model_hint`
+    (entry 193), `Turn.audio_ref` (202), `Intent.canonical_meaning` (208).
+
+94. **Elaborate error handling is evidence of a path worth checking, not of a path that
+    works.** `speech.js` had a careful Web Speech failure taxonomy — insecure context,
+    no microphone, service unreachable, failed start — each written for a real defect
+    and each correct. All of it was for `SpeechRecognition`, **which does not exist in
+    Safari on iOS**, on a product whose drivers carry iPhones. Two sessions improved the
+    handling of a path that could never run for half the audience.
+
+    Before improving a fallback, check the platform matrix of the thing it falls back
+    from. And when the primary is retired, **delete the fallback with it** — its only
+    remaining callers were its own tests, which is how dead code gets wired back in.

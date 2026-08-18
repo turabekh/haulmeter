@@ -1568,13 +1568,27 @@ export async function askQuestion(facilityId, text) {
   return queuedPost("/community/questions", { facility_id: facilityId, text });
 }
 
-export async function askVoice(text, driving = false) {
+export async function askVoice(text, driving = false, locale = undefined) {
   const resp = await fetch(`${API_BASE}/voice/ask`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ text, driving }),
+    body: JSON.stringify({ text, driving, locale }),
   });
   if (!resp.ok) throw new Error(`voice failed: ${resp.status}`);
+  return resp.json();
+}
+
+// AI-CONTEXT: the copilot's ears (decision 209). Base64 rather than multipart, matching
+// the M15 coaching attempt: the client holds a `MediaRecorder` blob and one JSON body is
+// what the F12 offline queue can carry unchanged. A 503 is speech being unavailable — a
+// different thing from the driver having said nothing, and the sheet says so.
+export async function listenVoice(audioB64, driving = false, locale = undefined) {
+  const resp = await fetch(`${API_BASE}/voice/listen`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ audio_b64: audioB64, driving, locale }),
+  });
+  if (!resp.ok) throw new Error(`voice listen failed: ${resp.status}`);
   return resp.json();
 }
 

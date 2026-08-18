@@ -18,12 +18,15 @@ from .domain.service import (
     approve_and_send,
     claim_assistant,
     classify_intent,
+    copilot_voice,
     draft_counterparty_message,
     handle_utterance,
     interaction_mode,
+    listen,
     register_module,
     register_voice_messages,
     route,
+    speak,
 )
 
 __all__ = [
@@ -37,10 +40,13 @@ __all__ = [
     "approve_and_send",
     "claim_assistant",
     "classify_intent",
+    "copilot_voice",
     "draft_counterparty_message",
     "handle_utterance",
+    "listen",
     "interaction_mode",
     "register_module",
     "register_voice_messages",
+    "speak",
     "route",
 ]

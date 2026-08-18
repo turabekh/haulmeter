@@ -1,26 +1,34 @@
-<!-- AI-CONTEXT: Voice Copilot sheet (M11, PRD §8.11 / design-prd §14). The mic
-     affordance opens this; the driver speaks and the app answers over its OWN
-     data (intent routing, api.js -> /voice/ask). On-device Web Speech: the mic
-     button captures speech (SpeechRecognition -> text -> /ask) and answers are
-     spoken back (SpeechSynthesis) — voice-first + audio-out while DRIVING
-     (§14.1). Typing is always available; where the platform lacks the API the
-     mic/speaker hide and it degrades to text (§14.5 — one graceful re-ask, never
-     pretend to understand). Answers are ≤2 sentences, figure-first (§14.3). -->
+<!-- AI-CONTEXT: Voice Copilot sheet (M11, PRD §8.11 / design-prd §14).
+
+     THE EARS AND THE MOUTH ARE THE SERVER'S NOW (decision 209), and the reason is that
+     the browser's could not do the job for the drivers this product is for:
+
+     · `SpeechRecognition` DOES NOT EXIST in Safari on iOS. An iPhone driver had a mic
+       button that degraded to typing, forever, which is honest and is also why the
+       owner's verdict was "it doesn't work".
+     · `speechSynthesis` has no `uz-UZ`, `so-SO` or `pa-IN` voice on any mainstream
+       handset, so the copilot was MUTE in exactly the languages it exists to serve —
+       while a paid Azure Uzbek voice sat in the same codebase voicing M15.
+
+     So: `MediaRecorder` -> `/voice/listen` -> Deepgram, and the answer comes back as mp3
+     bytes from Azure, played from a blob. `MediaRecorder` works everywhere
+     `SpeechRecognition` did and on iOS besides, so nothing was lost by dropping it.
+
+     Hands-free by default, using the same energy-gate detector M15 built (`listen.js`,
+     entry 187): nobody holds a button while driving. The hold-to-talk path stays as the
+     fallback for a cab too loud for the detector.
+
+     `speechSynthesis` REMAINS as the fallback voice only — for a box with no Azure key,
+     where the honest degradation is a robot reading English rather than silence.
+     Answers are ≤2 sentences, figure-first (§14.3). -->
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from "vue";
 import { Send, Mic, Square, Volume2 } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
-import { askVoice } from "../api.js";
+import { askVoice, listenVoice } from "../api.js";
 import Spinner from "./Spinner.vue";
-import {
-  recognitionSupported,
-  recognitionUnavailableReason,
-  createRecognizer,
-  speechFailureKind,
-  synthesisSupported,
-  speak,
-  cancelSpeech,
-} from "../speech.js";
+import { synthesisSupported, speak, cancelSpeech } from "../speech.js";
+import { listenForSpeech } from "../listen.js";
 
 const props = defineProps({
   driving: { type: Boolean, default: false },
@@ -32,48 +40,123 @@ const answer = ref(null);
 const asking = ref(false);
 const listening = ref(false);
 const hint = ref(""); // §14.5 graceful re-ask, shown once then falls back to typing
+const speaking = ref(false);
+const replayRequested = ref(false);
 
-const micOn = recognitionSupported();
-const ttsOn = synthesisSupported();
-let recognizer = null;
+// MediaRecorder is the floor now, not SpeechRecognition — it exists wherever the old
+// path did and on iOS besides, so the mic button is real on every handset.
+const micOn = typeof window !== "undefined" && typeof window.MediaRecorder !== "undefined";
+// the browser voice is the FALLBACK only, for a box with no Azure key
+const ttsFallback = synthesisSupported();
 
-function startListening() {
-  if (!micOn || asking.value) return;
+let micStream = null;
+let recorder = null;
+let listener = null;
+let chunks = [];
+let current = null;
+
+function releaseMic() {
+  if (listener) { listener.stop(); listener = null; }
+  if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+}
+
+function stopRecorder() {
+  if (recorder && recorder.state === "recording") recorder.stop();
+  recorder = null;
+}
+
+// AI-CONTEXT: HANDS-FREE, because nobody holds a button while answering at 65 mph — the
+// same argument entry 187 made for M15's session loop, and the same detector. The energy
+// gate learns the cab's floor rather than using a constant: an idling truck is not a quiet
+// kitchen, and a fixed threshold either never triggers in one or never stops in the other.
+async function startListening() {
+  if (!micOn || asking.value || listening.value) return;
   hint.value = "";
-  cancelSpeech(); // don't listen over our own spoken answer
-  recognizer = createRecognizer(locale.value, {
-    onResult: (transcript) => {
-      text.value = transcript;
-      ask(); // heard something -> route it immediately (voice-first)
-    },
-    onError: (err) => {
-      listening.value = false;
-      // AI-CONTEXT: say which failure it was (§23 entry 90). Every error but
-      // `not-allowed` used to collapse into "Didn't catch that — try again", so a
-      // device with NO MICROPHONE and one that cannot reach the recognition service
-      // both invited the driver to retry, forever, at something that cannot work.
-      // §14.5's "one graceful re-ask" is the right answer only when re-asking could
-      // succeed; the rest is §12.4 — what happened, and what to do instead.
-      hint.value = {
-        blocked: t("voice.mic_blocked"),
-        no_mic: t("voice.no_mic"),
-        network: t("voice.net_down"),
-        unavailable: t("voice.unsupported"),
-        retry: t("voice.retry"),
-      }[speechFailureKind(err)];
-    },
-    onEnd: () => {
-      listening.value = false;
+  cancelSpeech();
+  stopAudio();
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    // a refusal is a fact about the device, not a thing to re-ask forever (§12.4)
+    hint.value = t("voice.mic_blocked");
+    return;
+  }
+  chunks = [];
+  recorder = new MediaRecorder(micStream);
+  recorder.ondataavailable = (e) => chunks.push(e.data);
+  recorder.onstop = () => {
+    releaseMic();
+    listening.value = false;
+    send();
+  };
+  recorder.start();
+  listening.value = true;
+  listener = listenForSpeech(micStream, {
+    onSpeechEnd: () => stopRecorder(),
+    // heard nothing at all: say so and hand the button back rather than sitting with an
+    // open microphone (§12.4 — what happened AND what to do)
+    onTimeout: () => {
+      listener = null;
+      stopRecorder();
+      hint.value = t("voice.retry");
     },
   });
-  // listening is TRUE only once the recogniser has actually started. Setting it
-  // first is what left the sheet claiming to listen after a failed start.
-  listening.value = recognizer.start() !== false;
 }
 
 function stopListening() {
-  if (recognizer) recognizer.stop();
+  stopRecorder();
+  releaseMic();
   listening.value = false;
+}
+
+async function send() {
+  if (!chunks.length) return;
+  asking.value = true;
+  hint.value = "";
+  try {
+    const blob = new Blob(chunks, { type: "audio/webm" });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+    answer.value = await listenVoice(btoa(binary), props.driving, locale.value);
+    play(answer.value);
+  } catch {
+    // §14.5: never pretend to understand. A recogniser that failed is not a driver who
+    // said nothing, and the copilot needs its live data behind it either way.
+    answer.value = null;
+    hint.value = t("voice.net_down");
+  }
+  asking.value = false;
+}
+
+// AI-CONTEXT: the answer's OWN voice, in the driver's language, from Azure. The browser
+// fallback runs only when the server sent no audio — which means either no Azure key on
+// this box or a locale we have no voice for, and a robot reading English is better than
+// silence in the first case and is all we have in the second.
+function stopAudio() {
+  if (current) {
+    current.onended = null;
+    current.pause();
+    current = null;
+  }
+  speaking.value = false;
+}
+
+function play(a) {
+  if (!a) return;
+  const wanted = props.driving || replayRequested.value;
+  replayRequested.value = false;
+  if (!wanted) return;
+  if (a.audio_b64) {
+    stopAudio();
+    current = new Audio(`data:audio/mpeg;base64,${a.audio_b64}`);
+    speaking.value = true;
+    current.onended = stopAudio;
+    current.onerror = stopAudio;
+    current.play().catch(stopAudio);
+    return;
+  }
+  if (ttsFallback && a.spoken) speak(a.spoken, locale.value);
 }
 
 async function ask() {
@@ -82,40 +165,32 @@ async function ask() {
   stopListening();
   asking.value = true;
   try {
-    answer.value = await askVoice(q, props.driving);
+    answer.value = await askVoice(q, props.driving, locale.value);
+    play(answer.value);
   } catch {
     // offline / no session — the copilot needs the live data behind it
     answer.value = { spoken: t("system.offline"), intent: "unknown" };
   }
   asking.value = false;
   text.value = "";
-  // while DRIVING the answer is audio-first (§14.1/§13.4); stopped, tap to hear
-  if (props.driving && ttsOn && answer.value?.spoken) speak(answer.value.spoken, locale.value);
 }
 
 function replay() {
-  if (answer.value?.spoken) speak(answer.value.spoken, locale.value);
+  replayRequested.value = true;
+  play(answer.value);
 }
 
 onMounted(() => {
-  // opened from a mic tap (a user gesture) -> start listening; errors fall back
+  // opened from a mic tap (a user gesture) -> start listening; errors fall back to typing
   if (micOn) {
     startListening();
     return;
   }
-  // AI-CONTEXT: SAY WHY (§23 entry 91). With no recogniser the mic button simply
-  // vanished and the sheet offered a text box with no explanation — so a driver whose
-  // voice had worked yesterday, on a phone that had since been served over plain
-  // http, learned nothing. "Voice is not available here" is a fact; a missing button
-  // is a puzzle. The commonest cause by far is an insecure context, which is a
-  // deployment fact rather than anything the driver did, so it gets its own sentence.
-  hint.value =
-    recognitionUnavailableReason() === "insecure"
-      ? t("voice.insecure")
-      : t("voice.unsupported");
+  hint.value = t("voice.unsupported");
 });
 onBeforeUnmount(() => {
   stopListening();
+  stopAudio();
   cancelSpeech();
 });
 </script>
@@ -124,12 +199,18 @@ onBeforeUnmount(() => {
   <div class="voice">
     <div v-if="answer" class="voice__answer" :class="{ hero: driving }">
       <p class="voice__spoken" aria-live="polite">{{ answer.spoken }}</p>
+      <!-- AI-CONTEXT: offered when EITHER voice can serve it — the server's mp3 or the
+           browser's fallback. Gating this on `synthesisSupported()` alone hid the button
+           on precisely the phones that now have a real Azure voice available to them.
+           `data-playing` acknowledges the tap on screen whether or not sound reaches the
+           ear, which is entry 205's lesson from the coaching surface. -->
       <button
-        v-if="ttsOn"
+        v-if="answer.audio_b64 || ttsFallback"
         class="voice__replay"
         type="button"
-        :aria-label="t('voice.replay')"
-        @click="replay"
+        :data-playing="speaking"
+        :aria-label="speaking ? t('voice.stop') : t('voice.replay')"
+        @click="speaking ? stopAudio() : replay()"
       >
         <Volume2 :size="18" :stroke-width="2" aria-hidden="true" />
       </button>
