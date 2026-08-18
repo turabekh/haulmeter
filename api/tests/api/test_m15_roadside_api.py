@@ -114,6 +114,33 @@ def _account(db):
     return identity.register_account(db, f"m15-api-{uuid.uuid4().hex[:8]}@example.com", "pw-123456")
 
 
+def _owned_session(client, db):
+    """A session plus a bearer token for the account that owns it.
+
+    AI-CONTEXT: the transcript endpoint checks ownership, and it should — a transcript is a
+    driver's own recorded voice, not a public artefact keyed by a guessable id. (The result
+    endpoint has no such check today. That is a real finding, recorded here rather than
+    widened into this change.)
+    """
+    resp = client.post(
+        "/auth/register",
+        json={"email": f"m15-own-{uuid.uuid4().hex[:8]}@example.com", "password": "pw-123456"},
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    client.headers.update({"Authorization": f"Bearer {body['token']}"})
+
+    scenario = m.ScenarioVersion(
+        version=1, difficulty=m.Difficulty.clear, allowed_intents=["destination"],
+        status=m.ContentStatus.draft,
+    )
+    db.add(scenario)
+    db.flush()
+    return loop.start_session(
+        db, scenario=scenario, account_id=uuid.UUID(body["account_id"]), consented=True
+    )
+
+
 def _session(db):
     scenario = m.ScenarioVersion(
         version=1,
@@ -555,6 +582,104 @@ def test_the_officer_answers_in_the_same_breath_as_the_score(client, db, monkeyp
     # separate spoken echo is not sent while he is improvising
     assert kinds[0]["echo"] is None
     assert kinds[0]["ack"] is None
+
+
+def test_the_conversation_is_kept_so_it_can_be_heard_again(client, db, monkeypatch):
+    """AI-CONTEXT: THE PROMISE THE CONSENT SCREEN WAS ALREADY MAKING.
+
+    Every driver agrees to "the voice recording, the 30-day deletion with scores kept"
+    before a stop may start. `Turn.audio_ref` existed from the first migration, its own
+    docstring named the 30-day class, `classify_audio_30d` existed and `run_audio_retention`
+    swept it unflagged — and NOTHING EVER WROTE THE COLUMN. The socket transcribed the
+    audio and dropped it, so there was nothing to review, nothing to replay, and nothing
+    for the sweep to delete. A driver cannot hear their own mistakes while making them; the
+    value of a recorded stop is almost all in the second listen.
+    """
+    import base64 as _b64
+
+    from app.modules.m15_roadside.domain import conversation
+
+    _module_on(db)
+    intent = _draft_content(db)
+    db.add(
+        m.PhraseVariant(
+            intent_id=intent.id, text="RELEASED LINE", difficulty=m.Difficulty.clear,
+            status=m.ContentStatus.released, version=2,
+        )
+    )
+    db.flush()
+    session = _owned_session(client, db)
+    doc = _stored_audio(db, b"\x00OFFICER")
+
+    monkeypatch.setattr(
+        m15_api.conversation, "conversational_officer",
+        lambda db_, s: conversation.ImprovisedTurn(
+            line="Where are you headed?", intent_key="destination", done=False
+        ),
+    )
+    monkeypatch.setattr(m15_api.conversation, "officer_mode", lambda db_: "llm")
+    monkeypatch.setattr(m15_api.m15_audio, "fragment_audio", lambda db_, text: doc)
+    class _Stt:
+        def transcribe(self, audio, locale):
+            return "i am headed to dallas", 0.95
+
+    monkeypatch.setattr(m15_api.speech, "resolve_stt", lambda: _Stt())
+
+    with client.websocket_connect(f"/roadside/session/{session.id}/stream") as ws:
+        ws.send_json({"type": "ready", "driver_state": "IDLE"})
+        ws.receive_json()
+        ws.receive_json()
+        ws.send_json({
+            "type": "answer", "driver_state": "IDLE",
+            "audio_b64": _b64.b64encode(b"DRIVER-VOICE-BYTES").decode(),
+        })
+        for _ in range(3):
+            ws.receive_json()
+        ws.send_json({"type": "bye"})
+
+    body = client.get(f"/roadside/session/{session.id}/transcript").json()
+    speakers = [t["speaker"] for t in body["turns"]]
+    assert speakers[:2] == ["officer", "driver"]
+
+    driver = body["turns"][1]
+    assert driver["text"] == "i am headed to dallas"
+    assert driver["audio_url"], "the driver's own voice was transcribed and thrown away"
+
+    officer = body["turns"][0]
+    assert officer["text"] == "Where are you headed?"
+    assert officer["audio_url"], "the officer's line was playable in the frame and not after"
+
+
+def test_an_expired_recording_says_so_rather_than_offering_a_broken_play_button(client, db):
+    """The 30-day sweep takes the voice and leaves the words — as consent describes.
+
+    AI-CONTEXT: the row deliberately survives its own audio, so `audio_url` must go null
+    while `text` stays. A URL pointing at swept bytes is a play button that fails on tap,
+    which is a worse answer than saying the recording has expired.
+    """
+    from app.foundation.f06_documents import public as documents
+
+    _module_on(db)
+    _draft_content(db)
+    db.flush()
+    session = _owned_session(client, db)
+    ref = _stored_audio(db, b"\x00OLD")
+    db.add(
+        m.Turn(
+            session_id=session.id, seq=1, speaker=m.Speaker.driver,
+            transcript="something i said a month ago", audio_ref=ref,
+        )
+    )
+    db.flush()
+
+    document = db.get(documents.Document, ref)
+    documents.classify_audio_30d(document)
+    documents.delete_bytes(db, document)
+    db.flush()
+
+    turn = client.get(f"/roadside/session/{session.id}/transcript").json()["turns"][0]
+    assert turn["text"] == "something i said a month ago"
+    assert turn["audio_url"] is None
 
 
 # --- the client's own condition for showing the entry ---------------------------------

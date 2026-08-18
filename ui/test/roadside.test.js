@@ -19,6 +19,7 @@ import RoadsideConsentSurface from "../src/surfaces/RoadsideConsentSurface.vue";
 import RoadsideCoachSurface from "../src/surfaces/RoadsideCoachSurface.vue";
 import RoadsideSessionSurface from "../src/surfaces/RoadsideSessionSurface.vue";
 import RoadsideDrillSurface from "../src/surfaces/RoadsideDrillSurface.vue";
+import RoadsideTranscriptSurface from "../src/surfaces/RoadsideTranscriptSurface.vue";
 import { routes } from "../src/router.js";
 import { setToken, logout } from "../src/core/api.js";
 import { DriverState, useDriverState, __resetStateForTests } from "../src/core/state.js";
@@ -715,5 +716,75 @@ describe("Roadside — today's practice", () => {
     await flushPromises();
 
     expect(w.text()).toContain(messages["roadside.drill.none"]);
+  });
+});
+
+describe("Roadside — the stop played back", () => {
+  // AI-CONTEXT: `Turn.audio_ref` existed from the first migration, `classify_audio_30d`
+  // existed, the retention sweep ran unflagged — and nothing ever wrote the column. The
+  // consent screen promised every driver "the voice recording, the 30-day deletion with
+  // scores kept" while the socket transcribed the audio and dropped it.
+  const SCRIPT = {
+    session_id: "sess-1",
+    completed: true,
+    turns: [
+      { seq: 1, speaker: "officer", text: "Where are you headed?",
+        audio_url: "/media/document/o1?sig=x", unclear: false },
+      { seq: 2, speaker: "driver", text: "i am headed to dallas",
+        audio_url: "/media/document/d1?sig=x", unclear: false },
+    ],
+  };
+
+  it("shows both voices in order, each playable", async () => {
+    const played = [];
+    vi.stubGlobal("Audio", class {
+      constructor(src) {
+        this.src = src;
+      }
+      play() {
+        played.push(this.src);
+        return Promise.resolve();
+      }
+      pause() {}
+    });
+    stubFetch({ "/roadside/session/sess-1/transcript": jsonOk(SCRIPT) });
+
+    const w = mount(RoadsideTranscriptSurface, {
+      global: { plugins: [await at("roadside-transcript", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain("Where are you headed?");
+    expect(w.text()).toContain("i am headed to dallas");
+
+    await w.findAll(".turn__play")[1].trigger("click");
+    await flushPromises();
+    expect(played[0]).toContain("/media/document/d1");
+  });
+
+  it("keeps the words when the recording has expired, and says why", async () => {
+    // the 30-day sweep takes the voice and leaves the text — consent describes exactly
+    // this, so the screen must not offer a play button that fails when tapped
+    vi.stubGlobal("Audio", class {
+      play() {
+        return Promise.resolve();
+      }
+      pause() {}
+    });
+    const expired = {
+      ...SCRIPT,
+      turns: [{ seq: 1, speaker: "driver", text: "something i said a month ago",
+                audio_url: null, unclear: false }],
+    };
+    stubFetch({ "/roadside/session/sess-1/transcript": jsonOk(expired) });
+
+    const w = mount(RoadsideTranscriptSurface, {
+      global: { plugins: [await at("roadside-transcript", { sessionId: "sess-1" })] },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain("something i said a month ago");
+    expect(w.findAll(".turn__play")).toHaveLength(0);
+    expect(w.text()).toContain(messages["roadside.transcript.expired"]);
   });
 });

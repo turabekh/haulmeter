@@ -402,6 +402,12 @@ With the flag on (`/admin/flags`, an operator decision — not a step to take ca
    usually imperceptible; the thing to actually check is that **the officer always speaks
    at all** — if the voice fails, the question must still be on screen and the mic must
    still open.
+6b. **Hear it back.** From the results, "Listen to the whole stop" replays both voices in
+   order — his questions and your own answers. **Check your own voice is actually there**:
+   the consent screen promised a recording before you started, and until this session
+   nothing was writing it. Thirty days on the audio is swept and the words remain, which is
+   what consent says — a turn with no play button and one sentence explaining why is
+   CORRECT, and a play button that fails when tapped is not.
 7. **Start** → the consent screen states three things: the voice recording, the **30-day
    deletion** with scores kept, and the microphone prompt. **"Not now" is a full-size
    button beside "I agree"** — check that, it is the whole value of the record.

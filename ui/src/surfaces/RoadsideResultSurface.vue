@@ -113,6 +113,19 @@ onMounted(load);
         {{ t("roadside.result.practice_cta") }}
       </button>
 
+      <!-- AI-CONTEXT: the way to hear the stop back. Secondary to practising, because
+           listening is not learning on its own — but a recording nobody can reach is a
+           recording nobody has, and the consent screen promised it before the stop began. -->
+      <button
+        v-if="!isDriving"
+        class="result__listen"
+        type="button"
+        @click="router.push({
+          name: 'roadside-transcript', params: { sessionId: route.params.sessionId } })"
+      >
+        {{ t("roadside.result.listen_back") }}
+      </button>
+
       <button
         v-if="!isDriving"
         class="result__retry"
@@ -209,6 +222,7 @@ onMounted(load);
   line-height: var(--type-label-line);
   font-weight: var(--type-label-weight);
 }
+.result__listen,
 .result__retry {
   min-height: var(--touch-min);
   margin-top: var(--s-3);

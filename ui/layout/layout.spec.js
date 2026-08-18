@@ -765,6 +765,26 @@ const ROADSIDE_COACHING_Q9 = {
   coaching: [{ ...ROADSIDE_COACHING.coaching[0], explanation: null, glosses: {} }],
 };
 
+// the stop played back — both voices, and the same stop with its audio swept
+const ROADSIDE_TRANSCRIPT = {
+  session_id: ROADSIDE_SESSION,
+  completed: true,
+  turns: [
+    { seq: 1, speaker: "officer", text: "Where are you headed with this load?",
+      audio_url: "/media/document/o1?size=full&exp=1&sig=x", unclear: false },
+    { seq: 2, speaker: "driver", text: "i am headed to dallas texas",
+      audio_url: "/media/document/d1?size=full&exp=1&sig=x", unclear: false },
+  ],
+};
+const ROADSIDE_TRANSCRIPT_EXPIRED = {
+  session_id: ROADSIDE_SESSION,
+  completed: true,
+  turns: [
+    { seq: 1, speaker: "driver", text: "something i said a month ago",
+      audio_url: null, unclear: false },
+  ],
+};
+
 const ROADSIDE_DRILL = {
   plan: {
     id: "00000000-0000-0000-0000-0000000000d4",
@@ -1119,6 +1139,18 @@ const SURFACES = [
   ["roadside-drill-none", "/roadside/drill", {
     mocks: { "/roadside/drill/today": { plan: null } },
     ready: ".drill__note",
+  }],
+  /* AI-CONTEXT: the stop played back. Two states because the interesting one is the
+   * SECOND: thirty days on the audio is swept and the words remain, so a turn renders
+   * readable and unplayable with one sentence saying why. An empty state and an expired
+   * state have layout specs like anything else (§15.3). */
+  ["roadside-transcript", `/roadside/transcript/${ROADSIDE_SESSION}`, {
+    mocks: { [`/roadside/session/${ROADSIDE_SESSION}/transcript`]: ROADSIDE_TRANSCRIPT },
+    ready: ".turn__text",
+  }],
+  ["roadside-transcript-expired", `/roadside/transcript/${ROADSIDE_SESSION}`, {
+    mocks: { [`/roadside/session/${ROADSIDE_SESSION}/transcript`]: ROADSIDE_TRANSCRIPT_EXPIRED },
+    ready: ".script__note",
   }],
   ["roadside-coach", `/roadside/coach/${ROADSIDE_SESSION}`, {
     mocks: { [`/roadside/session/${ROADSIDE_SESSION}/coaching`]: ROADSIDE_COACHING },

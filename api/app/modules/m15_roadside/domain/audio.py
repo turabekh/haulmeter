@@ -231,6 +231,40 @@ def variants_needing_audio(db: DbSession) -> list:
     return out
 
 
+def store_driver_audio(db: DbSession, blob: bytes, *, storage=None):
+    """Keep what the driver actually said, under the 30-day class consent promised.
+
+    AI-CONTEXT: THE PIECE THAT WAS NEVER WRITTEN. `Turn.audio_ref` has existed since the
+    first migration and its own docstring says "the raw audio here is the 30-day TTL
+    class"; `classify_audio_30d` exists; `run_audio_retention` sweeps it unflagged and
+    documents at length why it must never be flagged. **The consent screen tells every
+    driver about "the voice recording, the 30-day deletion with scores kept" before they
+    may start.** Every part of that promise was built except the recording: the socket
+    transcribed the audio and dropped it, so there was nothing to review, nothing to
+    replay, and nothing for the sweep to delete.
+
+    CLASSIFIED AT WRITE TIME, by the caller that knows what the bytes ARE — F6 cannot tell
+    a driver's recording from a synthesized officer line by looking, and guessing is what
+    the column exists to prevent. An officer line is `permanent` content; this is a
+    person's voice and it goes away.
+    """
+    if not blob:
+        return None
+    owner = content_account(db)
+    document = documents.store_document(
+        db,
+        owner.id,
+        documents.DocType.other,
+        blob,
+        filename="driver-answer.webm",
+        content_type="audio/webm",
+        storage=storage,
+    )
+    documents.classify_audio_30d(document)
+    db.flush()
+    return document.id
+
+
 def fragment_audio(db: DbSession, text: str, *, locale: str = "en", storage=None):
     """A synthesized scrap — a city, a number — cached by its text forever.
 

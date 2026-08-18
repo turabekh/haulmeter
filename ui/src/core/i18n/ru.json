@@ -1272,5 +1272,11 @@
   "roadside.session.speaking": "Инспектор сейчас заговорит",
   "roadside.coach.checking": "Проверяем ваш ответ",
   "roadside.result.working": "Разбираем ваши ответы. Это займёт несколько секунд.",
-  "roadside.coach.play_explanation": "Послушать на вашем языке"
+  "roadside.coach.play_explanation": "Послушать на вашем языке",
+  "roadside.transcript.title": "Весь разговор",
+  "roadside.transcript.you": "Вы",
+  "roadside.transcript.stop": "Стоп",
+  "roadside.transcript.empty": "В этой сессии ничего не записано.",
+  "roadside.transcript.expired": "Записи хранятся 30 дней. Текст остаётся; аудио старых ответов удалено.",
+  "roadside.result.listen_back": "Прослушать весь разговор"
 }

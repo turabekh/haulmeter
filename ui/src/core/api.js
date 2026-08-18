@@ -2363,6 +2363,10 @@ export async function openRoadsideSession(body) {
 export const fetchRoadsideResult = (sessionId) =>
   apiGet(`/roadside/session/${sessionId}/result`);
 
+// the whole conversation, both voices, to read back or listen to again
+export const fetchRoadsideTranscript = (sessionId) =>
+  apiGet(`/roadside/session/${sessionId}/transcript`);
+
 // AI-CONTEXT: the WebSocket URL, built here so the surface never assembles an origin.
 //
 // `API_BASE` is "/api" in a deployment and an absolute http:// URL in dev, and a socket

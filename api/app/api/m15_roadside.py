@@ -163,6 +163,71 @@ def session_result(
     }
 
 
+@router.get("/session/{session_id}/transcript")
+def session_transcript(
+    session_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    account: identity.Account | None = Depends(current_account),
+) -> dict:
+    """The whole conversation, both voices, in order — to read back or listen to.
+
+    AI-CONTEXT: WHY THIS IS WORTH KEEPING AT ALL. A driver practising English cannot hear
+    their own mistakes while they are making them; the value of a recorded stop is almost
+    entirely in the second listen. Every part of that was already built and one piece was
+    missing — `Turn.audio_ref` existed and was never written, so the consent screen promised
+    a recording that was transcribed and discarded.
+
+    **AUDIO CAN BE GONE WHILE THE TURN REMAINS, and that is correct rather than a bug.**
+    The driver's own voice is `audio_30d`: swept 30 days after the stop by an unflagged job,
+    while the transcript and the scores stay — exactly what consent says. So `audio_url` is
+    null on an old turn and the text is still there, and the surface must render that as
+    "the recording has expired" rather than as a failure to load.
+
+    NOT A SCORE SURFACE. It carries what was said and what was heard, not verdicts: the
+    band lives on the result screen and the teaching on the coaching screen. A transcript
+    annotated with marks is a report card, and this is a recording.
+    """
+    session = db.get(m15.Session, session_id)
+    if session is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such session")
+    if session.account_id and (account is None or account.id != session.account_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such session")
+
+    turns = db.scalars(
+        select(m15.Turn).where(m15.Turn.session_id == session_id).order_by(m15.Turn.seq)
+    )
+    return {
+        "session_id": str(session.id),
+        "completed": session.completed_at is not None,
+        "turns": [
+            {
+                "seq": turn.seq,
+                "speaker": turn.speaker.value,
+                "text": turn.transcript,
+                "audio_url": _audio_url(turn.audio_ref) if _audio_playable(db, turn) else None,
+                # a driver's own turn we could not make out — said plainly here for the
+                # same reason it is said in the stop (Q-2), rather than left to look like
+                # a bad transcription
+                "unclear": turn.review_status.value == "review_needed",
+            }
+            for turn in turns
+        ],
+    }
+
+
+def _audio_playable(db, turn) -> bool:
+    """False once the bytes have been swept, so the surface can say so.
+
+    AI-CONTEXT: a URL to deleted bytes is a play button that fails. The row survives the
+    sweep deliberately — the transcript is kept, the voice is not — so the difference has
+    to be visible here rather than discovered by tapping.
+    """
+    if turn.audio_ref is None:
+        return False
+    document = db.get(documents.Document, turn.audio_ref)
+    return document is not None and documents.bytes_available(document)
+
+
 @router.get("/session/{session_id}/coaching")
 def session_coaching(
     session_id: uuid.UUID,
@@ -522,6 +587,11 @@ async def _officer_frame(websocket: WebSocket, session_id, message) -> bool:
                 })
                 try:
                     audio_ref = m15_audio.fragment_audio(db, improvised.line)
+                    # AI-CONTEXT: on the TURN, not only in the frame. The frame is
+                    # consumed and gone; the turn is what a driver reviews afterwards, and
+                    # a conversation you can only replay while it is happening is not a
+                    # recording of anything.
+                    turn.audio_ref = audio_ref
                     db.commit()
                     audio_url = _audio_url(audio_ref)
                 except Exception:
@@ -678,11 +748,19 @@ async def _answer_frame(websocket: WebSocket, session_id, message) -> bool:
         # tag is simply absent, so the ack would come back on a schedule and the fallback
         # would get WORSE at the moment it is being relied on. The improvising officer has
         # no separate ack to suppress: his own line opens by saying the fact back.
+        # AI-CONTEXT: KEEP WHAT THEY SAID. The consent screen promises every driver "the
+        # voice recording, the 30-day deletion with scores kept" before they may start, and
+        # until now the socket transcribed the audio and dropped it — so the promise
+        # described something that did not happen, `Turn.audio_ref` stayed null, and the
+        # retention sweep had nothing to delete. Stored before scoring so a turn that fails
+        # to score still has its recording.
+        driver_audio = m15_audio.store_driver_audio(db, audio) if audio else None
+
         improvising = conversation.officer_mode(db) == "llm"
         if improvising:
             turn = loop.record_driver_turn(
                 db, session, officer=officer, transcript=transcript,
-                asr_confidence=confidence, rubric=None,
+                asr_confidence=confidence, rubric=None, audio_ref=driver_audio,
             )
         else:
             # AI-CONTEXT: a rubric that cannot answer produces REVIEW_NEEDED, not a
@@ -691,13 +769,13 @@ async def _answer_frame(websocket: WebSocket, session_id, message) -> bool:
             try:
                 turn = loop.record_driver_turn(
                     db, session, officer=officer, transcript=transcript,
-                    asr_confidence=confidence,
+                    asr_confidence=confidence, audio_ref=driver_audio,
                     rubric=F9Rubric(db, account_id=session.account_id),
                 )
             except RubricUnavailable:
                 turn = loop.record_driver_turn(
                     db, session, officer=officer, transcript=transcript,
-                    asr_confidence=0.0, rubric=_ReviewOnly(),
+                    asr_confidence=0.0, rubric=_ReviewOnly(), audio_ref=driver_audio,
                 )
         db.commit()
 

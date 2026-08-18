@@ -1272,5 +1272,11 @@
   "roadside.session.speaking": "ਅਫ਼ਸਰ ਬੋਲਣ ਵਾਲਾ ਹੈ",
   "roadside.coach.checking": "ਤੁਹਾਡੇ ਜਵਾਬ ਦੀ ਜਾਂਚ ਹੋ ਰਹੀ ਹੈ",
   "roadside.result.working": "ਤੁਹਾਡੇ ਜਵਾਬ ਵੇਖੇ ਜਾ ਰਹੇ ਹਨ। ਇਸ ਵਿੱਚ ਕੁਝ ਸਕਿੰਟ ਲੱਗਦੇ ਹਨ।",
-  "roadside.coach.play_explanation": "ਇਸਨੂੰ ਆਪਣੀ ਭਾਸ਼ਾ ਵਿੱਚ ਸੁਣੋ"
+  "roadside.coach.play_explanation": "ਇਸਨੂੰ ਆਪਣੀ ਭਾਸ਼ਾ ਵਿੱਚ ਸੁਣੋ",
+  "roadside.transcript.title": "ਪੂਰੀ ਗੱਲਬਾਤ",
+  "roadside.transcript.you": "ਤੁਸੀਂ",
+  "roadside.transcript.stop": "ਰੋਕੋ",
+  "roadside.transcript.empty": "ਇਸ ਸੈਸ਼ਨ ਵਿੱਚ ਕੁਝ ਰਿਕਾਰਡ ਨਹੀਂ ਹੋਇਆ।",
+  "roadside.transcript.expired": "ਰਿਕਾਰਡਿੰਗ 30 ਦਿਨ ਰੱਖੀ ਜਾਂਦੀ ਹੈ। ਲਿਖਤ ਰਹਿੰਦੀ ਹੈ; ਪੁਰਾਣੇ ਜਵਾਬਾਂ ਦਾ ਆਡੀਓ ਮਿਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ।",
+  "roadside.result.listen_back": "ਪੂਰੀ ਗੱਲਬਾਤ ਸੁਣੋ"
 }

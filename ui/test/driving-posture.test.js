@@ -51,6 +51,7 @@ const SOURCE = {
   "roadside-result": "RoadsideResultSurface",
   "roadside-coach": "RoadsideCoachSurface",
   "roadside-drill": "RoadsideDrillSurface",
+  "roadside-transcript": "RoadsideTranscriptSurface",
 };
 
 // the driver app: everything that is not a §18 portal and not a public page

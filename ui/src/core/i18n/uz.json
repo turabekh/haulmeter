@@ -1272,5 +1272,11 @@
   "roadside.session.speaking": "Xodim gapirmoqchi",
   "roadside.coach.checking": "Javobingiz tekshirilmoqda",
   "roadside.result.working": "Aytganlaringiz ko'rib chiqilmoqda. Bu bir necha soniya oladi.",
-  "roadside.coach.play_explanation": "Buni o'z tilingizda tinglang"
+  "roadside.coach.play_explanation": "Buni o'z tilingizda tinglang",
+  "roadside.transcript.title": "To'liq suhbat",
+  "roadside.transcript.you": "Siz",
+  "roadside.transcript.stop": "To'xtatish",
+  "roadside.transcript.empty": "Bu mashg'ulotda hech narsa yozib olinmagan.",
+  "roadside.transcript.expired": "Ovoz yozuvlari 30 kun saqlanadi. Matn qoladi; eski javoblarning ovozi o'chirilgan.",
+  "roadside.result.listen_back": "Butun suhbatni tinglash"
 }

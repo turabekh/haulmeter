@@ -1272,5 +1272,11 @@
   "roadside.session.speaking": "Saraakiishu wuu hadli doonaa",
   "roadside.coach.checking": "Waxaan hubinaynaa jawaabtaada",
   "roadside.result.working": "Waxaan dib u eegaynaa jawaabahaaga. Tani waxay qaadanaysaa dhowr ilbiriqsi.",
-  "roadside.coach.play_explanation": "Ku dhagayso luqaddaada"
+  "roadside.coach.play_explanation": "Ku dhagayso luqaddaada",
+  "roadside.transcript.title": "Wadahadalka oo dhan",
+  "roadside.transcript.you": "Adiga",
+  "roadside.transcript.stop": "Jooji",
+  "roadside.transcript.empty": "Waxba lagama duubin fadhigan.",
+  "roadside.transcript.expired": "Duubistu waxay socotaa 30 maalmood. Qoraalku wuu hadhayaa; codka jawaabaha hore waa la tirtiray.",
+  "roadside.result.listen_back": "Dhagayso wadahadalka oo dhan"
 }

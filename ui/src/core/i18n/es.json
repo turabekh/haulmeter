@@ -1272,5 +1272,11 @@
   "roadside.session.speaking": "El agente va a hablar",
   "roadside.coach.checking": "Comprobando tu respuesta",
   "roadside.result.working": "Revisando tus respuestas. Tarda unos segundos.",
-  "roadside.coach.play_explanation": "Escúchalo en tu idioma"
+  "roadside.coach.play_explanation": "Escúchalo en tu idioma",
+  "roadside.transcript.title": "La parada completa",
+  "roadside.transcript.you": "Tú",
+  "roadside.transcript.stop": "Detener",
+  "roadside.transcript.empty": "No se grabó nada en esta sesión.",
+  "roadside.transcript.expired": "Las grabaciones se guardan 30 días. El texto permanece; el audio de turnos antiguos se ha borrado.",
+  "roadside.result.listen_back": "Escuchar la parada completa"
 }

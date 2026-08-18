@@ -47,6 +47,7 @@ import VendorJoinSurface from "./surfaces/vendor/VendorJoinSurface.vue";
 import RoadsideSurface from "./surfaces/RoadsideSurface.vue";
 import RoadsideConsentSurface from "./surfaces/RoadsideConsentSurface.vue";
 import RoadsideSessionSurface from "./surfaces/RoadsideSessionSurface.vue";
+import RoadsideTranscriptSurface from "./surfaces/RoadsideTranscriptSurface.vue";
 import RoadsideResultSurface from "./surfaces/RoadsideResultSurface.vue";
 import RoadsideCoachSurface from "./surfaces/RoadsideCoachSurface.vue";
 import RoadsideDrillSurface from "./surfaces/RoadsideDrillSurface.vue";
@@ -138,6 +139,13 @@ export const routes = [
     path: "/roadside/result/:sessionId",
     name: "roadside-result",
     component: RoadsideResultSurface,
+    meta: { driving: "withdraws" },
+  },
+  // the stop played back, both voices — reached from the result screen
+  {
+    path: "/roadside/transcript/:sessionId",
+    name: "roadside-transcript",
+    component: RoadsideTranscriptSurface,
     meta: { driving: "withdraws" },
   },
   // §18 web-first portal — no tab chrome, wider frame; auth required (fleet owner)

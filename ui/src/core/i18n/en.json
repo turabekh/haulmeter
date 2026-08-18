@@ -1272,5 +1272,11 @@
   "roadside.session.speaking": "The officer is about to speak",
   "roadside.coach.checking": "Checking your answer",
   "roadside.result.working": "Going back over what you said. This takes a few seconds.",
-  "roadside.coach.play_explanation": "Listen to this in your language"
+  "roadside.coach.play_explanation": "Listen to this in your language",
+  "roadside.transcript.title": "The whole stop",
+  "roadside.transcript.you": "You",
+  "roadside.transcript.stop": "Stop",
+  "roadside.transcript.empty": "Nothing was recorded in this session.",
+  "roadside.transcript.expired": "Recordings are kept for 30 days. The words stay; the audio for older turns has been deleted.",
+  "roadside.result.listen_back": "Listen to the whole stop"
 }
