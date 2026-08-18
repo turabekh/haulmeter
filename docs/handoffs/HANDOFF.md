@@ -3,9 +3,9 @@
 This file is a **pointer, not content**, and as of 2026-08-16 it is one again: it had grown
 to 45 KB of inline summary, which every session read to find one filename.
 
-➡️ **[HANDOFF-137.md](HANDOFF-137.md)** — read this first, every session. It holds the current state,
+➡️ **[HANDOFF-138.md](HANDOFF-138.md)** — read this first, every session. It holds the current state,
 the decisions, the exact next task and the blockers. **[HANDOFF-134.md](HANDOFF-134.md)** is
-its companions: **137** is M15 Session D (FR5/FR6 and the conversational pass), **136** is M15 Session C, **135** is the pilot-day preflight from the same
+its companions: **138** is M15 Session E (the conversation gets fast, and eight things built-and-never-wired), **137** is M15 Session D (FR5/FR6 and the conversational pass), **136** is M15 Session C, **135** is the pilot-day preflight from the same
 sitting, and **134** is the full platform snapshot underneath both. 134 §9's owner questions
 all still stand.
 
@@ -22,6 +22,7 @@ The full history below is never deleted; a handoff is a dated record.
 
 | # | Session |
 |---|---|
+| [138](HANDOFF-138.md) | M15 Session E: the officer answers in two seconds, and eight things were built and never wired |
 | [137](HANDOFF-137.md) | M15 Session D: it teaches, and it stops sounding like a form |
 | [136](HANDOFF-136.md) | M15 Session C: a person can reach it |
 | [135](HANDOFF-135.md) | the pilot day, checked before the pilot day |
