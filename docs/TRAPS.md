@@ -589,13 +589,17 @@ nobody re-runs decays into a screenshot in an old handoff. Its screenshots are o
     a reasoning task, so `effort=low` looked like free seconds. **Measured against the live
     API, five calls each: no effort 2.91s median, `effort=low` 3.07s — inside the noise.**
     ~2.8–3.0s is that model's round-trip floor for that prompt and no request-shaping
-    recovers it. The seconds were in the SECOND leg: TTS at ~1.2s, serialized behind the
-    same frame, and an improvised line is novel so it is a cache MISS *every turn* — the
-    thing that made the scripted officer cheap does not apply to an improvising one at all.
-    **Two rules fall out.** Measure each leg before shaping the request: a per-turn number
-    with two network calls inside it names neither. And where the legs are genuinely serial
-    (TTS needs the text), the fix is to stop making the DRIVER wait for both — ship the
-    text on its own frame and let the voice follow. *(138)*
+    recovers it. **Then the second measurement corrected the first.** TTS looked like the
+    culprit at ~1.2s — measured from a laptop in Tashkent. On the box (us-central1, next
+    door to Azure) the same call takes **0.25s**, and 0 when the text cache hits. So the
+    turn is the MODEL almost entirely: 3.3–4.7s end to end on production, of which a
+    quarter second is the voice. **Three rules fall out.** (1) Measure each leg — a
+    per-turn number with two network calls inside it names neither. (2) **Measure from
+    where the code runs.** A network-bound leg timed from your own machine tells you about
+    your own machine; the same call from the box was 5× faster and inverted the diagnosis.
+    (3) When the legs are serial and one is slow anyway, splitting the frame is still
+    right — but bank it as correctness (a failing TTS no longer takes the turn down), not
+    as the second it turned out not to buy. *(138)*
 
 82. **A model swap is a content decision wearing a performance costume.** Haiku 4.5 answers
     the same officer prompt in 1.4s against Opus 5's 3.0s, which is the whole latency

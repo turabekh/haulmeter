@@ -31,12 +31,22 @@ written down here so nobody spends the afternoon on it again:
     like free seconds. Measured against the live API, five calls each: no effort 2.91s
     median, `effort=low` 3.07s. Inside the noise. ~2.8–3.0s is simply this model's
     round-trip floor for this prompt, and no request-shaping recovers it.
-  · **it IS the second leg.** Azure takes ~1.2s to say the line. `audio_fragment` caches
-    by text, but an improvised line is usually novel — so where the scripted officer drew
-    from a finite reviewed pool that converged toward free, this one mostly MISSES and
-    pays the 1.2s again. ~3.0s + ~1.2s serialized behind one frame is the 4.2s that was
-    observed. **The fix is in `_officer_frame`, not here**: the text ships the moment it
-    exists and the voice follows on its own frame.
+  · **the second leg is real but SMALL, and the first figure for it was measured in the
+    wrong place.** From a laptop in Tashkent, Azure took ~1.2s to say a line. From the
+    box — us-central1, next door to Azure — it takes **0.25s** (median of 3, 0.22–0.60).
+    `audio_fragment` caches by text, so a repeated line costs nothing at all; a novel one
+    costs a quarter second. The frame split below is therefore worth ~0.25s on a miss and
+    ~0 on a hit, **not the 1.2s the first version of this comment claimed**.
+  · **so the turn is the MODEL, almost entirely.** Measured end to end on production,
+    `ready` → officer text: **3.3s, 3.6s, 3.9s, 4.1s, 4.2s, 4.7s** (plus one 6.3s cold
+    first call after a deploy). Subtract the 0.25s and what is left is the model. There is
+    no request shape that fixes that — only a different model, which is an owner decision
+    (entry 190) because the prompt's prohibitions are the review a human would otherwise
+    have done and how well they hold is a property of the model.
+
+**The split in `_officer_frame` is kept on correctness, not on the second it does not buy:**
+a TTS failure used to take the whole turn down with it, and the closing frame used to take
+the driver's verdict down with it. It also costs nothing when the cache hits.
 
 The schema below stays regardless, earned on robustness rather than speed: it makes the
 reply an object instead of a fenced-JSON hunt, so a stray code fence can no longer end a

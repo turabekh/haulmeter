@@ -390,11 +390,13 @@ With the flag on (`/admin/flags`, an operator decision — not a step to take ca
    itself** — do not reach for a button. Answer normally; a pause of about a second ends
    your turn. Then the officer says something ("Alright.") before the next question.
    **If it never hears you** (loud cab, denied mic) it says so and gives you the button.
-   **The written question appears about a second BEFORE you hear it** — the model chooses
-   the line (~3.0s) and the voice is synthesized after (~1.2s), on its own frame, so the
-   text does not wait for it. Watch that the mic stays SHUT during that second: an
-   improvised line is unreviewed content and a mic that opens on the text would record you
-   answering a question you have not heard.
+   **The written question appears slightly before you hear it** — the model chooses the
+   line (3.3–4.7s on production) and the voice follows on its own frame (0.25s on a new
+   line, instant on a repeated one). Watch that the mic stays SHUT in that gap: a mic that
+   opened on the text would record you answering a question you have not heard. The gap is
+   usually imperceptible; the thing to actually check is that **the officer always speaks
+   at all** — if the voice fails, the question must still be on screen and the mic must
+   still open.
 7. **Start** → the consent screen states three things: the voice recording, the **30-day
    deletion** with scores kept, and the microphone prompt. **"Not now" is a full-size
    button beside "I agree"** — check that, it is the whole value of the record.

@@ -434,14 +434,16 @@ async def _officer_frame(websocket: WebSocket, session_id, message) -> bool:
 
                 turn = loop.record_improvised_officer_turn(db, session, improvised)
                 db.commit()
-                # AI-CONTEXT: THE LINE GOES BEFORE THE VOICE, and the two frames are the
-                # whole reason a turn stopped feeling slow. Measured, not guessed: the
-                # model takes ~3.0s to choose the line and Azure ~1.2s to say it, and
-                # those were SERIALIZED behind one frame — 4.2s of a screen where nobody
-                # had spoken and nothing had changed. `fragment_audio` caches by TEXT,
-                # but an improvised line is usually novel — so unlike the scripted
-                # officer, whose lines were a finite reviewed pool that converged toward
-                # free, this one mostly MISSES and pays the 1.2s again.
+                # AI-CONTEXT: THE LINE GOES BEFORE THE VOICE. Measured on the box, not
+                # guessed and not measured from a laptop: the model takes 3.0–4.5s to
+                # choose the line and Azure 0.25s to say it (0 when `fragment_audio`
+                # hits the text cache, which repeated lines do). So this split buys about
+                # a quarter second, NOT the 1.2s an earlier version of this comment
+                # claimed from a laptop in Tashkent — the box sits next door to Azure.
+                #
+                # It is kept on correctness rather than that quarter second: before it, a
+                # TTS failure took the whole turn down with it. The turn's real cost is
+                # the model, and only a different model changes that (entry 190).
                 #
                 # So the text ships the moment it exists and the audio follows on its own
                 # frame. `audio_pending` is what stops the surface treating "no audio_url"
