@@ -239,7 +239,14 @@ _TERMS: dict[str, dict[str, tuple[str, ...]]] = {
         "en": ("owed", "owe", "money", "what am i owed", "how much am i owed"),
         "es": ("deben", "debe", "adeudado", "dinero", "cuanto me deben"),
         "ru": ("должны", "задолженность", "деньги", "сколько мне должны"),
-        "uz": ("qarz", "qarzdor", "pul", "qancha qarzdorlar"),
+        # AI-CONTEXT: `qarz*` rather than `qarz`, and this is Uzbek grammar rather than a
+        # typo tolerance. `qarz` / `qarzi` / `qarzim` / `qarzlarim` are ONE WORD wearing
+        # case and possessive suffixes — the language glues them on, and a recogniser
+        # returning the inflected form is returning the correct form. Found by speaking to
+        # production: Azure heard "menga qancha qarzi bor" and the copilot answered
+        # "Tushunmadim" while suggesting the very phrase the driver had just said. The `*`
+        # convention is F-30's, established for exactly this and missed here.
+        "uz": ("qarz*", "pul", "qancha qarzdorlar"),
         "so": ("lacag", "lacagta", "i leeyahay", "la leeyahay", "immisa lacag ah"),
         "pa": ("ਬਕਾਇਆ", "ਪੈਸਾ", "ਪੈਸੇ"),
     },
@@ -247,7 +254,8 @@ _TERMS: dict[str, dict[str, tuple[str, ...]]] = {
         "en": ("points", "reward", "rewards"),
         "es": ("puntos", "recompensa", "recompensas"),
         "ru": ("очки", "очков", "баллы", "баллов", "бонус*"),
-        "uz": ("ball", "ballar", "ballarim", "mukofot"),
+        # same grammar: ball / ballar / ballarim / ballim
+        "uz": ("ball*", "mukofot"),
         "so": ("dhibco", "dhibcaha", "abaalmarin"),
         "pa": ("ਪੁਆਇੰਟ", "ਇਨਾਮ"),
     },

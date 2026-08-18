@@ -305,7 +305,10 @@ def test_handle_utterance_transcribes_then_routes(db, monkeypatch):
 
     driver = _driver(db)
     # (text, confidence) — the seam's real contract; a bare string is what broke it
-    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en", content_type=None: ("what am I owed", 0.95))
+    monkeypatch.setattr(
+        service, "listen",
+        lambda db, audio, locale="en", content_type=None: ("what am I owed", 0.95),
+    )
 
     resp, transcript = m11.handle_utterance(
         db, ai.FakeModelProvider(), driver.id, b"\x00fake-webm-bytes",
@@ -475,7 +478,10 @@ def test_a_low_confidence_transcript_is_never_routed_as_a_command(db, monkeypatc
     from app.modules.m11_voice.domain import service
 
     driver = _driver(db)
-    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en", content_type=None: ("send my claim", 0.20))
+    monkeypatch.setattr(
+        service, "listen",
+        lambda db, audio, locale="en", content_type=None: ("send my claim", 0.20),
+    )
 
     resp, transcript = m11.handle_utterance(
         db, ai.FakeModelProvider(), driver.id, b"\x00audio", locale="en", driving=False
@@ -492,7 +498,10 @@ def test_a_confident_transcript_routes_normally(db, monkeypatch):
     from app.modules.m11_voice.domain import service
 
     driver = _driver(db)
-    monkeypatch.setattr(service, "listen", lambda db, audio, locale="en", content_type=None: ("what am I owed", 0.97))
+    monkeypatch.setattr(
+        service, "listen",
+        lambda db, audio, locale="en", content_type=None: ("what am I owed", 0.97),
+    )
 
     resp, _ = m11.handle_utterance(
         db, ai.FakeModelProvider(), driver.id, b"\x00audio", locale="en", driving=False
@@ -568,3 +577,33 @@ def test_azure_stt_reports_no_match_as_zero_confidence_not_as_words(db, monkeypa
     )
 
     assert speech.AzureSttAdapter().transcribe(b"\x00", locale="uz") == ("", 0.0)
+
+
+# --- Uzbek is agglutinative, and the lexicon has to be (entry 212) --------------------
+#
+# AI-CONTEXT: found by SPEAKING to the copilot on production, not by reading the lexicon.
+# Azure heard "Menga qancha qarzi bor." for "Menga qancha qarz bor?" — a correct
+# transcription, because `qarz` / `qarzi` / `qarzim` / `qarzlar` are one word wearing
+# different suffixes. The lexicon listed the bare stem, so the match failed and the
+# copilot answered "Tushunmadim" while SUGGESTING the very phrase the driver had said.
+#
+# F-30 already established the `*` prefix convention for exactly this ("explicit `*`
+# prefixes for Russian/Uzbek morphology"). These two entries were simply missed.
+
+@pytest.mark.parametrize("utterance", [
+    "menga qancha qarz bor",
+    "menga qancha qarzi bor",     # what Azure actually returns
+    "qarzim qancha",
+    "qancha qarzlarim bor",
+])
+def test_uzbek_money_questions_route_whatever_suffix_the_word_wears(db, utterance):
+    from app.modules.m11_voice.domain import service
+
+    assert service.classify_intent(utterance, "uz") == "money_owed"
+
+
+@pytest.mark.parametrize("utterance", ["ballarim qancha", "ballar qancha", "ballim qancha"])
+def test_uzbek_points_questions_route_whatever_suffix_the_word_wears(db, utterance):
+    from app.modules.m11_voice.domain import service
+
+    assert service.classify_intent(utterance, "uz") == "points_balance"
