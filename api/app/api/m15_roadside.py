@@ -38,6 +38,7 @@ from app.foundation.f09_ai_gateway.domain import speech
 from app.foundation.f09_ai_gateway.domain.enums import AiTask
 from app.modules.m15_roadside import public as m15
 from app.modules.m15_roadside.domain import audio as m15_audio
+from app.modules.m15_roadside.domain import conversation
 from app.modules.m15_roadside.domain import session_loop as loop
 from app.modules.m15_roadside.domain.rubric_f9 import F9Rubric, RubricUnavailable
 
@@ -384,6 +385,49 @@ async def _officer_frame(websocket: WebSocket, session_id, message) -> bool:
         if session is None:
             await websocket.close(code=CLOSE_BAD_SESSION)
             return False
+        # AI-CONTEXT: THE IMPROVISING OFFICER (entry 189). The model chooses what is said;
+        # everything about what it is WORTH stays where it was. If it is unavailable, over
+        # budget or unparseable we fall through to the scripted loop rather than to
+        # silence — a driver mid-stop gets a stiffer officer, not a dead screen, and the
+        # scripted path is fully reviewed content that always works.
+        if conversation.officer_mode(db) == "llm":
+            try:
+                improvised = conversation.conversational_officer(db, session)
+            except conversation.OfficerUnavailable:
+                improvised = None
+            if improvised is not None:
+                if improvised.done:
+                    verdict = loop.complete_session(db, session)
+                    db.commit()
+                    await websocket.send_json({
+                        "type": "complete",
+                        "band": verdict.band.value,
+                        "provisional": verdict.provisional,
+                        "label_key": verdict.label_key,
+                        "closing": improvised.line,
+                        "closing_audio_url": _audio_url(
+                            m15_audio.fragment_audio(db, improvised.line)
+                        ),
+                    })
+                    db.commit()
+                    return True
+
+                turn = loop.record_improvised_officer_turn(db, session, improvised)
+                # runtime synthesis, cached by TEXT — the officer's common sentences
+                # converge toward free as the same lines recur across drivers
+                audio_ref = m15_audio.fragment_audio(db, improvised.line)
+                db.commit()
+                await websocket.send_json({
+                    "type": "officer",
+                    "seq": turn.seq,
+                    "intent_key": improvised.intent_key,
+                    "text": improvised.line,
+                    "audio_url": _audio_url(audio_ref),
+                    "opening": None,
+                    "opening_audio_url": None,
+                })
+                return True
+
         try:
             # AI-CONTEXT: `allow_draft` IS NOT READ FROM THE FRAME, and this line used to
             # read it. The dev seam's entire safety is that nothing in the request path

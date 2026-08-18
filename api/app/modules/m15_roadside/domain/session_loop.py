@@ -430,6 +430,44 @@ def next_officer_turn(
     )
 
 
+def record_improvised_officer_turn(db: DbSession, session: Session, improvised) -> Turn:
+    """Persist a line the model chose, against the intent it says it is asking about.
+
+    AI-CONTEXT: the intent is what keeps SCORING deterministic when the officer is
+    improvising. `expected_slots` still resolve from the scenario's hidden state, so the
+    driver's answer is checked against the facts of this stop rather than against the
+    model's opinion of it — the model picks the conversation, never the verdict.
+
+    An unknown or empty intent key is stored as NULL rather than guessed at. A turn with no
+    intent scores nothing and teaches nothing, which is the correct outcome for a line the
+    model could not tie to a topic; inventing an intent would attach a driver's answer to a
+    question nobody asked.
+    """
+    intent = (
+        db.scalar(select(Intent).where(Intent.key == improvised.intent_key))
+        if improvised.intent_key
+        else None
+    )
+    scenario = db.get(ScenarioVersion, session.scenario_version_id)
+    seq = int(
+        db.scalar(
+            select(func.coalesce(func.max(Turn.seq), 0)).where(Turn.session_id == session.id)
+        )
+        or 0
+    )
+    turn = Turn(
+        session_id=session.id,
+        seq=seq + 1,
+        speaker=Speaker.officer,
+        intent_id=intent.id if intent else None,
+        transcript=improvised.line,
+        expected_slots=expected_slots_for(intent, scenario) if intent else {},
+    )
+    db.add(turn)
+    db.flush()
+    return turn
+
+
 def expected_slots_for(intent: Intent, scenario: ScenarioVersion) -> dict[str, str]:
     """The FACTS this question expects, resolved from the scenario's hidden state.
 
