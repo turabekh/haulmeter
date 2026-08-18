@@ -101,7 +101,10 @@ describe("TabBar (design-prd §4 NAV-1)", () => {
     const tabs = w.findAll(".tab");
     expect(tabs).toHaveLength(5);
     const text = w.text();
-    for (const label of ["Map", "Load", "Money", "Docs", "More"]) {
+    // "Roadside" replaced "Docs" in slot 4 at decision 207; the wallet moved to a More
+    // row and inspection mode gained its own entries (§10.4's tap budget). The COUNT is
+    // the law this test guards and it is unchanged — NAV-1 was not reversed.
+    for (const label of ["Map", "Load", "Money", "Roadside", "More"]) {
       expect(text).toContain(label);
     }
     expect(w.html().toLowerCase()).not.toContain("hamburger");

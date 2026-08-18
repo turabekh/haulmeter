@@ -49,15 +49,33 @@ test("inspection mode is reachable in ≤2 taps from a cold start, offline", asy
 
   let taps = 0;
 
-  // tap 1: the Docs tab in the five-tab bar (NAV-1)
-  const docsTab = page.locator('.tab, nav a, nav button').filter({ hasText: /docs|документ|dokument|ਦਸਤਾਵੇਜ਼|waraaq|documento/i }).first();
-  await docsTab.click();
+  // AI-CONTEXT: THIS PATH CHANGED AT DECISION 207 AND THE NUMBER DID NOT.
+  //
+  // Roadside Ready took the fourth tab slot and Docs moved to a More row. That made the
+  // old route More → Documents → Inspection — THREE taps — and this probe is what said
+  // so, in a real browser, while every unit test in the project stayed green. The fix
+  // was a second door rather than a smaller promise: inspection mode is its own entry on
+  // Load (and on More), so the law still reads ≤2 and still measures ≤2.
+  //
+  // LOAD, not More: §5 foregrounds the Load tab when the driver is ON_SITE, which is
+  // where a driver is when an officer walks up.
+
+  // tap 1: the Load tab in the five-tab bar (NAV-1, still exactly five)
+  const loadTab = page.locator('.tab, nav a, nav button').filter({ hasText: /load|груз|yuk|ਲੋਡ|xamuul|carga/i }).first();
+  await loadTab.click();
   taps += 1;
   await page.waitForTimeout(400);
 
-  // tap 2: inspection mode
-  const inspect = page.locator("button.inspect");
-  await expect(inspect, "the inspection button must be on the Docs tab (§10.4)").toBeVisible();
+  // tap 2: inspection mode, directly — not the wallet with inspection behind it
+  const inspect = page.locator("button.inspect-row");
+  await expect(inspect, "inspection mode must be one tap from a tab root (§10.4)").toBeVisible();
+
+  // the claim in LoadSurface's comment is that it sits above the fold at 360x800, so an
+  // officer is never waiting on a scroll. A claim in a comment is worth what it is
+  // measured at.
+  const box = await inspect.boundingBox();
+  expect(box.y + box.height, "inspection mode must be reachable without scrolling").toBeLessThanOrEqual(800);
+
   await inspect.click();
   taps += 1;
   await page.waitForTimeout(400);

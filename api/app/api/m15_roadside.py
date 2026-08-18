@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import current_account, get_db, require_module
+from app.api.deps import current_account, get_db, optional_account, require_module
 from app.api.media import KIND_DOCUMENT, SIZE_FULL, media_url
 from app.core.db import SessionLocal
 from app.foundation.f01_identity import public as identity
@@ -340,6 +340,73 @@ def coaching_attempt(
         "passed": passed,
         "review_needed": scored.review_needed,
         "recorded": account is not None,
+    }
+
+
+@router.get("/progress")
+def progress(
+    db: Session = Depends(get_db),
+    account: identity.Account | None = Depends(optional_account),
+) -> dict:
+    """Where the driver stands, for the Roadside tab root.
+
+    AI-CONTEXT: A GUEST GETS ZEROES AND A NULL BAND, NOT A 403. The free check is the
+    module's front door and auth is never placed in front of it (M15-FR1); a tab that
+    401s on open would put a signup wall exactly where FR1 forbids one. The surface
+    reads "no band yet" from the same shape whether nobody is signed in or a signed-in
+    driver has not run a check, because the CTA it draws is identical in both cases.
+
+    `provisional` is Q-8 and it is carried, never recomputed — see `progress.Readiness`.
+    """
+    from app.modules.m15_roadside.domain import drills
+
+    account_id = account.id if account else None
+    readiness = m15.latest_readiness(db, account_id)
+    skills = m15.skill_summary(db, account_id)
+    plan = drills.todays_drill(db, account_id) if account_id else None
+    db.commit()
+    return {
+        "band": readiness.band,
+        "provisional": readiness.provisional,
+        "checked_at": readiness.checked_at.isoformat() if readiness.checked_at else None,
+        "skills": {"seen": skills.seen, "passed": skills.passed, "due": skills.due},
+        "drill": {
+            "day": plan.plan_day if plan else None,
+            "due": len(plan.items.get("variant_ids", [])) if plan else 0,
+            "completed": plan.completed_at is not None if plan else False,
+        },
+    }
+
+
+@router.get("/sessions")
+def session_list(
+    db: Session = Depends(get_db),
+    account: identity.Account | None = Depends(optional_account),
+) -> dict:
+    """The caller's own past stops, newest first.
+
+    AI-CONTEXT: THE SCOPING IS THE POINT OF THIS ENDPOINT, not a precaution on it. It
+    hands session ids to a screen, and `GET /session/{id}/result` does not yet check
+    ownership (HANDOFF-139 §5) — so an unscoped list here would turn a known read of
+    your OWN band into an enumeration of everyone's. `session_history` takes an account
+    and has no other parameter for a caller to widen.
+
+    A guest gets an empty list rather than a 403, for FR1's reason: their session lives
+    against a guest token and becomes theirs on claim, which is the result screen's job.
+    """
+    rows = m15.session_history(db, account.id if account else None)
+    return {
+        "sessions": [
+            {
+                "id": str(row.id),
+                "mode": row.mode.value,
+                "started_at": row.started_at.isoformat(),
+                "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+                "band": row.band,
+                "provisional": row.provisional,
+            }
+            for row in rows
+        ]
     }
 
 

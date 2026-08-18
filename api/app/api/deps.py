@@ -59,6 +59,33 @@ def bearer_token(authorization: str = Header(default="")) -> str:
     return authorization[len("Bearer ") :]
 
 
+def optional_bearer_token(authorization: str = Header(default="")) -> str | None:
+    """The token if one was sent, `None` if none was — never a 401.
+
+    AI-CONTEXT: `bearer_token` RAISES on a missing header, which makes
+    `Account | None = Depends(current_account)` a lie wherever it appears: the annotation
+    says a guest is welcome and the dependency 401s before the handler runs. M15 is
+    written that way throughout and M15-FR1 promises the opposite ("auth is never placed
+    in front of the free check"). This pair is the honest version, for endpoints that
+    genuinely serve an anonymous caller.
+    """
+    if not authorization.startswith("Bearer "):
+        return None
+    return authorization[len("Bearer ") :]
+
+
+def optional_account(
+    token: str | None = Depends(optional_bearer_token),
+    db: Session = Depends(get_db),
+) -> identity.Account | None:
+    """Who is calling, or nobody. An invalid token is treated as nobody, deliberately:
+    an expired session on a public surface should degrade to the signed-out view rather
+    than trap a driver behind an error they cannot act on."""
+    if token is None:
+        return None
+    return identity.resolve_session(db, token)
+
+
 def current_account(
     token: str = Depends(bearer_token),
     db: Session = Depends(get_db),

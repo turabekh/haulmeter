@@ -983,3 +983,106 @@ def test_the_scored_frame_carries_the_echo_and_the_ack(client, db, monkeypatch):
 
     assert "echo" in frame and "echo_audio_url" in frame
     assert "ack" in frame and "ack_audio_url" in frame
+
+
+# --- the Roadside tab root: progress and history -------------------------------------
+#
+# AI-CONTEXT: these two endpoints exist because Roadside became a bottom-nav tab
+# (decision 207) and a tab root has to say where the driver stands. The scoping test
+# below is the one that matters: `GET /session/{id}/result` still has no ownership check
+# (HANDOFF-139 §5), so a list endpoint that leaked ids would turn a known read of your
+# own band into an enumeration of everyone's.
+
+
+def _completed_check(db, account_id, band="green"):
+    scenario = m.ScenarioVersion(
+        version=1, difficulty=m.Difficulty.clear, allowed_intents=["destination"],
+        status=m.ContentStatus.draft,
+    )
+    db.add(scenario)
+    db.flush()
+    session = loop.start_session(db, scenario=scenario, account_id=account_id, consented=True)
+    session.band = band
+    session.completed_at = session.started_at
+    db.flush()
+    return session
+
+
+def test_progress_answers_a_guest_with_zeroes_rather_than_a_401(client, db):
+    """M15-FR1: auth is never placed in front of the free check.
+
+    The tab root fetches this on open. A 401 here would put a signup wall on a tab a
+    driver has not chosen to sign up for, which is the one thing FR1 forbids.
+    """
+    _module_on(db)
+
+    resp = client.get("/roadside/progress")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["band"] is None
+    assert body["skills"] == {"seen": 0, "passed": 0, "due": 0}
+
+
+def test_progress_reports_the_latest_completed_check_and_carries_provisional(client, db):
+    """Q-8: the band a driver was SHOWN is the one the row recorded.
+
+    `provisional` is carried off the session rather than recomputed, so this screen can
+    never disagree with the result screen about the same stop.
+    """
+    _module_on(db)
+    session = _owned_session(client, db)
+    session.band = "yellow"
+    session.provisional = True
+    session.completed_at = session.started_at
+    db.flush()
+
+    body = client.get("/roadside/progress").json()
+
+    assert body["band"] == "yellow"
+    assert body["provisional"] is True
+    assert body["checked_at"] is not None
+
+
+def test_the_history_list_never_returns_another_drivers_stops(client, db):
+    """THE POINT OF THE ENDPOINT. Scoping, not a precaution on it.
+
+    A stranger's session id is the key to their band while the result endpoint is
+    unguarded, so the list must never be a source of ids that are not yours.
+    """
+    _module_on(db)
+    stranger = _account(db)
+    strangers_stop = _completed_check(db, stranger.id, band="red")
+
+    mine = _owned_session(client, db)  # also sets the bearer token to my account
+
+    body = client.get("/roadside/sessions").json()
+
+    ids = [row["id"] for row in body["sessions"]]
+    assert str(mine.id) in ids
+    assert str(strangers_stop.id) not in ids
+
+
+def test_the_history_list_is_empty_for_a_guest_rather_than_forbidden(client, db):
+    _module_on(db)
+
+    resp = client.get("/roadside/sessions")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"sessions": []}
+
+
+def test_history_includes_a_stop_the_driver_walked_out_of(client, db):
+    """An abandoned stop still happened.
+
+    Filtering to completed sessions would make the history disagree with the driver's
+    memory of their own week, which is the surface's entire job.
+    """
+    _module_on(db)
+    unfinished = _owned_session(client, db)
+    assert unfinished.completed_at is None
+
+    body = client.get("/roadside/sessions").json()
+
+    assert [row["id"] for row in body["sessions"]] == [str(unfinished.id)]
+    assert body["sessions"][0]["completed_at"] is None

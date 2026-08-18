@@ -778,3 +778,29 @@ recorded the trap, or all of them where it was carried forward.
 
     A screenshot carries no hostname. Before probing anything, establish which box is on
     screen: a state that cannot coexist (released here, draft there) settles it instantly.
+
+90. **Moving a screen can break a requirement stated as a NUMBER, and no unit test is
+    counting.** Decision 207 gave Roadside the fourth tab and moved Docs to a More row.
+    Everything still rendered, every request still succeeded, and the wallet a driver
+    eventually reached was correct — 1,068 vitest and 2,387 pytest stayed green. The only
+    thing that changed was the tap count: §10.4 requires inspection mode within **2 taps
+    of a cold start**, and More → Documents → Inspection is **three**.
+
+    It was caught by `layout/inspection.spec.js`, which drives a real browser with the
+    network cut, walks the path and **prints the number**. A requirement written as a
+    number needs a check that counts; assertions about what renders cannot see it.
+
+    **Before moving anything off a tab root, grep design-prd for a tap budget, an
+    "offline in", or a "from cold start" attached to it.** The fix is usually a second
+    entry point, not a smaller promise — the law is there because of the moment it
+    describes, and moving the screen does not move the officer at the window.
+
+91. **`Account | None = Depends(current_account)` is a lie — the dependency raises.**
+    `bearer_token` 401s on a missing `Authorization` header, so the handler never runs and
+    the `| None` branch is dead code. All eight M15 endpoints were written this way, with
+    docstrings promising guests "an honest empty answer, not a 403", while M15-FR1 says
+    auth is never placed in front of the free check. The whole guest path was unreachable
+    and nothing was red, because **no test ever called an endpoint without a token.**
+
+    Use `optional_account` when a caller may genuinely be anonymous, and **write the
+    no-token test** — an annotation is not a behaviour, and a docstring is not a test.

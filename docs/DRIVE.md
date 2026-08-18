@@ -357,28 +357,48 @@ as a parking reading) → status + freshness update; armed load → corridor sur
 4. Cancel per policy → both sides update; cancellation email in the Gmail inbox.
 
 ## J13 — Docs wallet `[M5-FR3, §17 Q16]`
-1. **Docs** → capture a "CDL" → typed, gridded **by type**, localized label.
+**Docs is no longer a tab (decision 207).** It is a row on **More**, beside a second row
+that opens inspection mode directly. Reaching the wallet is More → Documents.
+1. **More → Documents** → capture a "CDL" → typed, gridded **by type**, localized label.
 2. Second CDL → **pre-emptive** replace warning (amber, not red) → old one archived, pointed at
    replacement; expiry ladder follows the live one only.
 3. **Remove** → confirm sheet states consequence + limit (reminders stop, nothing deleted). Archive
    shows *why* each row is there; **Restore** works — except a superseded CDL while its replacement
    is live, and the block **names** the obstacle.
-4. **Inspection mode**: from cold start, ≤2 taps, **works with the API stopped**.
+4. **Inspection mode: count the taps, from a cold start, with the API stopped.** §10.4 says
+   ≤2 and decision 207 nearly cost it — More → Documents → Inspection is three. Walk BOTH
+   two-tap doors: **Load → Inspection mode** (the one that matters; §5 puts a driver on Load
+   when an officer walks up, and the row sits above the fold without scrolling) and
+   **More → Inspection mode**. Each must open the sheet itself, not merely land on the
+   wallet. `layout/inspection.spec.js` counts this in a browser; your job here is to
+   confirm it feels like two taps and not two taps plus a hunt.
 
-## J13b — Roadside Ready `[M15-FR3/FR4, E3 §E3.1.6]`
-**Gated on `m15_roadside`, which is OFF.** With the flag off, More shows **no Roadside row**
-at all — that is step 1, and it is the only step most sessions should see.
+## J13b — Roadside Ready `[M15-FR3/FR4, E3 §E3.1.6, decision 207]`
+**Roadside is the fourth bottom-nav tab** (decision 207 reversed E3.1.6's "no new
+bottom-nav tab" and D16's More row). Gated on `m15_roadside`.
+
+**Step 0, and do it first: the tab root is a program home, not a hub.** Open the
+**Roadside** tab cold, signed out. It must show the acquisition state — "You haven't run
+a check yet." and an offer — never a sign-in wall. M15-FR1 says auth is never placed in
+front of the free check, and the tab is the front door. *(Known gap: `POST
+/roadside/session` itself still 401s a guest — see the defect log. The tab root does not.)*
+
+**Step 0b: come back after a check.** The root then carries the band (labelled
+**provisional** — Q-8), a seen / passed / due counter row, and **Past stops**. An abandoned
+stop is listed and says *Not finished*; tapping any row opens that stop's result. If the
+band here disagrees with the result screen for the same stop, that is a defect — the band
+is carried off the session row precisely so it cannot.
 
 With the flag on (`/admin/flags`, an operator decision — not a step to take casually):
 1. **The stop opens and closes.** "Afternoon. I'll need to ask you a few questions." at
    the start, "That's everything." at the end — not a screen that simply changes.
-2. **More → Roadside Ready.** With nothing released, the screen says **why** it is empty —
+2. **The Roadside tab.** With nothing released, the screen says **why** it is empty —
    the lines are with a reviewer — rather than showing a spinner or an offer that fails.
 2. **Admin → Roadside content** (a second, platform-admin browser): a variant reads `draft`
    and offers only **Mark reviewed**. Release is not offered from draft, because the server
    refuses it and a button that always 422s teaches an operator to distrust the surface.
    Review it → **Release** appears → release it. **Holdouts are labelled** in the list.
-3. Back on the driver app, reload **Roadside Ready** → the check is now offered.
+3. Back on the driver app, reload the **Roadside** tab → the check is now offered.
 4. **Answer the WRONG question on purpose** — say "I'm hauling furniture" when asked about
    hours. The officer must **clarify** ("I'm asking how long you've been driving today, not
    where you're headed"), **once**, and then move on if you miss it again. That is FR2's
@@ -439,7 +459,7 @@ an hours question — so there is something to teach.
 ## J13d — The daily drill `[M15-FR6, partial]`
 Follows J13c, **signed in** — a drill belongs to a person.
 
-1. **Roadside Ready → Today's practice.** Before any check has been done it says
+1. **Roadside tab → Today's practice.** Before any check has been done it says
    *"Nothing due today. Practice appears after a check."*
 2. After coaching, it holds the phrasings you practised, **interleaved**: two consecutive
    items should be DIFFERENT questions, not two ways of asking one. That is the property
@@ -556,4 +576,5 @@ driver-identifiable.
 ## Defect log (append rows — this drives the next session)
 | # | Journey·Step | Surface | What I saw | Expected | Severity (blocks money / blocks daily / cosmetic) |
 |---|---|---|---|---|---|
-| 1 | | | | | |
+| 1 | J13b·0 | M15 API (all endpoints) | Every M15 endpoint 401s a caller with no bearer token — `bearer_token` raises on a missing header — including `POST /roadside/session`. All eight are annotated `Account \| None` with docstrings promising guests an empty answer. Found 2026-08-18 while building the tab (decision 207); not fixed there. | M15-FR1: "A Roadside Check starts with zero signup… auth is never placed in front of the free check." A guest reaches the first officer line in <60s. Needs the guest-token design, not an annotation fix. | blocks daily (it blocks the module's entire acquisition path) |
+| 2 | | | | | |

@@ -51,6 +51,14 @@ from .domain.models import (
     TrainingRecord,
     Turn,
 )
+from .domain.progress import (
+    HISTORY_LIMIT,
+    Readiness,
+    SkillSummary,
+    latest_readiness,
+    session_history,
+    skill_summary,
+)
 from .domain.service import (
     FLAG_KEY,
     MODULE,
@@ -68,7 +76,13 @@ __all__ = [
     "release",
     "teachable_variants",
     "FLAG_KEY",
+    "HISTORY_LIMIT",
     "MODULE",
+    "Readiness",
+    "SkillSummary",
+    "latest_readiness",
+    "session_history",
+    "skill_summary",
     "CoachingContent",
     "ModelAnswer",
     "AudioFragment",

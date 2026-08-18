@@ -45,7 +45,7 @@ const SOURCE = {
   "stop-packets": "StopPacketsSurface",
   // M15 — the session withdraws by PAUSING rather than by hiding a control, which is
   // still a consultation of the driver state and still the same claim
-  roadside: "RoadsideSurface",
+  roadside: "RoadsideHomeSurface",
   "roadside-consent": "RoadsideConsentSurface",
   "roadside-session": "RoadsideSessionSurface",
   "roadside-result": "RoadsideResultSurface",

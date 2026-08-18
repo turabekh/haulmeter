@@ -728,6 +728,45 @@ const OWNER_MOCKS = {
 // (api/app/api/m15_roadside.py::scenarios and ::session_result) — a fixture whose shape
 // drifts from its endpoint measures a screen the change never reached.
 const ROADSIDE_SESSION = "00000000-0000-0000-0000-0000000000d2";
+/* AI-CONTEXT: the tab root's two reads. `_EMPTY` is a driver who has never run a check —
+ * the acquisition state, and the one a stranger meets. The populated pair is the
+ * returning driver: a provisional band (Q-8 labels it everywhere), a counter row, and a
+ * history holding one unfinished stop, because an abandoned stop is listed rather than
+ * hidden and its row is a different shape. */
+const ROADSIDE_PROGRESS_EMPTY = {
+  band: null,
+  provisional: true,
+  checked_at: null,
+  skills: { seen: 0, passed: 0, due: 0 },
+  drill: { day: null, due: 0, completed: false },
+};
+const ROADSIDE_PROGRESS = {
+  band: "yellow",
+  provisional: true,
+  checked_at: "2026-08-14T09:12:00+00:00",
+  skills: { seen: 24, passed: 11, due: 6 },
+  drill: { day: 3, due: 6, completed: false },
+};
+const ROADSIDE_SESSIONS = {
+  sessions: [
+    {
+      id: "00000000-0000-0000-0000-0000000000e1",
+      mode: "check",
+      started_at: "2026-08-14T09:00:00+00:00",
+      completed_at: "2026-08-14T09:12:00+00:00",
+      band: "yellow",
+      provisional: true,
+    },
+    {
+      id: "00000000-0000-0000-0000-0000000000e2",
+      mode: "check",
+      started_at: "2026-08-09T14:20:00+00:00",
+      completed_at: null,
+      band: null,
+      provisional: true,
+    },
+  ],
+};
 const ROADSIDE_SCENARIO = {
   id: "00000000-0000-0000-0000-0000000000d1",
   difficulty: "clear",
@@ -1116,10 +1155,35 @@ const SURFACES = [
    * The RESULT is the one worth the mock. It carries the band in the Meter type step, the
    * provisional sentence, the review line and a tag list, which is the longest this screen
    * ever gets and the shape most likely to reflow under +40% in Gurmukhi. */
-  ["roadside", "/roadside", { mocks: { "/roadside/scenarios": { scenarios: [] } }, ready: ".roadside__empty" }],
+  ["roadside", "/roadside", {
+    mocks: {
+      "/roadside/scenarios": { scenarios: [] },
+      "/roadside/progress": ROADSIDE_PROGRESS_EMPTY,
+      "/roadside/sessions": { sessions: [] },
+    },
+    ready: ".card__label",
+  }],
   ["roadside-offer", "/roadside", {
-    mocks: { "/roadside/scenarios": { scenarios: [ROADSIDE_SCENARIO] } },
-    ready: ".roadside__cta",
+    mocks: {
+      "/roadside/scenarios": { scenarios: [ROADSIDE_SCENARIO] },
+      "/roadside/progress": ROADSIDE_PROGRESS_EMPTY,
+      "/roadside/sessions": { sessions: [] },
+    },
+    ready: ".card__cta",
+  }],
+  /* AI-CONTEXT: THE RETURNING DRIVER, which is the state the tab was built for and the
+   * one the two above cannot show. Decision 207 made this a tab root, so it is now the
+   * screen a driver lands on repeatedly rather than a hub they visit once — band, three
+   * counters and a history list stacked, which is the tallest this screen ever gets and
+   * the shape most likely to reflow under +40% in Gurmukhi. The band sits in the display
+   * type step beside a Mono counter row: two figure treatments on one card at 360 dp. */
+  ["roadside-returning", "/roadside", {
+    mocks: {
+      "/roadside/scenarios": { scenarios: [ROADSIDE_SCENARIO] },
+      "/roadside/progress": ROADSIDE_PROGRESS,
+      "/roadside/sessions": ROADSIDE_SESSIONS,
+    },
+    ready: ".stops",
   }],
   ["roadside-consent", "/roadside/consent/00000000-0000-0000-0000-0000000000d1", {
     ready: ".consent__agree",

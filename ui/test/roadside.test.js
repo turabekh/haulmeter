@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
-import RoadsideSurface from "../src/surfaces/RoadsideSurface.vue";
+import RoadsideHomeSurface from "../src/surfaces/RoadsideHomeSurface.vue";
 import RoadsideResultSurface from "../src/surfaces/RoadsideResultSurface.vue";
 import RoadsideConsentSurface from "../src/surfaces/RoadsideConsentSurface.vue";
 import RoadsideCoachSurface from "../src/surfaces/RoadsideCoachSurface.vue";
@@ -64,22 +64,26 @@ afterEach(() => {
   logout();
 });
 
-describe("Roadside — the catalogue", () => {
+describe("Roadside — the tab root", () => {
+  // AI-CONTEXT: these five moved from `RoadsideSurface` when decision 207 made Roadside a
+  // tab and the hub became a program home. The BEHAVIOURS are unchanged and that is why
+  // they moved rather than went — a new surface at an old route inherits every promise
+  // the old one made. Only the selectors differ: the offer is now a card action.
   it("says WHY it is empty rather than showing an empty screen", async () => {
     // the state the module genuinely ships in: nothing reviewed, so nothing offered
     stubFetch({ "/roadside/scenarios": jsonOk({ scenarios: [] }) });
-    const w = mount(RoadsideSurface, { global: { plugins: [router()] } });
+    const w = mount(RoadsideHomeSurface, { global: { plugins: [router()] } });
     await flushPromises();
 
     expect(w.text()).toContain(messages["roadside.empty"]);
-    expect(w.find(".roadside__cta").exists()).toBe(false);
+    expect(w.find(".card__cta").exists()).toBe(false);
   });
 
   it("treats the module gate as an absence, not an error", async () => {
     // 404 is `require_module` saying the module is off (entry 105). A driver who has not
     // been given the feature must not be told something failed.
     stubFetch({ "/roadside/scenarios": jsonOk({ detail: "not enabled" }, 404) });
-    const w = mount(RoadsideSurface, { global: { plugins: [router()] } });
+    const w = mount(RoadsideHomeSurface, { global: { plugins: [router()] } });
     await flushPromises();
 
     expect(w.text()).toContain(messages["roadside.empty"]);
@@ -88,31 +92,31 @@ describe("Roadside — the catalogue", () => {
 
   it("offers the check when there is something to run", async () => {
     stubFetch({ "/roadside/scenarios": jsonOk({ scenarios: [SCENARIO] }) });
-    const w = mount(RoadsideSurface, { global: { plugins: [router()] } });
+    const w = mount(RoadsideHomeSurface, { global: { plugins: [router()] } });
     await flushPromises();
 
-    expect(w.find(".roadside__cta").text()).toBe(messages["roadside.start"]);
+    expect(w.find(".card__cta").text()).toBe(messages["roadside.start"]);
   });
 
   it("withdraws the offer while the truck is moving (SM-3, Q-4)", async () => {
     stubFetch({ "/roadside/scenarios": jsonOk({ scenarios: [SCENARIO] }) });
-    const w = mount(RoadsideSurface, { global: { plugins: [router()] } });
+    const w = mount(RoadsideHomeSurface, { global: { plugins: [router()] } });
     await flushPromises();
 
     useDriverState().setState(DriverState.DRIVING);
     await flushPromises();
 
-    expect(w.find(".roadside__cta").exists()).toBe(false);
+    expect(w.find(".card__cta").exists()).toBe(false);
     expect(w.text()).toContain(messages["roadside.session.paused_driving"]);
   });
 
   it("reports a server failure as a failure, with a way back", async () => {
     stubFetch({ "/roadside/scenarios": jsonOk({}, 500) });
-    const w = mount(RoadsideSurface, { global: { plugins: [router()] } });
+    const w = mount(RoadsideHomeSurface, { global: { plugins: [router()] } });
     await flushPromises();
 
-    expect(w.find(".roadside__failed").exists()).toBe(true);
-    expect(w.find(".roadside__retry").exists()).toBe(true);
+    expect(w.find('[role="alert"]').exists()).toBe(true);
+    expect(w.find(".home__retry").exists()).toBe(true);
   });
 });
 

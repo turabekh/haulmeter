@@ -239,6 +239,14 @@ onBeforeUnmount(() => {
   }
 });
 function honourDeepLink() {
+  // AI-CONTEXT: `?inspection=1` OPENS INSPECTION MODE DIRECTLY, and it is what keeps
+  // §10.4's "≤2 taps from cold start" true after decision 207 moved Docs off the tab bar.
+  // More → Documents → Inspection is three taps; Load → Inspection and More → Inspection
+  // are two, and both land here. Same query precedent as `?doc=` immediately below —
+  // navigation structure is §22.2 never-improvise, so this reuses the established
+  // mechanism rather than inventing a route.
+  if (route?.query?.inspection) inspecting.value = true;
+
   // the surface is mounted without a router in several tests and in inspection mode
   const wanted = route?.query?.doc;
   if (!wanted) return;

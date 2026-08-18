@@ -44,7 +44,7 @@ import VendorReputation from "./surfaces/vendor/VendorReputation.vue";
 import VendorProfile from "./surfaces/vendor/VendorProfile.vue";
 import VendorSite from "./surfaces/vendor/VendorSite.vue";
 import VendorJoinSurface from "./surfaces/vendor/VendorJoinSurface.vue";
-import RoadsideSurface from "./surfaces/RoadsideSurface.vue";
+import RoadsideHomeSurface from "./surfaces/RoadsideHomeSurface.vue";
 import RoadsideConsentSurface from "./surfaces/RoadsideConsentSurface.vue";
 import RoadsideSessionSurface from "./surfaces/RoadsideSessionSurface.vue";
 import RoadsideTranscriptSurface from "./surfaces/RoadsideTranscriptSurface.vue";
@@ -110,7 +110,7 @@ export const routes = [
   // Every one declares `withdraws`, the session included. A spoken inspection at 65 mph is
   // the worst thing on this list, and Q-4 makes the engine refuse anyway — the session
   // surface turns that refusal into a paused state rather than a closed socket.
-  { path: "/roadside", name: "roadside", component: RoadsideSurface, meta: { driving: "withdraws" } },
+  { path: "/roadside", name: "roadside", component: RoadsideHomeSurface, meta: { driving: "withdraws" } },
   {
     path: "/roadside/consent/:scenarioId",
     name: "roadside-consent",

@@ -2398,6 +2398,24 @@ export const releaseRoadsideContent = (kind, id) =>
 // AI-CONTEXT: `locale` is a QUERY PARAM rather than an account preference, because the
 // driver who most needs coaching in their own language is the one who has not made an
 // account yet. The client already knows what it is rendering in.
+// AI-CONTEXT: the Roadside tab root's two reads (decision 207). Both answer a guest —
+// the tab is the module's front door and M15-FR1 forbids auth in front of the free
+// check — so neither throws on a signed-out caller. A 404 is the module gate (entry
+// 105), which is an absence rather than a failure: the surface draws its empty state.
+export async function fetchRoadsideProgress() {
+  const resp = await fetch(`${API_BASE}/roadside/progress`, { headers: headers() });
+  if (resp.status === 404) return null;
+  if (!resp.ok) throw new Error(`/roadside/progress ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchRoadsideSessions() {
+  const resp = await fetch(`${API_BASE}/roadside/sessions`, { headers: headers() });
+  if (resp.status === 404) return { sessions: [] };
+  if (!resp.ok) throw new Error(`/roadside/sessions ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchRoadsideCoaching(sessionId, locale) {
   return apiGet(`/roadside/session/${sessionId}/coaching?locale=${encodeURIComponent(locale)}`);
 }

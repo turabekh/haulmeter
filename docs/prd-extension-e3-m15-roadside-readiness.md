@@ -129,7 +129,7 @@ Boundaries: m15 imports `foundation.*.public` + earlier modules' `.public` only 
 
 ### E3.1.6 Driver UI (design-prd §22.3 DoD applies in full)
 
-- **Entry:** a plain **row** on More — §10.5 keeps More a plain 64 dp row list with **no cards, no promos, no badges**, so the entry is a row ("Roadside Ready" + one-line caption), not a card — plus org-invite deep links. **No new bottom-nav tab** — tab changes remain the standing A8/D7 owner decision (D16 folds into it).
+- **Entry:** ~~a plain **row** on More … **No new bottom-nav tab** — tab changes remain the standing A8/D7 owner decision (D16 folds into it).~~ **SUPERSEDED 2026-08-18 by decision 207 (owner):** Roadside Ready is the **fourth bottom-nav tab**, displacing Docs, which moved to a More row. NAV-1 is unchanged at five tabs; A8 keeps the tab question open with one fewer option. The tab root is a program home (`RoadsideHomeSurface`), not the old hub. Org-invite deep links are unaffected.
 - **Session surface:** full-screen, S1 shape; oversized officer-line text mirror (optional), 56 dp mic, live "listening" state, hard pause on DRIVING. New-surface composition logged as decision-log proposals (§E3.1.7); if any new token proves necessary, **STOP** per §22.
 - **Result surface:** strengths / needs-practice per phrase family; claim prompt for guests; "Start my plan" primary CTA.
 - **Drill player:** S2 dock-task shape; progress strip; shadowing playback; works offline per FR6.
@@ -236,7 +236,7 @@ Registry text for **D14**, signed and to be written into `trucker-platform-prd-v
 |---|---|---|---|
 | **D14** | **SIGNED — scope (b)** | Approve this extension; Session A authorized, B and C by their own kickoffs against this entry | Nothing further for Session A |
 | **D15** | **OPEN** | Approve the §9 three-tier amendment (§E3.5) — the second named change to standing law | Phase B billing only; Phase A has zero payment code and proceeds regardless |
-| **D16** | **CONFIRMED** | Entry point: More **row** + fleet-portal Readiness section at Phase A; whether Readiness ever earns a bottom-nav tab folds into the standing A8/D7 tab decision | — |
+| **D16** | **CONFIRMED, then SUPERSEDED 2026-08-18 (decision 207)** | Was: More **row** + fleet-portal Readiness section. Readiness **earned the fourth tab**; the fleet-portal half stands unchanged | — |
 | **D17** | **CONFIRMED** | Training record as a wallet document type, **excluded from inspection mode** — whether to show a training record to an officer is the driver's choice, not a designed flow | — |
 | **D18** | **OPEN (deferred)** | Neutral-brand surface (reserved): if consultant/CDL-school channels later require a non-Haulmeter face, the options are a skinned §18 portal or module extraction (cheap by construction — schema-per-module + public-interface-only imports). Deferred until a channel demands it | Nothing today |
 | **D19** | **OPEN** | **`m15_assessment` trigger criteria** (M13 Q13 style): transportation counsel engaged · scorer calibration ≥90% agreement · consent + retention architecture reviewed. The flag does not exist until all three; no build proceeds toward it meanwhile. **Note:** the counsel criterion can share the D13 engagement — one transportation-counsel touch can scope carrier-name invoicing (M14) and assessment-mode exposure (M15) together | `m15_assessment` creation |
