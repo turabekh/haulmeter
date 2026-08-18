@@ -120,11 +120,28 @@ async function send() {
     for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
     answer.value = await listenVoice(btoa(binary), props.driving, locale.value);
     play(answer.value);
-  } catch {
-    // §14.5: never pretend to understand. A recogniser that failed is not a driver who
-    // said nothing, and the copilot needs its live data behind it either way.
+    // heard, but not confidently enough to act on — the server says so rather than
+    // routing a guess, and the driver is shown what it thought it heard
+    if (answer.value?.data?.unclear) hint.value = t("voice.retry");
+  } catch (err) {
+    // AI-CONTEXT: SAY WHICH FAILURE IT WAS. The first version of this collapsed every
+    // outcome into "voice needs a connection" — which is the defect entry 90 fixed for
+    // the old recogniser, reintroduced by me the moment its taxonomy was deleted. The
+    // owner then met a copilot that blamed the network for a vendor with no Uzbek model,
+    // and the screenshot could not say which of the two it was.
+    //
+    // §12.4: what happened, and what to do instead. "Try again" is honest only when
+    // trying again could work.
     answer.value = null;
-    hint.value = t("voice.net_down");
+    const status = Number(String(err?.message || "").match(/(\d{3})$/)?.[1]);
+    hint.value =
+      status === 401
+        ? t("voice.signed_out")
+        : status === 503
+          ? t("voice.speech_down")
+          : status === 422
+            ? t("voice.retry")
+            : t("voice.net_down");
   }
   asking.value = false;
 }

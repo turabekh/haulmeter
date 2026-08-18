@@ -4575,3 +4575,71 @@ describe("BookingsSurface — the driver's own bookings (§23 entry 110)", () =>
     w.unmount();
   });
 });
+
+describe("VoiceSheet — a failure says WHICH failure (§12.4)", () => {
+  // AI-CONTEXT: the first server-speech version collapsed every outcome into "voice needs
+  // a connection" — the defect entry 90 fixed for the old recogniser, reintroduced the
+  // moment its taxonomy was deleted. The owner then met a copilot blaming the network for
+  // a vendor that had no Uzbek model, and the screenshot could not say which it was.
+  function recorderStub() {
+    const instances = [];
+    class FakeRecorder {
+      constructor() { this.state = "inactive"; instances.push(this); }
+      start() { this.state = "recording"; }
+      stop() {
+        this.state = "inactive";
+        if (this.ondataavailable) this.ondataavailable({ data: new Blob(["x"]) });
+        if (this.onstop) this.onstop();
+      }
+    }
+    vi.stubGlobal("MediaRecorder", FakeRecorder);
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [] }) },
+      configurable: true,
+    });
+    return instances;
+  }
+
+  const CASES = [
+    [401, "voice.signed_out"],
+    [503, "voice.speech_down"],
+    [422, "voice.retry"],
+    [500, "voice.net_down"],
+  ];
+
+  for (const [status, key] of CASES) {
+    it(`says ${key} on HTTP ${status}, not "the network is down"`, async () => {
+      const instances = recorderStub();
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status }));
+      try {
+        const w = mount(VoiceSheet);
+        await flushPromises();
+        instances[0].stop();
+        await flushPromises();
+        expect(w.find(".voice__hint").text()).toBe(en[key]);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  }
+
+  it("says 'say that again' when the server heard something it could not trust", async () => {
+    const instances = recorderStub();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        intent: "unknown", spoken: "I didn't catch that.",
+        data: { unclear: true, confidence: 0.31 }, transcript: "one of my art",
+      }),
+    }));
+    try {
+      const w = mount(VoiceSheet);
+      await flushPromises();
+      instances[0].stop();
+      await flushPromises();
+      expect(w.find(".voice__hint").text()).toBe(en["voice.retry"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

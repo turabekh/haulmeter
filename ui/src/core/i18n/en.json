@@ -1285,6 +1285,8 @@
   "voice.placeholder": "Ask about parking, fuel, or what you're owed",
   "voice.replay": "Play answer",
   "voice.retry": "Didn't catch that — try again or type.",
+  "voice.signed_out": "Sign in to use the copilot — or type your question.",
+  "voice.speech_down": "Voice is unavailable right now. Type your question and I'll answer.",
   "voice.stop": "Stop",
   "voice.title": "Copilot",
   "voice.unavailable": "Voice is on the Map tab for now.",

@@ -1285,6 +1285,8 @@
   "voice.placeholder": "Pregunta sobre estacionamiento, combustible o lo que te deben",
   "voice.replay": "Reproducir respuesta",
   "voice.retry": "No te entendí — inténtalo otra vez o escribe.",
+  "voice.signed_out": "Inicia sesión para usar el copiloto — o escribe tu pregunta.",
+  "voice.speech_down": "La voz no está disponible ahora. Escribe tu pregunta y te respondo.",
   "voice.stop": "Detener",
   "voice.title": "Copiloto",
   "voice.unavailable": "Por ahora, la voz está en la pestaña Mapa.",

@@ -1285,6 +1285,8 @@
   "voice.placeholder": "Parkovka, yoqilg'i yoki qarz haqida so'rang",
   "voice.replay": "Javobni eshittirish",
   "voice.retry": "Tushunmadim — qayta ayting yoki yozing.",
+  "voice.signed_out": "Kopilotdan foydalanish uchun tizimga kiring — yoki savolingizni yozing.",
+  "voice.speech_down": "Ovoz hozir ishlamayapti. Savolingizni yozing — javob beraman.",
   "voice.stop": "To‘xtatish",
   "voice.title": "Kopilot",
   "voice.unavailable": "Hozircha ovoz Xarita bo'limida.",

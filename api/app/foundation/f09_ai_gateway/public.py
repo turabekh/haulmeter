@@ -45,6 +45,8 @@ from .domain.service import (
 )
 from .domain.speech import (
     ANOMALY_MINUTES_PER_CALL,
+    DEEPGRAM_LANGUAGES,
+    AzureSttAdapter,
     FakeSttAdapter,
     FakeTtsAdapter,
     SpeechAnomaly,
@@ -60,6 +62,8 @@ from .domain.speech import (
 
 __all__ = [
     "ANOMALY_MINUTES_PER_CALL",
+    "AzureSttAdapter",
+    "DEEPGRAM_LANGUAGES",
     "FakeSttAdapter",
     "FakeTtsAdapter",
     "SpeechAnomaly",

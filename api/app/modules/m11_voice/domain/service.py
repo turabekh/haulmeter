@@ -329,7 +329,7 @@ def listen(db: Session, audio: bytes, *, locale: str = "en") -> tuple[str, float
     there was no microphone button that did anything, while a paid Deepgram key sat in the
     same settings object serving M15.
     """
-    transcript, confidence = ai.resolve_stt().transcribe(audio, locale=locale)
+    transcript, confidence = ai.resolve_stt(locale).transcribe(audio, locale=locale)
     ai.record_audio_minutes(db, MODULE, ai.AiTask.stt, max(len(audio) / 320_000.0, 0.02))
     return transcript, confidence
 

@@ -516,8 +516,55 @@ def test_listen_returns_the_confidence_the_floor_reads(db, monkeypatch):
         def transcribe(self, audio, *, locale):
             return ("hello", 0.91)
 
-    monkeypatch.setattr(gateway, "resolve_stt", lambda: _Stt())
+    monkeypatch.setattr(gateway, "resolve_stt", lambda locale="en": _Stt())
     text, confidence = service.listen(db, b"\x00audio", locale="en")
 
     assert text == "hello"
     assert confidence == 0.91
+
+
+def test_the_gateway_picks_a_vendor_that_can_hear_the_language(db):
+    """The owner's second report, in one assertion.
+
+    AI-CONTEXT: Deepgram's nova-2 has NO MODEL for uz, pa or so — measured against the
+    live API, not read in documentation — and returns HTTP 400. The copilot passed the
+    driver's locale straight through, so every Uzbek question 400ed and the sheet said
+    "voice needs a connection". Three of six launch locales, including the audience this
+    product exists for.
+
+    M15 is unaffected and that is why `resolve_stt()` still defaults to English: its
+    officer always speaks English and it passes no locale.
+    """
+    from app.foundation.f09_ai_gateway.domain import speech
+
+    for supported in ("en", "es", "ru"):
+        assert isinstance(speech.resolve_stt(supported), speech.DeepgramSttAdapter)
+    for unsupported in ("uz", "pa", "so"):
+        assert isinstance(speech.resolve_stt(unsupported), speech.AzureSttAdapter)
+    # the default is what every existing caller gets, unchanged
+    assert isinstance(speech.resolve_stt(), speech.DeepgramSttAdapter)
+
+
+def test_azure_stt_reports_no_match_as_zero_confidence_not_as_words(db, monkeypatch):
+    """`NoMatch` means it heard audio and resolved nothing — never a transcript.
+
+    The floor is what stops the copilot acting on a guess, and Azure's short-audio API
+    returns no confidence number of its own, so `RecognitionStatus` has to carry it.
+    """
+    from app.foundation.f09_ai_gateway.domain import speech
+
+    class _Resp:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return {"RecognitionStatus": "NoMatch"}
+
+    monkeypatch.setattr(
+        speech, "_http", lambda: type("C", (), {"post": lambda *a, **k: _Resp()})()
+    )
+    monkeypatch.setattr(
+        speech,
+        "get_settings",
+        lambda: type("S", (), {"azure_speech_key": "k", "azure_speech_region": "r"})(),
+    )
+
+    assert speech.AzureSttAdapter().transcribe(b"\x00", locale="uz") == ("", 0.0)

@@ -268,6 +268,94 @@ class AzureTtsAdapter:
         return resp.content
 
 
+# AI-CONTEXT: WHICH LANGUAGES DEEPGRAM CAN ACTUALLY HEAR, measured against the live API
+# on 2026-08-18 rather than remembered from documentation.
+#
+#   nova-2  uz -> 400 "No such model/language/tier combination found"
+#   nova-2  pa -> 400        nova-2  so -> 400
+#   nova-2  en/es/ru -> 200
+#
+# THREE OF SIX LAUNCH LOCALES, including the primary audience. The copilot passed the
+# driver's locale straight through and 400ed on every Uzbek question — which is what
+# "not working" was. M15 never hit it because the roadside officer is always English and
+# it hardcodes `locale="en"`.
+#
+# Deepgram's fallbacks were measured too and are not good enough: nova-3 `multi` heard
+# "Menga qancha qarz bor?" as "menge cancha karlsborne" (0.71), whisper-large as
+# "ming yakancha qarzbo" (0.56). Azure heard "Menga qancha qarzi bor." — so the split is
+# by capability, not by preference.
+DEEPGRAM_LANGUAGES = frozenset({"en", "es", "ru"})
+
+
+class AzureSttAdapter:
+    """Speech-to-text for the languages Deepgram has no model for (uz, pa, so).
+
+    AI-CONTEXT: IT TAKES BROWSER AUDIO UNCHANGED, and that was the open question — Azure's
+    short-audio REST documents WAV-PCM and OGG-OPUS, while `MediaRecorder` in Chrome emits
+    `audio/webm;codecs=opus` and iOS Safari emits mp4. Measured with genuine
+    browser-recorded bytes: webm/opus, ogg/opus and wav all returned 200. So there is no
+    transcoding step, and there is no ffmpeg in this image to do one with.
+
+    The container is declared honestly in `Content-Type` rather than mislabelled — the
+    Deepgram adapter's hardcoded `audio/wav` works only because Deepgram sniffs, and
+    copying that habit into a second vendor is how it stops being harmless.
+    """
+
+    name = "azure_stt"
+    LOCALES = {
+        "uz": "uz-UZ",
+        "pa": "pa-IN",
+        "so": "so-SO",
+        "en": "en-US",
+        "es": "es-US",
+        "ru": "ru-RU",
+        "tg": "tg-TJ",
+    }
+
+    def __init__(self) -> None:
+        settings = get_settings()
+        if not (settings.azure_speech_key and settings.azure_speech_region):
+            raise SpeechUnavailable(
+                "AZURE_SPEECH_KEY/REGION are not set: this deployment cannot transcribe "
+                "the locales Deepgram has no model for. Refusing rather than degrading — "
+                "recognising Uzbek speech as English produces confident nonsense, which a "
+                "copilot would then act on."
+            )
+        self._key = settings.azure_speech_key
+        self._region = settings.azure_speech_region
+
+    def transcribe(
+        self, audio: bytes, *, locale: str, content_type: str = "audio/webm; codecs=opus"
+    ) -> tuple[str, float]:
+        language = self.LOCALES.get((locale or "").split("-")[0], "en-US")
+        resp = _http().post(
+            f"https://{self._region}.stt.speech.microsoft.com"
+            f"/speech/recognition/conversation/cognitiveservices/v1",
+            params={"language": language},
+            headers={
+                "Ocp-Apim-Subscription-Key": self._key,
+                "Content-Type": content_type,
+            },
+            content=audio,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        status = payload.get("RecognitionStatus")
+        if status == "NoMatch":
+            # heard audio, resolved nothing — an empty transcript at zero confidence,
+            # which the caller's floor already treats as "say that again"
+            return "", 0.0
+        if status != "Success":
+            raise SpeechUnavailable(f"Azure STT returned {status!r}: {payload!r}")
+        # AI-CONTEXT: THE SHORT-AUDIO REST API RETURNS NO CONFIDENCE at all — `DisplayText`
+        # and nothing to floor it with. Reporting a made-up number would defeat the floor
+        # that exists to stop the copilot acting on a guess, so a successful recognition
+        # reports 1.0 and the honesty lives in `RecognitionStatus`: Azure says Success or
+        # it says NoMatch. This is a REAL difference in guarantee from Deepgram and is the
+        # reason it is written down rather than smoothed over.
+        return payload.get("DisplayText", ""), 1.0
+
+
 def stt_configured() -> bool:
     return bool(get_settings().deepgram_api_key)
 
@@ -277,9 +365,18 @@ def tts_configured() -> bool:
     return bool(settings.azure_speech_key and settings.azure_speech_region)
 
 
-def resolve_stt() -> SttAdapter:
-    """The configured STT adapter, or a refusal. NEVER a Fake."""
-    return DeepgramSttAdapter()
+def resolve_stt(locale: str = "en") -> SttAdapter:
+    """The adapter that can hear THIS language, or a refusal. NEVER a Fake.
+
+    AI-CONTEXT: the locale argument defaults to English so every existing caller keeps its
+    behaviour — M15 transcribes a US officer's stop and passes nothing. Only callers that
+    serve a driver in their own language need to say which one, and those are exactly the
+    ones Deepgram cannot always serve.
+    """
+    base = (locale or "en").split("-")[0]
+    if base in DEEPGRAM_LANGUAGES:
+        return DeepgramSttAdapter()
+    return AzureSttAdapter()
 
 
 def resolve_tts() -> TtsAdapter:

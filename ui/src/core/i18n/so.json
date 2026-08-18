@@ -1285,6 +1285,8 @@
   "voice.placeholder": "Weydii baabuur-dhigasho, shidaal ama waxa lagugu leeyahay",
   "voice.replay": "Ka dhig jawaabta",
   "voice.retry": "Ma maqlin — mar kale isku day ama qor.",
+  "voice.signed_out": "Gal si aad u isticmaasho kobilotka — ama qor su'aashaada.",
+  "voice.speech_down": "Codku hadda ma shaqaynayo. Qor su'aashaada — waan kuu jawaabi.",
   "voice.stop": "Jooji",
   "voice.title": "Kaaliye",
   "voice.unavailable": "Hadda codku wuxuu ku jiraa tabka Khariidadda.",
