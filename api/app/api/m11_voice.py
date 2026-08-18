@@ -6,6 +6,7 @@ activation.
 """
 
 import base64
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -16,6 +17,8 @@ from app.foundation.f01_identity import public as identity
 from app.foundation.f09_ai_gateway import public as ai
 from app.foundation.f15_localization import public as f15
 from app.modules.m11_voice import public as m11
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/voice", tags=["voice"],
     # PRD §6: the module's own flag, gating every route in it (§23 entry 105)
@@ -141,6 +144,19 @@ def listen(
         # for this distinction with a whole session dying on a vendor 400 (entry 203); the
         # copilot answers with a status a surface can act on instead.
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "speech is unavailable") from exc
+    # AI-CONTEXT: DIAGNOSTIC WITHOUT THE WORDS. Twice now a "copilot not working" report
+    # has cost a round of guessing that a single line here would have settled — which
+    # vendor was asked, in which language, and whether it heard anything. The TRANSCRIPT
+    # IS DELIBERATELY NOT LOGGED: M15 records a driver's speech only behind an explicit
+    # consent screen with a 30-day class, and the copilot has neither, so putting
+    # utterances in container logs would be a retention decision made by a debugging
+    # convenience. Length and confidence say what is needed.
+    log.info(
+        "m11.listen locale=%s vendor=%s bytes=%d mime=%s heard_chars=%d conf=%.2f intent=%s",
+        locale, ai.resolve_stt(locale).name, len(audio), body.mime or "-",
+        len(transcript or ""), resp.data.get("confidence", 1.0) if resp.data else 1.0,
+        resp.intent,
+    )
     db.commit()
     return _response(resp, transcript)
 

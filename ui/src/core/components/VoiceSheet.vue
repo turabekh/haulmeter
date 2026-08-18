@@ -220,6 +220,17 @@ onBeforeUnmount(() => {
 <template>
   <div class="voice">
     <div v-if="answer" class="voice__answer" :class="{ hero: driving }">
+      <!-- AI-CONTEXT: WHAT WE HEARD, SHOWN. §14.5 is "never pretend to understand", and a
+           driver cannot tell a wrong ANSWER from a misheard QUESTION unless the surface
+           says which it was. The endpoint has returned this since decision 209 and nothing
+           rendered it, so "Tushunmadim" was indistinguishable from a recogniser that heard
+           something else entirely — for the owner AND for the session debugging it.
+
+           Only for the spoken path: a typed question is already on screen, and echoing it
+           back would be the app reading the driver their own words. -->
+      <p v-if="answer.transcript" class="voice__heard">
+        {{ t("voice.heard", { text: answer.transcript }) }}
+      </p>
       <p class="voice__spoken" aria-live="polite">{{ answer.spoken }}</p>
       <!-- AI-CONTEXT: offered when EITHER voice can serve it — the server's mp3 or the
            browser's fallback. Gating this on `synthesisSupported()` alone hid the button
@@ -292,6 +303,13 @@ onBeforeUnmount(() => {
   color: var(--text-1);
   font-size: var(--type-body-size);
 }
+/* deliberately quieter than the answer: it is context for the answer, not the answer */
+.voice__heard {
+  margin: 0 0 var(--s-2) 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
 .voice__spoken {
   margin: 0;
   flex: 1;
@@ -308,7 +326,14 @@ onBeforeUnmount(() => {
   color: var(--shield-500);
 }
 /* voice-first: while driving the spoken answer is oversized (§14 / S1) */
-.voice__answer.hero .voice__spoken {
+.voice__answer.hero /* deliberately quieter than the answer: it is context for the answer, not the answer */
+.voice__heard {
+  margin: 0 0 var(--s-2) 0;
+  color: var(--text-3);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+.voice__spoken {
   font-size: var(--type-title-size);
   line-height: var(--type-title-line);
 }

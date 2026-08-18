@@ -1216,6 +1216,7 @@ describe("FacilityProfileSurface — driver Q&A (M10-FR4)", () => {
 });
 
 describe("VoiceSheet — copilot ask/answer (M11-FR1)", () => {
+  let savedMediaDevices = null;
   // AI-CONTEXT: the secure-context dance that used to sit here is gone with the
   // recogniser (decision 209). `MediaRecorder` and `getUserMedia` need a secure context
   // too, but the browser enforces that by refusing the mic — which the sheet already
@@ -1285,12 +1286,20 @@ describe("VoiceSheet — copilot ask/answer (M11-FR1)", () => {
     vi.stubGlobal("MediaRecorder", FakeRecorder);
     vi.stubGlobal("speechSynthesis", { speak, cancel: vi.fn() });
     vi.stubGlobal("SpeechSynthesisUtterance", class { constructor(text) { this.text = text; } });
+    // see the note in the sibling helper: this one is not undone by unstubAllGlobals
+    savedMediaDevices = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
     Object.defineProperty(navigator, "mediaDevices", {
       value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [] }) },
       configurable: true,
     });
     return { instances, speak };
   }
+
+  afterEach(() => {
+    if (savedMediaDevices) Object.defineProperty(navigator, "mediaDevices", savedMediaDevices);
+    else delete navigator.mediaDevices;
+    savedMediaDevices = null;
+  });
 
   it("records the driver and sends the audio to /voice/listen, not the browser recogniser", async () => {
     const { instances } = installRecorder();
@@ -4577,6 +4586,7 @@ describe("BookingsSurface — the driver's own bookings (§23 entry 110)", () =>
 });
 
 describe("VoiceSheet — a failure says WHICH failure (§12.4)", () => {
+  let savedMediaDevices = null;
   // AI-CONTEXT: the first server-speech version collapsed every outcome into "voice needs
   // a connection" — the defect entry 90 fixed for the old recogniser, reintroduced the
   // moment its taxonomy was deleted. The owner then met a copilot blaming the network for
@@ -4593,12 +4603,24 @@ describe("VoiceSheet — a failure says WHICH failure (§12.4)", () => {
       }
     }
     vi.stubGlobal("MediaRecorder", FakeRecorder);
+    // AI-CONTEXT: `defineProperty` is NOT undone by `vi.unstubAllGlobals()`. Leaving it in
+    // place made MapSurface — which mounts this sheet — start recording inside an
+    // unrelated test two describes later, and the failure surfaced as a map overlay
+    // assertion. The ORIGINAL DESCRIPTOR is saved and put back: `delete` alone left
+    // `navigator` in a third state that was neither the real one nor the stub.
+    savedMediaDevices = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
     Object.defineProperty(navigator, "mediaDevices", {
       value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [] }) },
       configurable: true,
     });
     return instances;
   }
+
+  afterEach(() => {
+    if (savedMediaDevices) Object.defineProperty(navigator, "mediaDevices", savedMediaDevices);
+    else delete navigator.mediaDevices;
+    savedMediaDevices = null;
+  });
 
   const CASES = [
     [401, "voice.signed_out"],

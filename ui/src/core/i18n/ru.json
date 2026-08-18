@@ -1278,6 +1278,7 @@
   "vendor.where": "Где",
   "vendor.your_documents": "Что вы прислали",
   "voice.ask": "Спросить",
+  "voice.heard": "Вы сказали: «{text}»",
   "voice.listening": "Слушаю…",
   "voice.mic": "Голос",
   "voice.mic_blocked": "Микрофон выключен — напишите вопрос.",

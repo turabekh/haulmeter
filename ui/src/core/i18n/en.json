@@ -1278,6 +1278,7 @@
   "vendor.where": "Where",
   "vendor.your_documents": "What you have sent",
   "voice.ask": "Ask",
+  "voice.heard": "You said: “{text}”",
   "voice.listening": "Listening…",
   "voice.mic": "Voice",
   "voice.mic_blocked": "Mic is off — type your question.",

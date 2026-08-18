@@ -1278,6 +1278,7 @@
   "vendor.where": "ਕਿੱਥੇ",
   "vendor.your_documents": "ਤੁਸੀਂ ਕੀ ਭੇਜਿਆ",
   "voice.ask": "ਪੁੱਛੋ",
+  "voice.heard": "ਤੁਸੀਂ ਕਿਹਾ: “{text}”",
   "voice.listening": "ਸੁਣ ਰਿਹਾ ਹੈ…",
   "voice.mic": "ਆਵਾਜ਼",
   "voice.mic_blocked": "ਮਾਈਕ ਬੰਦ ਹੈ — ਆਪਣਾ ਸਵਾਲ ਲਿਖੋ।",
