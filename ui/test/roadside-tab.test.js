@@ -84,26 +84,25 @@ describe("§10.4 — inspection mode stays within two taps of a cold start", () 
   // Tap 1 is always a tab (a cold start lands on a tab root). Tap 2 must therefore be a
   // control ON that tab root that opens inspection mode itself. Nesting it behind the
   // wallet row would make it three and is precisely what this asserts against.
-  const TAB_ROOTS = ["/map", "/load", "/money", "/roadside", "/more"];
+  const TAB_ROOTS = ["/map", "/load", "/money", "/docs", "/roadside", "/more"];
 
-  it("is reachable from a tab root by exactly one more tap", () => {
-    const sources = {
-      "/load": read("src/surfaces/LoadSurface.vue"),
-    };
-    const opensInspection = Object.entries(sources)
-      .filter(([, src]) => src.includes("/docs?inspection=1"))
-      .map(([path]) => path);
-
-    expect(opensInspection.length).toBeGreaterThan(0);
-    for (const path of opensInspection) expect(TAB_ROOTS).toContain(path);
+  it("is reachable from a tab root by exactly one more tap — now through Docs", () => {
+    // AI-CONTEXT: THE LOAD DOOR WAS REMOVED AT 221 (owner). It existed because 207 spent
+    // the Docs tab slot on Roadside and More -> Documents -> Inspection was three taps;
+    // 213 put Docs back on the bar and KEPT the Load door anyway, and this is the reversal
+    // of that half. Docs tab root -> its own Inspection button is two, which is the same
+    // two the law has always asked for.
+    const docs = read("src/surfaces/DocsSurface.vue");
+    expect(docs).toContain('class="inspect"');
+    expect(TAB_ROOTS).toContain("/docs");
   });
 
-  it("is on Load, which is the tab the state machine foregrounds at a stop", () => {
-    // AI-CONTEXT: KEPT after 213 restored the Docs tab, even though §10.4's two taps are
-    // satisfied without it. §5 foregrounds Load when ON_SITE — which is where a driver is
-    // when an officer walks up — and the row sits above the fold there. The More rows
-    // added at 207 were removed instead: with Docs on the bar they were a third path.
-    expect(read("src/surfaces/LoadSurface.vue")).toContain("/docs?inspection=1");
+  it("no longer sits on Load, and nothing else re-adds a second door", () => {
+    // a third path to one screen is what 213 removed from More; two paths is what 221
+    // removed from Load. If a future session re-adds one, it should be a decision rather
+    // than a drift, and this is what makes it show up as a failing test.
+    expect(read("src/surfaces/LoadSurface.vue")).not.toContain("inspection=1");
+    expect(read("src/surfaces/LoadSurface.vue")).not.toContain("inspect-row");
     expect(read("src/surfaces/MoreSurface.vue")).not.toContain("inspection=1");
   });
 
@@ -115,9 +114,12 @@ describe("§10.4 — inspection mode stays within two taps of a cold start", () 
     expect(docs).toMatch(/query\?\.inspection\)\s*inspecting\.value = true/);
   });
 
-  it("survives DRIVING on Load — §10.4 keeps it reachable at speed", () => {
-    const src = read("src/surfaces/LoadSurface.vue");
-    const row = src.slice(src.indexOf('class="inspect-row"') - 400, src.indexOf('class="inspect-row"'));
+  it("survives DRIVING on Docs — §10.4 keeps it reachable at speed", () => {
+    // §10.4: "DRIVING: inspection mode reachable but confirms vehicle stopped". The
+    // control itself must not be withdrawn at speed — an officer can stop a truck that
+    // has not finished stopping.
+    const src = read("src/surfaces/DocsSurface.vue");
+    const row = src.slice(src.indexOf('class="inspect"') - 400, src.indexOf('class="inspect"'));
     expect(row).not.toMatch(/v-if="!isDriving"/);
   });
 });

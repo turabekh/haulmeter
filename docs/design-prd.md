@@ -253,8 +253,8 @@ Each spec: purpose · anatomy at 360 dp · primary action · session type · DRI
 - Purpose: wallet + capture inbox.
 - Anatomy: Inspection mode button (top, 56 dp) → expiring-soon strip (marker pills) → document grid by type → capture FAB-chip.
 - Primary action: Inspection mode. Sessions: S2. DRIVING: inspection mode reachable but confirms vehicle stopped.
-- **Inspection mode must be reachable offline in ≤2 taps from cold start.** With Docs on the bar that is satisfied here (Docs tab → Inspection). **The second door on Load is kept anyway**: §5 foregrounds Load when ON_SITE, which is where a driver is when an officer walks up, and the row sits above the fold there. The More rows added at 207 were removed — with Docs on the bar they were a third path to one screen. `layout/inspection.spec.js` counts the taps in a real browser with the network cut and is the only acceptable proof.
-- The Load entry is **unconditional** — every other control on that screen is gated on a live load, and an inspection is not; a driver stopped between loads needs their credentials exactly as much.
+- **Inspection mode must be reachable offline in ≤2 taps from cold start.** With Docs on the bar that is satisfied **here and only here**: Docs tab → Inspection. **There is exactly ONE door** (§23 entry 221, owner). The second door on Load, added at 207 when Roadside had taken the Docs slot and kept at 213, was removed once it was a second path to one screen rather than the only path to it — the same argument that removed the More rows at 213. `layout/inspection.spec.js` counts the taps in a real browser with the network cut and is the only acceptable proof; it walks the remaining door, because §10.4 is a promise about reachability and the only way to keep it is something a thumb can actually reach.
+- The Docs entry is **unconditional and the tab's primary action** — it is the first control on the surface, above the fold at 360×800, so an officer is never waiting on a scroll.
 
 ### 10.5 More
 - Purpose: identity, fleet, points, settings, help. Deliberately boring; a plain 64 dp row list. No cards, no promos, no badges. Sessions: S3.

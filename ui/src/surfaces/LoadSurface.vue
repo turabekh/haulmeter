@@ -37,7 +37,6 @@ import {
   TriangleAlert,
   ChevronDown,
   ChevronRight,
-  ShieldCheck,
 } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import TheMeter from "../core/components/TheMeter.vue";
@@ -895,35 +894,6 @@ async function endLoad() {
     <section v-if="!paperworkFirst" class="card meter-card">
       <TheMeter :label="meterLabel" :figure="meterFigure" :variant="variant" :status="meterStatus" />
     </section>
-    <!-- AI-CONTEXT: INSPECTION MODE, AND IT IS HERE BECAUSE OF A TAP BUDGET (decision 207).
-         §10.4 requires inspection mode within 2 taps of a cold start. It used to be the
-         Docs tab's primary action — one tap to the tab, one to the button. Roadside took
-         that tab slot, and More → Documents → Inspection is three taps, so the law needed
-         a second door that is two.
-
-         LOAD IS THE RIGHT DOOR, not a consolation for the lost one: a driver with an
-         officer at the window is at a stop, and §5 already foregrounds this tab when
-         ON_SITE. It sits directly under the Meter so it is above the fold at 360×800
-         without scrolling — an officer waiting is the worst moment to hunt.
-
-         UNCONDITIONAL, deliberately. Every other control on this screen is gated on a
-         live load; an inspection is not, and a driver stopped between loads needs their
-         credentials exactly as much. It is a ROW rather than a `cta` because §8 allows a
-         card one action and the Meter card's action is the Meter.
-
-         DRIVING: it stays. §10.4 has inspection mode reachable at speed (it confirms the
-         vehicle is stopped on the far side), and it is the one thing on this screen that
-         a stop can demand before the truck has finished stopping. -->
-    <button
-      class="inspect-row"
-      type="button"
-      @click="router.push('/docs?inspection=1')"
-    >
-      <ShieldCheck :size="20" :stroke-width="2" aria-hidden="true" />
-      <span>{{ t("docs.inspection") }}</span>
-      <ChevronRight :size="20" :stroke-width="2" aria-hidden="true" />
-    </button>
-
     <!-- AI-CONTEXT: §15.5's degraded-location card, which became load-bearing the
          moment the meter started depending on real positions (F3's ping seam).
          "A single persistent Load-tab card explaining exactly what stops working
@@ -1734,25 +1704,6 @@ async function endLoad() {
 }
 /* calm, not red (§15.1's tone, applied to §15.5): the app still works, it just works
    with less. Hairline card, `marker` for the one word that matters. */
-.inspect-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  width: 100%;
-  min-height: var(--touch-primary);
-  padding: var(--s-3) var(--s-4);
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-card);
-  background: var(--ink-1);
-  color: var(--text-1);
-  font-family: var(--font-sans);
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line);
-  text-align: start;
-}
-.inspect-row span {
-  flex: 1 1 auto;
-}
 .degraded {
   display: flex;
   flex-direction: column;

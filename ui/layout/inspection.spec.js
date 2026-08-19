@@ -49,30 +49,35 @@ test("inspection mode is reachable in ≤2 taps from a cold start, offline", asy
 
   let taps = 0;
 
-  // AI-CONTEXT: THIS PATH CHANGED AT DECISION 207 AND THE NUMBER DID NOT.
+  // AI-CONTEXT: THIS PATH HAS CHANGED TWICE AND THE NUMBER HAS NOT.
   //
-  // Roadside Ready took the fourth tab slot and Docs moved to a More row. That made the
-  // old route More → Documents → Inspection — THREE taps — and this probe is what said
-  // so, in a real browser, while every unit test in the project stayed green. The fix
-  // was a second door rather than a smaller promise: inspection mode is its own entry on
-  // Load (and on More), so the law still reads ≤2 and still measures ≤2.
+  // At 207 Roadside took the fourth tab slot and Docs moved to a More row, making the
+  // route More -> Documents -> Inspection — THREE taps — and this probe is what said so,
+  // in a real browser, while every unit test in the project stayed green. A second door
+  // on Load restored the two.
   //
-  // LOAD, not More: §5 foregrounds the Load tab when the driver is ON_SITE, which is
-  // where a driver is when an officer walks up.
+  // At 221 the owner removed that Load door. It is affordable now for the reason 213
+  // recorded when it declined to remove it: **Docs is back on the bar**, so the tab root
+  // is one tap and its inspection button is the second. The law is unchanged and so is
+  // the measurement — what changed is which door this counts through.
+  //
+  // The probe deliberately walks the REMAINING door rather than asserting the removed
+  // one is gone: §10.4 is a promise about reachability, and the only way it can be kept
+  // is by something a thumb can actually reach.
 
-  // tap 1: the Load tab in the five-tab bar (NAV-1, still exactly five)
-  const loadTab = page.locator('.tab, nav a, nav button').filter({ hasText: /load|груз|yuk|ਲੋਡ|xamuul|carga/i }).first();
-  await loadTab.click();
+  // tap 1: the Docs tab in the six-tab bar
+  const docsTab = page.locator('.tab, nav a, nav button').filter({ hasText: /docs|ਕਾਗਜ਼|док-ты|waraaq|hujjat/i }).first();
+  await docsTab.click();
   taps += 1;
   await page.waitForTimeout(400);
 
   // tap 2: inspection mode, directly — not the wallet with inspection behind it
-  const inspect = page.locator("button.inspect-row");
+  const inspect = page.locator("button.inspect");
   await expect(inspect, "inspection mode must be one tap from a tab root (§10.4)").toBeVisible();
 
-  // the claim in LoadSurface's comment is that it sits above the fold at 360x800, so an
-  // officer is never waiting on a scroll. A claim in a comment is worth what it is
-  // measured at.
+  // above the fold at 360x800, so an officer is never waiting on a scroll. It is the
+  // Docs tab's primary action and sits at the very top of that surface — measured here
+  // rather than asserted, because that is the half of §10.4 a tap count cannot see.
   const box = await inspect.boundingBox();
   expect(box.y + box.height, "inspection mode must be reachable without scrolling").toBeLessThanOrEqual(800);
 
