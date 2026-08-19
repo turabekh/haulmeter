@@ -8,7 +8,7 @@ import { useRouter } from "vue-router";
 import { Check } from "lucide-vue-next";
 import { useI18n } from "../core/i18n.js";
 import { useTheme } from "../core/theme.js";
-import { email, logout, fetchPoints, fetchMe, verifyAuthority, saveEquipment, setFoodAlerts } from "../core/api.js";
+import { email, logout, fetchPoints, fetchMe, verifyAuthority, saveEquipment, setFoodAlerts, fetchNotificationClasses } from "../core/api.js";
 import SkeletonCard from "../core/components/SkeletonCard.vue";
 import { LoadState, Failure, failureOf } from "../core/load-state.js";
 import BottomSheet from "../core/components/BottomSheet.vue";
@@ -156,6 +156,26 @@ async function submitEquipment() {
 // M13 / E-D1: food alerts are OFF until turned on here. The hint states the caps
 // plainly rather than burying them — a driver should know what they're agreeing to.
 const foodAlerts = ref(false);
+// AI-CONTEXT: THIS SWITCH NEVER READ ITS OWN STATE (N-17, §23 entry 224). It was
+// `ref(false)` initialised by nothing, so a driver who had opted in reopened the app to
+// an OFF switch — and tapping it, believing they were opting in, opted them OUT. A
+// control that misreports itself is worse than one that does nothing, because the driver
+// acts on it.
+//
+// F8 has had the answer since it shipped: `GET /notifications/classes` is the canonical
+// per-class preference read, and the notifications sheet beside this card already uses
+// it. Read here rather than through `/vendors/alerts/opt-in`, which has no GET at all.
+const VENDOR_ALERT_CLASS = "vendor_alert";
+async function loadFoodAlerts() {
+  try {
+    const data = await fetchNotificationClasses();
+    const row = (data.classes || []).find((c) => c.key === VENDOR_ALERT_CLASS);
+    // absent means F8 has no row yet, which is the same as not opted in
+    foodAlerts.value = row ? !!row.opted_in : false;
+  } catch {
+    /* the switch keeps its default; a failed READ must not assert an opt-in state */
+  }
+}
 async function toggleFoodAlerts() {
   const next = !foodAlerts.value;
   foodAlerts.value = next;
@@ -179,6 +199,8 @@ async function loadPoints() {
 onMounted(async () => {
   await loadPoints();
   await loadMe();
+  // only when the card is actually on screen — a switched-off module is not asked about
+  if (me.value?.food_enabled) await loadFoodAlerts();
 });
 
 function changePassword() {

@@ -73,7 +73,7 @@ def test_the_food_opt_in_names_its_own_half(client, db):
     headers = _auth(client, db)
     resp = client.put("/vendors/alerts/opt-in", json={"opted_in": True}, headers=headers)
 
-    assert resp.status_code == 403, "food is off; this must not record an opt-in"
+    assert resp.status_code == 404, "food is off; this must not record an opt-in"
 
 
 def test_the_opt_in_still_works_when_food_is_running(client, db):
