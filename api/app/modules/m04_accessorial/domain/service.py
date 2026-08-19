@@ -379,6 +379,51 @@ def money_owed(db: Session, account_id, now: datetime | None = None) -> list[dic
     return rows
 
 
+def unfiled_claims(db: Session, account_id, now: datetime | None = None) -> list[dict]:
+    """Money the clock has already earned that nobody has been billed for.
+
+    AI-CONTEXT: the Money tab showed only FILED claims, so everything before filing was
+    invisible — which is how a driver watches the Meter climb on the Load tab and then
+    opens Money to nothing (§23 entry 226, owner report). This is the half of the
+    pipeline that was missing, and it is the only half with an action attached: a filed
+    claim is waiting on somebody else, an unfiled one is waiting on the driver.
+
+    ONLY CLAIMS THAT ACTUALLY ACCRUED. A stop that ended inside its free time owes
+    nothing, and listing it would bury the rows that are money under rows that are not —
+    on the owner's own account today, every claim is a $0.00 one. `generate_pack` agrees:
+    it opens no receivable when `amount_cents` is 0, so a $0 row would offer an action
+    that produces nothing.
+
+    THE AMOUNT COMES FROM M3'S LIVE CLOCK, never `claim.amount_cents` — that column is a
+    snapshot written at filing time and reads 0 on every open claim, which is the zero
+    that means "not measured" (TRAPS).
+    """
+    now = now or datetime.now(UTC)
+    rows = []
+    for claim in m3.open_claims_for_account(db, account_id):
+        state = m3.clock(db, claim, now)
+        if state.amount_cents <= 0:
+            continue
+        cp = loads.get_counterparty(db, claim.counterparty_ref) if claim.counterparty_ref else None
+        fac = facility_registry.get_facility(db, claim.facility_ref) if claim.facility_ref else None
+        rows.append(
+            {
+                "claim_id": str(claim.id),
+                # what the driver files against — the Money tab has no stop of its own
+                "stop_id": str(claim.stop_ref) if claim.stop_ref else None,
+                "amount_cents": state.amount_cents,
+                "detention_seconds": state.detention_seconds,
+                "aging_days": (now - _as_utc(claim.created_at)).days,
+                "counterparty_name": getattr(cp, "name", None),
+                "facility_name": getattr(fac, "name", None),
+            }
+        )
+    # oldest first: the stop that has been sitting unbilled longest is the one at risk of
+    # ageing past what a broker will entertain, and a newest-first list buries it
+    rows.sort(key=lambda r: r["aging_days"], reverse=True)
+    return rows
+
+
 def owed_context(db: Session, account_id, now: datetime | None = None) -> dict:
     """WHY the owed list is empty, for the empty state that has to say something true.
 

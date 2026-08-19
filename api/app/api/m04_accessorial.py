@@ -147,6 +147,21 @@ def lumper(
     return _claim_out(claim)
 
 
+@router.get("/unfiled")
+def unfiled(
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """Money already earned that no broker has been billed for (§23 entry 226).
+
+    Its own read rather than a field on `/owed`: that route answers "what am I owed",
+    and an unfiled claim is owed by nobody yet — no invoice exists and no counterparty
+    has been told. Mixing them would put money in a total a driver could take to a
+    broker who has never heard of it, which is the defect entry 142 removed.
+    """
+    return m4.unfiled_claims(db, account.id)
+
+
 @router.get("/owed")
 def owed(
     account: identity.Account = Depends(current_account),

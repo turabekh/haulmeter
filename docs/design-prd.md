@@ -245,8 +245,10 @@ Each spec: purpose · anatomy at 360 dp · primary action · session type · DRI
 
 ### 10.3 Money
 - Purpose: everything owed, recovered, saved — the driver's P&L with the platform.
-- Anatomy: month summary (Meter treatment: recovered + saved totals) → receivables list (status pills: invoiced / disputed / escalated / paid, aging in Mono) → savings row (fuel) → export row.
-- Primary action: per-receivable "Next action" (nudge / escalate / mark paid).
+- Anatomy: hero "Owed to you" (Meter treatment) → **"Not sent yet"** → **"Waiting on brokers"** → **"Paid"** (§23 entries 142, 226). The three sections are the money PIPELINE in the order the driver must act on it: what they still have to send, what a broker has to pay, what is done.
+- **The hero is a strict sum of "Waiting on brokers" and nothing else.** Unfiled money never enters it — no invoice exists and no counterparty has been told, so a driver could carry the figure to a broker who has never heard of it. "Not sent yet" carries its own subtotal on a plain line, never a second Meter.
+- **A stop that accrued nothing is not listed.** It owes no money, filing it opens no receivable, and it would bury the rows that are money under rows that are not.
+- Primary action: per-row and single — "Send it to the broker" on an unfiled stop, "Next action" (nudge / escalate / mark paid) on a filed one.
 - Sessions: S3. DRIVING: read-only; actions deferred with "tonight" queue.
 
 ### 10.4 Docs — a tab again (207 moved it to More; 213 brought it back)

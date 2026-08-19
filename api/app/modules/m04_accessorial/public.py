@@ -23,6 +23,7 @@ from .domain.service import (
     money_owed,
     owed_context,
     register_module,
+    unfiled_claims,
 )
 
 __all__ = [
@@ -43,5 +44,6 @@ __all__ = [
     "file_tonu",
     "money_owed",
     "owed_context",
+    "unfiled_claims",
     "register_module",
 ]

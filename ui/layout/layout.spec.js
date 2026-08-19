@@ -1013,6 +1013,25 @@ const SURFACES = [
     ready: ".meter-card .meter__status",
   }],
   ["money", "/money"],
+  /* AI-CONTEXT: the "Not sent yet" section (§23 entry 226). It is the densest row on this
+   * tab — a dock, a broker, a money figure, an age AND a full-width 48 dp action stacked
+   * under them — so 360 dp with Gurmukhi at 200% is exactly where it would break, and
+   * `money.unfiled_hint` is the longest sentence the tab has ever carried. */
+  ["money-unfiled", "/money", {
+    mocks: {
+      ...MONEY_MOCKS,
+      "/accessorial/owed": [],
+      "/accessorial/unfiled": [
+        { claim_id: "c-1", stop_id: "s-1", amount_cents: 18776, detention_seconds: 9000,
+          aging_days: 12, counterparty_name: "Blue Road Logistics LLC",
+          facility_name: "Metro Market Warehouse" },
+        { claim_id: "c-2", stop_id: "s-2", amount_cents: 4250, detention_seconds: 2040,
+          aging_days: 3, counterparty_name: "AM TRANS EXPEDITE, LLC",
+          facility_name: "FREIGHT MINDS NJ WAREHOUSE" },
+      ],
+    },
+    ready: ".row--unfiled .row__file",
+  }],
   /* AI-CONTEXT: THE EMPTY MONEY TAB, which had one sentence and needed four (§23 entry
    * 215). §15.3 gives an empty state a layout spec like anything else, and these two are
    * the ones that can actually overflow: `empty_free_time` is the longest of the four in

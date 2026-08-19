@@ -1157,6 +1157,13 @@ export async function fetchOwed() {
   return apiGet(`/accessorial/owed`, `owed`);
 }
 
+// AI-CONTEXT: money the clock earned that nobody has been billed for (§23 entry 226).
+// Its OWN read rather than a field on `/owed`: that answers "what am I owed", and an
+// unfiled claim is owed by nobody yet — no invoice exists and no broker has been told.
+export async function fetchUnfiled() {
+  return apiGet(`/accessorial/unfiled`, `unfiled`);
+}
+
 // AI-CONTEXT: the driver records that a broker actually paid (§23 entry 108). Until
 // this existed nothing in the product could mark a receivable recovered, so the Money
 // tab's own "Recovered" figure was structurally zero. It records a fact; no money moves

@@ -17,8 +17,10 @@ import ClaimMoneySheet from "../core/components/ClaimMoneySheet.vue";
 import { useI18n } from "../core/i18n.js";
 import { useDriverState } from "../core/state.js";
 import { formatMoney } from "../core/meter.js";
+import { online } from "../core/api.js";
 import { receivableStatusToken } from "../core/presentation.js";
-import { fetchOwed, fetchEarnings, fetchMe, markReceivablePaid } from "../core/api.js";
+import { fetchOwed, fetchEarnings, fetchMe, markReceivablePaid, fetchUnfiled, generateClaim } from "../core/api.js";
+import Spinner from "../core/components/Spinner.vue";
 import SkeletonCard from "../core/components/SkeletonCard.vue";
 import SkeletonRow from "../core/components/SkeletonRow.vue";
 import { LoadState, Failure, failureOf } from "../core/load-state.js";
@@ -41,6 +43,20 @@ const EMPTY_EARNINGS = Object.freeze({
   flagged_cents: 0,
 });
 const rows = ref([]);
+// AI-CONTEXT: THE HALF OF THE PIPELINE THIS TAB NEVER SHOWED (§23 entry 226, owner).
+//
+// "Load tab showed actual money accrued waiting, but after I finish the load the Money
+// tab is not showing any money." Nothing was wrong with the arithmetic: this tab lists
+// FILED claims, filing is what opens a receivable, and everything before filing was
+// invisible — including the only money on the screen the driver can still act on.
+//
+// A filed claim is waiting on somebody else. An unfiled one is waiting on the DRIVER.
+// That is why this list sits above "Waiting on brokers" and carries the action.
+const unfiled = ref([]);
+const unfiledState = ref(LoadState.LOADING);
+const unfiledFailure = ref(null);
+const filingId = ref("");
+const fileError = ref("");
 const earnings = ref(EMPTY_EARNINGS);
 const owedState = ref(LoadState.LOADING);
 const owedFailure = ref(null);
@@ -66,6 +82,40 @@ async function loadOwed() {
   }
 }
 
+async function loadUnfiled() {
+  try {
+    unfiled.value = await fetchUnfiled();
+    unfiledState.value = LoadState.LOADED;
+    unfiledFailure.value = null;
+  } catch (e) {
+    unfiled.value = [];
+    unfiledFailure.value = failureOf(e);
+    unfiledState.value = LoadState.FAILED;
+  }
+}
+
+// AI-CONTEXT: filing IN PLACE rather than sending the driver to the Load tab to find the
+// stop again — the whole defect is that filing was invisible, and a row that only points
+// at another screen leaves it invisible with an extra tap. `generateClaim` is the same
+// call the Load tab's ladder makes, 409 included: already filed is a success arriving
+// twice, so it refreshes rather than complaining.
+async function onFile(row) {
+  if (filingId.value) return;
+  filingId.value = row.claim_id;
+  fileError.value = "";
+  try {
+    await generateClaim(row.stop_id);
+  } catch (e) {
+    // §15.4 — this is a money-moving action and its failure is never silent
+    fileError.value = online.value ? t("money.file_failed") : t("money.file_offline");
+    filingId.value = "";
+    return;
+  }
+  filingId.value = "";
+  // the row moves from one list to the other, so BOTH have to be re-read
+  await Promise.all([loadUnfiled(), refreshMoney()]);
+}
+
 async function loadEarnings() {
   try {
     earnings.value = await fetchEarnings();
@@ -80,6 +130,7 @@ async function loadEarnings() {
 
 onMounted(async () => {
   await loadOwed();
+  await loadUnfiled();
   await loadEarnings();
   try {
     me.value = await fetchMe();
@@ -123,6 +174,14 @@ const settledOpen = ref(false);
 // the figure a driver opens this tab to learn, and it is a SUM OF THE LIST BELOW IT —
 // which is the property the old hero did not have.
 const owedCents = computed(() => outstanding.value.reduce((n, r) => n + r.amount_cents, 0));
+// AI-CONTEXT: DELIBERATELY NOT ADDED TO THE HERO (§23 entry 226).
+//
+// Entry 142 made "Owed to you" a strict SUM OF THE LIST BENEATH IT, and that
+// reconciliation property is the only reason a figure that large is allowed on this
+// screen. Unfiled money is owed by NOBODY: no invoice exists and no broker has been
+// told. Folding it in would rebuild the exact defect 142 removed — a driver could carry
+// the number to a broker who has never heard of it. Its own subtotal, its own section.
+const unfiledCents = computed(() => unfiled.value.reduce((n, r) => n + r.amount_cents, 0));
 const owedBrokers = computed(
   () => new Set(outstanding.value.map((r) => r.counterparty_name).filter(Boolean)).size,
 );
@@ -309,6 +368,47 @@ async function refreshMoney() {
         <span class="mono">{{ formatMoney(earnings.flagged_cents) }}</span>
       </li>
     </ul>
+
+    <!-- AI-CONTEXT: what the DRIVER still has to do, above what a broker has to do.
+         §8's one-primary rule is satisfied per row: each carries a single act, "Send it
+         to the broker". The subtotal is a plain line rather than a second Meter — two
+         large figures and no answer to which one the tab is about is what entry 142
+         removed, and this money is the more provisional of the two. -->
+    <template v-if="unfiledState === LoadState.LOADED && unfiled.length">
+      <h1 class="money__title">{{ t("money.unfiled_title") }}</h1>
+      <p class="money__sub">
+        {{ t("money.unfiled_hint") }}
+        <span class="mono">{{ formatMoney(unfiledCents) }}</span>
+      </p>
+      <p v-if="fileError" class="money__failed" role="alert">{{ fileError }}</p>
+      <ul class="rows">
+        <li v-for="r in unfiled" :key="r.claim_id">
+          <div class="row row--unfiled">
+            <span class="row__main">
+              <span class="row__kind">{{ r.facility_name || t("money.no_dock") }}</span>
+              <span class="row__who">{{ r.counterparty_name || t("money.no_broker") }}</span>
+            </span>
+            <span class="row__right">
+              <span class="row__amount">{{ formatMoney(r.amount_cents) }}</span>
+              <span class="row__aging">{{ daysLabel(r) }}</span>
+            </span>
+            <button
+              class="row__file"
+              type="button"
+              :disabled="!!filingId || isDriving"
+              @click="onFile(r)"
+            >
+              <Spinner v-if="filingId === r.claim_id" />
+              {{ t("money.file_it") }}
+            </button>
+          </div>
+        </li>
+      </ul>
+    </template>
+    <p v-else-if="unfiledState === LoadState.FAILED" class="money__failed">
+      {{ unfiledFailure === Failure.OFFLINE ? t("system.load_offline") : t("money.unfiled_failed") }}
+      <button class="money__retry" type="button" @click="loadUnfiled">{{ t("system.retry") }}</button>
+    </p>
 
     <h1 class="money__title">{{ t("money.waiting") }}</h1>
     <SkeletonRow v-if="owedState === LoadState.LOADING" :count="3" />
@@ -531,6 +631,41 @@ async function refreshMoney() {
   color: var(--text-2);
   font-size: var(--type-body-size);
   line-height: var(--type-body-line);
+}
+.row--unfiled {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--s-2);
+  width: 100%;
+  text-align: left;
+}
+.money__sub {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0 var(--s-4) var(--s-2);
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+.row__file {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 48px;
+  margin-top: var(--s-2);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-control);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: var(--type-body-size);
+  font-weight: 600;
+}
+.row__file:disabled {
+  opacity: 0.6;
 }
 .money__failed {
   display: flex;

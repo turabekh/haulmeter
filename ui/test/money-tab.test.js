@@ -406,3 +406,76 @@ describe("Recording a payment that does not go through", () => {
     expect(w.find(".cm__failed").exists()).toBe(false);
   });
 });
+
+// AI-CONTEXT: the half of the pipeline this tab never showed (§23 entry 226, owner:
+// "load tab showed actual money accrued waiting but after I finish the load, money tab
+// is not showing any money" → "we should also show what is open (not filed yet)").
+describe("Money the clock earned that nobody has been billed for", () => {
+  const UNFILED = [
+    { claim_id: "c1", stop_id: "s1", amount_cents: 7500, detention_seconds: 3600,
+      aging_days: 3, counterparty_name: "Blue Road Logistics", facility_name: "Harvest Foods DC" },
+  ];
+
+  function stubWith(unfiledRows, onFile) {
+    return vi.fn((url, opts) => {
+      const u = String(url);
+      if (u.includes("/accessorial/unfiled")) return jsonOk(unfiledRows);
+      if (u.includes("/accessorial/owed")) return jsonOk([]);
+      if (u.includes("/money/earnings")) return jsonOk(EARNINGS);
+      if (u.includes("/claim") && opts?.method === "POST") return onFile ? onFile() : jsonOk({});
+      if (u.includes("/me")) return jsonOk({ verified: false });
+      return jsonOk({});
+    });
+  }
+
+  it("lists what has not been sent, with the dock and the broker", async () => {
+    const { w } = await mountMoney(stubWith(UNFILED));
+
+    expect(w.text()).toContain(en["money.unfiled_title"]);
+    expect(w.text()).toContain("Harvest Foods DC");
+    expect(w.text()).toContain("Blue Road Logistics");
+    expect(w.find(".row--unfiled").text()).toContain("$75.00");
+  });
+
+  it("keeps that money OUT of the hero, which is a sum of the filed list", async () => {
+    // entry 142's reconciliation property: unfiled money is owed by nobody — no invoice
+    // exists and no broker has been told. In the hero it would be a figure a driver could
+    // carry to someone who has never heard of it.
+    const { w } = await mountMoney(stubWith(UNFILED));
+
+    expect(w.find(".meter__figure").text()).toBe("$0.00");
+    expect(w.find(".money__sub").text()).toContain("$75.00"); // its own subtotal instead
+  });
+
+  it("files in place, then moves the row to the filed list", async () => {
+    const calls = [];
+    const stub = stubWith(UNFILED, () => { calls.push("filed"); return jsonOk({ claim_id: "c1" }); });
+    const { w } = await mountMoney(stub);
+
+    await w.find(".row__file").trigger("click");
+    await flushPromises();
+
+    expect(calls).toEqual(["filed"]);
+    const refetched = stub.mock.calls.filter((c) => String(c[0]).includes("/accessorial/unfiled"));
+    expect(refetched.length).toBeGreaterThan(1); // both lists re-read, the row moves
+  });
+
+  it("says so when sending fails — this is a money-moving action (§15.4)", async () => {
+    const { w } = await mountMoney(
+      stubWith(UNFILED, () => Promise.resolve({ ok: false, status: 500 })),
+    );
+
+    await w.find(".row__file").trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain(en["money.file_failed"]);
+  });
+
+  it("shows nothing at all when every stop stayed inside its free time", async () => {
+    // the owner's own account today: four claims, all $0.00 — the server filters them out
+    // so the rows that ARE money are not buried under rows that are not
+    const { w } = await mountMoney(stubWith([]));
+
+    expect(w.text()).not.toContain(en["money.unfiled_title"]);
+  });
+});
