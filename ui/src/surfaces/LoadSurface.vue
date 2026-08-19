@@ -81,6 +81,7 @@ const router = useRouter();
 
 const live = ref(null); // live meter response, or null (no load)
 const arrivalMs = ref(0); // null while a live load is pre-arrival
+const endedNow = ref(null); // frozen `now` once M3 says the visit is over
 const now = ref(Date.now());
 const reporting = ref(false); // incident sheet open
 const incidentToast = ref("");
@@ -326,14 +327,32 @@ let timer = null;
 function clearLoad() {
   live.value = null;
   arrivalMs.value = null;
+  endedNow.value = null;
 }
 
+// AI-CONTEXT: THE METER WENT BACK TO FULL FREE TIME AND FROZE THERE (§23 entry 219).
+//
+// Reported as "the ticker starts correctly and converts to the paid ticker correctly,
+// but when I add a BOL or other photos it goes back and freezes" — and reproduced in
+// this component exactly: with `phase: "ended"` carrying detention_cents 7500, the tab
+// rendered **2:00:00 · Free time** where the server had just said **$75.00**.
+//
+// `ended` is M3's third phase and this function handled two of them. It fell through to
+// `return null`, the branch written for `not_arrived`, so `arrivalMs` went null — and
+// `state` reads `arrivalMs ?? now`, which makes the trigger time equal to now on EVERY
+// tick. Elapsed is therefore permanently zero: the free-time clock reads its full value
+// and never moves. That is both halves of the report, "goes back" and "freezes", from
+// one missing case. The same shape as N-06 on the server, one layer up: a null arrival
+// silently defaulting to `now` and reporting the result as a measurement.
+//
+// A visit that has ENDED is not a visit that never started. The money is final and the
+// server has already computed it, so the clock stops rather than restarting.
 function deriveArrival(m) {
   const base = Date.now();
   if (m.phase === "within_free_time") {
     return base - (m.free_time_minutes * 60 - m.free_time_remaining_seconds) * 1000;
   }
-  if (m.phase === "accruing") {
+  if (m.phase === "accruing" || m.phase === "ended") {
     return base - (m.free_time_minutes * 60 + m.detention_seconds) * 1000;
   }
   return null; // not arrived
@@ -344,6 +363,10 @@ async function loadMeter() {
     const m = await fetchMeter(activeStopId.value);
     live.value = m;
     arrivalMs.value = deriveArrival(m);
+    // the instant the visit stopped counting. Everything derived from the clock reads
+    // this instead of the live `now`, so an ended stop holds its final figure rather
+    // than accruing forever off a truck that has left.
+    endedNow.value = m.phase === "ended" ? Date.now() : null;
   } catch {
     setActiveStop(null); // stale/offline -> there is no load to show
     clearLoad();
@@ -506,8 +529,15 @@ const apptSourceKey = computed(() => {
 const onTime = computed(() => live.value?.on_time ?? null);
 const arrivedAt = computed(() => hm(live.value?.arrived_at));
 
+// `endedNow` freezes the clock without freezing the TAB: `now` goes on ticking for the
+// appointment countdown and everything else that legitimately moves.
 const state = computed(() =>
-  computeDetentionState(arrivalMs.value ?? now.value, freeMin.value, rateCents.value, now.value),
+  computeDetentionState(
+    arrivalMs.value ?? now.value,
+    freeMin.value,
+    rateCents.value,
+    endedNow.value ?? now.value,
+  ),
 );
 const withinFree = computed(() => state.value.phase === "within_free_time");
 const accruing = computed(() => !!live.value && !preArrival.value && !withinFree.value);
@@ -534,6 +564,8 @@ const noticeMsg = ref("");
 // a claim is filed once the SERVER says so (live.filed) — persists across tab
 // switches/remounts — or optimistically the moment we file it (filed ref).
 const isFiled = computed(() => !!(filed.value || live.value?.filed));
+// the visit is over and no claim has been filed yet — the money is settled, the act is not
+const isEnded = computed(() => !isFiled.value && live.value?.phase === "ended");
 const filedAmount = computed(
   () => filed.value?.amount_cents ?? live.value?.detention_cents ?? 0,
 );
@@ -569,11 +601,15 @@ const meterLabel = computed(() => {
     if (apptDeltaSeconds.value === null) return t("load.waiting");
     return apptPassed.value ? t("load.appt_passed") : t("load.until_appt");
   }
+  if (isEnded.value) return t("load.detention");
   return withinFree.value ? t("load.free_time") : t("load.detention");
 });
 const meterFigure = computed(() => {
   if (!live.value) return "—";
   if (isFiled.value) return formatMoney(filedAmount.value);
+  // the SERVER's final figure, not one re-derived here — it is the number the claim
+  // will be filed for, and two arithmetics for one amount is how they disagree
+  if (isEnded.value) return formatMoney(live.value?.detention_cents ?? 0);
   if (preArrival.value) {
     if (apptDeltaSeconds.value === null) return "—";
     return formatClock(Math.abs(apptDeltaSeconds.value));
@@ -585,6 +621,8 @@ const meterFigure = computed(() => {
 const meterStatus = computed(() => {
   if (!live.value) return "";
   if (isFiled.value) return t("load.filed_frozen");
+  if (isEnded.value)
+    return `${formatClock(live.value?.detention_seconds ?? 0)} · ${t("load.stop_ended")}`;
   return preArrival.value || withinFree.value
     ? ""
     : `${formatClock(state.value.detentionSeconds)} · $${Math.round(rateCents.value / 100)}/h`;

@@ -619,6 +619,7 @@
   "load.start": "Start a load",
   "load.stop.delivery": "Delivery",
   "load.stop.pickup": "Pickup",
+  "load.stop_ended": "Stop ended — clock stopped",
   "load.terms.absent": "the rate con does not say",
   "load.terms.detention": "Detention",
   "load.terms.free": "Free time",

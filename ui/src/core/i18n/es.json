@@ -619,6 +619,7 @@
   "load.start": "Iniciar una carga",
   "load.stop.delivery": "Entrega",
   "load.stop.pickup": "Recogida",
+  "load.stop_ended": "Parada terminada — reloj detenido",
   "load.terms.absent": "el rate con no lo dice",
   "load.terms.detention": "Detención",
   "load.terms.free": "Tiempo libre",

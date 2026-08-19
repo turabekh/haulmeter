@@ -619,6 +619,7 @@
   "load.start": "Yukni boshlash",
   "load.stop.delivery": "Tushirish",
   "load.stop.pickup": "Yuklash",
+  "load.stop_ended": "To'xtash tugadi — hisoblagich to'xtadi",
   "load.terms.absent": "rate con’da bu ko‘rsatilmagan",
   "load.terms.detention": "Kutish (detention)",
   "load.terms.free": "Bepul vaqt",

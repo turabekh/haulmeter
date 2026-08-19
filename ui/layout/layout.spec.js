@@ -989,6 +989,29 @@ const SURFACES = [
     open: [".collapsed"],
     ready: ".load:has(.card__toggle):has(.checklist)",
   }],
+  /* AI-CONTEXT: the Meter on a visit M3 says has ENDED (§23 entry 219). M3 has three
+   * phases and this harness measured two — the third rendered "2:00:00 · Free time" over
+   * a payload carrying $75.00, and nothing here would have caught it, because a state
+   * that is never registered is a state nobody looks at.
+   *
+   * The status line is the reason it is worth a row of its own: it is the longest this
+   * Meter ever gets — a clock, a separator and a sentence ("Остановка завершена —
+   * счётчик остановлен" in Russian) — under the largest type step in the product. */
+  ["load-ended", "/load", {
+    stop: LIVE_STOP,
+    mocks: {
+      ...LIVE_MOCKS,
+      [`/load/${LIVE_STOP}/meter`]: {
+        ...LIVE_MOCKS[`/load/${LIVE_STOP}/meter`],
+        phase: "ended",
+        free_time_remaining_seconds: 0,
+        detention_seconds: 3600,
+        detention_cents: 7500,
+        filed: false,
+      },
+    },
+    ready: ".meter-card .meter__status",
+  }],
   ["money", "/money"],
   /* AI-CONTEXT: THE EMPTY MONEY TAB, which had one sentence and needed four (§23 entry
    * 215). §15.3 gives an empty state a layout spec like anything else, and these two are

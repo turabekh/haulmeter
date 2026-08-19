@@ -619,6 +619,7 @@
   "load.start": "Bilow xamuul",
   "load.stop.delivery": "Gaarsiinta",
   "load.stop.pickup": "Qaadista",
+  "load.stop_ended": "Joogsigii wuu dhammaaday — saacaddii way joogsatay",
   "load.terms.absent": "rate con-ku ma sheegin",
   "load.terms.detention": "Sugitaan (detention)",
   "load.terms.free": "Waqti bilaash ah",

@@ -619,6 +619,7 @@
   "load.start": "Начать груз",
   "load.stop.delivery": "Выгрузка",
   "load.stop.pickup": "Погрузка",
+  "load.stop_ended": "Остановка завершена — счётчик остановлен",
   "load.terms.absent": "в rate con это не указано",
   "load.terms.detention": "Простой",
   "load.terms.free": "Бесплатное время",
