@@ -696,6 +696,8 @@
   "money.paid.note": "Bu sizga to'langanini qayd etadi. Pul to'g'ridan-to'g'ri bankingizga tushadi — ilova uni saqlamaydi.",
   "money.paid.question": "Broker qaysi da'voni to'ladi?",
   "money.paid.submit": "To'langan deb belgilash",
+  "money.paid_failed": "Saqlanmadi. Qayta urinish uchun yana bosing.",
+  "money.paid_failed_offline": "Siz oflaynsiz, shuning uchun bu yozilmadi. Aloqa paydo bo'lganda yana bosing.",
   "money.paid_so_far": "Sizga to'langan",
   "money.recovered": "Qaytarildi",
   "money.settled": "Allaqachon to'langan",

@@ -47,6 +47,11 @@ const owedFailure = ref(null);
 const earningsState = ref(LoadState.LOADING);
 const earningsFailure = ref(null);
 const drafting = ref(false);
+// N-08: the sheet has declared a `busy` prop since it shipped and no parent ever bound
+// it, so both money CTAs stayed live through the in-flight POST — a double-tap guard
+// wired to nothing. It is bound now, by the same state that holds the failure.
+const paidBusy = ref(false);
+const paidFailure = ref(null);
 const me = ref(null); // F1: verified operating authority, shown as a trust pill
 
 async function loadOwed() {
@@ -155,6 +160,13 @@ const emptyMessage = computed(() => {
 
 // the row a driver tapped, and the acts it offers
 const openRow = ref(null);
+function closeRow() {
+  openRow.value = null;
+  // the failure belongs to one attempt on one claim; carrying it to the next claim the
+  // driver opens would report a failure that never happened there
+  paidFailure.value = null;
+  paidBusy.value = false;
+}
 function daysLabel(r) {
   return r.aging_days === 1 ? t("money.days_one") : t("money.days", { n: r.aging_days });
 }
@@ -164,30 +176,57 @@ function chasedLabel(r) {
   if (n === 1) return t("money.chased_one");
   return t("money.chased_many", { n });
 }
+// AI-CONTEXT: A FAILED "THEY PAID ME" USED TO SAY NOTHING AT ALL (N-07, §23 entry 218).
+//
+// This closed the sheet FIRST and then called a helper whose entire error path was an
+// empty `catch` with a comment explaining why that was acceptable. Measured in the real
+// component: the POST was attempted, it was rejected, the sheet closed, the row was
+// unchanged, and no wording anywhere on the screen said it had not happened. §15.4 is
+// explicit — "failed money-moving actions are always explicit and persistent until
+// resolved" — and this is the ONLY money-moving act a driver has in this product.
+//
+// So the sheet is closed by SUCCESS, not by the tap. On failure it stays open holding a
+// specific sentence, and the button that failed is the button that retries.
+//
+// 409 IS NOT A FAILURE: F7's ledger refuses a transition out of `recovered`/`written_off`,
+// which means somebody already recorded this — the work succeeded, it just was not ours.
+// `generateClaim` sets that precedent for a double-tap on the claim rail; the same read
+// applies here, and treating it as an error would teach a driver to re-tap a row that is
+// already settled.
 async function onSheetPaid() {
   const row = openRow.value;
+  if (!row || paidBusy.value) return;
+  paidBusy.value = true;
+  paidFailure.value = null;
+  try {
+    await markReceivablePaid(row.receivable_id);
+  } catch (e) {
+    if (e?.status !== 409) {
+      // no status at all means `fetch` itself threw — a dead zone, not a refusal, and
+      // the two need different sentences because only one of them is worth retrying now
+      paidFailure.value = e?.status ? t("money.paid_failed") : t("money.paid_failed_offline");
+      paidBusy.value = false;
+      return;
+    }
+  }
+  paidBusy.value = false;
   openRow.value = null;
-  if (row) await onMarkPaid(row.receivable_id);
+  await refreshMoney();
 }
 function onSheetChase() {
   // M11-FR3's ghostwriter, reached from the claim it is about rather than from an
   // unnamed button at the bottom of the tab. The driver reads and sends it themselves,
   // so this never becomes a second automatic mail beside the dunning cadence.
-  openRow.value = null;
+  closeRow();
   drafting.value = true;
 }
 function onSheetEvidence() {
   const row = openRow.value;
-  openRow.value = null;
+  closeRow();
   if (row?.stop_id) router.push(`/load/${row.stop_id}/evidence`);
 }
 
-async function onMarkPaid(receivableId) {
-  try {
-    await markReceivablePaid(receivableId);
-  } catch {
-    /* offline, or the ledger refused it — the list below is the source of truth */
-  }
+async function refreshMoney() {
   try {
     rows.value = await fetchOwed();
     earnings.value = await fetchEarnings(); // Recovered moves the North Star figure
@@ -379,11 +418,13 @@ async function onMarkPaid(receivableId) {
     <BottomSheet
       :open="!!openRow && !isDriving"
       :title="openRow ? kindLabel(openRow.kind) : ''"
-      @close="openRow = null"
+      @close="closeRow"
     >
       <ClaimMoneySheet
         v-if="openRow"
         :row="openRow"
+        :busy="paidBusy"
+        :failure="paidFailure"
         :payable="PAYABLE_STATES.includes(openRow.state)"
         @chase="onSheetChase"
         @paid="onSheetPaid"

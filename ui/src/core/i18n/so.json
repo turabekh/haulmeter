@@ -696,6 +696,8 @@
   "money.paid.note": "Tani waxay diiwaangelinaysaa in lagu bixiyay. Lacagtu si toos ah ayey bangigaaga u gashaa — abku marnaba ma hayo.",
   "money.paid.question": "Sheegashadee ayuu dilaalku bixiyay?",
   "money.paid.submit": "Calaamadee inay la bixiyay",
+  "money.paid_failed": "Ma kaydsanin. Mar kale taabo si aad u isku daydo.",
+  "money.paid_failed_offline": "Waxaad tahay offline, markaa lama diiwaangelin. Mar kale taabo marka aad hesho shabakad.",
   "money.paid_so_far": "Lagu bixiyay",
   "money.recovered": "La soo celiyay",
   "money.settled": "Horay loo bixiyay",

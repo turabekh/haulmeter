@@ -696,6 +696,8 @@
   "money.paid.note": "Esto registra que le pagaron. El dinero va directo a su banco — la app nunca lo retiene.",
   "money.paid.question": "¿Cuál reclamo pagó el bróker?",
   "money.paid.submit": "Marcar como pagado",
+  "money.paid_failed": "No se guardó. Toca de nuevo para reintentar.",
+  "money.paid_failed_offline": "Estás sin conexión, así que no se registró. Toca de nuevo cuando tengas señal.",
   "money.paid_so_far": "Le han pagado",
   "money.recovered": "Recuperado",
   "money.settled": "Ya pagado",

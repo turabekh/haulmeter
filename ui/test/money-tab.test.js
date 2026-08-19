@@ -317,3 +317,92 @@ describe("An empty Money tab says WHY it is empty", () => {
     expect(w.find(".money__empty").text()).toBe(en["money.empty"]);
   });
 });
+
+// AI-CONTEXT: N-07 / N-08 — the only money-moving act a driver has, and its failure was
+// silent (§23 entry 218). Measured in this component before the fix: the POST was
+// attempted, rejected, the sheet closed, the row was unchanged, and nothing anywhere on
+// the screen said it had not happened. §15.4: "failed money-moving actions are always
+// explicit and persistent until resolved."
+describe("Recording a payment that does not go through", () => {
+  function payStub(payResponse) {
+    return vi.fn((url, opts) => {
+      const u = String(url);
+      if (u.includes("/paid") && opts?.method === "POST") return payResponse();
+      if (u.includes("/accessorial/owed")) return jsonOk([OUTSTANDING[0]]);
+      if (u.includes("/money/earnings")) return jsonOk(EARNINGS);
+      if (u.includes("/me")) return jsonOk({ verified: false });
+      return jsonOk({});
+    });
+  }
+
+  async function tapPaid(w) {
+    await w.find(".rows .row").trigger("click");
+    await flushPromises();
+    const btn = w.findAll(".cm .cta--text").find((b) => b.text().includes(en["money.act_paid"]));
+    await btn.trigger("click");
+    await flushPromises();
+    return w;
+  }
+
+  it("says so, in the driver's own words, when the phone is in a dead zone", async () => {
+    const { w } = await mountMoney(payStub(() => Promise.reject(new Error("dead zone"))));
+    await tapPaid(w);
+
+    expect(w.find(".cm__failed").exists()).toBe(true);
+    expect(w.find(".cm__failed").text()).toBe(en["money.paid_failed_offline"]);
+  });
+
+  it("keeps the sheet OPEN holding the failure, so the button that failed can retry", async () => {
+    // the old code closed the sheet on the tap rather than on the success, so even a
+    // message would have gone with it
+    const { w } = await mountMoney(payStub(() => Promise.reject(new Error("dead zone"))));
+    await tapPaid(w);
+
+    expect(w.find(".cm").exists()).toBe(true);
+    const retry = w.findAll(".cm .cta--text").find((b) => b.text().includes(en["money.act_paid"]));
+    expect(retry.attributes("disabled")).toBeUndefined();
+  });
+
+  it("distinguishes a refusal from a dead zone — they are not the same sentence", async () => {
+    const { w } = await mountMoney(
+      payStub(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) })),
+    );
+    await tapPaid(w);
+
+    expect(w.find(".cm__failed").text()).toBe(en["money.paid_failed"]);
+  });
+
+  it("treats 409 as done rather than failed — somebody already recorded it", async () => {
+    // F7 refuses a transition out of recovered/written_off. That is the work having
+    // succeeded, not ours having failed, and telling a driver otherwise teaches them to
+    // re-tap a settled row.
+    const { w } = await mountMoney(
+      payStub(() => Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })),
+    );
+    await tapPaid(w);
+
+    expect(w.find(".cm__failed").exists()).toBe(false);
+    expect(w.find(".cm").exists()).toBe(false); // the sheet closed, as on success
+  });
+
+  it("closes the sheet only on SUCCESS, and clears nothing else", async () => {
+    const { w } = await mountMoney(payStub(() => jsonOk({ receivable_id: "r1", state: "recovered" })));
+    await tapPaid(w);
+
+    expect(w.find(".cm").exists()).toBe(false);
+    expect(w.find(".cm__failed").exists()).toBe(false);
+  });
+
+  it("does not carry one claim's failure onto the next claim opened (N-08 state reset)", async () => {
+    const { w } = await mountMoney(payStub(() => Promise.reject(new Error("dead zone"))));
+    await tapPaid(w);
+    expect(w.find(".cm__failed").exists()).toBe(true);
+
+    await w.find(".sheet__close").trigger("click");
+    await flushPromises();
+    await w.find(".rows .row").trigger("click");
+    await flushPromises();
+
+    expect(w.find(".cm__failed").exists()).toBe(false);
+  });
+});

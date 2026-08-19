@@ -1540,6 +1540,18 @@ const SURFACES = [
   ["sheet-claim-money", "/money", {
     mocks: MONEY_MOCKS, open: [".rows .row"], ready: ".cm__hist",
   }],
+  /* AI-CONTEXT: the sheet holding a FAILED payment (N-07, §23 entry 218). §22.3 wants
+   * every state of a fetching surface laid out, and this one had no state at all until
+   * the failure stopped being swallowed. The harness 404s any path it has no mock for,
+   * so tapping "They paid me" here IS the refusal case — no error injection needed.
+   *
+   * Worth measuring rather than assuming: the message lands between the history and two
+   * full-width CTAs in a sheet that already fills most of 800 dp, and it is the longest
+   * of the two failure sentences in Gurmukhi and Russian. A sheet that scrolls its own
+   * primary action off the bottom is how a driver would never see the retry. */
+  ["sheet-claim-money-failed", "/money", {
+    mocks: MONEY_MOCKS, open: [".rows .row", ".cm .cta--text"], ready: ".cm__failed",
+  }],
   // the settled section, opened: rows that are records rather than controls
   ["money-settled", "/money", {
     mocks: MONEY_MOCKS, open: [".settled-toggle"], ready: ".row--settled",

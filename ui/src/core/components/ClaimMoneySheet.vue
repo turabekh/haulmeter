@@ -32,6 +32,14 @@ const props = defineProps({
   // ledger refuses — the rule the picker sheet used to carry, moved to where the offer
   // now lives rather than lost with it.
   payable: { type: Boolean, default: true },
+  // AI-CONTEXT: §15.4 — "failed money-moving actions are always explicit and persistent
+  // until resolved" (N-07). Recording a payment is the ONLY money-moving act a driver
+  // has, and its failure was swallowed into an empty catch: the sheet closed, the row
+  // was unchanged, and nothing on the screen said it had not happened. Measured, not
+  // argued. The message lands HERE rather than on the tab because the act belongs to
+  // this claim (entry 142) — and the sheet stays open holding it, so the button that
+  // failed is the button that retries.
+  failure: { type: String, default: null },
 });
 const emit = defineEmits(["chase", "paid", "evidence"]);
 const { t, has } = useI18n();
@@ -88,6 +96,7 @@ function day(iso) {
       <Send :size="18" :stroke-width="2" aria-hidden="true" />
       {{ t("money.act_chase") }}
     </button>
+    <p v-if="failure" class="cm__failed" role="alert">{{ failure }}</p>
     <button
       v-if="payable"
       class="cta cta--text"
@@ -164,6 +173,12 @@ function day(iso) {
   font-variant-numeric: tabular-nums;
   color: var(--text-2);
   font-size: var(--type-caption-size);
+}
+.cm__failed {
+  margin: var(--s-3) 0 0;
+  color: var(--text-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
 }
 .cm__quiet {
   margin: var(--s-2) 0 var(--s-4);

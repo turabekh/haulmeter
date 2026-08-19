@@ -696,6 +696,8 @@
   "money.paid.note": "This records that you were paid. The money goes straight to your bank — the app never holds it.",
   "money.paid.question": "Which claim did the broker pay?",
   "money.paid.submit": "Mark as paid",
+  "money.paid_failed": "That did not save. Tap again to retry.",
+  "money.paid_failed_offline": "You are offline, so this was not recorded. Tap again when you have signal.",
   "money.paid_so_far": "Paid to you",
   "money.recovered": "Recovered",
   "money.settled": "Already paid",
