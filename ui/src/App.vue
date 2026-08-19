@@ -66,7 +66,14 @@ onUnmounted(() => {
            the one surface whose content is ALREADY refetched from its own viewport on
            activation, so keeping it costs nothing in staleness. -->
       <router-view v-slot="{ Component }">
-        <KeepAlive :include="['MapSurface']">
+        <!-- AI-CONTEXT: §23 entry 100 kept the MAP alive across tab switches, because it
+             is the one surface whose cost is in its FIRST paint — tiles, GL context,
+             viewport fetch — and paying that again on every return was the whole defect.
+             THE MAP IS DORMANT (D21, §23 entry 228) and keep-aliving a surface no tab can
+             reach is pure cost, so the include is empty while it sleeps. It is left as an
+             empty array rather than deleted: entry 100's argument is untouched and the
+             line is where reactivation puts `MapSurface` back. -->
+        <KeepAlive :include="[]">
           <component :is="Component" />
         </KeepAlive>
       </router-view>

@@ -81,12 +81,18 @@ describe("map keep-alive (§23 entry 100)", () => {
     expect(h1.mounts.LoadSurface).toBe(2);
   });
 
-  it("names only the map in the include list", async () => {
+  it("keeps NOTHING alive while the map is dormant (D21, §23 entry 228)", async () => {
     // reads the real App template so the assertion tracks the shipped list, not a
-    // copy of it that can drift
+    // copy of it that can drift.
+    //
+    // INVERTED rather than deleted. Entry 100's argument is untouched — the map is still
+    // the one surface whose cost is in its first paint — but keep-aliving a surface no
+    // tab can reach is pure cost, so the include is empty while it sleeps. The line stays
+    // in App.vue and this test stays here: together they are where reactivation puts
+    // `MapSurface` back, and a test deleted now is a proof nobody restores later.
     const app = (await import("../src/App.vue?raw")).default;
     const match = app.match(/<KeepAlive\s+:include="\[([^\]]*)\]"/);
     expect(match, "App.vue must keep exactly one KeepAlive include list").toBeTruthy();
-    expect(match[1].replace(/['"\s]/g, "").split(",").filter(Boolean)).toEqual(["MapSurface"]);
+    expect(match[1].replace(/['"\s]/g, "").split(",").filter(Boolean)).toEqual([]);
   });
 });

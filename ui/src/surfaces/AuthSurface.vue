@@ -53,7 +53,11 @@ async function submit() {
     } else {
       await register(form.email.trim(), form.password, authority.value);
     }
-    router.push("/map");
+    // AI-CONTEXT: the first screen after signing in, and it named the MAP (D21, §23
+    // entry 228). With the map dormant that pushed every new driver at a redirect on
+    // their very first tap. `"/"` rather than a literal `/load`: the router owns where
+    // home is, so this line does not have to be found again when the map returns.
+    router.push("/");
   } catch (e) {
     if (e.message === "email_taken") error.value = t("auth.error_taken");
     else if (e.message?.startsWith("login") || e.message?.includes("401")) error.value = t("auth.error_invalid");

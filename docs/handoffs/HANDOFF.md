@@ -3,9 +3,9 @@
 This file is a **pointer, not content**, and as of 2026-08-16 it is one again: it had grown
 to 45 KB of inline summary, which every session read to find one filename.
 
-➡️ **[HANDOFF-140.md](HANDOFF-140.md)** — read this first, every session. It holds the current state,
+➡️ **[HANDOFF-141.md](HANDOFF-141.md)** — read this first, every session. It holds the current state,
 the decisions, the exact next task and the blockers. **[HANDOFF-134.md](HANDOFF-134.md)** is
-its companions: **140** is the Roadside tab, the 49-intent content floor and a copilot that still does not answer (decisions 207–214), **139** is M15 Session F (one reported symptom, three causes, none in the button), **138** is M15 Session E (the conversation gets fast, and eight things built-and-never-wired), **137** is M15 Session D (FR5/FR6 and the conversational pass), **136** is M15 Session C, **135** is the pilot-day preflight from the same
+its companions: **141** is the map dormancy flip and the five-tab bar (D21, decisions 215–228), **140** is the Roadside tab, the 49-intent content floor and a copilot that still does not answer (decisions 207–214), **139** is M15 Session F (one reported symptom, three causes, none in the button), **138** is M15 Session E (the conversation gets fast, and eight things built-and-never-wired), **137** is M15 Session D (FR5/FR6 and the conversational pass), **136** is M15 Session C, **135** is the pilot-day preflight from the same
 sitting, and **134** is the full platform snapshot underneath both. 134 §9's owner questions
 all still stand.
 
@@ -22,6 +22,7 @@ The full history below is never deleted; a handoff is a dated record.
 
 | # | Session |
 |---|---|
+| [141](HANDOFF-141.md) | the map goes to sleep, and four dead pointers the kickoff had not seen |
 | [140](HANDOFF-140.md) | Roadside becomes a tab, the bar becomes six, 49 intents released — and five more things that were wired to nothing |
 | [139](HANDOFF-139.md) | M15 Session F: the play button that was never broken |
 | [138](HANDOFF-138.md) | M15 Session E: the officer answers in two seconds, and eight things were built and never wired |

@@ -21,6 +21,8 @@
 //     --entrypoint sh -v "$PWD/docs/handoffs:/repo-docs" ui \
 //     -c "npx playwright install chromium; OBSERVE_SHOTS=1 npx playwright test layout/observe-loading.spec.js"
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 // AI-CONTEXT: off by default — see above. `/repo-docs` is only mounted when a human is
 // deliberately refreshing the images, so writing unconditionally would put them inside
@@ -30,6 +32,18 @@ async function shoot(page, name) {
   if (!SHOTS) return;
   await page.screenshot({ path: `/repo-docs/assets/${name}.png`, fullPage: false });
 }
+
+// AI-CONTEXT: both observations below open the MAP, which is dormant (owner decision
+// D21, §23 entry 228) — `/` now lands on `/load`, so they would observe the Load tab under
+// the map's name, which is the failure this whole harness exists to prevent.
+//
+// SKIPPED, not deleted, and read from `router.js` so the skip lifts itself the moment the
+// map comes back. What they prove — that a slow or failed overlay never names a facility
+// it has not loaded — is still the map's own law and is worth restoring with it.
+const MAP_DORMANT = /export const MAP_DORMANT\s*=\s*true/.test(
+  readFileSync(fileURLToPath(new URL("../src/router.js", import.meta.url)), "utf8"),
+);
+test.skip(() => MAP_DORMANT, "the map is dormant (D21) — these observe its states");
 
 const API = "http://localhost:8008";
 const SESSION = {

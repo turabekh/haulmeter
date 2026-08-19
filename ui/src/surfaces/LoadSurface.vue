@@ -969,12 +969,19 @@ async function endLoad() {
          Meter, so it stands down with the Meter — a sentence about a card that is not
          on screen is the noise §10.2 keeps this tab clear of. -->
     <p v-if="!live && !isDriving && !paperworkFirst" class="hint">{{ t("load.empty_hint") }}</p>
-    <!-- §10.2 DRIVING: "collapses to Meter-only glance card + voice hint". The hint
-         names a real destination — VoiceSheet lives on the Map tab — so this is a
-         label pointing somewhere, not the dead-control pattern §23 forbids. It is
-         text rather than a control: Forbidden #11 rules out interactive prompts at
-         speed, and the driver reaches voice where it already is. -->
-    <p v-if="isDriving" class="hint">{{ t("voice.unavailable") }}</p>
+    <!-- AI-CONTEXT: THE VOICE HINT STOOD DOWN WITH THE MAP (D21, §23 entry 228).
+         §10.2 DRIVING says "collapses to Meter-only glance card + voice hint", and the
+         hint earned its place on one fact: it named a REAL destination, because
+         `VoiceSheet` is imported by `MapSurface` and nowhere else. With the map dormant
+         there is no tab to reach it from, so the same sentence becomes a label pointing
+         nowhere — the dead-pointer pattern §23 forbids, and at 60 mph it is the worst
+         place in the product to put one.
+         Standing it down rather than rewording it, because §10.2's own reason for the
+         collapse is that DRIVING leaves only the Meter glance: a sentence about a sheet
+         that cannot be opened is exactly the noise this tab is kept clear of. The string
+         and its six translations stay in the catalogue — orphaned keys are not an error
+         here (verified against `locale-completeness.test.js`), and reactivation wants
+         them. It returns with the map. -->
 
     <template v-if="!isDriving">
       <!-- everything from here to the ladder describes a REAL stop. With no load

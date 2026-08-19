@@ -96,16 +96,19 @@ function testRouter() {
 }
 
 describe("TabBar (design-prd §4 NAV-1)", () => {
-  it("renders exactly 6 labeled tabs and no hamburger", () => {
-    // AI-CONTEXT: SIX since decision 213, and the count is still the law this guards.
-    // NAV-1 said five; D7 priced the change at a measured six-tab sweep across every
-    // locale and xx-XL; that sweep was run and passed, and the owner authorised six.
-    // Docs is back on the bar beside Roadside — 207 had displaced it to keep five.
+  it("renders exactly 5 labeled tabs and no hamburger", () => {
+    // AI-CONTEXT: FIVE since owner decision D21 (§23 entry 228), and the count is still
+    // the law this guards. NAV-1 said five; 207 displaced Docs to keep five; D7 priced
+    // the sixth at a measured sweep across every locale and xx-XL and 213 authorised it
+    // once that sweep passed; D21 put the MAP to sleep and the bar is five again.
+    // Not a revert — a different five: Roadside holds the slot 207 opened, and five at
+    // 72 dp is covered a fortiori by the sweep that passed at six.
     const w = mount(TabBar, routerStub);
     const tabs = w.findAll(".tab");
-    expect(tabs).toHaveLength(6);
+    expect(tabs).toHaveLength(5);
     const text = w.text();
-    for (const label of ["Map", "Load", "Money", "Docs", "Roadside", "More"]) {
+    expect(text).not.toContain("Map");
+    for (const label of ["Load", "Money", "Docs", "Roadside", "More"]) {
       expect(text).toContain(label);
     }
     expect(w.html().toLowerCase()).not.toContain("hamburger");
@@ -974,7 +977,7 @@ describe("AuthSurface + auth guard (F1, PRD §7.1)", () => {
     w.unmount();
   });
 
-  it("logs in and routes to the map; token persists", async () => {
+  it("logs in and routes to HOME, not the dormant map; token persists", async () => {
     const fetchStub = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -991,7 +994,10 @@ describe("AuthSurface + auth guard (F1, PRD §7.1)", () => {
       await w.find("form").trigger("submit");
       await flushPromises();
       expect(isAuthenticated.value).toBe(true);
-      expect(router.currentRoute.value.name).toBe("map");
+      // AI-CONTEXT: it pushed "/map" until D21 (§23 entry 228) — the very first tap a new
+      // driver makes, aimed at a dormant surface. It pushes "/" now, so the router owns
+      // where home is and this line does not have to be found again when the map returns.
+      expect(router.currentRoute.value.path).toBe("/load");
     } finally {
       vi.unstubAllGlobals();
       logout();
@@ -3317,7 +3323,7 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     expect(w.findAll(".context").map((e) => e.text()).join("").match(/04:10/g)).toHaveLength(1);
   });
 
-  it("collapses to a Meter-only glance with a voice hint while DRIVING (§10.2)", async () => {
+  it("collapses to a Meter-only glance while DRIVING, with no dead pointer (§10.2)", async () => {
     const router = testRouter();
     const w = mount(LoadSurface, { global: { plugins: [router] } });
     await flushPromises();
@@ -3326,10 +3332,15 @@ describe("LoadSurface — §10.2 anatomy and DRIVING", () => {
     useDriverState().setState(DriverState.DRIVING);
     await w.vm.$nextTick();
 
-    // everything below the Meter goes; the hint names a destination that exists
+    // AI-CONTEXT: the hint STOOD DOWN with the map (D21, §23 entry 228). It earned its
+    // place on one fact — that it named a REAL destination, `VoiceSheet` being imported
+    // by `MapSurface` and nowhere else — and with the map dormant the same sentence points
+    // nowhere. §10.2's own reason for this collapse is that DRIVING leaves the Meter
+    // glance and nothing else, so a sentence about a sheet that cannot be opened is the
+    // noise it exists to remove. At 60 mph it is the worst place in the product for one.
     expect(w.find(".next").exists()).toBe(false);
     expect(w.findAll(".cta")).toHaveLength(0);
-    expect(w.text()).toContain("Voice is on the Map tab");
+    expect(w.text()).not.toContain("Voice is on the Map tab");
   });
 
   it("keeps one CTA on screen and puts the rest behind More (§10.2 single CTA)", async () => {

@@ -2,6 +2,13 @@
 // feature (NAV-2); secondary tasks are sheets, not routes (NAV-3). The app is
 // gated behind F1 auth: routes require a session except /login (meta.public +
 // meta.chrome:false hides the tab shell for the full-screen onboarding flow).
+// AI-CONTEXT: the ONE switch that hides the map (owner decision D21, §23 entry 228).
+//
+// Kept greppable and in one place on purpose: it mirrors the `m01_map` flag rather than
+// replacing it, so the surface and the endpoints go dark together and come back together.
+// Reactivation recipe lives in the handoff; it starts here.
+export const MAP_DORMANT = true;
+
 import { createRouter, createWebHistory } from "vue-router";
 import PasswordSurface from "./surfaces/PasswordSurface.vue";
 import MapSurface from "./surfaces/MapSurface.vue";
@@ -68,10 +75,23 @@ const devRoutes = import.meta.env.DEV
   : [];
 
 export const routes = [
-  { path: "/", redirect: "/map" },
+  { path: "/", redirect: MAP_DORMANT ? "/load" : "/map" },
   // full-screen onboarding flow — no tab chrome, no auth required
   { path: "/login", name: "login", component: AuthSurface, meta: { public: true, chrome: false } },
-  { path: "/map", name: "map", component: MapSurface, meta: { driving: "withdraws" } },
+  // AI-CONTEXT: THE MAP IS DORMANT, NOT DELETED (owner decision D21, §23 entry 228).
+  //
+  // The route is KEPT and redirects, because a bookmarked or deep-linked `/map` must land
+  // somewhere real rather than 404 — a driver who saved the tab before the flip is the
+  // person this line exists for. `MapSurface` stays imported and keeps every one of its
+  // tests: dormant code keeps its proofs, which is the argument for dormancy over
+  // deletion.
+  //
+  // ONE greppable constant, mirroring the `m01_map` flag: reactivation is `MAP_DORMANT =
+  // false` plus the operator toggle plus the tab entry and the KeepAlive line, and the
+  // map returns whole.
+  MAP_DORMANT
+    ? { path: "/map", redirect: "/load" }
+    : { path: "/map", name: "map", component: MapSurface, meta: { driving: "withdraws" } },
   { path: "/facility/:id", name: "facility", component: FacilityProfileSurface, meta: { driving: "withdraws" } },
   // full-screen linear flows (NAV-3); reached from the map card CTAs (NAV-5)
   { path: "/book/:spotId", name: "book", component: BookingSurface, meta: { driving: "withdraws" } },

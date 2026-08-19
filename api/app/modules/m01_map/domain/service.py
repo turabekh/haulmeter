@@ -153,7 +153,16 @@ def register_module(db: Session) -> None:
     from app.foundation.f15_localization import public as localization
 
     localization.register_catalogue(db, messages.KEY_PREFIX, messages.ALERT_MESSAGES)
-    flags.register_flag(db, FLAG_KEY, description="M1 Road Intelligence Map", default_on=True)
+    # AI-CONTEXT: THE MAP SHIPS OFF (owner decision D21, §23 entry 228). `default_on` is a
+    # fact about the shipped code — "does this capability ship on" — and under dormancy the
+    # honest answer is no. It does NOT and cannot write `enabled`, which belongs to the
+    # operator alone, so a box where an operator already switched the map on keeps it until
+    # that operator says otherwise; production is exactly such a box and its flip is an ops
+    # step, ordered AFTER the UI deploy so a live map tab never faces 404ing endpoints.
+    #
+    # The flag stays REGISTERED. Dormant, not unregistered: reactivation is one operator
+    # toggle plus MAP_DORMANT, and the surfaces and their tests are still here.
+    flags.register_flag(db, FLAG_KEY, description="M1 Road Intelligence Map", default_on=False)
     flags.register_flag(
         db, WEIGH_STATION_FLAG, description="M1 Weigh-station layer (E3.1, OSM-sourced)"
     )

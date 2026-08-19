@@ -22,6 +22,17 @@
 // seconds and putting a browser on that path would cost the tight loop this codebase
 // depends on. `make ci` runs both.
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+// AI-CONTEXT: read from `router.js` rather than declared here (D21, §23 entry 228).
+// A second copy of this switch is a second thing to remember, and the one that gets
+// forgotten is the one that makes a sweep measure the wrong screen. Same idiom
+// `map-keepalive.test.js` uses for the KeepAlive list: assert against the shipped
+// source, never against a copy of it.
+const MAP_DORMANT = /export const MAP_DORMANT\s*=\s*true/.test(
+  readFileSync(fileURLToPath(new URL("../src/router.js", import.meta.url)), "utf8"),
+);
 
 const BASE = process.env.UI_BASE || "http://ui:9008";
 
@@ -1310,7 +1321,12 @@ const SURFACES = [
   // row is 48 dp rather than the strip's 32: §6.5's floor is MET here rather than
   // excused, so the sweep has to see it. The More card is a separate state because it
   // renders on a different gate — the strip respects a dismissal and the card does not.
-  ["install-offer", "/map", { installOffer: true, ready: ".strip__install" }],
+  // AI-CONTEXT: MOVED OFF THE MAP (D21, §23 entry 228). It was measured there because
+  // that is where the strip's height is most expensive — and with the map dormant the
+  // state simply could not render. Load is the new home: the strip sits over a Meter
+  // card, so its 48 dp row is still measured against real content rather than a blank
+  // page, and §6.5's floor is still MET here rather than excused.
+  ["install-offer", "/load", { installOffer: true, ready: ".strip__install" }],
   ["install-card", "/more", { installOffer: true, ready: ".install__why" }],
   // §23 entry 102: F8's inbox, the first surface that renders anything the
   // notification system decided. New sheet, so it gets measured at 360 dp with the
@@ -2369,7 +2385,28 @@ const CHECKS = [
   },
 ];
 
-for (const [name, path, live] of SURFACES) {
+// AI-CONTEXT: THE MAP'S OWN STATES SLEEP WITH IT (D21, §23 entry 228).
+//
+// Every state rooted at `/` renders the map, and `/` now redirects to `/load` — so each
+// would measure the Load tab under a map state's name, which is the single failure this
+// file's comments warn about most often.
+//
+// FILTERED BY PATH, NOT BY A LIST OF NAMES. The first version of this hand-listed six
+// states; there are EIGHTEEN, and the twelve it missed failed the sweep. A remembered
+// list is a silent cap — it reports a smaller number as though it were the same coverage
+// — so the rule is derived from the data: if a state's route is the map's, it sleeps.
+//
+// SKIPPED, not deleted, and tied to `MAP_DORMANT`, which is READ OUT OF `router.js` above
+// rather than copied here. Reactivation lifts the skip with the same flip that restores
+// the tab, and the names are printed so nobody reads the smaller total as unchanged.
+const MAP_ROOTS = new Set(["/", "/map"]);
+const SWEPT = MAP_DORMANT ? SURFACES.filter(([, path]) => !MAP_ROOTS.has(path)) : SURFACES;
+if (MAP_DORMANT) {
+  const asleep = SURFACES.filter(([, path]) => MAP_ROOTS.has(path)).map(([n]) => n);
+  console.log(`  map dormant (D21) — ${asleep.length} map states skipped: ${asleep.join(", ")}`);
+}
+
+for (const [name, path, live] of SWEPT) {
   const theme = "dark";
   // `pa` joins the matrix because §6.2's "metrics-compatible line-height tokens
   // verified" is a LAYOUT claim, and this harness is the only thing that can answer
@@ -2425,7 +2462,7 @@ async function at200(page, path, live) {
   await page.waitForTimeout(150); // let the reflow settle before measuring it
 }
 
-for (const [name, path, live] of SURFACES) {
+for (const [name, path, live] of SWEPT) {
   test(`${name} · 200% — reflow and clipping (T-5/T-6)`, async ({ page }) => {
     await at200(page, path, live);
     await page.evaluate(() => document.fonts && document.fonts.ready);

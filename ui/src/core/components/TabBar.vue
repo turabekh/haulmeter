@@ -1,32 +1,30 @@
-<!-- AI-CONTEXT: The SIX-tab bottom bar (design-prd §4 NAV-1, amended by decision 213).
+<!-- AI-CONTEXT: The FIVE-tab bottom bar (design-prd §4 NAV-1; owner decision D21,
+     §23 entry 228 — which supersedes decision 213 IN PART).
      Icons WITH labels, no hamburger, ever. Bottom-anchored in the thumb zone (§7.3),
      64 dp + safe-area, targets ≥48 dp (§6.5). The ONLY interactive color is shield
      (§6.1). Custom-built on tokens with zero Quasar defaults (§19 Q-4).
 
-     SIX, AND THE NUMBER WAS MEASURED BEFORE IT WAS ARGUED. NAV-1 said "5 tabs exactly"
-     and D7 set the price of changing it: "build a throwaway six-tab bar and run the
-     181-state layout sweep under all six locales and xx-XL; 360÷6 = 60 dp clears the
-     48 dp glove floor but THE LABELS ARE THE RISK". That sweep was run — every state,
-     every locale, xx-XL and 200% — and it passes. The owner authorised six (2026-08-18);
-     this comment records that the condition attached to it was met, not waived.
+     THE MAP SLOT IS GONE, AND THE SWEEP THAT ALLOWED SIX STILL COVERS FIVE. D7 priced
+     the sixth tab — "build a throwaway six-tab bar and run the 181-state layout sweep
+     under all six locales and xx-XL; 360÷6 = 60 dp clears the 48 dp glove floor but THE
+     LABELS ARE THE RISK" — and that sweep was run and passed at SIX. Five tabs at 72 dp
+     is strictly easier than six at 60, so this configuration is covered a fortiori and a
+     fresh full sweep is not owed. **A SEVENTH TAB, OR ANY RETURN TO SIX, OWES THE
+     MEASUREMENT AGAIN**: the amendment is to the number, never to the discipline.
 
-     AT 360 dp EACH TAB IS 60 dp, down from 72. That is what makes the labels tight, and
-     it is why `nav.roadside` and `nav.docs` are their own short strings rather than
-     reuses of "Roadside Ready" or a full "Documents" — Russian ("Документы") and Somali
-     ("Wax dheeraad ah") set the width, not English.
+     WHY FIVE AND NOT "BACK TO FIVE": this is not a revert. NAV-1's original five were
+     Map · Load · Money · Docs · More. These five are Load · Money · Docs · Roadside ·
+     More — the map is dormant (D21) and Roadside holds the slot it opened at 207.
 
-     INSPECTION MODE KEEPS ITS SECOND DOOR ON LOAD even though Docs is a tab again and
-     §10.4's two taps are satisfied without it. It is not redundancy for its own sake:
-     §5 foregrounds Load when the driver is ON_SITE, which is where they are when an
-     officer walks up, and the row sits above the fold there. The MORE rows added at 207
-     are gone — with Docs back on the bar they were a third path to one screen. -->
+     THE MAP IS DORMANT, NOT DELETED. `MapSurface` and its tests are still in the tree and
+     still green; the route redirects behind `MAP_DORMANT` in `router.js`, which mirrors
+     the `m01_map` flag. Reactivation puts this entry back beside those two switches. -->
 <script setup>
-import { Map, Truck, DollarSign, FileText, Mic, MoreHorizontal } from "lucide-vue-next";
+import { Truck, DollarSign, FileText, Mic, MoreHorizontal } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
 
 const { t } = useI18n();
 const tabs = [
-  { to: "/map", key: "nav.map", icon: Map },
   { to: "/load", key: "nav.load", icon: Truck },
   { to: "/money", key: "nav.money", icon: DollarSign },
   { to: "/docs", key: "nav.docs", icon: FileText },

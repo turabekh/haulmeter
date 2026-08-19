@@ -60,7 +60,14 @@ async function submit() {
 
 <template>
   <div class="pw">
-    <p v-if="isDriving" class="pw__hint" role="status">{{ t("voice.unavailable") }}</p>
+    <!-- AI-CONTEXT: this said "Voice is on the Map tab for now" (D21, §23 entry 228).
+         With the map dormant that names a tab that no longer exists — and it is the ONLY
+         thing this surface renders at speed, so it could not simply stand down the way
+         Load's did: removing it leaves a blank screen at 60 mph. `driving.paused`
+         ("Available when you're stopped.") is the existing line for exactly this, already
+         translated, and it says the true thing about a password form: not where to go
+         instead, but that this one waits. -->
+    <p v-if="isDriving" class="pw__hint" role="status">{{ t("driving.paused") }}</p>
     <template v-else>
     <h1 class="pw__title">{{ forced ? t("pw.forced_title") : t("pw.title") }}</h1>
     <p v-if="forced" class="pw__hint">{{ t("pw.forced_hint") }}</p>

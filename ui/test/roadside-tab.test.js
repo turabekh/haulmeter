@@ -62,19 +62,22 @@ describe("the tab bar after decisions 207 and 213", () => {
     },
   };
 
-  it("has exactly six tabs — the count NAV-1 was amended to (213)", () => {
-    // 207 displaced Docs to keep five; 213 brought it back and made the bar six, after
-    // D7's measured sweep. The number is asserted because it is the law, not the layout.
+  it("has exactly five tabs — the map slot is dormant (D21, entry 228)", () => {
+    // 207 displaced Docs to keep five; 213 brought it back and made the bar six after
+    // D7's measured sweep; D21 removed the MAP slot and the bar is five again — not a
+    // revert, a different five. The number is asserted because it is the law, not the
+    // layout: a seventh tab, or any return to six, owes D7's measurement again.
     const w = mount(TabBar, tabStub);
 
-    expect(w.findAll(".tab")).toHaveLength(6);
+    expect(w.findAll(".tab")).toHaveLength(5);
+    expect(w.findAll(".tab").map((a) => a.attributes("href"))).not.toContain("/map");
   });
 
   it("offers Roadside and Docs side by side, in that order", () => {
     const w = mount(TabBar, tabStub);
 
     const hrefs = w.findAll(".tab").map((a) => a.attributes("href"));
-    expect(hrefs).toEqual(["/map", "/load", "/money", "/docs", "/roadside", "/more"]);
+    expect(hrefs).toEqual(["/load", "/money", "/docs", "/roadside", "/more"]);
     expect(w.text()).toContain(en["nav.roadside"]);
     expect(w.text()).toContain(en["nav.docs"]);
   });
@@ -84,7 +87,7 @@ describe("§10.4 — inspection mode stays within two taps of a cold start", () 
   // Tap 1 is always a tab (a cold start lands on a tab root). Tap 2 must therefore be a
   // control ON that tab root that opens inspection mode itself. Nesting it behind the
   // wallet row would make it three and is precisely what this asserts against.
-  const TAB_ROOTS = ["/map", "/load", "/money", "/docs", "/roadside", "/more"];
+  const TAB_ROOTS = ["/load", "/money", "/docs", "/roadside", "/more"];
 
   it("is reachable from a tab root by exactly one more tap — now through Docs", () => {
     // AI-CONTEXT: THE LOAD DOOR WAS REMOVED AT 221 (owner). It existed because 207 spent

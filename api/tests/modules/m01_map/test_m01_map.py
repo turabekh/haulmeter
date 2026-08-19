@@ -29,21 +29,29 @@ def test_register_module_creates_flag_and_admin_view(db):
     force-assigned `enabled = True`, so on every real box M1 came up ON while the test
     environment had it off — the suite was measuring a state the product never had.
 
-    M1 DECLARES `default_on=True` now, so the test and the box agree, and the assertion
-    became the sharper one: the capability is on because the code ships it on, and NO
-    operator has decided anything. Those were indistinguishable before."""
+    M1 then DECLARED `default_on=True`, and the assertion became the sharper one: on
+    because the code ships it on, with no operator having decided anything.
+
+    **THE MAP NOW SHIPS OFF (owner decision D21, §23 entry 228).** Dormant, not deleted:
+    the flag is still REGISTERED and still switchable, which is the whole difference
+    between this and removing the module. `default_on=False` is the honest declaration —
+    a capability the product no longer ships on — and the second half of this test is
+    unchanged on purpose, because the property that matters is untouched by dormancy:
+    **an operator's decision still beats the declaration, in both directions.** That is
+    what makes reactivation one toggle rather than a redeploy."""
     m1.register_module(db)
     row = db.get(flags.FeatureFlag, "m01_map")
-    assert row is not None  # registered — switchable in the console
-    assert row.default_on is True  # ships on: the 29 July decision, declared
+    assert row is not None  # registered — switchable in the console, dormant not deleted
+    assert row.default_on is False  # ships OFF: D21, declared
     assert row.enabled is None  # and nobody has overruled it
-    assert flags.is_enabled(db, "m01_map") is True
-
-    # an operator's decision beats the declaration, in both directions
-    flags.disable(db, "m01_map")
     assert flags.is_enabled(db, "m01_map") is False
-    flags.clear_decision(db, "m01_map")
+
+    # an operator's decision beats the declaration, in both directions — the property
+    # reactivation depends on, and the reason dormancy is one toggle
+    flags.enable(db, "m01_map")
     assert flags.is_enabled(db, "m01_map") is True
+    flags.clear_decision(db, "m01_map")
+    assert flags.is_enabled(db, "m01_map") is False
 
 
 def test_drive_preset_shows_only_its_layers(db):

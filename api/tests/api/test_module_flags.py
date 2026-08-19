@@ -293,3 +293,27 @@ def test_the_default_budget_is_a_live_f13_config_knob(db):
     flags.set_config(db, ai.CONFIG_MONTHLY_BUDGET, 123_456, scope="ai")
     register_all(db)
     assert db.get(ai.ModuleBudget, MODULES[0].MODULE).monthly_budget_micros == 123_456
+
+
+def test_a_dormant_map_refuses_its_endpoints(client, db):
+    """AI-CONTEXT: the dormancy flip is only real if the ENDPOINTS go dark with the tab
+    (owner decision D21, §23 entry 228).
+
+    Hiding a surface while its API stays open is not dormancy, it is a hidden feature —
+    and §23 entry 105's module-flag gate is what makes the difference. `m01_map` now
+    declares `default_on=False`, so a box where no operator has decided anything serves
+    no map at all.
+    """
+    from app.modules.m01_map import public as m1
+
+    m1.register_module(db)
+    reg = client.post(
+        "/auth/register", json={"email": "dormant@example.com", "password": "pw-123456"}
+    )
+    headers = {"Authorization": f"Bearer {reg.json()['token']}"}
+
+    resp = client.get(
+        "/map/overlay?min_lat=32&min_lon=-97&max_lat=33&max_lon=-96", headers=headers
+    )
+
+    assert resp.status_code == 404, "the map is dormant; its endpoints must refuse"

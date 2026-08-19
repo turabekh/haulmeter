@@ -16,6 +16,7 @@
 // considers the question. Behaviour is covered per surface in ui-components.test.js;
 // this is the completeness net that catches the next screen somebody forgets.
 import { describe, it, expect } from "vitest";
+import { MAP_DORMANT } from "../src/router.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { routes } from "../src/router.js";
@@ -61,7 +62,15 @@ const driverRoutes = routes.filter(
 
 describe("SM-3 — every driver surface declares what it does at speed", () => {
   it("covers exactly the driver routes, so a new one cannot slip through", () => {
-    expect(driverRoutes.map((r) => r.name).sort()).toEqual(Object.keys(SOURCE).sort());
+    // AI-CONTEXT: `map` KEEPS its entry in SOURCE while the map is dormant (D21, §23
+    // entry 228) and is subtracted here instead of deleted. Dormant code keeps its
+    // proofs: the posture MapSurface holds at speed is still declared and still true,
+    // and deleting the entry would mean reactivation restores a surface with no SM-3
+    // coverage and nothing to notice. The route itself drops out of `driverRoutes` on
+    // its own — the census filters redirects — so this is tied to MAP_DORMANT rather
+    // than hand-maintained, and flipping that constant puts the map back on both sides.
+    const expected = Object.keys(SOURCE).filter((n) => !(MAP_DORMANT && n === "map"));
+    expect(driverRoutes.map((r) => r.name).sort()).toEqual(expected.sort());
   });
 
   it("declares a DRIVING posture on every driver route (§22.3)", () => {

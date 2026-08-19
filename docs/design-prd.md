@@ -69,12 +69,11 @@ Environment constants for all three: bright sun glare AND night dark (dark-first
 
 | Tab | Label (EN) | Serves | Backing modules |
 |---|---|---|---|
-| 1 | **Map** | Where am I going; what's around | M1, M2, M6, M7 (layers) |
-| 2 | **Load** | Current work: stop, clock, evidence, protection | M3, M4, M5, F5 |
-| 3 | **Money** | Owed, recovered, saved; claims pipeline | M3, M4, M9, M7 savings |
-| 4 | **Docs** | Wallet, inspection mode, uploads | M5, F6, M9 exports |
-| 5 | **Roadside** | Practice a roadside inspection; the readiness program | M15 |
-| 6 | **More** | Profile, fleet, points, settings, help | M10, M12, F1 |
+| 1 | **Load** | Current work: stop, clock, evidence, protection | M3, M4, M5, F5 |
+| 2 | **Money** | Owed, recovered, saved; claims pipeline | M3, M4, M9, M7 savings |
+| 3 | **Docs** | Wallet, inspection mode, uploads | M5, F6, M9 exports |
+| 4 | **Roadside** | Practice a roadside inspection; the readiness program | M15 |
+| 5 | **More** | Profile, fleet, points, settings, help | M10, M12, F1 |
 
 > **Amended twice on 2026-08-18.** **Decision 207** gave slot 4 to Roadside and displaced Docs
 > to a More row, keeping five. **Decision 213 restored Docs and made the bar SIX** — the owner
@@ -84,6 +83,22 @@ Environment constants for all three: bright sun glare AND night dark (dark-first
 > item's default `min-width: auto` refusing to shrink a `nowrap` label). Fixed, re-measured,
 > green. **A seventh tab owes the same measurement.** A8 (Parking) is no longer blocked on a
 > free slot and returns to the queue on its own merits.
+>
+> **Amended again on 2026-08-19 — owner decision D21, §23 entry 228: the MAP slot is removed
+> and the bar is FIVE.** Load · Money · Docs · Roadside · More, and the app home (`/`) is
+> `/load`. Rationale in the owner's voice: Journey 1 (load → detention → payment) is the
+> validated-first product, and the map was the only surface violating "single-player useful
+> on install #1". **This is DORMANCY, NOT DELETION** — `m01_map` ships off, the route
+> redirects behind one greppable `MAP_DORMANT` constant, and MapSurface, MapCanvas,
+> PresetChips, CorridorStack and VoiceSheet all remain in the tree with their tests green.
+> Deletion is a separate future decision, gated on pilot evidence.
+>
+> **D7's sweep still covers this configuration a fortiori:** five tabs at 72 dp is strictly
+> easier than the six-at-60 dp bar that passed every state in six locales under xx-XL and
+> 200%, so no fresh full sweep is owed — but the specs asserting six were updated and pass.
+> **Any return to six, or a seventh, owes the measurement again: the amendment is to the
+> number, never to the discipline.** Not a revert to the original five, either — Roadside
+> holds the slot 207 opened, and Map is the one that left.
 
 **Navigation laws:**
 
