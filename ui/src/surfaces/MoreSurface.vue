@@ -370,8 +370,14 @@ function signOut() {
       </form>
     </section>
 
-    <!-- M13 / E-D1: opt-in food alerts. Default OFF; the caps are stated, not buried. -->
-    <section class="card">
+    <!-- AI-CONTEXT: THE FOOD HALF WAS SWITCHED OFF AND THIS CARD KEPT ADVERTISING IT
+         (§23 entry 223, owner report). `m13_vendor` has been FALSE in production since
+         HANDOFF-114, food goes BY FLAG rather than by deletion (v2.0 §4: "do not delete
+         the code; the cost is sunk and the flag makes it free to carry") — and this
+         section had no condition at all, while the authority card twenty lines up has
+         had one since it shipped.
+         M13 / E-D1: opt-in food alerts. Default OFF; the caps are stated, not buried. -->
+    <section v-if="me && me.food_enabled" class="card">
       <h2 class="card__title">{{ t("vendor.alerts") }}</h2>
       <button
         class="alerts"

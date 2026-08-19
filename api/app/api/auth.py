@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import bearer_token, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f13_flags import public as flags
+from app.modules.m13_vendor import public as m13
 from app.modules.m15_roadside import public as m15
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -333,6 +334,13 @@ def me(
         # than a literal: `is_enabled` treats an unregistered flag as OFF, so a typo here
         # would not fail, it would silently hide the entry forever.
         "roadside_enabled": flags.is_enabled(db, m15.FLAG_KEY),
+        # AI-CONTEXT: the food-alerts card's condition, and it exists because that card
+        # had none (§23 entry 223). `m13_vendor` has been FALSE in production since the
+        # food half was switched off (HANDOFF-114), and the More screen went on offering
+        # "Food alerts" to every driver — an opt-in to notifications from a module that
+        # is not running. The rule two lines up is the one it broke: a capability nobody
+        # has switched on must not advertise itself.
+        "food_enabled": flags.is_enabled(db, m13.FLAG_KEY),
         # AI-CONTEXT: on `/me` as well as on the login response, and THIS is the one that
         # mattered (D4). Sessions last 30 days, so a driver who signs in with a temporary
         # password and reopens the app next morning never sees `/login` again — the flag

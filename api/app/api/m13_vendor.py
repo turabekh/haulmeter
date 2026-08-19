@@ -23,6 +23,7 @@ from app.api.deps import canonical_facility_id, current_account, get_db, require
 from app.foundation.f01_identity import public as identity
 from app.foundation.f02_facility import public as facility_registry
 from app.foundation.f08_notifications import public as notify
+from app.foundation.f13_flags import public as flags
 from app.foundation.f14_admin import public as admin
 from app.modules.m13_vendor import public as m13
 
@@ -381,6 +382,13 @@ def set_alert_opt_in(
     account: identity.Account = Depends(current_account),
     db: Session = Depends(get_db),
 ) -> dict:
+    # AI-CONTEXT: A DISABLED MODULE MUST NOT ACCEPT AN OPT-IN (§23 entry 223). This
+    # recorded a subscription to `VENDOR_ALERT` whether or not `m13_vendor` was running,
+    # so a driver could opt into alerts that cannot arrive — a promise the product has no
+    # way to keep, which is worse than a control that visibly does nothing. Same 403 the
+    # authority-verification route uses for the same reason.
+    if not flags.is_enabled(db, m13.FLAG_KEY):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "vendor alerts not enabled")
     # E-D1: the class is OFF until the driver turns it on, here and nowhere else
     pref = notify.set_class_opt_in(db, account.id, m13.VENDOR_ALERT, body.opted_in)
     return {"class": m13.VENDOR_ALERT, "opted_in": pref.opted_in}
