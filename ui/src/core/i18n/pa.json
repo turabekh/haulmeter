@@ -803,6 +803,7 @@
   "packet.no_recipient": "ਕੋਈ ਈਮੇਲ ਦਰਜ ਨਹੀਂ",
   "packet.no_reference": "ਕੋਈ ਲੋਡ ਹਵਾਲਾ ਨਹੀਂ",
   "packet.note": "ਜਦ ਤੱਕ ਤੁਸੀਂ ਨਾ ਭੇਜੋ, ਕੁਝ ਨਹੀਂ ਜਾਂਦਾ।",
+  "packet.nothing_captured": "ਇਸ ਸਟਾਪ 'ਤੇ ਹਾਲੇ ਕੁਝ ਨਹੀਂ ਲਿਆ ਗਿਆ — ਪੈਕ ਖਾਲੀ ਜਾਵੇਗਾ।",
   "packet.offline": "ਸਿਗਨਲ ਨਹੀਂ। ਆਨਲਾਈਨ ਹੋਣ ਉੱਤੇ ਭੇਜੋ।",
   "packet.ready": "ਤੁਸੀਂ {place} ਤੋਂ ਨਿਕਲ ਗਏ। ਤੁਹਾਡੇ ਕਾਗਜ਼ਾਤ ਤਿਆਰ ਹਨ।",
   "packet.ready_driving": "ਕਾਗਜ਼ਾਤ ਤਿਆਰ — ਰੁਕਣ ਉੱਤੇ ਵੇਖੋ।",

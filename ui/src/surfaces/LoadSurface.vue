@@ -165,6 +165,8 @@ const packetReference = computed(() => nextPacket.value?.reference ?? "");
 // §3: nothing in this product had ever written `contact_email`, so on most real loads
 // the honest answer here is that there is no address yet.
 const packetRecipient = computed(() => nextPacket.value?.recipient || "");
+// what the pack would actually carry — an empty one is a claim with no evidence in it
+const packetHasContents = computed(() => (nextPacket.value?.contents ?? []).length > 0);
 // AI-CONTEXT: §8's "one Primary per screen", applied to the state that had TWO.
 //
 // With paperwork waiting and no load running, this tab rendered the packet card's
@@ -680,6 +682,12 @@ const rung = computed(() => {
   if (!live.value) return "start";
   if (isFiled.value) return null;
   if (preArrival.value) return "arrive";
+  // AI-CONTEXT: A FINISHED STOP LEADS WITH THE MONEY (§23 entry 227, owner screenshot).
+  // The ladder put "Snap BOL" in the primary slot on a stop the same screen had just
+  // declared over — telling a driver to photograph paperwork at a dock they have left,
+  // above the one act that still pays. Capture stays reachable as a secondary rung; it
+  // simply stops outranking filing once the visit is done.
+  if (isEnded.value && claimable.value) return "claim";
   if (!bolCaptured.value) return "bol";
   if (accruing.value && !noticeSent.value && !noticeInFlight.value) return "notice";
   if (claimable.value) return "claim";
@@ -903,6 +911,17 @@ async function endLoad() {
       </p>
       <p v-if="isDriving" class="packet-card__driving">{{ t("packet.ready_driving") }}</p>
       <template v-else>
+        <!-- AI-CONTEXT: AN EMPTY PACK IS NOT WORTH SENDING (§23 entry 227, owner
+             screenshot). The card led with "check and send" over a packet holding no BOL,
+             no seal, no damage note and 0/4 photos — a claim with no evidence behind it,
+             which is worse in front of a broker than sending nothing.
+             STATED, NOT BLOCKED, and deliberately INSIDE this block rather than chained
+             to the `v-if` above it: the first draft of this line joined that chain and
+             took the whole send control away with it, which is a product deciding it
+             knows better than the driver holding paper copies. Eighteen tests said so. -->
+        <p v-if="!packetHasContents" class="packet-card__driving">
+          {{ t("packet.nothing_captured") }}
+        </p>
         <!-- §16: colour AND icon AND label. The missing case takes `marker` — the same
              token `.late` already uses for a fact that needs attention without being an
              alarm — because the driver did not cause it and can fix it in the sheet. -->

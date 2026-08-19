@@ -803,6 +803,7 @@
   "packet.no_recipient": "Email qayd etilmagan",
   "packet.no_reference": "Yuk raqami yo'q",
   "packet.note": "Siz yubormaguningizcha hech narsa ketmaydi.",
+  "packet.nothing_captured": "Bu to'xtashda hali hech narsa olinmadi — to'plam bo'sh ketadi.",
   "packet.offline": "Aloqa yo'q. Tarmoq paydo bo'lganda yuboring.",
   "packet.ready": "{place} dan chiqdingiz. Hujjatlaringiz tayyor.",
   "packet.ready_driving": "Hujjatlar tayyor — to'xtaganingizda ko'ring.",

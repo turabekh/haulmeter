@@ -440,6 +440,9 @@ def assert_presence(db: Session, account_id, facility_id, occurred_at, lat=None,
     presence = _open_presence(db, account_id, facility_id, occurred_at)
     if presence is None:
         return None  # a concurrent evaluation opened the visit; theirs stands
+    # the driver's own statement, recorded so the exit path can tell it from a sensor's
+    presence.attested_at = _as_utc(occurred_at)
+    db.flush()
     # `GeofenceEvent.geom` is NOT NULL, so an event can only be emitted when there is a
     # real position to put in it. With no device fix the visit is still opened — that is
     # what `is_present` reads and what starts the clock — and the attestation is recorded
@@ -564,6 +567,25 @@ def _apply_to_state(db: Session, account_id, lat: float, lon: float, occurred_at
             else:
                 db.flush()
         elif not inside and presence is not None:
+            # AI-CONTEXT: A DRIVER WHO SAID "I AM HERE" IS NOT OVERRULED BY AN IMPOSSIBLE
+            # FIX (§23 entry 227).
+            #
+            # Measured on production: a stop attested at 07:56 was closed 76 seconds later
+            # by a fix ~17,000 km from the dock, which drafted paperwork announcing the
+            # driver had left a facility they were standing on, froze the Meter, and ended
+            # the claim. Every component was correct; the premise was not.
+            #
+            # This is NOT a threshold to tune — it is an arithmetic impossibility. No
+            # truck covers that ground in that time, so the two facts cannot both be
+            # true, and the product must not silently pick the sensor over the person.
+            # The visit stays open and is closed by a plausible exit or by the driver's
+            # own "leave this stop", which is a durable end either way.
+            #
+            # An UNATTESTED visit is untouched: the geofence opened it and the geofence
+            # closes it, exactly as before.
+            if _implausible_exit(db, presence, arming.facility_id, lat, lon, occurred_at):
+                db.flush()
+                continue
             presence.outside_streak += 1
             if presence.outside_streak < confirm:
                 # not yet confirmed: no event, the visit stays open, and `last_tick_at` is
@@ -585,6 +607,27 @@ def _apply_to_state(db: Session, account_id, lat: float, lon: float, occurred_at
                 )
             )
     return events
+
+
+# AI-CONTEXT: 55 m/s is ~198 km/h — comfortably above any truck, and far below the speed
+# an impossible fix implies. It is a plausibility floor rather than a tuned knob: the case
+# it exists for is off by five orders of magnitude, so its exact value cannot change an
+# outcome that matters. `exit_confirm_pings` and `accuracy_gate_m` remain the knobs, and
+# remain inert; this does not touch them.
+MAX_PLAUSIBLE_SPEED_MPS = 55.0
+
+
+def _implausible_exit(db, presence, facility_id, lat, lon, occurred_at) -> bool:
+    """Would closing this attested visit require impossible travel?"""
+    if presence.attested_at is None:
+        return False
+    elapsed = (_as_utc(occurred_at) - _as_utc(presence.attested_at)).total_seconds()
+    if elapsed <= 0:
+        return True  # a fix at or before the attestation cannot describe leaving after it
+    distance_m = facility_registry.facility_distances(db, [facility_id], lat, lon).get(facility_id)
+    if distance_m is None:
+        return False  # nothing measurable to judge; the ordinary rules apply
+    return (distance_m / elapsed) > MAX_PLAUSIBLE_SPEED_MPS
 
 
 def _open_presence(db: Session, account_id, facility_id, occurred_at) -> GeofencePresence | None:

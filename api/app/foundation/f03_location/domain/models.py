@@ -136,6 +136,10 @@ class GeofencePresence(Base):
     # The config ships at 1, which is exactly today's single-ping exit, so this column
     # changes nothing until an operator decides otherwise.
     outside_streak: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # AI-CONTEXT: set when the DRIVER said "I am here" (§23 entry 227). NULL means the
+    # geofence opened this visit and the geofence may close it; a timestamp means a person
+    # made a statement, and a fix that contradicts it implausibly does not get to win.
+    attested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class GeofenceEvent(Base):

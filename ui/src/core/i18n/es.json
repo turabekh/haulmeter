@@ -803,6 +803,7 @@
   "packet.no_recipient": "Sin correo registrado",
   "packet.no_reference": "Sin referencia de carga",
   "packet.note": "No sale nada hasta que usted lo envíe.",
+  "packet.nothing_captured": "Todavía no se capturó nada en esta parada — el paquete saldría vacío.",
   "packet.offline": "Sin señal. Envíelo cuando vuelva a tener conexión.",
   "packet.ready": "Salió de {place}. Su papeleo está listo.",
   "packet.ready_driving": "Papeleo listo — revíselo cuando se detenga.",

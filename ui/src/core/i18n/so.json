@@ -803,6 +803,7 @@
   "packet.no_recipient": "Iimayl lama diiwaangelin",
   "packet.no_reference": "Tixraac shixnad ma jiro",
   "packet.note": "Waxba ma baxayaan ilaa aad dirto.",
+  "packet.nothing_captured": "Wax lagama duubin joogsigan weli — xirmadu waxay bixi doontaa iyadoo madhan.",
   "packet.offline": "Shabakad ma jirto. Dir marka aad shabakad hesho.",
   "packet.ready": "Waad ka baxday {place}. Waraaqahaagu waa diyaar.",
   "packet.ready_driving": "Waraaqaha waa diyaar — eeg marka aad joogsato.",

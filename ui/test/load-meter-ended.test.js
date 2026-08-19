@@ -139,3 +139,38 @@ describe("When F3 says the driver has left", () => {
     lastEvents.value = [];
   });
 });
+
+// AI-CONTEXT: the owner's screenshot (§23 entry 227) — a screen that announced a
+// departure that had not happened, offered to send an empty pack, and told the driver to
+// photograph a BOL at a dock it had just said they left.
+describe("A stop the app believes is over", () => {
+  it("leads with the money, not with 'photograph the BOL'", async () => {
+    const w = await mountMeter({ ...ENDED, bol_captured: false, notice_sent: true });
+
+    expect(w.text()).toContain(en["load.cta.claim"]);
+    const primary = w.find(".cta");
+    expect(primary.text()).not.toContain(en["load.cta.bol"]);
+  });
+
+  it("says an empty pack would go out empty, rather than leading with 'send'", async () => {
+    setToken("tok");
+    setActiveStop("stop-1");
+    vi.stubGlobal("fetch", vi.fn((u) => {
+      const s = String(u);
+      if (s.includes("/meter")) return jsonOk(ENDED);
+      if (s.includes("/protection/stop-packets")) return jsonOk([
+        { packet_id: "p1", stop_id: "stop-1", state: "draft", drafted_at: "2026-08-19T07:57:16Z",
+          reference: "BRL-78426", recipient: "ap@blue.com", counterparty_name: "Blue Road",
+          facility_name: "Harvest Foods DC", contents: [], claim: null },
+      ]);
+      return jsonOk({});
+    }));
+    const w = mount(LoadSurface, {
+      global: { plugins: [createRouter({ history: createMemoryHistory(), routes })] },
+    });
+    await flushPromises();
+    await flushPromises();
+
+    expect(w.text()).toContain(en["packet.nothing_captured"]);
+  });
+});

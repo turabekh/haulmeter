@@ -803,6 +803,7 @@
   "packet.no_recipient": "No email on file",
   "packet.no_reference": "No load reference",
   "packet.note": "Nothing goes out until you send it.",
+  "packet.nothing_captured": "Nothing was captured at this stop yet — the pack would go out empty.",
   "packet.offline": "No signal. Send this when you're back online.",
   "packet.ready": "You left {place}. Your paperwork is ready.",
   "packet.ready_driving": "Paperwork ready — review it when you stop.",
