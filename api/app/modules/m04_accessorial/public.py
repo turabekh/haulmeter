@@ -21,6 +21,7 @@ from .domain.service import (
     file_lumper,
     file_tonu,
     money_owed,
+    owed_context,
     register_module,
 )
 
@@ -41,5 +42,6 @@ __all__ = [
     "file_lumper",
     "file_tonu",
     "money_owed",
+    "owed_context",
     "register_module",
 ]

@@ -379,6 +379,38 @@ def money_owed(db: Session, account_id, now: datetime | None = None) -> list[dic
     return rows
 
 
+def owed_context(db: Session, account_id, now: datetime | None = None) -> dict:
+    """WHY the owed list is empty, for the empty state that has to say something true.
+
+    AI-CONTEXT: §15.3 gave the Money tab one empty sentence — "Add your first load to
+    start the meter" — and the owner read it while holding seven loads and fourteen
+    claims (§23 entry 215). An empty state that can only describe a brand-new driver
+    tells everyone else the screen is broken, which is exactly how it was reported.
+
+    Three facts separate the reachable cases, and no more than three: whether a load has
+    ever been recorded, how many claims are started but unfiled, and — the one worth
+    money — how much those unfiled claims have ALREADY accrued. A driver sitting on
+    accrued detention they never filed is the only case here with money on the table,
+    and it is the case the old sentence buried.
+
+    The accrued figure is computed from M3's LIVE clock rather than `claim.amount_cents`,
+    because the stored column is a snapshot written at filing time and reads 0 on every
+    open claim — a zero that means "not measured" (TRAPS). That costs one clock walk per
+    open claim; open claims are the small end of a driver's history, and the alternative
+    is a figure that is always zero and never says so.
+    """
+    now = now or datetime.now(UTC)
+    open_claims = m3.open_claims_for_account(db, account_id)
+    accrued = 0
+    for claim in open_claims:
+        accrued += m3.clock(db, claim, now).amount_cents
+    return {
+        "has_loads": bool(loads.list_loads(db, account_id, limit=1)),
+        "open_claims": len(open_claims),
+        "accrued_unfiled_cents": accrued,
+    }
+
+
 def _counterparty_name(db: Session, receivable) -> str | None:
     if receivable.counterparty_ref is None:
         return None

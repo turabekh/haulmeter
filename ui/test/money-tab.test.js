@@ -246,3 +246,74 @@ describe("A row leads somewhere, with a next step (§10.3)", () => {
     expect(w.text()).toContain("$312.50"); // the figures stay readable, which §10.3 allows
   });
 });
+
+// AI-CONTEXT: THE EMPTY STATE NAMED ONE CAUSE AND THERE ARE FOUR (§23 entry 215).
+//
+// Measured on production before a line changed: the owner's account held 7 loads and 14
+// detention claims, every claim `open` with $0 accrued because every stop ended INSIDE
+// its free time. So no receivable ever opened, `money_owed` was correctly empty, and
+// §15.3's one sentence told a driver with seven loads to "add your first load". The tab
+// was arithmetically right and read as broken — which is how it was reported, three
+// times, as "always showing zero".
+describe("An empty Money tab says WHY it is empty", () => {
+  function emptyStub(earnings) {
+    return vi.fn((url) => {
+      const u = String(url);
+      if (u.includes("/accessorial/owed")) return jsonOk([]);
+      if (u.includes("/money/earnings")) return jsonOk({ ...EARNINGS, ...earnings });
+      if (u.includes("/me")) return jsonOk({ verified: false });
+      return jsonOk({});
+    });
+  }
+
+  it("tells a driver who has never recorded a load to add one (§15.3, unchanged)", async () => {
+    const { w } = await mountMoney(
+      emptyStub({ has_loads: false, open_claims: 0, accrued_unfiled_cents: 0 }),
+    );
+    expect(w.find(".money__empty").text()).toBe(en["money.empty"]);
+  });
+
+  it("does NOT tell a driver holding loads and claims to add their first load", async () => {
+    // the reported bug, exactly: seven loads, fourteen open claims, nothing accrued
+    const { w } = await mountMoney(
+      emptyStub({ has_loads: true, open_claims: 14, accrued_unfiled_cents: 0 }),
+    );
+
+    const shown = w.find(".money__empty").text();
+    expect(shown).not.toBe(en["money.empty"]);
+    expect(shown).toBe(en["money.empty_free_time"]);
+  });
+
+  it("leads with the money when a stop accrued and was never filed", async () => {
+    // the only case here with money on the table — `number rather than sentence` (§22.2)
+    const { w } = await mountMoney(
+      emptyStub({ has_loads: true, open_claims: 1, accrued_unfiled_cents: 7500 }),
+    );
+
+    const shown = w.find(".money__empty").text();
+    expect(shown).toContain("$75.00");
+    expect(shown).toBe(en["money.empty_unfiled"].replace("{money}", "$75.00"));
+  });
+
+  it("tells a driver with loads but no open claim how the meter starts", async () => {
+    const { w } = await mountMoney(
+      emptyStub({ has_loads: true, open_claims: 0, accrued_unfiled_cents: 0 }),
+    );
+    expect(w.find(".money__empty").text()).toBe(en["money.empty_no_claims"]);
+  });
+
+  it("falls back to the least specific true sentence when the summary failed", async () => {
+    // earnings and owed fail independently; a screen that cannot prove which case it is
+    // in must not guess one — least of all the "you have done nothing" one, confidently
+    const stubbed = vi.fn((url) => {
+      const u = String(url);
+      if (u.includes("/accessorial/owed")) return jsonOk([]);
+      if (u.includes("/money/earnings")) return Promise.resolve({ ok: false, status: 500 });
+      if (u.includes("/me")) return jsonOk({ verified: false });
+      return jsonOk({});
+    });
+    const { w } = await mountMoney(stubbed);
+
+    expect(w.find(".money__empty").text()).toBe(en["money.empty"]);
+  });
+});

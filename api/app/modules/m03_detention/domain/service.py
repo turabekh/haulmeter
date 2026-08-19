@@ -1290,6 +1290,28 @@ DUNNING_TERMINAL_STATES = ("recovered", "escalated")
 
 
 
+def open_claims_for_account(db: Session, account_id) -> list[DetentionClaim]:
+    """Claims this driver has started and not yet filed.
+
+    AI-CONTEXT: the Money tab could not tell "you are owed nothing" from "this screen is
+    broken" (§23 entry 215). Its empty state named ONE cause — no loads yet — and the
+    owner met it holding seven loads and fourteen claims, every one of them still `open`
+    because each stop ended inside its free time. Answering that needs the claims that
+    have NOT become money, which is the one slice of M3 nothing exposed: every other
+    query here walks `invoiced` claims, forward toward the broker.
+    """
+    return list(
+        db.scalars(
+            select(DetentionClaim)
+            .where(
+                DetentionClaim.account_id == account_id,
+                DetentionClaim.state == ClaimState.open,
+            )
+            .order_by(DetentionClaim.created_at.desc())
+        )
+    )
+
+
 def claims_awaiting_dunning(db: Session, now: datetime) -> list[DetentionClaim]:
     """Invoiced claims, still unpaid, opened recently enough to still be worth chasing."""
     terminal = [s for s in ledger.ReceivableState if s.value in DUNNING_TERMINAL_STATES]

@@ -128,6 +128,31 @@ const owedFrom = computed(() =>
   owedBrokers.value === 1 ? t("money.owed_from_one") : t("money.owed_from", { n: owedBrokers.value }),
 );
 
+// AI-CONTEXT: THE EMPTY STATE NAMED ONE CAUSE AND THERE ARE FOUR (§23 entry 215).
+//
+// §15.3 specifies the sentence "Recovered and saved money shows up here. Add your first
+// load to start the meter." — and the owner read it while holding SEVEN loads and
+// FOURTEEN detention claims. Every claim was `open` with $0 accrued, because every stop
+// had ended inside its free time, so no receivable was ever opened and the list was
+// correctly empty. An empty state that can only describe a driver who has done nothing
+// tells every other driver the screen is broken, which is exactly how it was reported.
+//
+// The cases are ordered MOST ACTIONABLE FIRST, and the first one is the only one with
+// money in it: detention already accrued on a stop that was never filed. `number rather
+// than sentence` (§22.2) is why the figure leads that message.
+//
+// The fallback when the summary has not loaded is §15.3's original sentence, unchanged:
+// a screen that cannot prove which case it is in says the least specific true thing.
+const emptyMessage = computed(() => {
+  if (earningsState.value !== LoadState.LOADED) return t("money.empty");
+  const e = earnings.value ?? {};
+  if ((e.accrued_unfiled_cents ?? 0) > 0)
+    return t("money.empty_unfiled", { money: formatMoney(e.accrued_unfiled_cents) });
+  if ((e.open_claims ?? 0) > 0) return t("money.empty_free_time");
+  if (e.has_loads) return t("money.empty_no_claims");
+  return t("money.empty");
+});
+
 // the row a driver tapped, and the acts it offers
 const openRow = ref(null);
 function daysLabel(r) {
@@ -259,7 +284,7 @@ async function onMarkPaid(receivableId) {
          empty list. The same built-and-inert shape as `register_message` before N-01
          and `system.loading` beside it. It says what the tab is FOR and names the one
          action that starts it, which is both halves of §15.3. -->
-    <p v-else-if="!rows.length" class="money__empty">{{ t("money.empty") }}</p>
+    <p v-else-if="!rows.length" class="money__empty">{{ emptyMessage }}</p>
     <!-- everything filed has been paid: a different sentence from "nothing here yet",
          and the one a driver has earned the right to read. -->
     <p v-else-if="!outstanding.length" class="money__empty">{{ t("money.all_paid") }}</p>

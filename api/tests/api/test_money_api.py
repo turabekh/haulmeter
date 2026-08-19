@@ -71,3 +71,19 @@ def test_earnings_ddd_over_http(client, db):
     body = resp.json()
     assert body["recovered_cents"] == 30000
     assert body["ddd_cents"] == 30000  # no fuel/flagged yet
+
+
+def test_earnings_carries_what_the_empty_state_needs_to_say(client, db):
+    """AI-CONTEXT: §23 entry 215 — the Money tab's empty sentence had one cause and
+    there are four. The three facts that tell them apart ride on THIS payload rather
+    than a third fetch, because the tab already declares two independent load-states for
+    two fetches and a third would buy one sentence at the price of another failure mode
+    on the screen that must not look broken while it is right.
+    """
+    _account_id, headers = _auth(client)
+
+    body = client.get("/money/earnings", headers=headers).json()
+
+    assert body["has_loads"] is False
+    assert body["open_claims"] == 0
+    assert body["accrued_unfiled_cents"] == 0

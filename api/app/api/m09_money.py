@@ -59,6 +59,10 @@ def earnings(
         "fees_year_cents": s.fees_year_cents,
         "recovered_year_net_cents": s.recovered_year_net_cents,
         "year": s.year,
+        # what the empty state needs to say something true (§23 entry 215)
+        "has_loads": s.has_loads,
+        "open_claims": s.open_claims,
+        "accrued_unfiled_cents": s.accrued_unfiled_cents,
     }
 
 

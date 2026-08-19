@@ -86,6 +86,13 @@ class EarningsSummary:
     fees_year_cents: int = 0
     recovered_year_net_cents: int = 0
     year: int = 0
+    # WHY the list under this figure is empty, when it is (§23 entry 215). It rides on
+    # the summary rather than a third fetch because the Money tab already declares two
+    # independent states for two fetches, and a third would buy one sentence at the cost
+    # of another failure mode on the screen that must never look broken while it is right.
+    has_loads: bool = False
+    open_claims: int = 0
+    accrued_unfiled_cents: int = 0
 
 
 @dataclass
@@ -372,6 +379,7 @@ def earnings_dashboard(db: Session, account_id, now: datetime | None = None) -> 
     year_fees = sum(r.get("fee_cents", 0) for r in year_rows)
     fuel_saved = m7.driver_analytics(db, account_id).savings_cents
     flagged = _flagged_total(db, account_id)
+    context = m4.owed_context(db, account_id, now=now)
     return EarningsSummary(
         recovered_cents=recovered,
         fuel_saved_cents=fuel_saved,
@@ -383,6 +391,9 @@ def earnings_dashboard(db: Session, account_id, now: datetime | None = None) -> 
         # can be checked against the rows beneath it
         recovered_year_net_cents=year_gross - year_fees,
         year=now.year,
+        has_loads=context["has_loads"],
+        open_claims=context["open_claims"],
+        accrued_unfiled_cents=context["accrued_unfiled_cents"],
     )
 
 

@@ -990,6 +990,40 @@ const SURFACES = [
     ready: ".load:has(.card__toggle):has(.checklist)",
   }],
   ["money", "/money"],
+  /* AI-CONTEXT: THE EMPTY MONEY TAB, which had one sentence and needed four (§23 entry
+   * 215). §15.3 gives an empty state a layout spec like anything else, and these two are
+   * the ones that can actually overflow: `empty_free_time` is the longest of the four in
+   * every locale (two clauses, and Gurmukhi + xx-XL is where it wraps), and
+   * `empty_unfiled` carries a MONEY FIGURE inside prose — the one place on this tab where
+   * a number is not in its own Mono column and therefore the one most likely to break a
+   * line badly at 200%.
+   *
+   * Registered with the owner's measured production shape rather than an invented one:
+   * loads recorded, claims open, nothing accrued, list correctly empty. */
+  ["money-empty-freetime", "/money", {
+    mocks: {
+      ...MONEY_MOCKS,
+      "/accessorial/owed": [],
+      "/money/earnings": {
+        recovered_cents: 0, fuel_saved_cents: 0, flagged_cents: 0, ddd_cents: 0,
+        recovered_year_gross_cents: 0, fees_year_cents: 0, recovered_year_net_cents: 0,
+        year: 2026, has_loads: true, open_claims: 14, accrued_unfiled_cents: 0,
+      },
+    },
+    ready: ".money__empty",
+  }],
+  ["money-empty-unfiled", "/money", {
+    mocks: {
+      ...MONEY_MOCKS,
+      "/accessorial/owed": [],
+      "/money/earnings": {
+        recovered_cents: 0, fuel_saved_cents: 0, flagged_cents: 0, ddd_cents: 0,
+        recovered_year_gross_cents: 0, fees_year_cents: 0, recovered_year_net_cents: 0,
+        year: 2026, has_loads: true, open_claims: 1, accrued_unfiled_cents: 18750,
+      },
+    },
+    ready: ".money__empty",
+  }],
   // AI-CONTEXT: the three SKELETON shapes, measured at 360 dp in the commit that
   // introduced them (§23 entry 131, v2.0 acceptance #3). A skeleton the harness cannot
   // render is a skeleton that ships unmeasured — and these are the first thing a driver
