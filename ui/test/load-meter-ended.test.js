@@ -97,3 +97,45 @@ describe("The Meter when M3 says the visit has ENDED", () => {
     expect(w.find(".meter__label").text()).toBe(en["load.detention"]);
   });
 });
+
+// AI-CONTEXT: the owner's two reports, which turned out to be one line (§23 entry 225).
+//
+//   "load tab showed actual money accrued waiting, but after I finish the load the
+//    money tab is not showing any money"
+//   "check and send options appeared even though I did not finish the load"
+//
+// On EXIT the surface reloaded the PAPERWORK — that is the check-and-send card — and left
+// the Meter ticking locally off a stale arrival. So one half of the screen said the stop
+// was over and the other went on adding money to it. Measured on production afterwards:
+// four claims that day, every one `open`, every dwell inside its one minute of free time,
+// every amount $0.00, and no receivable — so the Money tab was right and the Meter was
+// the one inventing.
+describe("When F3 says the driver has left", () => {
+  it("re-reads the Meter, instead of leaving it accruing over a finished stop", async () => {
+    const { lastEvents } = await import("../src/core/location.js");
+    setToken("tok");
+    setActiveStop("stop-1");
+    let payload = ACCRUING;
+    const stub = vi.fn((u) =>
+      String(u).includes("/meter") ? jsonOk(payload) : jsonOk({}));
+    vi.stubGlobal("fetch", stub);
+    const w = mount(LoadSurface, {
+      global: { plugins: [createRouter({ history: createMemoryHistory(), routes })] },
+    });
+    await flushPromises();
+    expect(w.find(".meter__figure").text()).toBe("$75.00");
+
+    // the server has since ended the visit, and it accrued nothing — the shape the
+    // owner actually hit, where the local clock had been climbing all along
+    payload = { ...ENDED, detention_seconds: 0, detention_cents: 0 };
+    lastEvents.value = [{ event_type: "EXIT" }];
+    await flushPromises();
+    await flushPromises();
+
+    const meterReads = stub.mock.calls.filter((c) => String(c[0]).includes("/meter"));
+    expect(meterReads.length).toBeGreaterThan(1); // it asked again
+    expect(w.find(".meter__figure").text()).toBe("$0.00");
+    expect(w.find(".meter__status").text()).toContain(en["load.stop_ended"]);
+    lastEvents.value = [];
+  });
+});

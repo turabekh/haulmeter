@@ -403,7 +403,26 @@ onUnmounted(() => timer && clearInterval(timer));
 // `lastEvents` is F3's own seam for exactly this ("a surface can watch this to react
 // to an EXIT without polling the meter"), so no new polling and no new endpoint.
 watch(lastEvents, (events) => {
-  if ((events || []).some((e) => e.event_type === "EXIT")) loadPackets();
+  if (!(events || []).some((e) => e.event_type === "EXIT")) return;
+  loadPackets();
+  // AI-CONTEXT: AND THE METER, WHICH THIS WATCHER USED TO LEAVE RUNNING (§23 entry 225).
+  //
+  // Owner-reported as two separate bugs and it is one: "the Load tab showed actual money
+  // accrued waiting, but after I finish the load the Money tab shows nothing", and "check
+  // and send appeared even though I had not left the stop yet".
+  //
+  // On EXIT this reloaded the PAPERWORK and nothing else. So the packet card arrived —
+  // that is the "check and send" — while the Meter went on ticking locally from the
+  // `arrivalMs` it had derived at the last fetch, adding money the server had already
+  // stopped counting. The two halves of the screen were describing different stops, and
+  // the driver believed the half that was climbing.
+  //
+  // The server settles it: on EXIT the visit is `ended`, with a final
+  // `detention_seconds`/`detention_cents` that may well be ZERO because the dwell never
+  // passed free time. Re-reading here is what lets the Meter freeze on the real figure
+  // (entry 219) at the same instant the paperwork appears, instead of inventing money
+  // that no claim will ever be worth.
+  loadMeter();
 });
 
 const freeMin = computed(() => live.value?.free_time_minutes ?? 0);
