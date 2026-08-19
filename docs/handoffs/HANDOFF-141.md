@@ -47,6 +47,7 @@ by reading the list:
 | `PasswordSurface.vue:63` | the same `voice.unavailable` hint — and the ONLY thing it renders at speed | → `driving.paused`; standing it down would have left a blank screen at 60 mph |
 | `roadside-tab.test.js`, `ui-components.test.js` | pinned six tabs and the login destination | updated |
 | `layout.spec.js` ×**18** | map states rooted at `/` | skipped by PATH, all 18 named in the run output |
+| `BookingSurface.vue:131`, `FuelSurface.vue:125` | done buttons pushing `'/map'` — **single-quoted**, so the double-quoted census missed both | → `push('/')`; found in the shipped bundle after deploy, guarded by a quote-agnostic test |
 
 Left deliberately: **`DevIndexSurface.vue:65`** links `/map` — `/dev` ships only in
 development builds (entry 51), it is not driver-visible, and it now lands on `/load`.

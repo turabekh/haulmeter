@@ -122,7 +122,13 @@ async function getCode() {
         <span class="done__code" aria-live="polite">{{ code }}</span>
         <p class="done__note">{{ t("fuel.show_pump") }}</p>
       </section>
-      <button class="cta" type="button" @click="router.push('/map')">
+      <!-- AI-CONTEXT: this pushed '/map' until D21 (§23 entry 228) — the done button at
+           the end of a fuel stop, aimed at a dormant surface. `'/'` rather than a literal
+           `/load`: the router owns where home is, so this does not have to be found again
+           when the map returns. It was missed by the first dead-pointer census because
+           that grep looked for "/map" in DOUBLE quotes and these two are single-quoted —
+           the census is quote-agnostic now. -->
+      <button class="cta" type="button" @click="router.push('/')">
         {{ t("booking.done") }}
       </button>
     </template>

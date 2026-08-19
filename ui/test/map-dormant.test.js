@@ -56,6 +56,22 @@ describe("The map is dormant (D21)", () => {
     expect(w.text()).not.toContain(en["nav.map"]);
   });
 
+  it("leaves no push target aimed at the dormant map, in either quote style", async () => {
+    // AI-CONTEXT: the first census grepped for "/map" in DOUBLE quotes and missed two
+    // single-quoted `router.push('/map')` calls — the done buttons at the end of a
+    // parking booking and a fuel stop, both driver-visible. Found by reading the shipped
+    // BUNDLE rather than the source, which is the only place the two spellings look the
+    // same. This asserts over the source with the quote style left open, so the next one
+    // cannot hide behind a quote mark.
+    const files = import.meta.glob("../src/**/*.vue", { query: "?raw", import: "default", eager: true });
+    const offenders = Object.entries(files)
+      .filter(([path]) => !path.includes("DevIndexSurface")) // dev-only, ships out of prod builds
+      .filter(([, src]) => /push\(\s*['"`]\/map['"`]\s*\)/.test(src))
+      .map(([path]) => path);
+
+    expect(offenders, `these push at the dormant map: ${offenders.join(", ")}`).toEqual([]);
+  });
+
   it("keeps the Money tab's chase on the ghostwriter — the M11 coupling this protects", async () => {
     // `m11_voice` is NOT touched by the flip: only the map's mic ENTRY goes. The chase
     // flow (§23 entry 142) routes through the ghostwriter so the driver sends the message
