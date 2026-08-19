@@ -559,6 +559,7 @@ const warningWindow = computed(
     state.value.freeTimeRemainingSeconds <= PRE_DETENTION_SECONDS,
 );
 const noticeMsg = ref("");
+const claimError = ref(""); // §15.4: a failed FILING is never silent
 
 // a claim is filed once the SERVER says so (live.filed) — persists across tab
 // switches/remounts — or optimistically the moment we file it (filed ref).
@@ -755,11 +756,23 @@ async function onGenerateClaim() {
   // so a stale render or a double tap cannot file a claim worth nothing.
   if (!activeStopId.value || filed.value || !claimable.value || rungBusy.value) return;
   rungBusy.value = "claim";
+  claimError.value = "";
   try {
     filed.value = await generateClaim(activeStopId.value); // arrive->accrue->FILE (freezes Meter)
     await loadMeter();
   } catch {
-    /* offline / queued in a later F12 pass */
+    // AI-CONTEXT: THIS CATCH WAS EMPTY, ON THE ONE ACTION THIS PRODUCT EXISTS FOR
+    // (§23 entry 222). Filing is what turns a running clock into money a broker owes,
+    // and a 500, a 403 or a dead dock left the driver with a button that went un-busy
+    // and nothing else — no message, no queued item, no claim. §15.4: "failed
+    // money-moving actions are always explicit and persistent until resolved."
+    //
+    // The comment that stood here said "offline / queued in a later F12 pass". There is
+    // no such pass: `generateClaim` is a raw fetch, not a `queuedPost`, so nothing was
+    // queued then and nothing is queued now — the sentence described a mechanism that
+    // does not exist, which is why the silence looked deliberate. Same shape as N-07 on
+    // the Money tab, and the same fix: say which failure it was.
+    claimError.value = online.value ? t("load.claim_failed") : t("load.claim_offline");
   } finally {
     rungBusy.value = "";
   }
@@ -784,7 +797,13 @@ async function onSendNotice() {
     } else noticeMsg.value = t("load.notice_early");
     await loadMeter();
   } catch {
-    noticeMsg.value = t("load.notice_early");
+    // AI-CONTEXT: THIS SAID "Detention hasn't started yet — nothing to notify" FOR EVERY
+    // FAILURE (§23 entry 222), which is not a worse message but a DIFFERENT FACT: the
+    // driver concludes their clock is not running when what actually happened is that
+    // the broker was never told. `onSendPacket` 500 lines up already distinguishes the
+    // dead dock from the server refusal, and this is that same pattern applied to the
+    // notice — the one message on this screen that a detention claim later rests on.
+    noticeMsg.value = online.value ? t("load.notice_failed") : t("load.notice_offline");
   } finally {
     rungBusy.value = "";
   }
@@ -1120,6 +1139,7 @@ async function endLoad() {
       <div v-if="live" class="actions">
         <p v-if="noticeMsg" class="notice-msg">{{ noticeMsg }}</p>
         <p v-if="arriveError" class="notice-msg">{{ arriveError }}</p>
+        <p v-if="claimError" class="notice-msg">{{ claimError }}</p>
         <!-- §10.2: ONE state-dependent CTA. The ladder picks the rung; the rungs it
              passes over stay reachable below as secondary text controls. -->
         <button

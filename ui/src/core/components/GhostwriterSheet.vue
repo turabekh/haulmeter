@@ -16,7 +16,8 @@ const TONES = ["relationship", "neutral", "firm"];
 const tone = ref("neutral");
 const facts = ref("");
 const draft = ref(null);
-const sent = ref(false);
+const copied = ref(false);
+const copyFailed = ref(false);
 const busy = ref(false);
 
 async function write() {
@@ -33,15 +34,35 @@ async function write() {
   busy.value = false;
 }
 
-function approve() {
-  // driver approval is the gate; the actual send is the F8 counterparty seam
-  sent.value = true;
+// AI-CONTEXT: THE BUTTON SAID "Approve & send", THE SCREEN THEN SAID "Sent", AND
+// NOTHING LEFT THE SYSTEM (§23 entry 222).
+//
+// The whole handler was `sent.value = true`, under a comment claiming "the actual send
+// is the F8 counterparty seam" — which it never called. So a driver chasing a broker for
+// unpaid detention read the word **Sent** and waited on a message that had never been
+// written to anything. The validation law in CLAUDE.md names exactly this: "nothing
+// 'sends' that didn't actually leave the system."
+//
+// AUTO-SENDING IS NOT THE FIX, and that is a logged decision rather than a preference:
+// entry 142 routed chasing through this sheet precisely so "the driver reads and sends
+// the message themselves — no second automatic mail beside the dunning job's own
+// cadence". So the honest version of this control is the one that hands the driver the
+// words. It copies, and it says it copied.
+async function copyDraft() {
+  copyFailed.value = false;
+  try {
+    await navigator.clipboard.writeText(draft.value);
+    copied.value = true;
+  } catch {
+    // a denied permission or an insecure context — the draft stays on screen and the
+    // driver is told to select it, rather than being told it went somewhere
+    copyFailed.value = true;
+  }
 }
 </script>
 
 <template>
   <div class="ghost">
-    <template v-if="!sent">
       <div class="ghost__tones" role="group" :aria-label="t('ghost.title')">
         <button
           v-for="tn in TONES"
@@ -74,10 +95,9 @@ function approve() {
         <Spinner v-if="busy" />
         {{ busy ? t("busy.working") : t("ghost.draft") }}
       </button>
-      <button v-else class="cta" type="button" @click="approve">{{ t("ghost.approve") }}</button>
-    </template>
-
-    <p v-else class="sent">{{ t("ghost.sent") }}</p>
+      <button v-else class="cta" type="button" @click="copyDraft">{{ t("ghost.copy") }}</button>
+      <p v-if="copied" class="sent">{{ t("ghost.copied") }}</p>
+      <p v-if="copyFailed" class="sent">{{ t("ghost.copy_failed") }}</p>
   </div>
 </template>
 
