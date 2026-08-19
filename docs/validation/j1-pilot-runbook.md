@@ -4,7 +4,9 @@
 [`j1-journey.md`](j1-journey.md). It is the preflight, the sequence, and the evidence to
 capture per line.
 
-**What it is not.** It is not the observation protocol — [`../WATCH.md`](../WATCH.md) owns
+**What it is not.** It is not the driver's copy — [`j1-pilot-driver-pack.md`](j1-pilot-driver-pack.md)
+is what the driver is handed, and it deliberately withholds the tap-by-tap money flow so
+lines 1–3 can still be observed. It is not the observation protocol — [`../WATCH.md`](../WATCH.md) owns
 that, and its ONE RULE (*give the instruction, then say nothing*) governs the whole day.
 This page never says what to say to the driver; WATCH.md does. **Nothing here ticks a line.**
 A session adds an OBSERVED row; whether it clears anything is the owner's reading.

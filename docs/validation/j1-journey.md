@@ -11,6 +11,9 @@ pytest 2130, vitest 1020, layout 365, import-linter 31/31 — and that proves **
 whether that clears a line is the owner's reading. Each line is dated **when the world does
 it**, not when the code shipped.
 
+➡️ **[`j1-pilot-driver-pack.md`](j1-pilot-driver-pack.md)** — the pack the DRIVER is handed:
+setup, what is real (live-fire, the 15% fee), and what to report. Written for them, not us.
+
 ➡️ **[`j1-pilot-runbook.md`](j1-pilot-runbook.md)** — the operator's preflight and evidence
 sheet for the afternoon that closes five of these seven. It carries the production state as
 measured on 2026-08-17 and the two decisions the owner must make before the day.
