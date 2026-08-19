@@ -15,22 +15,27 @@ listed the map's dead pointers and missed the one on the sign-in screen.
 ## 1. State at the break
 
 ```
-prod   alembic 0094_f03_attested_presence · m15_roadside ON · m11_voice ON · m01_map ON (ops flip owed)
-prod   Perth Test Dock created at the owner's own coordinates (0 m) — the loop is testable
-local  gates 2632 pytest · 1124 vitest · 355/355 layout (18 map states dormant) · 32/32 contracts
-local  17 commits unpushed; the map-dormancy slice is committed and NOT deployed
+prod   alembic 0094_f03_attested_presence · m15_roadside ON · m11_voice ON · m03_detention ON
+prod   m01_map OFF — the D21 ops flip is DONE; /api/map/* answers 404
+prod   Perth Test Dock at the owner's own location (0 m) — the detention loop is testable
+local  gates 2632 pytest · 1125 vitest · 355/355 layout (18 map states dormant) · 32/32 contracts
+git    ALL PUSHED — turabekh/haulmeter at 36798ba, 0 unpushed
+local  stack DOWN (owner on a break); outbound queue was 0 unsent at shutdown
 ```
 
-**Deployed through entry 227.** The map slice (D21 / 228) is **local only** — §4 of its
-kickoff puts deploy out of scope.
+**Everything through entry 228 is deployed, flipped and pushed.** Nothing is outstanding
+that a session can do on its own.
 
-## 2. THE OPS STEP THAT IS OWED, AND ITS ORDER
+## 2. THE OPS FLIP IS DONE — and the order it needed, recorded for next time
 
-`m01_map` on production reads `enabled = true` — a real operator decision, which correctly
-beats the code's new `default_on=False`. So the box still serves the map.
+`m01_map` carried `enabled = true` on production, a real operator decision that correctly
+beat the code's new `default_on=False`, so the code change alone did not switch it off.
 
-**Deploy the UI first, then flip the flag.** The other order leaves a live Map tab in front
-of 404ing endpoints. One toggle in the admin console, or `flags.disable(db, "m01_map")`.
+**The UI was deployed FIRST, then the flag flipped.** The other order leaves a live Map tab
+in front of 404ing endpoints. Verified after: `enabled=false`, `/api/map/overlay` → 404,
+`m11_voice` / `m03_detention` / `m15_roadside` untouched, 0 tracebacks, 0 unsent outbound.
+
+**Reversal is one toggle** — `flags.enable(db, "m01_map")` — plus `MAP_DORMANT = false`.
 
 ## 3. What the map slice did
 
@@ -47,7 +52,13 @@ by reading the list:
 | `PasswordSurface.vue:63` | the same `voice.unavailable` hint — and the ONLY thing it renders at speed | → `driving.paused`; standing it down would have left a blank screen at 60 mph |
 | `roadside-tab.test.js`, `ui-components.test.js` | pinned six tabs and the login destination | updated |
 | `layout.spec.js` ×**18** | map states rooted at `/` | skipped by PATH, all 18 named in the run output |
-| `BookingSurface.vue:131`, `FuelSurface.vue:125` | done buttons pushing `'/map'` — **single-quoted**, so the double-quoted census missed both | → `push('/')`; found in the shipped bundle after deploy, guarded by a quote-agnostic test |
+| `BookingSurface.vue:131`, `FuelSurface.vue:125` | done buttons pushing `'/map'` — **single-quoted**, so the double-quoted census missed both | → `push('/')`; found in the shipped BUNDLE after deploy, guarded by a quote-agnostic test |
+
+**Six dead pointers in total** — four the kickoff's §1 had not listed, two my own first census
+missed. The last two surfaced only because I re-read the shipped bundle instead of trusting
+the grep: minification normalises quote style, so `'/map'` and `"/map"` look identical there
+and different in source. **A census is only as good as the spelling it assumed**, which is
+why the guard is now a test rather than a grep run once.
 
 Left deliberately: **`DevIndexSurface.vue:65`** links `/map` — `/dev` ships only in
 development builds (entry 51), it is not driver-visible, and it now lands on `/load`.
@@ -98,3 +109,27 @@ weak flag question).
 Deferred by D21's kickoff, for future D-entries: the `m11_voice` → `m11_ghostwriter` split,
 a list-based discovery surface for M6/M7/M13, and the map deletion-vs-return decision,
 which is evidence-gated on the pilot.
+
+
+## 7. Two facts about the repo that CLAUDE.md gets wrong
+
+Found while pushing, and both will trip the next session:
+
+- **The repo is PRIVATE, not public.** Rule 3 says "`git push` (github.com/turabekh/haulmeter,
+  **public**)" and rule 9 leans on it ("check a diff for secrets before it leaves"). An
+  unauthenticated fetch 404s and the push challenged for credentials — it is private.
+  The diff-scanning discipline is still right; its stated reason is not.
+- **This machine's default GitHub key authenticates as `turaboyenco`, not `turabekh`**, and
+  GitHub refuses one key on two accounts. A second key was generated and an SSH alias added
+  (`~/.ssh/config`, `Host github-turabekh`); `origin` now points at it, so `git push` works
+  with no token and nothing to expire.
+
+## 8. What was published, and what was deliberately coarsened
+
+The 31 unpushed commits carried the owner's device coordinates to ~100 m, labelled as
+theirs, in decision entries 220/227 and a test constant. Editing the tip would have left
+them in the history that was about to be pushed, so **the unpushed range was rewritten**
+(tree and one commit message) before anything left the machine: the prose keeps "Perth,
+Western Australia" and every distance, and the test constant is deliberately coarse.
+**Verified zero occurrences on the remote.** The emails in the entries were already public
+as the commit author and were left alone.
