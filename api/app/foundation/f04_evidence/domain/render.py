@@ -41,6 +41,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as pdfcanvas
 
 from .enums import PackTemplate
+from .ordering import timeline_key
 
 # --- §6.1 colour, light theme (§23 2026-07-20 — derived, approved, contrast-verified)
 INK_2 = HexColor("#FFFFFF")  # the page. §17: "on white"
@@ -316,7 +317,7 @@ def _pairs(cur, heading, rows):
     cur.rule()
 
 
-def _chronological(records, key="occurred_at"):
+def _chronological(records):
     """AI-CONTEXT: the chain is ordered by SEQ; a timeline is ordered by TIME, and
     the two are not the same list.
 
@@ -327,13 +328,13 @@ def _chronological(records, key="occurred_at"):
     clerk reads as sloppy at best and doctored at worst. Sorting for display changes
     nothing about the evidence: the verification block still covers the seq-ordered
     chain, and every row still carries the hash it was recorded under.
+
+    WHICH time is `ordering.timeline_key`'s business, and it is the SERVER's clock
+    (§23 entry 229) — the same key `compose_stop_pack` and `compose_grouped_pack` sort
+    by, because two sorts that must agree and are written twice will drift. The stop
+    grouping of §23 entry 78 is inside that key and is not weakened by this.
     """
-    # A pack spanning a route sorts by STOP first (§23 entry 78). Time alone would
-    # interleave two docks the moment a driver doubles back, and the section headings
-    # would then repeat and contradict the order they announce.
-    return sorted(
-        records, key=lambda r: (r.get("group_order", 0), r.get(key) is None, r.get(key))
-    )
+    return sorted(records, key=timeline_key)
 
 
 def _divergence_note(record) -> str:
@@ -352,6 +353,12 @@ def _divergence_note(record) -> str:
     Disclosing sub-minute jitter on every row would bury the rows that mean
     something. The threshold lives here, in the open, rather than in config: it is a
     statement about evidence, not a tuning knob.
+
+    The POLARITY inverted with §23 entry 229: the row's primary stamp is now the
+    server's clock, so the annotation is the driver's — `captured 10:02` against a
+    primary `14:22`. Same two facts, same threshold, stated the other way round. The
+    primary stamp is the one the rows are ordered by, or the document argues with
+    itself down the page.
     """
     occurred, received = record.get("occurred_at"), record.get("received_at")
     if occurred is None or received is None:
@@ -360,7 +367,7 @@ def _divergence_note(record) -> str:
     received = received if received.tzinfo else received.replace(tzinfo=UTC)
     if abs((received - occurred).total_seconds()) < DISCLOSE_DIVERGENCE_S:
         return ""
-    return f"filed {received.astimezone(UTC):%H:%M}"
+    return f"captured {occurred.astimezone(UTC):%H:%M}"
 
 
 def _timeline(cur, pack):
@@ -384,10 +391,13 @@ def _timeline(cur, pack):
             cur.space(BODY_LINE)
         cur.need(BODY_LINE + S2)
         # T-2: time is ALWAYS Mono + tabular, in every surface including this one
-        filed = _divergence_note(record)
-        captured = _fmt_ts(record.get("occurred_at"))
-        cur.text(f"{captured} · {filed}" if filed else captured, MONO, CAPTION, TEXT_2)
-        stamp_w = pdfmetrics.stringWidth("0000-00-00 00:00:00 UTC · filed 00:00", MONO, CAPTION)
+        captured = _divergence_note(record)
+        # the primary stamp is the clock the rows are ORDERED by (§23 entry 229)
+        filed = _fmt_ts(record.get("received_at") or record.get("occurred_at"))
+        cur.text(f"{filed} · {captured}" if captured else filed, MONO, CAPTION, TEXT_2)
+        stamp_w = pdfmetrics.stringWidth(
+            "0000-00-00 00:00:00 UTC · captured 00:00", MONO, CAPTION
+        )
         cur.text(
             str(record.get("type", "")).replace("_", " ").title(),
             SANS_MEDIUM,

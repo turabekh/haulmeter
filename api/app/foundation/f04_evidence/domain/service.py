@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from . import hashing
 from .enums import ArtifactType, PackTemplate, RecordType
 from .models import ChainAnchor, EvidenceArtifact, EvidenceLog, EvidenceRecord
+from .ordering import timeline_key
 
 
 @dataclass
@@ -364,7 +365,8 @@ def compose_grouped_pack(
                 artifacts.append({**artifact, "group": group_label, "group_order": order})
     if not logs:
         return None
-    timeline.sort(key=lambda r: (r["group_order"], r["occurred_at"] is None, r["occurred_at"]))
+    # the server's clock, within each stop's section — see `ordering.timeline_key`
+    timeline.sort(key=timeline_key)
     artifacts.sort(
         key=lambda a: (a["group_order"], a.get("received_at") is None, a.get("received_at"))
     )
@@ -421,7 +423,8 @@ def compose_stop_pack(db: Session, stop_ref, template: PackTemplate) -> Evidence
         parts.append(v)
         timeline.extend(pack.timeline)
         artifacts.extend(pack.artifacts)
-    timeline.sort(key=lambda r: (r["occurred_at"] is None, r["occurred_at"]))
+    # the server's clock, and the SAME key the renderer uses — see `ordering.timeline_key`
+    timeline.sort(key=timeline_key)
     artifacts.sort(key=lambda a: (a.get("received_at") is None, a.get("received_at")))
     # AI-CONTEXT: the verification block must speak the SAME dict a single-log pack
     # does, or the renderer reads nothing and prints "HASH CHAIN BROKEN — do not rely

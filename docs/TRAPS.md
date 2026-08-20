@@ -89,6 +89,17 @@ session*; this file records what is permanently true.
    repeat. **After adding an element, check the fixture actually produces it, and make
    `ready:` point AT the new element.** *(128)*
 
+7b. **A red-first fixture that stops reproducing the bug passes for the same reason a
+   fixed bug does, and nothing tells you which.** The packet-28 fixture (§23 entry 229)
+   was written with the photo's phone stamp EARLIER than the notice's — so phone-clock
+   order was already correct, the "failing" test passed against the UNFIXED code, and it
+   would have gone on passing forever while asserting nothing.
+
+   What caught it was a companion test asserting the fixture **does** invert under the old
+   sort key; that one went red and gave the fixture away. **Pair a regression fixture with
+   a test that the OLD behaviour fails on it.** A green red-first test is not evidence the
+   fix works — it is evidence the fixture no longer describes the bug. *(229)*
+
 8. **A test that calls the function *under* a control proves nothing about the control.**
    Every facility test called `askQuestion()` while the button that calls it was disabled in
    every state it rendered in — nobody could ask a question, and the suite was green.

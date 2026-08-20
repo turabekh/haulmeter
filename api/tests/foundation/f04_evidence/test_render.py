@@ -253,10 +253,13 @@ def test_the_trace_follows_time_not_the_order_points_were_recorded(db):
 
 
 def test_a_late_filed_record_discloses_both_clocks(db):
-    """Sorting by capture time was right and not sufficient. The chain's hashes
-    commit to SEQ — filing order — so a counterparty holding the chain can show the
-    rendered order differs from the order the hashes cover. F12 records both clocks
-    precisely so the gap can be disclosed; recording it and hiding it wastes it."""
+    """The row still states both clocks; §23 entry 229 inverted WHICH one leads.
+
+    The timeline is ordered by the server's clock, so the server's clock is the primary
+    stamp — a document ordered by one time and stamped with another argues with itself
+    down the page. The driver's capture time becomes the annotation. Same two facts,
+    same 5-minute threshold, stated the other way round: F12 records both clocks
+    precisely so the gap can be disclosed, and recording it and hiding it wastes it."""
     from sqlalchemy import select
 
     from app.foundation.f04_evidence.domain.models import EvidenceRecord
@@ -273,7 +276,10 @@ def test_a_late_filed_record_discloses_both_clocks(db):
     assert pack.timeline[0]["received_at"] is not None
     data = evidence.render_pack_pdf(pack)
 
-    assert b"filed 14:22" in data
+    # primary: the server's clock. Annotation: the driver's.
+    assert b"2026-07-20 14:22:00 UTC" in data
+    assert b"captured 07:58" in data
+    assert b"filed 14:22" not in data
 
 
 def test_ordinary_drift_is_not_announced_on_every_row(db):
