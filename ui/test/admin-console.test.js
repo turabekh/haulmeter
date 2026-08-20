@@ -17,6 +17,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import AdminShell from "../src/surfaces/admin/AdminShell.vue";
 import AdminOverview from "../src/surfaces/admin/AdminOverview.vue";
+import en from "../src/core/i18n/en.json";
 import AdminFlags from "../src/surfaces/admin/AdminFlags.vue";
 import AdminModeration from "../src/surfaces/admin/AdminModeration.vue";
 import AdminModules from "../src/surfaces/admin/AdminModules.vue";
@@ -171,6 +172,149 @@ describe("Admin shell — sectioned portal (§23 E-D4)", () => {
       "roadside",
       "audit",
     ]);
+  });
+});
+
+describe("A switched-off module gets no section (§23 entry 234)", () => {
+  // The vendor half has been off in production since HANDOFF-114 and the console went on
+  // showing a Vendors section with a verification badge — an operator's queue for work
+  // that cannot arrive. Same family as §23 entry 223, where the driver app advertised
+  // food alerts after the same flag went off: the flag was read nowhere a human could see.
+  const off = { ...OVERVIEW, modules: { m13_vendor: false } };
+  const on = { ...OVERVIEW, modules: { m13_vendor: true } };
+
+  it("drops the rail section when its module is off", async () => {
+    stubFetch({ "/admin/overview": off });
+    const w = mount(AdminShell, { global: { plugins: [testRouter()] } });
+    await flushPromises();
+
+    const labels = w.findAll(".rail__item").map((a) => a.text()).join(" ");
+    expect(labels).not.toContain("Vendors");
+    expect(labels, "only the dormant one goes").toContain("Moderation");
+    expect(w.findAll(".rail__item")).toHaveLength(8);
+  });
+
+  it("keeps it when the module is on", async () => {
+    stubFetch({ "/admin/overview": on });
+    const w = mount(AdminShell, { global: { plugins: [testRouter()] } });
+    await flushPromises();
+
+    expect(w.findAll(".rail__item").map((a) => a.text()).join(" ")).toContain("Vendors");
+  });
+
+  it("FAILS OPEN when it has not been told", async () => {
+    // a network blip must not lock an operator out of a section. This gate governs
+    // visibility, not authority — every endpoint behind a section checks permission itself
+    stubFetch({ "/admin/overview": OVERVIEW }); // no `modules` key at all
+    const w = mount(AdminShell, { global: { plugins: [testRouter()] } });
+    await flushPromises();
+
+    expect(w.findAll(".rail__item").map((a) => a.text()).join(" ")).toContain("Vendors");
+  });
+
+  it("takes the dormant module's figures off the overview too", async () => {
+    // a zero from a dormant module is not "nothing is waiting", it is "this cannot
+    // happen", and a stat that can only ever read 0 is decoration (§21.3)
+    stubFetch({ "/admin/overview": off });
+    const w = mount(AdminOverview);
+    await flushPromises();
+
+    // asserted against the SHIPPED strings: my first draft of this test checked for
+    // "Awaiting verification" and "Appearances", neither of which this app has ever
+    // rendered, so both passed while proving nothing (TRAPS 7c, one day old)
+    expect(w.text()).not.toContain(en["admin.ov.verification"]);
+    expect(w.text(), "the appearance funnel goes with it").not.toContain(
+      en["admin.ov.appearances"],
+    );
+    expect(w.text(), "the live queues stay").toContain(en["admin.ov.moderation"]);
+  });
+
+  it("does not report all-clear on a queue it is no longer showing", async () => {
+    // the trap in this change: "all clear" was computed from three counts, one of which
+    // is now hidden. A pending vendor the operator cannot see must not keep the banner
+    // away, and it must not be counted as work either.
+    stubFetch({
+      "/admin/overview": {
+        ...off,
+        pending: { vendor_verification: 2, moderation: 0, moderation_overdue: 0, claim_disputes: 0 },
+      },
+    });
+    const w = mount(AdminOverview);
+    await flushPromises();
+
+    expect(w.text()).toContain(en["admin.ov.all_clear"]);
+  });
+});
+
+describe("Accounts — who signed in, and what they did (§23 entry 234)", () => {
+  const DETAIL = {
+    account_id: "a-1", email: "driver@example.com", roles: ["driver"], active: true,
+    audit: [{ action: "password_reset", created_at: "2026-08-19T09:00:00Z", before: null, after: null }],
+    logins: [
+      { kind: "login", client_ip: "203.0.113.7", user_agent: "Mozilla/5.0 (Android 13)",
+        occurred_at: "2026-08-20T07:10:00Z" },
+      { kind: "register", client_ip: "203.0.113.7", user_agent: "Mozilla/5.0 (Android 13)",
+        occurred_at: "2026-07-01T11:00:00Z" },
+    ],
+    activity: [
+      { event: "load_added", module: "m03", occurred_at: "2026-08-20T07:20:00Z" },
+      // NO `admin.step.*` string exists for this one, and production emits it. `t()`
+      // throws on a missing key by design, so an unguarded label would take the page
+      // down for any driver who had ever tapped a service call.
+      { event: "service_call_tapped", module: "m13", occurred_at: "2026-08-20T07:25:00Z" },
+    ],
+  };
+
+  async function open() {
+    stubFetch({ "/admin/accounts": [DETAIL], "/admin/accounts/a-1": DETAIL });
+    const w = mount(AdminAccounts);
+    await flushPromises();
+    await w.find(".table tbody .link").trigger("click");
+    await flushPromises();
+    return w;
+  }
+
+  it("shows when they got in, from where, and on what", async () => {
+    const w = await open();
+    const text = w.text();
+
+    expect(text).toContain(en["admin.acct.logins"]);
+    expect(text).toContain("203.0.113.7");
+    expect(text).toContain("Mozilla/5.0 (Android 13)");
+    expect(text).toContain(en["admin.acct.login_register"]);
+  });
+
+  it("keeps the operator trail and the driver's own activity apart", async () => {
+    // "did support reset this password" and "did someone sign in as them" are asked by
+    // different people for different reasons; one merged feed answers neither
+    const w = await open();
+
+    expect(w.text()).toContain(en["admin.acct.history"]);
+    expect(w.text()).toContain(en["admin.acct.activity"]);
+    expect(w.text()).toContain("password_reset");
+    expect(w.text()).toContain(en["admin.step.load_added"]);
+  });
+
+  it("renders an event it has no name for instead of throwing", async () => {
+    const w = await open();
+
+    expect(w.text(), "readable, not a raw key and not a crash").toContain(
+      "service call tapped",
+    );
+  });
+
+  it("says so when there is nothing rather than showing an empty table", async () => {
+    stubFetch({
+      "/admin/accounts": [DETAIL],
+      "/admin/accounts/a-1": { ...DETAIL, logins: [], activity: [], audit: [] },
+    });
+    const w = mount(AdminAccounts);
+    await flushPromises();
+    await w.find(".table tbody .link").trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain(en["admin.acct.no_logins"]);
+    expect(w.text()).toContain(en["admin.acct.no_activity"]);
   });
 });
 

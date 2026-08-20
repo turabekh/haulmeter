@@ -21,6 +21,22 @@ import { fetchAdminOverview } from "../../core/api.js";
 const { t } = useI18n();
 const denied = ref(false);
 const pending = ref(null);
+// AI-CONTEXT: a switched-off module does not get a section in the rail (§23 entry 234).
+//
+// The vendor half has been off in production since HANDOFF-114, and the console went on
+// showing a Vendors section with a verification badge — an operator's queue for work that
+// cannot arrive. Same family as the driver app's food alerts advertised after the same
+// flag went off (§23 entry 223): the flag was read nowhere the human could see it.
+//
+// FAIL OPEN. `null` means we have not been told, and an unknown module renders. Hiding on
+// a failed fetch would lock an operator out of sections because of a network blip, and
+// this gate governs VISIBILITY, not authority — the endpoints behind each section do
+// their own permission checks either way.
+const modules = ref(null);
+function live(section) {
+  if (!section.flag || !modules.value) return true;
+  return modules.value[section.flag] !== false;
+}
 
 // counts ride on the rail so an operator sees where the work is before choosing a
 // section. Only sections with genuine pending work carry a badge — a "0" badge on
@@ -28,7 +44,13 @@ const pending = ref(null);
 const SECTIONS = [
   { key: "overview", to: "/admin", label: "admin.nav.overview" },
   { key: "flags", to: "/admin/flags", label: "admin.nav.flags" },
-  { key: "vendors", to: "/admin/vendors", label: "admin.nav.vendors", count: "vendor_verification" },
+  {
+    key: "vendors",
+    to: "/admin/vendors",
+    label: "admin.nav.vendors",
+    count: "vendor_verification",
+    flag: "m13_vendor",
+  },
   { key: "moderation", to: "/admin/moderation", label: "admin.nav.moderation", count: "moderation" },
   { key: "accounts", to: "/admin/accounts", label: "admin.nav.accounts" },
   { key: "data", to: "/admin/data", label: "admin.nav.data" },
@@ -46,7 +68,9 @@ function badge(section) {
 
 onMounted(async () => {
   try {
-    pending.value = (await fetchAdminOverview()).pending;
+    const data = await fetchAdminOverview();
+    pending.value = data.pending;
+    modules.value = data.modules ?? null;
   } catch {
     denied.value = true; // 403 (not a platform admin) or offline
   }
@@ -61,7 +85,7 @@ onMounted(async () => {
     <div v-else class="console__body">
       <nav class="rail" :aria-label="t('admin.title')">
         <router-link
-          v-for="s in SECTIONS"
+          v-for="s in SECTIONS.filter(live)"
           :key="s.key"
           :to="s.to"
           class="rail__item"

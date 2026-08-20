@@ -160,6 +160,15 @@ def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)) 
         except ValueError:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown authority") from None
     session = identity.create_session(db, account)
+    # the first sign-in a driver has, and it is a sign-in like any other
+    identity.record_login_event(
+        db,
+        account.id,
+        identity.LOGIN_REGISTER,
+        client_ip,
+        request.headers.get("user-agent"),
+        now,
+    )
     return TokenOut(
         token=session.token,
         account_id=str(account.id),
@@ -225,6 +234,18 @@ def login(body: Credentials, request: Request, db: Session = Depends(get_db)) ->
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid credentials")
     identity.clear_failed_logins(db, body.email)
     session = identity.create_session(db, account)
+    # AI-CONTEXT: the SUCCESS is recorded here and nowhere else (§23 entry 234).
+    # `clear_failed_logins` one line up deletes this driver's throttle rows, which is
+    # exactly why the throttle table can never answer "who signed in" — the moment it
+    # would have known, it forgets.
+    identity.record_login_event(
+        db,
+        account.id,
+        identity.LOGIN_LOGIN,
+        client_ip,
+        request.headers.get("user-agent"),
+        now,
+    )
     return TokenOut(
         token=session.token,
         account_id=str(account.id),

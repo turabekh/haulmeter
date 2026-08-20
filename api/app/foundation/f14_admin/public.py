@@ -23,6 +23,7 @@ from .domain.service import (
     emit,
     enqueue_moderation,
     ensure_job_schedule,
+    events_for_account,
     finish_job_run,
     funnel,
     job_history,
@@ -40,6 +41,7 @@ from .domain.service import (
 )
 
 __all__ = [
+    "events_for_account",
     "start_job_run",
     "latest_job_runs",
     "last_action_for",

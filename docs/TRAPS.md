@@ -357,6 +357,19 @@ session*; this file records what is permanently true.
     (`money.ev.escalation_offered` → "Collection offered") describing a step that had never
     once occurred. A source grep for the send path would have missed it entirely. *(129)*
 
+### f01.login_attempt is a THROTTLE, not a login history
+
+40d. **`f01.login_attempt` carries `client_ip` and looks exactly like a sign-in log. It
+   is not one.** It records **failures only** — its own docstring says "a driver who
+   succeeds has proved who they are" — it **prunes itself on every write**, and
+   `clear_failed_logins` **deletes that driver's rows the moment they get in**.
+   Production held **one** row against 236 live sessions.
+
+   An admin screen built on it would have been permanently empty *and looked like it was
+   working*. Successful sign-ins live in **`f01.login_event`** (§23 entry 234). Before
+   using any table as history, check whether something deletes from it on the happy
+   path. *(234)*
+
 ## 6 · SQLAlchemy and Postgres
 
 45. **Relationship collections are not trustworthy when the service writes with `db.add`.**

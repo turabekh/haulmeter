@@ -77,6 +77,24 @@ def count_events(
     return db.scalar(stmt)
 
 
+def events_for_account(db: Session, account_id, limit: int = 100) -> list[AnalyticsEvent]:
+    """AI-CONTEXT: one driver's activity, newest first (§23 entry 234).
+
+    `funnel` below counts events across everybody; this reads them for ONE person, which
+    is the question an operator asks when a specific driver writes in. Nothing new is
+    recorded for it — 251 of these already existed on production, written by five call
+    sites and read by no screen.
+    """
+    return list(
+        db.scalars(
+            select(AnalyticsEvent)
+            .where(AnalyticsEvent.account_id == account_id)
+            .order_by(AnalyticsEvent.occurred_at.desc())
+            .limit(limit)
+        )
+    )
+
+
 def funnel(db: Session, steps: list[str], module: str | None = None) -> list[int]:
     stmt = select(AnalyticsEvent).where(AnalyticsEvent.event_name.in_(steps))
     if module is not None:

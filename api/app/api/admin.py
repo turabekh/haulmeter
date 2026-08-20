@@ -611,6 +611,17 @@ def _vendor_funnel(db: Session) -> dict:
     return {"published": int(published), "confirmed": int(confirmed)}
 
 
+# AI-CONTEXT: the module flags the CONSOLE's own navigation is gated on (§23 entry 234).
+#
+# Deliberately a short, explicit list rather than every flag: this decides what an
+# operator can SEE, so a new flag must not silently hide a section by being named
+# something that happens to match a pattern. Flags and Modules are ungated on purpose —
+# Flags is where a dormant module is switched back ON (D21's reversal is one toggle
+# there), and hiding the switch inside the thing it switches is a locked door with the
+# key behind it.
+_CONSOLE_MODULE_FLAGS = ("m13_vendor", "m13_service_center", "m01_map", "m06_parking")
+
+
 @router.get("/overview")
 def overview(
     _admin: identity.Account = Depends(current_admin),
@@ -631,6 +642,17 @@ def overview(
         "facilities": _facility_counts(db),
         "ingest": _ingest_freshness(db),
         "eia_week_of": flags.get_config(db, "m07_eia_week_of"),
+        # AI-CONTEXT: which module halves are LIVE, so the console can stop presenting a
+        # switched-off one as work (§23 entry 234).
+        #
+        # It rides THIS response rather than a second fetch because the shell already
+        # calls it for the rail's counts, and a console that asked twice on every
+        # navigation would be the "five endpoints on mount" the shell was built to end.
+        #
+        # Reported as a map rather than a filtered list: the client decides what to do
+        # with an off module, and a list of only-enabled keys cannot distinguish "off"
+        # from "a key this build has never heard of".
+        "modules": {key: flags.is_enabled(db, key) for key in _CONSOLE_MODULE_FLAGS},
         "pending": {
             "vendor_verification": len(pending_vendors),
             "moderation": len(queue),
@@ -853,6 +875,35 @@ def account_detail(
             "after": a.after,
         }
         for a in admin.list_actions(db, target_ref=account.id, limit=25)
+    ]
+    # AI-CONTEXT: who/when/where they signed in, and what they did (§23 entry 234).
+    #
+    # THREE DIFFERENT TRAILS, kept apart on purpose, because merging them would lose the
+    # one thing that makes each useful:
+    #   `audit`    — what an OPERATOR did TO this person (f14.admin_action)
+    #   `logins`   — when THEY got in, from which address and device (f01.login_event)
+    #   `activity` — what they DID once inside (f14.analytics_event)
+    #
+    # `logins` deliberately does NOT come from `f01.login_attempt`, which carries a
+    # `client_ip` and looks like exactly this: that table is a throttle holding failures
+    # only, pruned on write and cleared on success, and a screen built on it would be
+    # permanently empty.
+    body["logins"] = [
+        {
+            "kind": e.kind,
+            "client_ip": e.client_ip,
+            "user_agent": e.user_agent,
+            "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None,
+        }
+        for e in identity.recent_logins(db, account.id, limit=25)
+    ]
+    body["activity"] = [
+        {
+            "event": e.event_name,
+            "module": e.module,
+            "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None,
+        }
+        for e in admin.events_for_account(db, account.id, limit=50)
     ]
     return body
 

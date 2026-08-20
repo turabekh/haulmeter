@@ -26,7 +26,21 @@ import {
   registerVendorAsAdmin,
 } from "../../core/api.js";
 
-const { t } = useI18n();
+const { t, has } = useI18n();
+
+// AI-CONTEXT: an event this build has no name for renders READABLY, never as a crash
+// (§23 entry 234). `t()` in this codebase THROWS on a missing key — deliberately, so a
+// driver never reads a raw key — and only three of the five event names production
+// actually emits have an `admin.step.*` string. `vendor_suggested` and
+// `service_call_tapped` would have taken the page down for any account that had one.
+//
+// This is i18n.js's own documented pattern for a legitimately optional lookup: ASK
+// first with `has`, rather than inferring absence from the answer. The fallback is the
+// event's own name, which is what an operator would have wanted anyway.
+function eventLabel(event) {
+  const key = `admin.step.${event}`;
+  return has(key) ? t(key) : String(event).replace(/_/g, " ");
+}
 const search = ref("");
 const accounts = ref([]);
 const selected = ref(null);
@@ -278,12 +292,62 @@ onMounted(load);
           </tr>
         </tbody>
       </table>
+      <p v-if="!selected.audit?.length" class="panel__empty">
+        {{ t("admin.acct.no_history") }}
+      </p>
+
+      <!-- AI-CONTEXT: THREE TRAILS, KEPT APART (§23 entry 234). The one above is what an
+           OPERATOR did TO this person; these two are what the PERSON did. Merging them
+           into one feed would read as a single story and answer neither question — "did
+           support reset this password" and "did someone else sign in as them" are asked
+           by different people for different reasons.
+
+           The address and the device are shown RAW. Resolving an IP to a city means
+           either shipping a geo database or handing a driver's address to a third party;
+           the owner chose neither, so this states what we actually know and lets an
+           operator look up the one case they care about. -->
+      <h3 class="acct__sub">{{ t("admin.acct.logins") }}</h3>
+      <table class="table">
+        <tbody>
+          <tr v-for="(l, i) in selected.logins" :key="`l${i}`">
+            <td class="table__figure">{{ stamp(l.occurred_at) }}</td>
+            <td class="table__name">{{ t(`admin.acct.login_${l.kind}`) }}</td>
+            <td class="table__figure">{{ l.client_ip || "—" }}</td>
+            <td class="table__name acct__ua" :title="l.user_agent">{{ l.user_agent || "—" }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-if="!selected.logins?.length" class="panel__empty">
+        {{ t("admin.acct.no_logins") }}
+      </p>
+
+      <h3 class="acct__sub">{{ t("admin.acct.activity") }}</h3>
+      <table class="table">
+        <tbody>
+          <tr v-for="(e, i) in selected.activity" :key="`e${i}`">
+            <td class="table__figure">{{ stamp(e.occurred_at) }}</td>
+            <td class="table__name">{{ eventLabel(e.event) }}</td>
+            <td class="table__figure">{{ e.module }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-if="!selected.activity?.length" class="panel__empty">
+        {{ t("admin.acct.no_activity") }}
+      </p>
     </section>
   </div>
 </template>
 
 <style scoped>
 @import "./admin-shared.css";
+/* a user-agent string is long and an operator scans the columns before it. Truncated
+   with the full value on hover — not shortened in the data, which would be an edit. */
+.acct__ua {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .acct__search {
   width: 100%;
   margin-bottom: var(--s-3);

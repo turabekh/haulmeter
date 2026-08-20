@@ -8,12 +8,17 @@
      · The overdue count is the number that should make an operator act first, so it
        carries the flare token and is never folded into the queue total. -->
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "../../core/i18n.js";
 import { fetchAdminOverview } from "../../core/api.js";
 
 const { t } = useI18n();
 const data = ref(null);
+// AI-CONTEXT: a switched-off module contributes no figures (§23 entry 234). Same rule
+// as the rail's, and the same fail-open default: unknown renders, only a definite `false`
+// hides. A zero from a dormant module is not "nothing is waiting" — it is "this cannot
+// happen", and §21.3's objection to decoration applies to a stat that can only ever be 0.
+const vendorLive = computed(() => data.value?.modules?.m13_vendor !== false);
 
 function jobState(job) {
   if (!job.enabled) return { key: "admin.ov.job_off", token: "--text-3" };
@@ -65,7 +70,7 @@ onMounted(async () => {
     <section class="panel">
       <h2 class="panel__title">{{ t("admin.ov.pending") }}</h2>
       <ul class="stats">
-        <li class="stat">
+        <li v-if="vendorLive" class="stat">
           <span class="stat__figure">{{ data.pending.vendor_verification }}</span>
           <span class="stat__label">{{ t("admin.ov.verification") }}</span>
         </li>
@@ -84,7 +89,7 @@ onMounted(async () => {
         </li>
       </ul>
       <p
-        v-if="!data.pending.vendor_verification && !data.pending.moderation && !data.pending.claim_disputes"
+        v-if="!(vendorLive && data.pending.vendor_verification) && !data.pending.moderation && !data.pending.claim_disputes"
         class="panel__empty"
       >
         {{ t("admin.ov.all_clear") }}
@@ -99,7 +104,7 @@ onMounted(async () => {
           <span class="stat__label">{{ t(`admin.step.${step.event}`) }}</span>
         </li>
       </ul>
-      <p class="panel__note">
+      <p v-if="vendorLive" class="panel__note">
         {{ t("admin.ov.appearances") }}:
         <span class="table__figure">{{ data.funnels.vendor_appearances.confirmed }}</span>
         {{ t("admin.ov.confirmed_of") }}

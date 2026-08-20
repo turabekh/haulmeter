@@ -111,6 +111,41 @@ class AuthSession(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class LoginEvent(Base):
+    """AI-CONTEXT: SUCCESSFUL sign-ins, kept so an operator can answer "who, when, from
+    where" (§23 entry 234). NOT `LoginAttempt` below, and the distinction is the point.
+
+    `LoginAttempt` looks like a login history — it even carries `client_ip` — and it is a
+    THROTTLE: it records failures only ("a driver who succeeds has proved who they are"),
+    it prunes itself on every write, and `clear_failed_logins` deletes a driver's rows the
+    moment they get in. Production held ONE row against 236 live sessions. An admin screen
+    built on it would have been confidently, permanently empty.
+
+    So this table records the opposite: the successes, with the address and the device
+    they came from. `account_id` rather than an email string, because the question is
+    about a person and an email can be changed.
+
+    BOUNDED ON WRITE, like its neighbour. This is personal data about drivers and an
+    unbounded PII table is a liability that grows on its own; `LOGIN_EVENT_RETENTION_DAYS`
+    is the window and it is a named constant in the service rather than F13 config,
+    because how long we keep records of people is a statement, not a tuning knob.
+    """
+
+    __tablename__ = "login_event"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.account.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(24), index=True)
+    client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # the raw header, truncated. Parsing it into "Chrome on Android" is a guess dressed
+    # as a fact, and an operator chasing a suspicious sign-in wants the string itself.
+    user_agent: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class LoginAttempt(Base):
     """AI-CONTEXT: throttling signal for the two unauthenticated hashing routes.
 

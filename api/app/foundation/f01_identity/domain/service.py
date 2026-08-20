@@ -15,6 +15,7 @@ from .models import (
     AuthSession,
     DriverProfile,
     LoginAttempt,
+    LoginEvent,
     Organization,
     OrgMembership,
     RoleAttachment,
@@ -495,6 +496,63 @@ def record_registration_attempt(
         )
     )
     db.flush()
+
+
+# AI-CONTEXT: how long we keep a record of where a driver signed in from (§23 entry 234).
+#
+# Six months: long enough for the question this exists to answer — "was that really them,
+# and where were they last week" — and short enough that we are not accumulating an
+# indefinite map of people's whereabouts. A named constant rather than F13 config,
+# because how long we retain personal data is a statement about the product, not a knob
+# an operator should be able to turn to "forever" on a Tuesday.
+LOGIN_EVENT_RETENTION_DAYS = 180
+
+LOGIN_LOGIN = "login"
+LOGIN_REGISTER = "register"
+
+
+def record_login_event(
+    db: Session,
+    account_id,
+    kind: str,
+    client_ip: str | None,
+    user_agent: str | None,
+    now: datetime | None = None,
+) -> LoginEvent:
+    """A SUCCESSFUL sign-in. `LoginAttempt` is the failure throttle; this is the history.
+
+    Bounded on write, the same way its neighbour is — an unbounded table of who was where
+    is a liability that grows whether anyone reads it or not.
+    """
+    now = _as_utc(now or datetime.now(UTC))
+    db.execute(
+        delete(LoginEvent).where(
+            LoginEvent.occurred_at < now - timedelta(days=LOGIN_EVENT_RETENTION_DAYS)
+        )
+    )
+    event = LoginEvent(
+        account_id=account_id,
+        kind=kind,
+        client_ip=client_ip,
+        # truncated rather than rejected: a header we cannot store in full is still worth
+        # the part we can, and a sign-in must never fail because a browser was verbose
+        user_agent=(user_agent or None) and user_agent[:300],
+        occurred_at=now,
+    )
+    db.add(event)
+    db.flush()
+    return event
+
+
+def recent_logins(db: Session, account_id, limit: int = 50) -> list[LoginEvent]:
+    return list(
+        db.scalars(
+            select(LoginEvent)
+            .where(LoginEvent.account_id == account_id)
+            .order_by(LoginEvent.occurred_at.desc())
+            .limit(limit)
+        )
+    )
 
 
 def record_failed_login(db: Session, email: str, client_ip: str | None, now: datetime) -> None:
