@@ -1332,7 +1332,11 @@ const SURFACES = [
   // notification system decided. New sheet, so it gets measured at 360 dp with the
   // rest rather than shipping unseen. Mocked empty AND populated is overkill here —
   // the populated rows are what can overflow, so that is what is measured.
-  ["sheet-notifications", "/more", {
+  //
+  // OPENED FROM THE STRIP'S BELL now, not a More row (§23 entry 230), and measured on
+  // /load rather than /more for the same reason `install-offer` moved there: the strip
+  // is the thing under test and Load is where its height is most expensive.
+  ["sheet-notifications", "/load", {
     mocks: {
       "/notifications": {
         notifications: [
@@ -1369,7 +1373,7 @@ const SURFACES = [
         timezone: "America/Denver", quiet_start: "22:00", quiet_end: "06:00",
       },
     },
-    open: [".alerts--link"],
+    open: [".strip__bell"],
     // the CONTROLS, not a row: the rows render from the inbox mock either way, and the
     // newly built things are what is worth proving present before anything is measured.
     // `:has()` twice, so this cannot go green with one of the two missing — which is

@@ -753,6 +753,7 @@
   "notifications.held": "ਰੋਕੀ · ਭੇਜੀ ਨਹੀਂ",
   "notifications.title": "ਸੂਚਨਾਵਾਂ",
   "notifications.unread": "{n} ਅਣਪੜ੍ਹੀਆਂ",
+  "notifications.unread_label": "ਸੂਚਨਾਵਾਂ · ਅਣਪੜ੍ਹੀਆਂ",
   "owner.active": "ਚਾਲੂ",
   "owner.add_property": "ਜਾਇਦਾਦ ਜੋੜੋ",
   "owner.add_spot": "ਥਾਂ ਜੋੜੋ",

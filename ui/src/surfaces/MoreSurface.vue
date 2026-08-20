@@ -16,45 +16,11 @@ import InstallSheet from "../core/components/InstallSheet.vue";
 import { installable, manualInstall, promptInstall } from "../core/install.js";
 import LocalePicker from "../core/components/LocalePicker.vue";
 import { mpgError, normalizeMpg, MIN_MPG, MAX_MPG } from "../core/truck.js";
-import NotificationsSheet from "../core/components/NotificationsSheet.vue";
-import { fetchNotifications, markNotificationRead } from "../core/api.js";
 import Spinner from "../core/components/Spinner.vue";
 
 const router = useRouter();
 const { t } = useI18n();
 
-// AI-CONTEXT: §23 entry 102 — F8's inbox, reached from the More list.
-//
-// §10.5 says More is "deliberately boring; a plain 64 dp row list. No cards, no
-// promos, NO BADGES", so there is no unread count on this row and none on the tab:
-// a number that follows a driver around is an interruption wearing a different hat,
-// and §13's budget governs interruptions however they are dressed. The unread state
-// lives INSIDE the sheet, where a driver who opened it has already asked.
-const notifications = ref([]);
-const notifOpen = ref(false);
-const nowMs = ref(Date.now());
-
-async function openNotifications() {
-  notifOpen.value = true;
-  try {
-    notifications.value = (await fetchNotifications()).notifications;
-  } catch {
-    // offline: this surface is pure history, so an empty list plus the sheet's own
-    // "nothing yet" is honest — there is no pending action to lose
-    notifications.value = [];
-  }
-  nowMs.value = Date.now();
-}
-
-async function openNotification(n) {
-  notifOpen.value = false;
-  if (!n.read_at) {
-    markNotificationRead(n.id).catch(() => {});
-    n.read_at = new Date().toISOString();
-  }
-  // §13.5: land on the exact screen and state it describes, never a tab root
-  if (n.deep_link) router.push(n.deep_link);
-}
 // iOS has no install API at all, so the sheet showing the Share gesture IS the path
 // there rather than a fallback from one. Same branch as the strip's, deliberately —
 // one module decides which platform can be prompted, and both callers ask it.
@@ -163,8 +129,8 @@ const foodAlerts = ref(false);
 // acts on it.
 //
 // F8 has had the answer since it shipped: `GET /notifications/classes` is the canonical
-// per-class preference read, and the notifications sheet beside this card already uses
-// it. Read here rather than through `/vendors/alerts/opt-in`, which has no GET at all.
+// per-class preference read, and the notifications sheet — now reached from the status
+// strip's bell rather than from a row on this tab — already uses it. Read here rather than through `/vendors/alerts/opt-in`, which has no GET at all.
 const VENDOR_ALERT_CLASS = "vendor_alert";
 async function loadFoodAlerts() {
   try {
@@ -218,15 +184,6 @@ function signOut() {
 <template>
   <div class="more">
     <h1 class="more__title">{{ t("nav.more") }}</h1>
-
-    <!-- AI-CONTEXT: §23 entry 110 — a driver could not see a booking they had paid
-         for. More is where a records screen belongs under NAV-1's five fixed tabs. -->
-    <section class="card">
-      <h2 class="card__title">{{ t("bookings.title") }}</h2>
-      <button class="cta" type="button" @click="router.push('/bookings')">
-        {{ t("bookings.view") }}
-      </button>
-    </section>
 
     <!-- AI-CONTEXT: the install offer's permanent home (§23 entry 152).
          It deliberately does NOT consult the strip's dismissal: tapping × silences an
@@ -413,15 +370,6 @@ function signOut() {
       <p class="equip__note">{{ t("vendor.alerts_hint") }}</p>
     </section>
 
-    <!-- §23 entry 102: the inbox row, composed from the row shapes already in this
-         list. §10.5 forbids badges here, so it carries a label and nothing else. -->
-    <section class="card">
-      <h2 class="card__title">{{ t("notifications.title") }}</h2>
-      <button class="alerts alerts--link" type="button" @click="openNotifications">
-        <span class="alerts__name">{{ t("more.notifications") }}</span>
-      </button>
-    </section>
-
     <section class="card">
       <h2 class="card__title">{{ t("more.account") }}</h2>
       <p v-if="email" class="more__email">{{ email }}</p>
@@ -430,10 +378,6 @@ function signOut() {
       </button>
       <button class="cta cta--danger" type="button" @click="signOut">{{ t("auth.logout") }}</button>
     </section>
-
-    <BottomSheet :open="notifOpen" :title="t('notifications.title')" @close="notifOpen = false">
-      <NotificationsSheet :notifications="notifications" :now="nowMs" @open="openNotification" />
-    </BottomSheet>
 
     <BottomSheet :open="installSheet" :title="t('install.title')" @close="installSheet = false">
       <InstallSheet />

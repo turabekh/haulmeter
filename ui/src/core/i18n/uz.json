@@ -753,6 +753,7 @@
   "notifications.held": "Ushlab turildi · yuborilmadi",
   "notifications.title": "Bildirishnomalar",
   "notifications.unread": "{n} o‘qilmagan",
+  "notifications.unread_label": "Bildirishnomalar · o‘qilmagan",
   "owner.active": "Faol",
   "owner.add_property": "Maydon qo'shish",
   "owner.add_spot": "Joy qo'shish",

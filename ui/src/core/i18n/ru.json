@@ -753,6 +753,7 @@
   "notifications.held": "Придержано · не отправлено",
   "notifications.title": "Уведомления",
   "notifications.unread": "{n} непрочитанных",
+  "notifications.unread_label": "Уведомления · есть непрочитанные",
   "owner.active": "Активно",
   "owner.add_property": "Добавить объект",
   "owner.add_spot": "Добавить место",

@@ -116,9 +116,12 @@ describe("A waiting update is a strip, not an interruption", () => {
     vi.unstubAllGlobals();
   });
 
-  it("says nothing when there is nothing waiting", () => {
+  it("offers no restart when there is nothing waiting", () => {
     const w = mount(StatusStrip, { props: { online: true, pending: 0, failed: 0 } });
-    expect(w.find(".strip").exists()).toBe(false);
+    // the strip is always present since entry 230 — the bell lives there. A waiting
+    // build is still a conditional row, and it is not waiting.
+    expect(w.find(".strip").exists()).toBe(true);
+    expect(w.find(".strip__update").exists()).toBe(false);
   });
 
   it("offers the restart when a new build is ready", () => {

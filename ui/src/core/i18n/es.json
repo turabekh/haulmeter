@@ -753,6 +753,7 @@
   "notifications.held": "Retenida · no enviada",
   "notifications.title": "Notificaciones",
   "notifications.unread": "{n} sin leer",
+  "notifications.unread_label": "Notificaciones · sin leer",
   "owner.active": "Activo",
   "owner.add_property": "Añadir propiedad",
   "owner.add_spot": "Añadir plaza",

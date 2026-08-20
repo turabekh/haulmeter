@@ -753,6 +753,7 @@
   "notifications.held": "La hayay · lama dirin",
   "notifications.title": "Ogeysiisyo",
   "notifications.unread": "{n} aan la akhrin",
+  "notifications.unread_label": "Ogeysiisyo · aan la akhrin",
   "owner.active": "Firfircoon",
   "owner.add_property": "Ku dar guri",
   "owner.add_spot": "Ku dar meel",

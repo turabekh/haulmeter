@@ -17,14 +17,28 @@
        which is M11's to build. Labelled, never linked (§23's registry precedent) —
        and a thing that is not there needs no label at all.
 
-     What remains is genuinely conditional, so the strip now renders NOTHING when the
-     driver is online with nothing queued — which is almost always. That is ~56 dp
-     returned to every screen in the app, and on the Map it is 56 dp of map.
-     Owner-requested (§23 entry 89). -->
+     What remains is genuinely conditional, so the strip carried NOTHING when the
+     driver was online with nothing queued — which is almost always. That was ~56 dp
+     returned to every screen in the app. Owner-requested (§23 entry 89).
+
+     THE STRIP IS ALWAYS PRESENT AGAIN (§23 entry 230, owner-decided), and entry 89 is
+     only half reversed: what it removed was chrome that said nothing, and the bell is
+     not that. F8's inbox was reachable only from a row on the More tab, so a driver had
+     to already suspect there was something to read. The strip is the product's one
+     persistent top surface and §14.2 already specifies it as the home of a persistent
+     48 dp control, so this composes rather than invents — there is no app bar in this
+     product and NAV-1 forbids a drawer.
+
+     The mic note above still stands: a control that does nothing is clutter. The bell
+     always does something, and it is WITHDRAWN rather than dead while DRIVING (§13.4 —
+     no interactive prompts at speed), the same withdrawal the Money tab applies. -->
 <script setup>
-import { computed, ref } from "vue";
-import { WifiOff, CloudOff, AlertTriangle, RefreshCw, Download, X } from "lucide-vue-next";
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import { WifiOff, CloudOff, AlertTriangle, RefreshCw, Download, X, Bell } from "lucide-vue-next";
 import { useI18n } from "../i18n.js";
+import { useDriverState } from "../state.js";
+import NotificationsSheet from "./NotificationsSheet.vue";
+import { fetchNotifications, markNotificationRead } from "../api.js";
 import { updateReady, applyUpdate } from "../pwa.js";
 import { offerInstall, manualInstall, promptInstall, dismissInstall } from "../install.js";
 import BottomSheet from "./BottomSheet.vue";
@@ -71,20 +85,93 @@ async function onInstall() {
   }
   await promptInstall();
 }
+
+// AI-CONTEXT: F8's inbox, reached from anywhere (§23 entry 230).
+//
+// A QUIET DOT AND NEVER A COUNT (owner decision). §10.5's "no badges" was written about
+// the More tab and entry 102 gave the reasoning that outlives the surface: a number that
+// follows a driver around all day is an interruption wearing a different hat, and §13.1's
+// budget governs interruptions however they are dressed. A dot says something is waiting;
+// a growing number asks to be cleared. The count is still in the response and is still
+// rendered INSIDE the sheet, where a driver who opened it has already asked.
+//
+// THE DOT NEVER GUESSES. A failed or unauthenticated read leaves it off rather than
+// asserting an unread state we do not have — the same rule the food-alert switch learned
+// (§23 entry 131): a control that misreports itself is worse than one that does nothing.
+// AI-CONTEXT: the strip does NOT own the router. It is chrome, mounted on every screen
+// and unit-mounted bare in four suites; injecting a router into it made those mounts warn
+// and made a component that only needs to say "go here" depend on knowing how. §13.5's
+// deep link travels up to the app shell, which already owns navigation.
+const emit = defineEmits(["navigate"]);
+const { isDriving } = useDriverState();
+const notifications = ref([]);
+const unread = ref(0);
+const notifOpen = ref(false);
+const nowMs = ref(Date.now());
+
+async function refreshUnread() {
+  try {
+    const data = await fetchNotifications();
+    notifications.value = data.notifications || [];
+    unread.value = Number(data.unread) || 0;
+  } catch {
+    unread.value = 0; // offline or signed out — assert nothing
+  }
+}
+
+async function openNotifications() {
+  notifOpen.value = true;
+  // offline: the sheet's own "nothing yet" is honest — this surface is pure history and
+  // there is no pending action to lose
+  await refreshUnread();
+  nowMs.value = Date.now();
+}
+
+async function openNotification(n) {
+  notifOpen.value = false;
+  if (!n.read_at) {
+    markNotificationRead(n.id).catch(() => {});
+    n.read_at = new Date().toISOString();
+    unread.value = Math.max(0, unread.value - 1);
+  }
+  // §13.5: land on the exact screen and state it describes, never a tab root
+  if (n.deep_link) emit("navigate", n.deep_link);
+}
+
+// re-read when the app comes back to the foreground, which is the same moment §13.3
+// re-checks quiet hours — a driver who has been away is exactly who has something new
+function onVisible() {
+  if (typeof document !== "undefined" && !document.hidden) refreshUnread();
+}
+onMounted(() => {
+  refreshUnread();
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisible);
+  }
+});
+onUnmounted(() => {
+  if (typeof document !== "undefined") {
+    document.removeEventListener("visibilitychange", onVisible);
+  }
+});
 </script>
 
 <template>
-  <header v-if="hasSomethingToSay || showInstall" class="strip">
-    <!-- offline is a calm banner, never red (§15.1) -->
-    <span v-if="!online" class="strip__offline">
-      <WifiOff :size="16" :stroke-width="2" aria-hidden="true" />
-      {{ t("system.offline") }}
-    </span>
+  <header class="strip">
+    <!-- AI-CONTEXT: the conditional facts live in their own flex box so exactly ONE
+         element owns the free space. TRAPS 95: `min-width: 0`, or a `nowrap` label
+         inside becomes this row's floor and the strip runs past 360 dp at 200% text. -->
+    <div class="strip__facts">
+      <!-- offline is a calm banner, never red (§15.1) -->
+      <span v-if="!online" class="strip__offline">
+        <WifiOff :size="16" :stroke-width="2" aria-hidden="true" />
+        {{ t("system.offline") }}
+      </span>
     <!-- F12: queued captures show a subtle pending glyph (§15.1) -->
-    <span v-if="pending > 0" class="strip__pending" :aria-label="t('system.pending')">
-      <CloudOff :size="14" :stroke-width="2" aria-hidden="true" />
-      {{ pending }}
-    </span>
+      <span v-if="pending > 0" class="strip__pending" :aria-label="t('system.pending')">
+        <CloudOff :size="14" :stroke-width="2" aria-hidden="true" />
+        {{ pending }}
+      </span>
     <!-- AI-CONTEXT: U-07. A write the server refused is NOT pending and must not read as
          pending — the driver was previously shown "synced" over lost evidence. This is
          the one thing on the strip that is not calm, and §15.1's "offline is never red"
@@ -92,10 +179,11 @@ async function onInstall() {
          not. §15.4 requires a failed money-moving action to be explicit and persistent.
          --flare-500 is the existing semantic token for that; no new colour, no new
          pattern — the same icon-plus-count shape the pending glyph already uses. -->
-    <span v-if="failed > 0" class="strip__failed" :aria-label="t('system.failed')">
-      <AlertTriangle :size="14" :stroke-width="2" aria-hidden="true" />
-      {{ failed }}
-    </span>
+      <span v-if="failed > 0" class="strip__failed" :aria-label="t('system.failed')">
+        <AlertTriangle :size="14" :stroke-width="2" aria-hidden="true" />
+        {{ failed }}
+      </span>
+    </div>
     <!-- the driver decides WHEN. It never reloads under someone photographing a BOL,
          which is the one thing an auto-updating shell must not do. -->
     <button v-if="updateReady" class="strip__update" type="button" @click="applyUpdate">
@@ -126,7 +214,23 @@ async function onInstall() {
     >
       <X :size="14" :stroke-width="2" aria-hidden="true" />
     </button>
+    <!-- §13.4: no interactive prompts at speed. The bell stays VISIBLE and stops being
+         tappable, rather than vanishing — SM-1 wants calm transitions, and chrome that
+         disappears at 5.6 mph and returns 90 s later is the strobe that rule forbids. -->
+    <button
+      class="strip__bell"
+      type="button"
+      :disabled="isDriving"
+      :aria-label="unread > 0 ? t('notifications.unread_label') : t('notifications.title')"
+      @click="openNotifications"
+    >
+      <Bell :size="20" :stroke-width="2" aria-hidden="true" />
+      <span v-if="unread > 0" class="strip__dot" aria-hidden="true"></span>
+    </button>
   </header>
+  <BottomSheet :open="notifOpen && !isDriving" :title="t('notifications.title')" @close="notifOpen = false">
+    <NotificationsSheet :notifications="notifications" :now="nowMs" @open="openNotification" />
+  </BottomSheet>
   <BottomSheet :open="iosSheet" :title="t('install.title')" @close="iosSheet = false">
     <InstallSheet />
   </BottomSheet>
@@ -215,5 +319,43 @@ async function onInstall() {
   gap: var(--s-1);
   color: var(--flare-500);
   font-variant-numeric: tabular-nums;
+}
+/* TRAPS 95: `flex: 1` alone does not grant shrinkage — `min-width: 0` is what stops a
+   nowrap label inside becoming this row's floor at 200% text. */
+.strip__facts {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex: 1;
+  min-width: 0;
+}
+/* §6.5's 48 dp floor is MET, for the same reason `.strip__install` meets it: this one
+   renders in every layout state, so the sweep measures it, and the honest way to pass a
+   check is to satisfy it. The strip's 32 dp is a `min-height`, so the row grows to 48. */
+.strip__bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-2);
+}
+.strip__bell:disabled {
+  color: var(--text-3);
+}
+/* the dot is a STATE, not a count (§23 entry 230). `marker` is the existing semantic
+   token for "something wants your attention and it is not an emergency" — no new
+   colour, and nothing here is `flare`, which this app reserves for money that failed. */
+.strip__dot {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--marker-500);
 }
 </style>

@@ -753,6 +753,7 @@
   "notifications.held": "Held · not sent",
   "notifications.title": "Notifications",
   "notifications.unread": "{n} unread",
+  "notifications.unread_label": "Notifications · unread",
   "owner.active": "Active",
   "owner.add_property": "Add property",
   "owner.add_spot": "Add spot",

@@ -14,12 +14,15 @@
 //   the information reachable; nothing ever re-sends it. This comment asserted
 //   "defer" until HANDOFF-109 — the FOURTH copy of a claim 108 corrected in three
 //   other files and missed here, which is the whole argument for the shape test below.
-// · §10.5 forbids badges in More, so no unread count leaks onto the row or the tab —
-//   a number that follows a driver around is an interruption in a different hat.
+// · No unread COUNT reaches the driver's chrome. §10.5 forbids badges in More and the
+//   affordance has since moved to the status strip (§23 entry 230) — the rule survived
+//   the surface, because entry 102's reasoning was never about which tab it sat on: a
+//   number that follows a driver around is an interruption in a different hat. A dot
+//   says something is waiting; a count asks to be cleared.
 // · Empty is a real state with real words, because an empty inbox and a broken one
 //   look identical otherwise — which is how this area went unnoticed this long.
-import { describe, it, expect } from "vitest";
-import { mount } from "@vue/test-utils";
+import { describe, it, expect, vi } from "vitest";
+import { mount, flushPromises } from "@vue/test-utils";
 import NotificationsSheet from "../src/core/components/NotificationsSheet.vue";
 import en from "../src/core/i18n/en.json";
 
@@ -186,17 +189,27 @@ describe("a held label may not promise delivery (§13.3, §23 entry 116)", () =>
 });
 
 describe("More — the inbox row (§10.5)", () => {
-  it("carries no badge or unread count, per §10.5", async () => {
-    // "deliberately boring; a plain 64 dp row list. No cards, no promos, NO BADGES."
-    // A count on this row would be an interruption the §13 budget never got to rule
-    // on — so this reads the SHIPPED template and asserts the row renders a label and
-    // nothing else. Asserting it against a mounted component would need a session, a
-    // router and a live fetch; the template is the thing that can actually drift.
+  it("marks unread with a dot and never a count (§23 entry 230)", async () => {
+    // §10.5's "NO BADGES" was written about the More tab, and entry 102 gave the reason
+    // that outlives the surface: a NUMBER that follows a driver around all day is an
+    // interruption the §13 budget never got to rule on. The affordance moved to the
+    // status strip; the rule did not move with the surface, it survived it.
+    //
+    // This reads the SHIPPED template, because that is the thing that can drift — a
+    // mounted assertion would need a session, a router and a live fetch.
+    const src = (await import("../src/core/components/StatusStrip.vue?raw")).default;
+    const bell = src.match(/<button\n\s+class="strip__bell"([\s\S]*?)<\/button>/);
+    expect(bell, "the bell must exist in the status strip").toBeTruthy();
+    expect(bell[1]).toContain("strip__dot");
+    // the dot is an empty span: no interpolation inside it, ever
+    expect(bell[1]).toMatch(/<span v-if="unread > 0" class="strip__dot"[^>]*><\/span>/);
+    expect(bell[1]).not.toMatch(/\{\{\s*unread/);
+  });
+
+  it("is gone from the More tab, which is boring again (§10.5)", async () => {
     const src = (await import("../src/surfaces/MoreSurface.vue?raw")).default;
-    const row = src.match(/<button class="alerts alerts--link" type="button" @click="openNotifications">([\s\S]*?)<\/button>/);
-    expect(row, "the notifications row must exist in More").toBeTruthy();
-    expect(row[1]).toContain("more.notifications");
-    expect(row[1]).not.toMatch(/unread|count|badge/i);
+    expect(src).not.toContain("openNotifications");
+    expect(src).not.toContain("alerts--link");
   });
 
   it("ships all six locales for every new string (Forbidden #7)", async () => {
@@ -212,5 +225,76 @@ describe("More — the inbox row (§10.5)", () => {
       const table = (await import(`../src/core/i18n/${loc}.json`)).default;
       for (const k of keys) expect(table[k], `${loc}:${k}`).toBeTruthy();
     }
+  });
+});
+
+// AI-CONTEXT: §23 entry 230 — the bell that is always there.
+//
+// Reached from a row on the More tab, the inbox required a driver to already suspect
+// there was something to read. These mount the real strip, because the things worth
+// pinning are behaviours, not template shapes: that the bell survives an empty inbox,
+// that a failed read asserts nothing, and that it withdraws at speed.
+describe("The status strip's bell (§23 entry 230)", () => {
+  const StatusStrip = () => import("../src/core/components/StatusStrip.vue");
+  const PROPS = { online: true, pending: 0, failed: 0 };
+
+  async function strip(unread) {
+    const api = await import("../src/core/api.js");
+    vi.spyOn(api, "fetchNotifications").mockResolvedValue({ notifications: [], unread });
+    const w = mount((await StatusStrip()).default, { props: PROPS });
+    await flushPromises();
+    return w;
+  }
+
+  it("is present on a screen with nothing else to say", async () => {
+    const w = await strip(0);
+    expect(w.find(".strip__bell").exists()).toBe(true);
+    expect(w.find(".strip__dot").exists(), "nothing unread, no dot").toBe(false);
+  });
+
+  it("shows a dot when something is unread, and never the number", async () => {
+    const w = await strip(7);
+    expect(w.find(".strip__dot").exists()).toBe(true);
+    expect(w.text()).not.toContain("7");
+  });
+
+  it("asserts nothing when the read fails", async () => {
+    // offline or signed out. A control that misreports itself is worse than one that
+    // does nothing, because the driver acts on it (§23 entry 131).
+    const api = await import("../src/core/api.js");
+    vi.spyOn(api, "fetchNotifications").mockRejectedValue(new Error("no session"));
+    const w = mount((await StatusStrip()).default, { props: PROPS });
+    await flushPromises();
+    expect(w.find(".strip__bell").exists()).toBe(true);
+    expect(w.find(".strip__dot").exists(), "a failed read is not an unread state").toBe(false);
+  });
+
+  it("withdraws at speed rather than disappearing (§13.4, SM-1)", async () => {
+    const state = await import("../src/core/state.js");
+    state.__resetStateForTests();
+    const w = await strip(3);
+    expect(w.find(".strip__bell").attributes("disabled")).toBeUndefined();
+
+    // sustained motion above walking speed for longer than the entry threshold
+    const t0 = Date.now();
+    state.observeMotion({ speedMps: 25, now: t0 });
+    state.observeMotion({ speedMps: 25, now: t0 + state.DRIVING_SUSTAIN_MS + 1 });
+    await w.vm.$nextTick();
+
+    expect(w.find(".strip__bell").exists(), "chrome must not strobe at 5.6 mph").toBe(true);
+    expect(w.find(".strip__bell").attributes("disabled")).toBeDefined();
+    state.__resetStateForTests();
+  });
+
+  it("emits the server's deep link rather than routing itself (§13.5)", async () => {
+    const api = await import("../src/core/api.js");
+    vi.spyOn(api, "markNotificationRead").mockResolvedValue({});
+    const w = await strip(1);
+    await w.find(".strip__bell").trigger("click");
+    await flushPromises();
+    await w.findComponent(NotificationsSheet).vm.$emit("open", {
+      id: "n1", deep_link: "/load/abc/evidence", read_at: null,
+    });
+    expect(w.emitted("navigate")[0]).toEqual(["/load/abc/evidence"]);
   });
 });

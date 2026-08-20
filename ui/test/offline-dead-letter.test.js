@@ -174,13 +174,15 @@ describe("the status strip says so (§15.4)", () => {
     expect(w.find(".strip__pending").exists(), "a refused write is NOT pending").toBe(false);
   });
 
-  it("still says nothing when there is nothing to say", async () => {
+  it("shows no failed count when nothing has failed", async () => {
     const { mount } = await import("@vue/test-utils");
     const StatusStrip = (await import("../src/core/components/StatusStrip.vue")).default;
     const w = mount(StatusStrip, { props: { online: true, pending: 0, failed: 0 } });
-    expect(w.find(".strip").exists(), "~56 dp returned to every screen (§23 entry 89)").toBe(
-      false,
-    );
+    // the strip itself is always present since entry 230 (it carries the bell); what
+    // entry 89 was protecting is that its CONDITIONAL rows stay absent, and a refused
+    // write must never be implied by chrome that is there for another reason
+    expect(w.find(".strip").exists()).toBe(true);
+    expect(w.find(".strip__failed").exists(), "no refused write, no count").toBe(false);
   });
 
   it("carries a label rather than a bare number (C-1: never colour alone)", async () => {

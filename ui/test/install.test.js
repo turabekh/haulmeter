@@ -250,11 +250,18 @@ describe("The strip asks, and yields to everything else", () => {
     expect(w.find(".strip__install").exists()).toBe(false);
   });
 
-  it("goes silent again when there is nothing to say and nothing to offer", () => {
-    // the strip's governing rule since entry 89: it renders NOTHING when the driver is
-    // online with nothing queued, which is almost always. An install offer that is not
-    // available must not resurrect it.
-    expect(strip({}).find(".strip").exists()).toBe(false);
+  it("carries the bell and nothing else when there is nothing to say", () => {
+    // Entry 89's rule was that the strip renders NOTHING when the driver is online with
+    // nothing queued. Entry 230 keeps the half that matters — no chrome that says
+    // nothing — while the bell earns its place on every screen. So the strip is present
+    // and its CONDITIONAL rows are still absent, which is what entry 89 was defending.
+    const w = strip({});
+    expect(w.find(".strip").exists()).toBe(true);
+    expect(w.find(".strip__bell").exists()).toBe(true);
+    expect(w.find(".strip__offline").exists()).toBe(false);
+    expect(w.find(".strip__pending").exists()).toBe(false);
+    expect(w.find(".strip__failed").exists()).toBe(false);
+    expect(w.find(".strip__install").exists()).toBe(false);
   });
 
   it("opens the Share sheet on iOS instead of prompting", async () => {

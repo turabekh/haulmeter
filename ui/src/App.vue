@@ -5,13 +5,14 @@
      tab bar) is suppressed on full-screen flows like login (route.meta.chrome). -->
 <script setup>
 import { computed, onMounted, onUnmounted } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import StatusStrip from "./core/components/StatusStrip.vue";
 import TabBar from "./core/components/TabBar.vue";
 import { online, pendingWrites, failedWrites, flushQueue } from "./core/api.js";
 import { startLocationReporting, stopLocationReporting } from "./core/location.js";
 
 const route = useRoute();
+const router = useRouter();
 const chrome = computed(() => route.meta.chrome !== false);
 const portal = computed(() => route.meta.portal === true);
 
@@ -51,6 +52,7 @@ onUnmounted(() => {
       :online="online"
       :pending="pendingWrites"
       :failed="failedWrites"
+      @navigate="(to) => router.push(to)"
     />
     <main class="app-content">
       <!-- AI-CONTEXT: §23 entry 100. The MAP alone is kept alive, and the narrowness
