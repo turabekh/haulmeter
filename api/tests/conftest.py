@@ -216,3 +216,29 @@ def _no_live_model_calls(monkeypatch):
     # `test_ai_gateway.py`, and a guard that rewrites the subject of a test is not a guard,
     # it is a false pass waiting to happen.
     monkeypatch.setattr(_ai, "resolve_provider", _fake)
+
+
+@pytest.fixture
+def awake_lot_prompt(monkeypatch):
+    """AI-CONTEXT: DORMANT MEANS THE PROOFS SURVIVE (§23 entry 231).
+
+    `lot_status_prompt` is dormant — the owner removed its only switch, so it dispatches
+    to nobody. Its laws are still laws: one ask a day, quiet hours, RESTING, the
+    per-subject mute, losing to real news rather than crowding it out. Deleting the tests
+    that hold them would mean reactivation ships against nothing, which is the opposite of
+    what entry 228 established when the map went dormant — every map component test
+    stayed green and unmodified there, and only the ones asserting navigation flipped.
+
+    So this fixture lifts dormancy for the duration of a test, and exactly one test
+    (`test_class_defaults.py`) asserts that production has it back on.
+    """
+    from dataclasses import replace
+
+    from app.foundation.f08_notifications.domain import service as f08
+
+    spec = f08.NOTIFICATION_CLASSES[f08.LOT_STATUS_PROMPT_CLASS]
+    assert spec.dormant, "this fixture exists to lift dormancy — the class is awake already"
+    monkeypatch.setitem(
+        f08.NOTIFICATION_CLASSES, f08.LOT_STATUS_PROMPT_CLASS, replace(spec, dormant=False)
+    )
+    return spec

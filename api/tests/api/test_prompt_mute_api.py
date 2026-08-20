@@ -76,7 +76,7 @@ def _prompts(client, headers):
     return [n for n in rows if n["category"] == PROMPT_CLASS]
 
 
-def test_a_muted_lot_stops_asking(client, db):
+def test_a_muted_lot_stops_asking(awake_lot_prompt, client, db):
     account, headers = _opted_in_driver(client, db)
     lot = _lot(db)
 
@@ -93,7 +93,7 @@ def test_a_muted_lot_stops_asking(client, db):
     assert held[0]["suppressed_reason"] == "muted"
 
 
-def test_muting_one_lot_leaves_every_other_lot_asking(client, db):
+def test_muting_one_lot_leaves_every_other_lot_asking(awake_lot_prompt, client, db):
     """The whole point of a per-SUBJECT mute. If this failed, the control would be the
     class switch wearing a smaller label."""
     account, headers = _opted_in_driver(client, db)
@@ -114,7 +114,7 @@ def test_muting_one_lot_leaves_every_other_lot_asking(client, db):
     assert asked[0]["deep_link"] == f"/facility/{other.id}"
 
 
-def test_unmuting_asks_again(client, db):
+def test_unmuting_asks_again(awake_lot_prompt, client, db):
     """§21.8, and the reason `unmute_subject` had to be written: before it, the only way
     out of a mute was `follow_subject`, which also switched the whole class on."""
     account, headers = _opted_in_driver(client, db)
@@ -167,7 +167,9 @@ def test_the_pref_route_reports_the_state_a_screen_has_to_render(client, db):
     assert client.get(pref, headers=headers).json()["muted"] is True
 
 
-def test_a_mute_recorded_against_a_MERGED_id_still_silences_the_real_lot(client, db):
+def test_a_mute_recorded_against_a_MERGED_id_still_silences_the_real_lot(
+    awake_lot_prompt, client, db
+):
     """§23 entry 73's scoping mistake, refused in a new place.
 
     A merge does not delete the duplicate — deliberately, so an id a driver already

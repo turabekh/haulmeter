@@ -100,6 +100,17 @@ session*; this file records what is permanently true.
    a test that the OLD behaviour fails on it.** A green red-first test is not evidence the
    fix works — it is evidence the fixture no longer describes the bug. *(229)*
 
+7c. **A "does not happen" test is unfalsifiable once the thing never happens.**
+   `test_a_muted_lot_stops_asking` asserted a muted lot is not asked. When the whole
+   class went dormant it kept passing — because nothing asks anybody, mute or no mute —
+   and it would have gone on passing over a broken mute forever. Found only because the
+   sweep that turned the class off was checked test-by-test.
+
+   **Whenever you switch a capability off, re-read its NEGATIVE tests first.** The
+   positive ones fail loudly and tell you they need attention; the negative ones go
+   green and tell you nothing. Give them a fixture that turns the capability back on,
+   so they keep testing the rule instead of the switch. *(231)*
+
 8. **A test that calls the function *under* a control proves nothing about the control.**
    Every facility test called `askQuestion()` while the button that calls it was disabled in
    every state it rendered in — nobody could ask a question, and the suite was green.

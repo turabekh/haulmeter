@@ -37,12 +37,16 @@ def _send(db, account, gateway, now=T0, subject_ref=None, category=notify.VENDOR
     )
 
 
-def test_class_is_off_until_the_driver_opts_in(db):
-    # never asked = never consented. The absence of a preference row must read as
-    # OFF, not as "no objection".
+def test_a_dormant_class_is_off_however_the_driver_answered(db):
+    # "never asked = never consented" was this class's rule until §23 entry 231; the
+    # owner reversed it for `vendor_alert` and the assertion moved rather than
+    # disappeared. `lot_status_prompt` is the class that is off for everyone now, and
+    # its rule is stronger: dormant beats even an explicit yes, because the switch that
+    # would take it back is gone (§21.8).
     account = _account(db)
     gateway = _gateway()
-    note = _send(db, account, gateway)
+    notify.set_class_opt_in(db, account.id, notify.LOT_STATUS_PROMPT_CLASS, True)
+    note = _send(db, account, gateway, category=notify.LOT_STATUS_PROMPT_CLASS)
 
     assert note.status == notify.NotificationStatus.suppressed
     assert note.suppress_reason == notify.SuppressReason.not_opted_in
@@ -140,7 +144,9 @@ def test_ungoverned_categories_are_unaffected(db):
 
 def test_vendor_alert_class_declares_its_anti_spam_laws(db):
     spec = notify.get_class(notify.VENDOR_ALERT_CLASS)
-    assert spec.opt_in_default is False
+    # §23 entry 231 reversed ONE clause of M13-FR6 — the default — and the rest of the
+    # bundle is asserted here precisely because a reversal is where the others get lost.
+    assert spec.opt_in_default is True
     assert spec.max_per_day == 1
     assert spec.route_relevant_only is True
     assert spec.tier == notify.NotificationTier.P1  # never P0 — food is not urgent
@@ -148,10 +154,13 @@ def test_vendor_alert_class_declares_its_anti_spam_laws(db):
 
 # --- following: the positive half of the same preference ---
 def test_following_is_consent_and_turns_the_class_on(db):
-    # E-D1: silence is never consent. A deliberate tap on "follow" is not silence —
-    # it is a request to be told, and a follow into a class that stayed OFF would be
-    # a control that reports success and does nothing.
+    # A deliberate tap on "follow" is a request to be told, and a follow into a class
+    # that stayed OFF would be a control that reports success and does nothing. Since
+    # §23 entry 231 the class no longer starts off, so the thing worth proving is that
+    # follow still lands an EXPLICIT yes over an opt-out rather than relying on the
+    # default to carry it.
     account = _account(db, "follow-on@example.com")
+    notify.set_class_opt_in(db, account.id, notify.VENDOR_ALERT_CLASS, False)
     assert notify.is_opted_in(db, account.id, notify.VENDOR_ALERT_CLASS) is False
 
     notify.follow_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-1")
@@ -249,13 +258,25 @@ def test_unmuting_lets_the_subject_through_again(db):
 def test_unmuting_leaves_the_class_switch_alone(db):
     """The trap `follow_subject` sets and this must not: it clears a mute AND opts the
     class in. Un-silencing one subject is not consent to the whole class, which is
-    `unfollow_subject`'s rule pointing the other way."""
-    account = _account(db, "unmute-optout@example.com")
-    notify.mute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-8")
+    `unfollow_subject`'s rule pointing the other way.
 
-    notify.unmute_subject(db, account.id, notify.VENDOR_ALERT_CLASS, "vendor-8")
+    ASSERTED IN BOTH DIRECTIONS since §23 entry 231. This test used to check only that
+    the switch read False afterwards, which passed for the wrong reason: `mute_subject`
+    was writing an opt-OUT as a side effect of creating the row, so the "unchanged" it
+    was proving was really "off, because muting turned it off". The invariant is that
+    neither mute nor unmute MOVES the switch — whichever way it was pointing.
+    """
+    left_on = _account(db, "unmute-default@example.com")
+    notify.mute_subject(db, left_on.id, notify.VENDOR_ALERT_CLASS, "vendor-8")
+    assert notify.is_opted_in(db, left_on.id, notify.VENDOR_ALERT_CLASS) is True
+    notify.unmute_subject(db, left_on.id, notify.VENDOR_ALERT_CLASS, "vendor-8")
+    assert notify.is_opted_in(db, left_on.id, notify.VENDOR_ALERT_CLASS) is True
 
-    assert notify.is_opted_in(db, account.id, notify.VENDOR_ALERT_CLASS) is False
+    left_off = _account(db, "unmute-optout@example.com")
+    notify.set_class_opt_in(db, left_off.id, notify.VENDOR_ALERT_CLASS, False)
+    notify.mute_subject(db, left_off.id, notify.VENDOR_ALERT_CLASS, "vendor-8")
+    notify.unmute_subject(db, left_off.id, notify.VENDOR_ALERT_CLASS, "vendor-8")
+    assert notify.is_opted_in(db, left_off.id, notify.VENDOR_ALERT_CLASS) is False
 
 
 def test_unmuting_leaves_the_other_mutes_in_place(db):

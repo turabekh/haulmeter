@@ -55,6 +55,14 @@ class NotificationClassSpec:
     # halves matter, because a class that skipped the check while still consuming a
     # slot would quietly cost the driver one of their two ordinary nudges.
     budget_exempt: bool = False
+    # AI-CONTEXT: ASLEEP, NOT DELETED (§23 entry 231). A dormant class never dispatches,
+    # whatever any driver's preference row says, and that is the whole reason the field
+    # exists rather than a migration clearing rows: a row is a driver's real choice and
+    # erasing it is a lie about what they chose. The laws below stay reviewable in one
+    # place and reactivation is this one field — the same shape as `MAP_DORMANT` (D21),
+    # for the same reason: a capability switched off in six scattered places is a
+    # capability nobody can find again.
+    dormant: bool = False
 
 
 ARRIVAL_REMINDER_CLASS = "arrival_reminder"
@@ -66,11 +74,23 @@ NOTIFICATION_CLASSES: dict[str, NotificationClassSpec] = {
     # M13-FR6 anti-spam laws are PART of the class definition: opt-in only, at most
     # one vendor push per driver per day, route/favorite-relevant facilities only,
     # quiet hours respected (inherited from P1), one-tap mute per vendor.
+    # AI-CONTEXT: OPT_IN_DEFAULT WAS FLIPPED TO **ON** (§23 entry 231, owner-decided).
+    #
+    # The 2026-07-25 entry made this the first opt-in class and its sentence was
+    # "absence of a preference row reads as NOT opted in — silence is never consent".
+    # That has been reversed by the owner. EVERY OTHER CLAUSE OF M13-FR6 IS UNTOUCHED
+    # and the tests in `test_class_defaults.py` are what keeps it that way: one push per
+    # driver per day, route/favorite-relevant facilities only, quiet hours inherited from
+    # P1, one-tap per-vendor mute. The cap matters MORE now, not less — default-off was
+    # doing some of its work, and default-on is what makes it bite.
+    #
+    # An explicit opt-OUT still wins: a default decides for the undecided and for nobody
+    # else, so a driver who turned these off is not turned back on by this.
     VENDOR_ALERT_CLASS: NotificationClassSpec(
         key=VENDOR_ALERT_CLASS,
         tier=NotificationTier.P1,
         max_per_day=1,
-        opt_in_default=False,
+        opt_in_default=True,
         route_relevant_only=True,
     ),
     # M5-FR5's EXIT carve-out (§23 entry 56, owner-approved — a notification class is
@@ -98,6 +118,12 @@ NOTIFICATION_CLASSES: dict[str, NotificationClassSpec] = {
     # NOT BUDGET-EXEMPT, deliberately: `protection_gap` earned its exemption by being a
     #   DEADLINE — the trailer cannot be photographed at that dock ever again — and a
     #   survey is the exact opposite. It must LOSE to real news rather than crowd it out.
+    # AI-CONTEXT: DORMANT (§23 entry 231, owner-decided). The sheet section that was this
+    # class's ONLY switch is gone, and three production accounts hold an explicit
+    # `opted_in=true`. Removing the surface alone would have kept asking exactly those
+    # drivers while taking away the control that turns it off — §21.8 requires off to be
+    # exactly as easy as on, and the honest reading of "remove this" is that it stops
+    # asking, not that it asks the people who can no longer refuse.
     LOT_STATUS_PROMPT_CLASS: NotificationClassSpec(
         key=LOT_STATUS_PROMPT_CLASS,
         tier=NotificationTier.P1,
@@ -105,6 +131,7 @@ NOTIFICATION_CLASSES: dict[str, NotificationClassSpec] = {
         opt_in_default=False,
         route_relevant_only=False,
         budget_exempt=False,
+        dormant=True,
     ),
     # J1-D1 (§23 entry 169, owner-signed — a notification class is a §22.2
     # never-improvise category and entry 118's delegation does not cover one).
@@ -287,7 +314,22 @@ def mute_subject(
     # one-tap mute for a single vendor without leaving the whole class
     pref = get_class_pref(db, account_id, class_key)
     if pref is None:
-        pref = NotificationClassPref(account_id=account_id, class_key=class_key)
+        # AI-CONTEXT: the new row INHERITS THE CLASS DEFAULT (§23 entry 231).
+        #
+        # `opted_in` is a `default=False` column, so creating a row here used to write an
+        # opt-OUT as a side effect of muting one vendor — "without leaving the whole
+        # class" is what this function's own comment promises and the opposite of what it
+        # did. It was invisible while the class defaulted OFF, because the row agreed with
+        # the default. Flipping `vendor_alert` ON made it a live defect: one mute would
+        # silently switch off every vendor alert, and the driver's only clue would be
+        # silence. A mute is a statement about ONE subject and must never be read as a
+        # statement about the class.
+        spec = get_class(class_key)
+        pref = NotificationClassPref(
+            account_id=account_id,
+            class_key=class_key,
+            opted_in=spec.opt_in_default if spec is not None else True,
+        )
         db.add(pref)
     pref.muted_subjects = sorted({*(pref.muted_subjects or []), str(subject_ref)})
     db.flush()
@@ -482,6 +524,9 @@ def dispatch(
     # the class; categories with no registered class are unaffected.
     spec = get_class(category)
     if spec is not None:
+        # a dormant class never reaches anyone, whatever their preference row says
+        if spec.dormant:
+            return _suppress(SuppressReason.not_opted_in)
         if not is_opted_in(db, account_id, category):
             return _suppress(SuppressReason.not_opted_in)
         if is_subject_muted(db, account_id, category, subject_ref):

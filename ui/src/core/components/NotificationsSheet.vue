@@ -29,12 +29,7 @@ import { useI18n } from "../i18n.js";
 import { ageLabel } from "../presentation.js";
 import { pushSupported, permissionState, isEnabled, enable, disable } from "../push.js";
 import Spinner from "./Spinner.vue";
-import {
-  fetchNotificationClasses,
-  setNotificationClass,
-  fetchNotificationPrefs,
-  setQuietHours,
-} from "../api.js";
+import { fetchNotificationPrefs, setQuietHours } from "../api.js";
 
 const props = defineProps({
   notifications: { type: Array, default: () => [] },
@@ -75,43 +70,18 @@ async function togglePush() {
   }
 }
 
-// AI-CONTEXT: the lot-status prompt's switch (§23 entry 114, owner-approved placement).
+// AI-CONTEXT: THE LOT-STATUS PROMPT'S SWITCH IS GONE (§23 entry 231, owner-asked).
 //
-// This is the ONLY way a driver can turn the prompt on. `dispatch` refuses an opt-in
-// class before any tier logic and the class defaults to off, so until this existed the
-// feature was suppressed `not_opted_in` for everyone — the third defect in one feature
-// where the rules were right and nothing could reach them.
+// Entry 114 built it because it was the ONLY way a driver could turn that prompt on, and
+// that is still true — which is exactly what removing it means: `lot_status_prompt` keeps
+// `opt_in_default=False` and now has no surface, so `dispatch` suppresses it
+// `not_opted_in` for everybody. The CLASS IS LEFT IN THE REGISTRY, dormant rather than
+// deleted, the same shape as the dormant map (D21): its laws are still reviewable in one
+// place and reactivation is this section plus nothing else.
 //
-// Only this class is offered here. `vendor_alert` already has its own control in More,
-// and `protection_gap` is ON by default for a stated reason — a driver cannot opt in to
-// a warning they have never seen — so a switch for it is a separate decision.
-const PROMPT_CLASS = "lot_status_prompt";
-const promptOn = ref(null); // null until known: a switch must not render a guess
-const promptBusy = ref(false);
-
-async function refreshClasses() {
-  try {
-    const data = await fetchNotificationClasses();
-    const row = (data.classes || []).find((c) => c.key === PROMPT_CLASS);
-    promptOn.value = row ? row.opted_in : null;
-  } catch {
-    promptOn.value = null; // offline or no session — say nothing rather than "off"
-  }
-}
-onMounted(refreshClasses);
-
-async function togglePrompt() {
-  promptBusy.value = true;
-  const next = !promptOn.value;
-  try {
-    const result = await setNotificationClass(PROMPT_CLASS, next);
-    promptOn.value = result.opted_in;
-  } catch {
-    /* leave the switch where it was: §11.7 forbids showing a choice that did not land */
-  } finally {
-    promptBusy.value = false;
-  }
-}
+// The per-subject mute on the facility screen is NOT this control and was left alone —
+// it now mutes a class that cannot fire, which is recorded in the handoff rather than
+// quietly widened into this change.
 
 // AI-CONTEXT: quiet hours (§13.3, §23 entry 115) — the half of that clause that had no
 // surface, next to the half that had no zone.
@@ -212,21 +182,6 @@ const rows = computed(() =>
       </button>
       <p v-else class="push__why">{{ t(`push.why_${pushState}`) }}</p>
       <p v-if="pushState === 'error'" class="push__why">{{ t("push.why_error") }}</p>
-    </section>
-
-    <!-- What we ASK, as opposed to how we reach you. The offer states the cost before
-         the switch, the same rule the push block above follows: this one asks the driver
-         for labour, and §21.8 forbids helping ourselves to it. -->
-    <!-- `prompt-class` is the §22.3 harness's handle. It borrows the push block's shape
-         deliberately — same tokens, same full-width control, no new component pattern —
-         but it needs its own selector, because a state the harness cannot PROVE it
-         rendered is a state that ships unmeasured. -->
-    <section v-if="promptOn !== null" class="push prompt-class">
-      <p class="push__what">{{ t("prompts.lot_what") }}</p>
-      <button class="push__cta" type="button" :disabled="promptBusy" @click="togglePrompt">
-        <Spinner v-if="promptBusy" />
-        {{ promptBusy ? t("busy.saving") : promptOn ? t("prompts.lot_off") : t("prompts.lot_on") }}
-      </button>
     </section>
 
     <!-- §13.3, the driver-adjustable half. The zone is stated rather than chosen: the

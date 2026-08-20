@@ -1355,18 +1355,6 @@ const SURFACES = [
         ],
         unread: 1,
       },
-      // §23 entry 114: the class switch, which is the only way a driver can turn the
-      // lot-status prompt on. It renders ONLY once the server has answered — an
-      // unmocked route 404s here, and this state passed while measuring a sheet with no
-      // switch in it before this mock existed.
-      "/notifications/classes": {
-        classes: [
-          {
-            key: "lot_status_prompt", opted_in: false, opt_in_default: false,
-            max_per_day: 1, tier: "P1",
-          },
-        ],
-      },
       // §23 entry 115: quiet hours. Same rule as the class switch above — the row
       // renders only once the server answers, and an unmocked route 404s here.
       "/notifications/prefs": {
@@ -1374,11 +1362,12 @@ const SURFACES = [
       },
     },
     open: [".strip__bell"],
-    // the CONTROLS, not a row: the rows render from the inbox mock either way, and the
-    // newly built things are what is worth proving present before anything is measured.
-    // `:has()` twice, so this cannot go green with one of the two missing — which is
-    // exactly how both shipped unmeasured in entry 114.
-    ready: ".notif:has(.prompt-class):has(.quiet)",
+    // the CONTROL, not a row: the rows render from the inbox mock either way, and the
+    // built thing is what is worth proving present before anything is measured.
+    // The lot-status switch was the other half of this `:has()` until §23 entry 231
+    // removed it — and its mock went with it, because a route with no consumer that a
+    // harness still answers is a state measuring something the app no longer does.
+    ready: ".notif:has(.quiet)",
   }],
   // `anon` because the door is only a door to someone who has no key — signed in, the
   // guard sends this state to the map and it measured the map (see prepare()).

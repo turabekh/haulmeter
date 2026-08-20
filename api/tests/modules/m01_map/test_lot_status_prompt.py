@@ -32,7 +32,7 @@ def _lot(db, kind=None, name="Riverside Truck Stop"):
     return facility.create_facility(db, kind, name, *DALLAS)
 
 
-def test_a_driver_who_stopped_is_asked(db):
+def test_a_driver_who_stopped_is_asked(awake_lot_prompt, db):
     account = _driver(db)
     lot = _lot(db)
     gw = notify.RecordingNotificationGateway()
@@ -45,7 +45,7 @@ def test_a_driver_who_stopped_is_asked(db):
     assert sent.title == "How's the lot at Riverside Truck Stop?"
 
 
-def test_the_answer_is_three_tray_buttons_the_map_already_speaks(db):
+def test_the_answer_is_three_tray_buttons_the_map_already_speaks(awake_lot_prompt, db):
     """No new vocabulary anywhere: these are PARKING_STATUS's own three values."""
     account = _driver(db)
     lot = _lot(db)
@@ -132,7 +132,7 @@ def test_the_class_is_off_by_default(db):
     assert notify.get_class(notify.LOT_STATUS_PROMPT_CLASS).opt_in_default is False
 
 
-def test_a_driver_who_stops_three_times_is_asked_once(db):
+def test_a_driver_who_stops_three_times_is_asked_once(awake_lot_prompt, db):
     account = _driver(db)
     gw = notify.RecordingNotificationGateway()
 
@@ -146,7 +146,7 @@ def test_a_driver_who_stops_three_times_is_asked_once(db):
     assert len(gw.sent) == 1
 
 
-def test_it_loses_to_real_news_rather_than_crowding_it_out(db):
+def test_it_loses_to_real_news_rather_than_crowding_it_out(awake_lot_prompt, db):
     """NOT budget-exempt, deliberately: `protection_gap` earned its exemption by being a
     deadline, and a survey is the opposite."""
     account = _driver(db)
@@ -164,7 +164,7 @@ def test_it_loses_to_real_news_rather_than_crowding_it_out(db):
     assert sent.suppress_reason == notify.SuppressReason.budget
 
 
-def test_a_sleeping_driver_is_not_woken_to_be_surveyed(db):
+def test_a_sleeping_driver_is_not_woken_to_be_surveyed(awake_lot_prompt, db):
     """§13.3 — and this is the case quiet hours were written for: a driver dwelling at a
     truck stop at 23:00 is asleep in the bunk, which is exactly why they are dwelling."""
     account = _driver(db)
@@ -201,7 +201,7 @@ def _ping(db, account, at, lat=DALLAS[0], lon=DALLAS[1]):
     return location.evaluate_ping(db, account.id, lat, lon, occurred_at=at)
 
 
-def test_a_driver_parked_at_an_unarmed_truck_stop_is_asked(db):
+def test_a_driver_parked_at_an_unarmed_truck_stop_is_asked(awake_lot_prompt, db):
     """The case the geofence cannot see: no load, no stop, no arming — just a driver
     who pulled in for the night."""
     account = _driver(db)
@@ -268,7 +268,7 @@ def test_the_ping_path_writes_nothing_to_the_location_tables(db):
     assert location.is_present(db, account.id, lot.id) is False
 
 
-def test_it_asks_once_and_then_stops_asking_on_every_ping(db):
+def test_it_asks_once_and_then_stops_asking_on_every_ping(awake_lot_prompt, db):
     """A driver dwelling for eight hours pings ~96 times. Without an ATTEMPT guard each
     one writes a suppressed row, and §23 entry 102's inbox renders suppressed rows — so
     the driver would open it to ninety identical held prompts."""

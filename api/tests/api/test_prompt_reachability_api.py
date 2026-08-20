@@ -99,7 +99,7 @@ def _inbox(client, headers, class_key=PROMPT_CLASS):
 # --- the test this file exists for -------------------------------------------------
 
 
-def test_a_driver_can_turn_the_prompt_on_and_then_be_asked(client, db):
+def test_a_driver_can_turn_the_prompt_on_and_then_be_asked(awake_lot_prompt, client, db):
     """RED before the opt-in endpoint existed, and the only test in the tree that could
     have caught the third occurrence.
 

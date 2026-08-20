@@ -53,78 +53,37 @@ afterEach(() => {
   logout();
 });
 
-describe("the class switch in the notifications sheet", () => {
-  it("offers to turn the prompt on, stating the cost before the switch", async () => {
+describe("the lot-status prompt has no switch any more (§23 entry 231)", () => {
+  it("offers nothing about lots in the notifications sheet", async () => {
+    // Entry 114 built that switch because it was the ONLY way a driver could turn the
+    // prompt on. Removing it is therefore not cosmetic: `lot_status_prompt` keeps
+    // `opt_in_default=False`, so `dispatch` now suppresses it `not_opted_in` for
+    // everybody. That is the owner's intent — this asserts the surface really is gone
+    // rather than merely hidden behind a condition that could come back true.
     stubFetch([["/notifications/classes", () => jsonOnce(CLASSES(false))]]);
 
     const w = mount(NotificationsSheet, { props: { notifications: [] } });
     await flushPromises();
 
-    expect(w.text()).toContain(en["prompts.lot_what"]);
-    expect(w.text()).toContain(en["prompts.lot_on"]);
-    // §21.8: the offer says what will be sent and how often BEFORE the tap
-    expect(en["prompts.lot_what"]).toContain("once a day");
-    w.unmount();
-  });
-
-  it("turning it on PUTs the class and then says it is on", async () => {
-    const fetchMock = stubFetch([
-      [
-        "/notifications/classes/lot_status_prompt/opt-in",
-        () => jsonOnce({ class: "lot_status_prompt", opted_in: true }),
-      ],
-      ["/notifications/classes", () => jsonOnce(CLASSES(false))],
-    ]);
-
-    const w = mount(NotificationsSheet, { props: { notifications: [] } });
-    await flushPromises();
-    const buttons = w.findAll(".push__cta");
-    await buttons.at(buttons.length - 1).trigger("click");
-    await flushPromises();
-
-    const put = fetchMock.mock.calls.find(([u]) => String(u).includes("/opt-in"));
-    expect(put, "nothing switched the class on").toBeTruthy();
-    expect(put[1].method).toBe("PUT");
-    expect(JSON.parse(put[1].body)).toEqual({ opted_in: true });
-    expect(w.text()).toContain(en["prompts.lot_off"]);
-    w.unmount();
-  });
-
-  it("offers to turn it back off once it is on", async () => {
-    stubFetch([["/notifications/classes", () => jsonOnce(CLASSES(true))]]);
-
-    const w = mount(NotificationsSheet, { props: { notifications: [] } });
-    await flushPromises();
-
-    expect(w.text()).toContain(en["prompts.lot_off"]);
-    expect(w.text()).not.toContain(en["prompts.lot_on"]);
-    w.unmount();
-  });
-
-  it("renders NO switch when the server never answered", async () => {
-    stubFetch([]); // every call rejects — offline, or no session
-
-    const w = mount(NotificationsSheet, { props: { notifications: [] } });
-    await flushPromises();
-
+    expect(w.find(".prompt-class").exists()).toBe(false);
     expect(w.text()).not.toContain(en["prompts.lot_what"]);
     expect(w.text()).not.toContain(en["prompts.lot_on"]);
+    expect(w.text()).not.toContain(en["prompts.lot_off"]);
     w.unmount();
   });
 
-  it("a failed write leaves the switch where it was", async () => {
+  it("does not even ask the server which classes the driver has", async () => {
+    // the sheet used to call `/notifications/classes` on mount for this one switch. A
+    // request whose only consumer is gone is a request that should be gone.
+    const calls = [];
     stubFetch([
-      ["/notifications/classes/lot_status_prompt/opt-in", () => jsonOnce({}, false)],
-      ["/notifications/classes", () => jsonOnce(CLASSES(false))],
+      ["/notifications/classes", (u) => { calls.push(u); return jsonOnce(CLASSES(false)); }],
     ]);
 
     const w = mount(NotificationsSheet, { props: { notifications: [] } });
     await flushPromises();
-    const buttons = w.findAll(".push__cta");
-    await buttons.at(buttons.length - 1).trigger("click");
-    await flushPromises();
 
-    expect(w.text()).toContain(en["prompts.lot_on"]); // still offering to turn it ON
+    expect(calls, "no consumer, no call").toHaveLength(0);
     w.unmount();
   });
 });
