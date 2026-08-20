@@ -6,10 +6,27 @@
 // catalogs (glossary, §12.3).
 import { ref } from "vue";
 import { messages, DEFAULT_LOCALE, LAUNCH_LOCALES } from "./i18n/index.js";
+import { saveLocale, fetchMe } from "./api.js";
 
 // the driver's language persists across sessions; on a first visit we honor the
 // device language if it's one we ship, else English (F15).
 const STORAGE_KEY = "longhaul.locale";
+
+// AI-CONTEXT: has the driver actually CHOSEN, or did we guess? (§23 entry 232)
+//
+// `initialLocale` conflates three things — a stored choice, the device's language, and
+// English — and the reconciliation below has to tell the first from the other two. A
+// guess must never overwrite a real choice held on the server, which is exactly what
+// would happen on a fresh install if "the device always wins".
+export function hasStoredLocale() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return !!saved && LAUNCH_LOCALES.includes(saved);
+  } catch {
+    return false;
+  }
+}
+
 function initialLocale() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -131,7 +148,7 @@ export function useI18n() {
       resolve(key, messages[locale.value] ?? messages[DEFAULT_LOCALE], locale.value),
       params,
     );
-  const setLocale = (next) => {
+  const setLocale = (next, { push = true } = {}) => {
     if (LAUNCH_LOCALES.includes(next)) {
       locale.value = next;
       try {
@@ -142,6 +159,12 @@ export function useI18n() {
       if (typeof document !== "undefined") {
         document.documentElement.setAttribute("lang", next);
       }
+      // the server writes this driver's notifications, so it has to be told. Never
+      // awaited and never able to fail the switch: the screen changes language offline
+      // exactly as it does online, and `syncLocale` catches the server up next launch.
+      // `push: false` is how the reconciler adopts the server's own value without
+      // echoing it straight back.
+      if (push) saveLocale(next).catch(() => {});
     }
   };
   // AI-CONTEXT: for keys that are legitimately OPTIONAL, which is a real case.
@@ -156,4 +179,32 @@ export function useI18n() {
     Object.hasOwn(messages[locale.value] ?? {}, key) ||
     Object.hasOwn(messages[DEFAULT_LOCALE], key);
   return { locale, t, has, setLocale };
+}
+
+// AI-CONTEXT: reconcile the device's language with the server's, once per launch
+// (§23 entry 232).
+//
+// THE DEVICE'S STORED CHOICE WINS, because the picker is the only place a driver ever
+// states this and it lives on the handset they stated it on. If they have not chosen —
+// a fresh install, a new phone — the app ADOPTS the server's value instead, so a driver
+// who set Uzbek last year does not silently get reset to English by a reinstall.
+//
+// Every existing account is `en` on the server with no way to have said otherwise, so
+// this is also the repair path: the twelve production profiles correct themselves the
+// next time their driver opens the app.
+//
+// Failure is silent by design. This is bookkeeping between two copies of a preference —
+// it must never interrupt a driver, and the next launch tries again.
+export async function syncLocale() {
+  try {
+    const me = await fetchMe();
+    if (!me || !me.locale) return;
+    if (hasStoredLocale()) {
+      if (me.locale !== locale.value) await saveLocale(locale.value);
+    } else if (me.locale !== locale.value) {
+      useI18n().setLocale(me.locale, { push: false });
+    }
+  } catch {
+    /* offline, or signed out — the next launch reconciles */
+  }
 }

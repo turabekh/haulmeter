@@ -8,7 +8,8 @@ import { computed, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import StatusStrip from "./core/components/StatusStrip.vue";
 import TabBar from "./core/components/TabBar.vue";
-import { online, pendingWrites, failedWrites, flushQueue } from "./core/api.js";
+import { online, pendingWrites, failedWrites, flushQueue, isAuthenticated } from "./core/api.js";
+import { syncLocale } from "./core/i18n.js";
 import { startLocationReporting, stopLocationReporting } from "./core/location.js";
 
 const route = useRoute();
@@ -31,6 +32,11 @@ onMounted(() => {
     window.addEventListener("offline", setOffline);
   }
   flushQueue(); // sync anything queued from a previous offline session
+  // AI-CONTEXT: the driver's language and the SERVER's copy of it, reconciled once per
+  // launch (§23 entry 232). F8 writes every notification from the server's copy, and
+  // nothing had ever written it — so this is both the ongoing sync and the repair path
+  // for every account that predates it. Silent, and never blocking: it is bookkeeping.
+  if (isAuthenticated.value) syncLocale();
   // F3's sensor. Nothing sent the server a position before this — the geofence could
   // emit ENTER (from the arrive button, at the facility's own coordinates) and could
   // never emit EXIT. Adaptive sampling and the battery budget live in core/location.js.

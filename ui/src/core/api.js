@@ -1024,6 +1024,26 @@ export async function register(email, password, authority = null) {
   return _adopt(await resp.json(), email);
 }
 
+// AI-CONTEXT: tell the SERVER which language to write this driver's alerts in
+// (§23 entry 232). F8 resolves every notification from `f01.driver_profile.locale`, and
+// until this existed nothing on any client ever wrote that column — the picker changed
+// the app and left the pushes in English.
+//
+// Deliberately NOT awaited by the picker and deliberately swallowing its error: §15.1
+// makes offline a mode, and a driver in a dead zone still gets to change their language.
+// The local switch is the truth on the device; this is the app catching the server up,
+// and `syncLocale` retries it on the next launch if this attempt never left.
+export async function saveLocale(locale) {
+  if (typeof fetch === "undefined" || !token.value) return null;
+  const resp = await fetch(`${API_BASE}/auth/locale`, {
+    method: "PATCH",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify({ locale }),
+  });
+  if (!resp.ok) throw new Error(`locale failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function fetchMe() {
   // F1: who's signed in + their operating-authority verification state
   const resp = await fetch(`${API_BASE}/auth/me`, { headers: headers() });

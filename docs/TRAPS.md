@@ -111,6 +111,16 @@ session*; this file records what is permanently true.
    green and tell you nothing. Give them a fixture that turns the capability back on,
    so they keep testing the rule instead of the switch. *(231)*
 
+7d. **A test that arranges state the product cannot arrange is testing the function, not
+   the feature.** Every F8 localization test called `set_user_locale` itself and passed,
+   for months, over a product where **nothing else ever called it** — no endpoint, no UI.
+   All twelve production profiles read `en`, the six-locale notification catalogue was
+   live and unreachable, and the suite was green throughout.
+
+   **Set up through the seam a user actually goes through** — the endpoint, the picker —
+   at least once per feature. If no test can reach the state without calling the writer
+   directly, that is the finding: nothing else can reach it either. *(232)*
+
 8. **A test that calls the function *under* a control proves nothing about the control.**
    Every facility test called `askQuestion()` while the button that calls it was disabled in
    every state it rendered in — nobody could ask a question, and the suite was green.

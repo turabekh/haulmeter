@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import bearer_token, current_account, get_db
 from app.foundation.f01_identity import public as identity
 from app.foundation.f13_flags import public as flags
+from app.foundation.f15_localization import public as localization
 from app.modules.m13_vendor import public as m13
 from app.modules.m15_roadside import public as m15
 
@@ -327,6 +328,11 @@ def me(
     return {
         "account_id": str(account.id),
         "email": account.email,
+        # AI-CONTEXT: the language the SERVER will write this driver's alerts in (§23
+        # entry 232). It rides `/me` so a fresh install has something to adopt: a phone
+        # with no stored choice must not silently reset a driver to English, which is
+        # what "the device always wins" would do on a new handset.
+        "locale": localization.get_user_locale(db, account),
         "verification_enabled": flags.is_enabled(db, identity.AUTHORITY_VERIFICATION_FLAG),
         # AI-CONTEXT: the More row's condition, and it rides `/me` for the same reason
         # `verification_enabled` does — a driver app cannot read F13, and a capability
@@ -385,6 +391,39 @@ def update_equipment(
         mpg=mpg,
     )
     return _equipment_out(profile)
+
+
+class LocaleIn(BaseModel):
+    locale: str
+
+
+@router.patch("/locale")
+def update_locale(
+    body: LocaleIn,
+    account: identity.Account = Depends(current_account),
+    db: Session = Depends(get_db),
+) -> dict:
+    """AI-CONTEXT: N-02's last mile (§23 entry 232).
+
+    F8 has resolved every driver notification's language from `f01.driver_profile.locale`
+    since N-02 — six modules' message tables, the fallback to compiled English, the tests.
+    **Nothing ever wrote that column.** `f15.set_user_locale` was exported and called by
+    tests and by nothing else, and the app's own picker wrote `localStorage` and stopped.
+    So all twelve production profiles read `en` and a driver running the app in Uzbek got
+    their detention alert in English — the whole catalogue built, shipped, and never once
+    reached by a real driver.
+
+    Validation is F15's, not this endpoint's: `set_user_locale` raises `UnsupportedLocale`
+    for anything outside the six launch locales, so the wire cannot widen the set that the
+    rest of the product believes in.
+    """
+    try:
+        localization.set_user_locale(db, account, body.locale)
+    except localization.UnsupportedLocale as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, f"unsupported locale: {body.locale}"
+        ) from exc
+    return {"locale": localization.get_user_locale(db, account)}
 
 
 @router.post("/verify-authority")
