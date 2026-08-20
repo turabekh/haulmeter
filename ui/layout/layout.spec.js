@@ -1580,10 +1580,13 @@ const SURFACES = [
   // control used to be text links at the bottom of the tab, reached here by `.audit-cta`
   // nth:1 and nth:2; they belong to a CLAIM now and are reached through its sheet. Only
   // ONE `.audit-cta` remains, so the nth indices are gone with the buttons.
+  // the ordinary case: opened from a claim WITH a stop, so the sheet shows what we
+  // already know and asks only for an addition (§23 entry 235). `.ghost__known` is the
+  // handle, because a summary that silently stopped rendering would ship unmeasured.
   ["sheet-ghostwriter", "/money", {
     mocks: MONEY_MOCKS,
-    open: [".rows .row", { click: ".cm .cta", nth: 0 }],
-    ready: ".tone",
+    open: [{ click: ".rows .row", nth: 1 }, { click: ".cm .cta", nth: 0 }],
+    ready: ".ghost__known",
   }],
   // AI-CONTEXT: the ghostwriter's REFUSAL (§23 entry 233). "Write it" used to be a
   // Primary that silently did nothing on an empty box; it answers now, and §7 puts that
@@ -1591,6 +1594,12 @@ const SURFACES = [
   // English and longer in Russian and Gurmukhi, it sits BETWEEN the textarea and a
   // full-width Primary in a sheet that already fills most of 800 dp, and a message that
   // pushes its own CTA off the bottom is how a driver never learns what to do.
+  // THE FIRST ROW IS THE LUMPER, and that is load-bearing rather than incidental: the
+  // outstanding list sorts by aging (31 days beats 12), so `.rows .row` first-match is
+  // `r-2`, which carries `stop_id: null`. That is the one case where we genuinely know
+  // nothing about a claim and the refusal is still the right answer (§23 entry 235).
+  // Pointing this at a row WITH a stop makes it draft instead — which is how this state
+  // failed when it was first re-pointed.
   ["sheet-ghostwriter-missing", "/money", {
     mocks: MONEY_MOCKS,
     open: [".rows .row", { click: ".cm .cta", nth: 0 }, ".ghost .cta"],

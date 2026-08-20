@@ -7,6 +7,7 @@ activation.
 
 import base64
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -14,8 +15,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_account, get_db, require_module
 from app.foundation.f01_identity import public as identity
+from app.foundation.f02_facility import public as facility
+from app.foundation.f05_load import public as loads
 from app.foundation.f09_ai_gateway import public as ai
 from app.foundation.f15_localization import public as f15
+from app.modules.m03_detention import public as m3
 from app.modules.m11_voice import public as m11
 
 log = logging.getLogger(__name__)
@@ -53,8 +57,12 @@ class ListenIn(BaseModel):
 
 class DraftIn(BaseModel):
     kind: str
-    facts: str
+    facts: str = ""
     tone: str = "neutral"
+    # AI-CONTEXT: the claim this chase is ABOUT (§23 entry 235). Only the reference
+    # travels — never the figures. The money in a detention notice is the Meter's
+    # arithmetic, and a number a client can post is a number a client can change.
+    stop_id: uuid.UUID | None = None
 
 
 def _response(resp: m11.VoiceResponse, transcript: str | None = None) -> dict:
@@ -177,6 +185,74 @@ def claims(
     ]
 
 
+def _hm(seconds: int | None) -> str | None:
+    if not seconds:
+        return None
+    hours, minutes = divmod(int(seconds) // 60, 60)
+    return f"{hours}h {minutes:02d}m"
+
+
+def _claim_facts(db: Session, stop_id, account: identity.Account) -> str | None:
+    """AI-CONTEXT: what WE already know about this claim, in the model's words (§23 e235).
+
+    The ghostwriter is opened from a claim and the claim was thrown away one line later —
+    `onSheetChase` closed the row and mounted the sheet with no props — so the prompt was
+    told nothing and returned a form of blanks for the driver to fill in by hand. Every
+    line below was already on the box; none of it had ever reached the model.
+
+    ASSEMBLED HERE, FROM OUR OWN RECORDS, never from the request body. `stop_id` is the
+    only thing the client sends, and it is ownership-checked before it is read: a driver
+    drafts from their own claim or from nothing at all.
+
+    Absent facts are OMITTED rather than rendered as an empty label — a line reading
+    "Broker: —" tells the model there is a hole to paper over, which is the behaviour
+    this whole entry exists to stop.
+    """
+    if stop_id is None:
+        return None
+    stop = loads.get_stop(db, stop_id)
+    if stop is None:
+        return None
+    load = loads.get_load(db, stop.load_id)
+    if load is None or load.account_id != account.id:
+        # not theirs: no facts, no error. The draft is still written from what the driver
+        # typed, and nothing about someone else's claim leaks into it.
+        return None
+
+    claim = m3.claim_for_stop(db, stop.id)
+    fac = facility.get_facility(db, stop.facility_id) if stop.facility_id else None
+    cp = (
+        loads.get_counterparty(db, load.counterparty_id)
+        if load.counterparty_id is not None
+        else None
+    )
+
+    lines: list[str] = []
+    if cp is not None and getattr(cp, "name", None):
+        lines.append(f"- Counterparty (the broker being written to): {cp.name}")
+    if fac is not None and getattr(fac, "name", None):
+        lines.append(f"- Facility where the driver was detained: {fac.name}")
+    if getattr(load, "reference_number", None):
+        lines.append(f"- Load reference: {load.reference_number}")
+    if claim is not None:
+        detained = _hm(claim.detention_seconds)
+        if detained:
+            lines.append(f"- Time detained beyond free time: {detained}")
+        if claim.free_time_minutes:
+            lines.append(f"- Contracted free time: {claim.free_time_minutes} minutes")
+        if claim.detention_rate_cents_per_hour:
+            rate = claim.detention_rate_cents_per_hour / 100
+            lines.append(f"- Agreed detention rate: ${rate:,.2f} per hour")
+        if claim.amount_cents:
+            lines.append(f"- Amount owed: ${claim.amount_cents / 100:,.2f}")
+        if claim.start_notice_sent_at is not None:
+            lines.append(
+                "- The counterparty was already notified in writing when the clock "
+                f"started, at {claim.start_notice_sent_at:%Y-%m-%d %H:%M} UTC"
+            )
+    return "\n".join(lines) or None
+
+
 @router.post("/draft")
 def draft(
     body: DraftIn,
@@ -185,6 +261,12 @@ def draft(
 ) -> dict:
     m11.register_module(db)  # idempotent: ensure the F9 drafting prompt exists
     text = m11.draft_counterparty_message(
-        db, _PROVIDER, account.id, body.kind, body.facts, tone=body.tone
+        db,
+        _PROVIDER,
+        account.id,
+        body.kind,
+        body.facts,
+        tone=body.tone,
+        claim_facts=_claim_facts(db, body.stop_id, account),
     )
     return {"draft": text, "outbound_language": "en"}

@@ -216,7 +216,25 @@ describe("A row leads somewhere, with a next step (§10.3)", () => {
     await flushPromises();
 
     expect(w.find(".cm").exists()).toBe(false);
-    expect(w.text()).toContain(en["ghost.facts"]);
+    // §23 entry 235: the sheet arrives KNOWING the claim, so the box asks for an addition
+    // rather than for facts the app is already holding
+    expect(w.text()).toContain(en["ghost.add"]);
+    expect(w.text()).toContain(en["ghost.known"]);
+  });
+
+  it("carries the claim into the ghostwriter instead of dropping it (§23 entry 235)", async () => {
+    // the owner's question: "since we know which load we are talking about, why do we
+    // have to ask filling brackets from a user?" — because `onSheetChase` closed the row
+    // and mounted `<GhostwriterSheet />` with no props, one line before it was needed.
+    const { w } = await openFirst();
+    await w.findAll(".cm .cta").find((b) => b.text().includes(en["money.act_chase"])).trigger("click");
+    await flushPromises();
+
+    const ghost = w.findComponent({ name: "GhostwriterSheet" });
+    expect(ghost.props("stopId"), "the reference travels").toBeTruthy();
+    expect(ghost.props("counterparty")).toBeTruthy();
+    // and the driver can SEE what we already know, which is the answer to "why am I typing"
+    expect(w.text()).toContain(ghost.props("counterparty"));
   });
 
   it("reaches the evidence behind the claim", async () => {

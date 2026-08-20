@@ -1634,11 +1634,12 @@ export async function auditSettlement({ carrier, periodStart, periodEnd, lines }
   return resp.json();
 }
 
-export async function draftMessage({ kind, facts, tone }) {
+export async function draftMessage({ kind, facts, tone, stopId = null }) {
   const resp = await fetch(`${API_BASE}/voice/draft`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ kind, facts, tone }),
+    // only the REFERENCE travels; the server reads the figures from its own records
+    body: JSON.stringify({ kind, facts, tone, stop_id: stopId }),
   });
   if (!resp.ok) throw new Error(`draft failed: ${resp.status}`);
   return resp.json();

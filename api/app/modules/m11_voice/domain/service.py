@@ -44,6 +44,31 @@ from . import lexicon, messages
 FLAG_KEY = "m11_voice"
 MODULE = "m11"
 GHOSTWRITER_PROMPT = "m11_ghostwriter"
+# AI-CONTEXT: v2 — the prompt is TOLD THE CLAIM, and that is the whole change (§23 e235).
+#
+# v1 was `"Write a {tone} {kind} to the counterparty in ENGLISH. Facts: {facts}"`. The
+# model received four words and whatever the driver typed — no counterparty, no dock, no
+# hours, no rate, no money — so every draft came back studded with `[Counterparty Company
+# Name]`, `[RC #_____]` and `[$XX.00]`. Those placeholders were the ONLY honest thing it
+# could produce with what it was given: the model was not guessing, it was told nothing.
+# Meanwhile the app opened this sheet FROM the claim and dropped it on the floor.
+#
+# THE VERSION BUMP IS LOAD-BEARING. `register_module` registers the prompt only when
+# `get_active_prompt` returns None, so editing the template in code changes nothing on a
+# box that already has one — production has carried v1 since M11 shipped. `get_active_prompt`
+# takes the highest ACTIVE version, so v2 wins by existing; v1 stays as history.
+GHOSTWRITER_PROMPT_VERSION = 2
+GHOSTWRITER_TEMPLATE = (
+    "Write a {tone} {kind} to the counterparty, in ENGLISH.\n\n"
+    "VERIFIED FACTS from our own records. Every one of these is accurate and specific. "
+    "Use them directly in the message and NEVER replace one with a placeholder:\n"
+    "{claim_facts}\n\n"
+    "What the driver adds, in their own words: {facts}\n\n"
+    "Do not invent a figure, date, reference number, address or name that is not given "
+    "above. If something a template would normally carry was not supplied, LEAVE IT OUT "
+    "rather than writing a blank for someone to fill in — the person sending this has "
+    "already told us everything they know."
+)
 
 # committing intents whose confirmation is deferred to on-screen-when-stopped
 _CONFIRM_INTENTS = {"start_detention", "book_parking"}
@@ -97,12 +122,14 @@ def register_module(db: Session) -> None:
         db, FLAG_KEY, description="M11 Voice Copilot & AI Communications", default_on=True
     )
     admin.register_admin_view(db, "m11.voice", MODULE, "Voice & Comms", "/admin/m11/voice")
-    if ai.get_active_prompt(db, GHOSTWRITER_PROMPT) is None:
+    active = ai.get_active_prompt(db, GHOSTWRITER_PROMPT)
+    if active is None or active.version < GHOSTWRITER_PROMPT_VERSION:
         ai.register_prompt(
             db,
             GHOSTWRITER_PROMPT,
             ai.AiTask.drafting,
-            "Write a {tone} {kind} to the counterparty in ENGLISH. Facts: {facts}",
+            GHOSTWRITER_TEMPLATE,
+            version=GHOSTWRITER_PROMPT_VERSION,
         )
     register_voice_messages(db)
 
@@ -397,16 +424,36 @@ def handle_utterance(
 
 
 # --- Comms ghostwriter (M11-FR3) ---
+NO_CLAIM_FACTS = "(none on file — the driver's account below is all we have)"
+NO_DRIVER_FACTS = "(nothing — write from the verified facts alone)"
+
+
 def draft_counterparty_message(
-    db: Session, provider, account_id, kind: str, facts: str, tone: str = "neutral"
+    db: Session,
+    provider,
+    account_id,
+    kind: str,
+    facts: str,
+    tone: str = "neutral",
+    claim_facts: str | None = None,
 ) -> str:
-    # F9 drafting seam; outbound is ALWAYS English (F15) — enforced by the prompt
+    """F9 drafting seam; outbound is ALWAYS English (F15) — enforced by the prompt.
+
+    `claim_facts` is assembled by the CALLER from our own records, never from the request
+    body: the money in a detention notice is the Meter's arithmetic, and a figure a client
+    could post is a figure a client could change.
+    """
     return ai.complete(
         db,
         provider,
         MODULE,
         GHOSTWRITER_PROMPT,
-        {"kind": kind, "tone": TONES.get(tone, TONES["neutral"]), "facts": facts},
+        {
+            "kind": kind,
+            "tone": TONES.get(tone, TONES["neutral"]),
+            "facts": facts.strip() or NO_DRIVER_FACTS,
+            "claim_facts": claim_facts or NO_CLAIM_FACTS,
+        },
         account_id=account_id,
     )
 

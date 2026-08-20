@@ -119,6 +119,37 @@ describe("The chase ghostwriter hands the driver the words", () => {
     expect(drafts, "nothing to draft FROM — the request must not go").toEqual([]);
   });
 
+  it("drafts from the claim alone when it knows which claim (§23 entry 235)", async () => {
+    // the owner's point: we opened this sheet FROM a detention claim, so demanding a
+    // typed sentence before we will write anything is asking for facts we are holding.
+    // Entry 233's complaint survives only for the case where we know nothing at all.
+    const fetchMock = vi.fn(() => jsonOk({ draft: "Please remit detention of $225.00." }));
+    vi.stubGlobal("fetch", fetchMock);
+    setToken("tok");
+    const w = mount(GhostwriterSheet, {
+      props: { stopId: "stop-1", counterparty: "Bolt Logistics LLC", amount: "$225.00" },
+    });
+
+    await tap(w, en["ghost.draft"]);
+
+    expect(w.text()).not.toContain(en["ghost.facts_required"]);
+    const [, init] = fetchMock.mock.calls.find(([u]) => String(u).includes("/voice/draft"));
+    expect(JSON.parse(init.body).stop_id, "the reference travels").toBe("stop-1");
+    expect(w.text()).toContain("Please remit detention of $225.00.");
+  });
+
+  it("still refuses when it knows NOTHING — no claim and no words", async () => {
+    const fetchMock = vi.fn(() => jsonOk({ draft: "unreachable" }));
+    vi.stubGlobal("fetch", fetchMock);
+    setToken("tok");
+    const w = mount(GhostwriterSheet); // no stopId: a receivable with no stop behind it
+
+    await tap(w, en["ghost.draft"]);
+
+    expect(w.text()).toContain(en["ghost.facts_required"]);
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes("/voice/draft"))).toEqual([]);
+  });
+
   it("clears the complaint as soon as the driver types", async () => {
     vi.stubGlobal("fetch", vi.fn(() => jsonOk({ draft: "d" })));
     setToken("tok");

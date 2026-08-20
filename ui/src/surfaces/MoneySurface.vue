@@ -272,10 +272,18 @@ async function onSheetPaid() {
   openRow.value = null;
   await refreshMoney();
 }
+// the claim being chased, held while the ghostwriter is open
+const chasing = ref(null);
 function onSheetChase() {
   // M11-FR3's ghostwriter, reached from the claim it is about rather than from an
   // unnamed button at the bottom of the tab. The driver reads and sends it themselves,
   // so this never becomes a second automatic mail beside the dunning cadence.
+  //
+  // AI-CONTEXT: THE CLAIM TRAVELS WITH IT NOW (§23 entry 235). `closeRow()` cleared
+  // `openRow` and the sheet mounted with no props, so the one thing this flow knows —
+  // which claim it is chasing — was discarded one line before it was needed. The row is
+  // captured FIRST and held for the sheet.
+  chasing.value = openRow.value;
   closeRow();
   drafting.value = true;
 }
@@ -532,8 +540,17 @@ async function refreshMoney() {
       />
     </BottomSheet>
 
-    <BottomSheet :open="drafting && !isDriving" :title="t('ghost.title')" @close="drafting = false">
-      <GhostwriterSheet />
+    <BottomSheet
+      :open="drafting && !isDriving"
+      :title="t('ghost.title')"
+      @close="((drafting = false), (chasing = null))"
+    >
+      <GhostwriterSheet
+        :stop-id="chasing?.stop_id || null"
+        :counterparty="chasing?.counterparty_name || null"
+        :facility="chasing?.facility_name || null"
+        :amount="chasing ? formatMoney(chasing.amount_cents) : null"
+      />
     </BottomSheet>
 
   </div>

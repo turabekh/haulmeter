@@ -5,12 +5,33 @@
      (§202 over a dropdown). Outbound is English regardless of input language
      (F15/M11-FR6). Live via api.js -> /voice/draft; offline shows a local draft. -->
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "../i18n.js";
 import { draftMessage } from "../api.js";
 import Spinner from "./Spinner.vue";
 
 const { t } = useI18n();
+
+// AI-CONTEXT: the claim this chase is ABOUT (§23 entry 235, owner-asked).
+//
+// "Since we know which load we are talking about, why do we have to ask filling brackets
+// from a user?" — they were right. This sheet is opened FROM a claim and was mounted with
+// no props at all, so the driver retyped facts the app was holding and got back a
+// template of `[Counterparty Company Name]` and `[$XX.00]` to fill in by hand.
+//
+// Only the STOP REFERENCE travels to the server, never the figures: the money in a
+// detention notice is the Meter's arithmetic, and a number the client could post is a
+// number the client could change. The summary below is what we already know, shown so a
+// driver can see WHY they are not being asked to type it.
+const props = defineProps({
+  stopId: { type: String, default: null },
+  counterparty: { type: String, default: null },
+  facility: { type: String, default: null },
+  amount: { type: String, default: null },
+});
+const known = computed(() =>
+  [props.counterparty, props.facility, props.amount].filter(Boolean).join(" · "),
+);
 
 const TONES = ["relationship", "neutral", "firm"];
 const tone = ref("neutral");
@@ -36,14 +57,25 @@ const missing = ref(false);
 
 async function write() {
   const f = facts.value.trim();
-  if (!f) {
+  // AI-CONTEXT: NO LONGER REQUIRED (§23 entry 235). Entry 233 made this button answer
+  // instead of silently doing nothing, which was right while the driver's typing was the
+  // only thing the model got. Now the claim itself travels, so an empty box is a complete
+  // request — and demanding a sentence we already know is the defect the owner reported.
+  // The complaint survives for the case where we know NOTHING: no claim and no words is
+  // genuinely nothing to write from.
+  if (!f && !props.stopId) {
     missing.value = true;
     return;
   }
   missing.value = false;
   busy.value = true;
   try {
-    const res = await draftMessage({ kind: "detention notice", facts: f, tone: tone.value });
+    const res = await draftMessage({
+      kind: "detention notice",
+      facts: f,
+      tone: tone.value,
+      stopId: props.stopId,
+    });
     draft.value = res.draft;
   } catch {
     // offline: a local English stub so the flow still demonstrates (F9 seam)
@@ -94,13 +126,19 @@ async function copyDraft() {
         </button>
       </div>
 
+      <!-- what we already know, so the driver can see why they are not typing it -->
+      <p v-if="known" class="ghost__known">
+        <span class="ghost__known_label">{{ t("ghost.known") }}</span>
+        {{ known }}
+      </p>
+
       <label class="field">
-        <span class="field__label">{{ t("ghost.facts") }}</span>
+        <span class="field__label">{{ stopId ? t("ghost.add") : t("ghost.facts") }}</span>
         <textarea
           v-model="facts"
           class="field__input"
           rows="3"
-          :placeholder="t('ghost.facts_placeholder')"
+          :placeholder="stopId ? t('ghost.add_placeholder') : t('ghost.facts_placeholder')"
           :aria-invalid="missing ? 'true' : undefined"
           :aria-describedby="missing ? 'ghost-facts-missing' : undefined"
           @input="missing = false"
@@ -149,6 +187,13 @@ async function copyDraft() {
   background: var(--accent-fill);
   color: var(--on-accent);
   border-color: var(--accent-fill);
+}
+.ghost__known {
+  color: var(--text-2);
+  font-size: var(--type-caption-size);
+}
+.ghost__known_label {
+  color: var(--text-3);
 }
 .field__error {
   color: var(--flare-500);
