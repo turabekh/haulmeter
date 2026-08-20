@@ -1585,6 +1585,17 @@ const SURFACES = [
     open: [".rows .row", { click: ".cm .cta", nth: 0 }],
     ready: ".tone",
   }],
+  // AI-CONTEXT: the ghostwriter's REFUSAL (§23 entry 233). "Write it" used to be a
+  // Primary that silently did nothing on an empty box; it answers now, and §7 puts that
+  // answer next to its field. Measured because the sentence is two lines at 360 dp in
+  // English and longer in Russian and Gurmukhi, it sits BETWEEN the textarea and a
+  // full-width Primary in a sheet that already fills most of 800 dp, and a message that
+  // pushes its own CTA off the bottom is how a driver never learns what to do.
+  ["sheet-ghostwriter-missing", "/money", {
+    mocks: MONEY_MOCKS,
+    open: [".rows .row", { click: ".cm .cta", nth: 0 }, ".ghost .cta"],
+    ready: ".field__error",
+  }],
   // the claim sheet itself: a money figure, a broker, a history and three graded acts.
   // Measured because a list of money figures at 200% is exactly the T-5/T-6 reflow case,
   // and 360 dp is where a two-column row runs out of width.

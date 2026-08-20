@@ -475,6 +475,7 @@
   "ghost.english": "Ingliz tili — yuborishga tayyor",
   "ghost.facts": "Nima bo'ldi?",
   "ghost.facts_placeholder": "masalan bepul vaqtdan 3 soat oshib ketdi",
+  "ghost.facts_required": "Avval nima bo‘lganini yozing — xabar shundan tuziladi.",
   "ghost.title": "Xabar yozish",
   "ghost.tone.firm": "Qat'iy",
   "ghost.tone.neutral": "Neytral",

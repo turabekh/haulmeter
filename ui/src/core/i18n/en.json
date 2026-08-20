@@ -475,6 +475,7 @@
   "ghost.english": "English — ready to send",
   "ghost.facts": "What happened?",
   "ghost.facts_placeholder": "e.g. 3 hours past free time at Dallas Receiver",
+  "ghost.facts_required": "Say what happened first — the message is written from it.",
   "ghost.title": "Draft a message",
   "ghost.tone.firm": "Firm",
   "ghost.tone.neutral": "Neutral",

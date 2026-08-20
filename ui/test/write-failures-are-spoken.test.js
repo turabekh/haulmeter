@@ -98,6 +98,55 @@ describe("The chase ghostwriter hands the driver the words", () => {
     return w;
   }
 
+  it("says what is missing instead of doing nothing (§23 entry 233)", async () => {
+    // THE REPORTED DEFECT. "Write it" is a full-weight Primary CTA sitting under an
+    // empty box, fully enabled, and its handler opened with a bare `if (!f) return`.
+    // Tapping it produced no request, no message and no change of any kind — measured
+    // in the real app before this test was written. §7's form rule wants every error
+    // "inline, specific, and next to its field"; a silent return is none of the three,
+    // and a Primary that does nothing is indistinguishable from a broken app.
+    const fetchMock = vi.fn(() => jsonOk({ draft: "unreachable" }));
+    vi.stubGlobal("fetch", fetchMock);
+    setToken("tok");
+    const w = mount(GhostwriterSheet);
+
+    await tap(w, en["ghost.draft"]);
+
+    expect(w.text()).toContain(en["ghost.facts_required"]);
+    // named precisely: other components mounted in this file poll their own endpoints,
+    // and "fetch was never called" would be a claim about them rather than about drafting
+    const drafts = fetchMock.mock.calls.filter(([u]) => String(u).includes("/voice/draft"));
+    expect(drafts, "nothing to draft FROM — the request must not go").toEqual([]);
+  });
+
+  it("clears the complaint as soon as the driver types", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => jsonOk({ draft: "d" })));
+    setToken("tok");
+    const w = mount(GhostwriterSheet);
+    await tap(w, en["ghost.draft"]);
+    expect(w.text()).toContain(en["ghost.facts_required"]);
+
+    await w.find("textarea").setValue("Held 3 hours at Dock 4");
+
+    expect(w.text(), "a complaint that outlives its cause is noise").not.toContain(
+      en["ghost.facts_required"],
+    );
+  });
+
+  it("still writes when there ARE facts", async () => {
+    // the sabotage guard: a fix that refuses everything would pass the test above
+    const fetchMock = vi.fn(() => jsonOk({ draft: "Please remit detention of $75.00." }));
+    vi.stubGlobal("fetch", fetchMock);
+    setToken("tok");
+    const w = mount(GhostwriterSheet);
+    await w.find("textarea").setValue("Held 3 hours at Dock 4");
+
+    await tap(w, en["ghost.draft"]);
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(w.text()).toContain("Please remit detention of $75.00.");
+  });
+
   it("copies the message rather than claiming to send it", async () => {
     const writeText = vi.fn(() => Promise.resolve());
     const w = await draft({ writeText });

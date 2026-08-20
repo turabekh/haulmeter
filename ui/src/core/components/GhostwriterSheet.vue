@@ -19,10 +19,28 @@ const draft = ref(null);
 const copied = ref(false);
 const copyFailed = ref(false);
 const busy = ref(false);
+// AI-CONTEXT: THE PRIMARY THAT DID NOTHING (§23 entry 233, owner-reported).
+//
+// `write()` opened with a bare `if (!f) return`, and "Write it" is a full-weight Primary
+// CTA sitting directly under the empty box. So the most obvious gesture on this sheet —
+// open it, tap the big blue button — produced no request, no message and no change of
+// any kind. Measured in the running app before this was touched: 0 requests, 0 DOM
+// change. To a driver that is not a validation rule, it is a broken app, and it is the
+// same family as entry 218's "Approve & send" whose handler was one assignment.
+//
+// §7's form rule wants every error "inline, specific, and next to its field", and §15.4
+// asks the driver to act only when only they can — which is exactly this case: nobody
+// else can say what happened. So the button stays enabled and ANSWERS. A disabled
+// Primary would have been the same silence wearing a greyer coat.
+const missing = ref(false);
 
 async function write() {
   const f = facts.value.trim();
-  if (!f) return;
+  if (!f) {
+    missing.value = true;
+    return;
+  }
+  missing.value = false;
   busy.value = true;
   try {
     const res = await draftMessage({ kind: "detention notice", facts: f, tone: tone.value });
@@ -83,7 +101,14 @@ async function copyDraft() {
           class="field__input"
           rows="3"
           :placeholder="t('ghost.facts_placeholder')"
+          :aria-invalid="missing ? 'true' : undefined"
+          :aria-describedby="missing ? 'ghost-facts-missing' : undefined"
+          @input="missing = false"
         ></textarea>
+        <!-- next to its field, which is where §7 puts an error -->
+        <span v-if="missing" id="ghost-facts-missing" class="field__error" role="alert">
+          {{ t("ghost.facts_required") }}
+        </span>
       </label>
 
       <p v-if="draft" class="draft">
@@ -124,6 +149,10 @@ async function copyDraft() {
   background: var(--accent-fill);
   color: var(--on-accent);
   border-color: var(--accent-fill);
+}
+.field__error {
+  color: var(--flare-500);
+  font-size: var(--type-caption-size);
 }
 .field {
   display: flex;

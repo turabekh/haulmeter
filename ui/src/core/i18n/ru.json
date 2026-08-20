@@ -475,6 +475,7 @@
   "ghost.english": "Английский — готово к отправке",
   "ghost.facts": "Что случилось?",
   "ghost.facts_placeholder": "напр. 3 часа сверх свободного времени",
+  "ghost.facts_required": "Сначала опишите, что произошло, — сообщение пишется из этого.",
   "ghost.title": "Составить сообщение",
   "ghost.tone.firm": "Жёстко",
   "ghost.tone.neutral": "Нейтрально",

@@ -475,6 +475,7 @@
   "ghost.english": "Inglés — listo para enviar",
   "ghost.facts": "¿Qué pasó?",
   "ghost.facts_placeholder": "ej. 3 horas pasadas del tiempo libre en Dallas Receiver",
+  "ghost.facts_required": "Primero di qué pasó: el mensaje se escribe a partir de eso.",
   "ghost.title": "Redactar un mensaje",
   "ghost.tone.firm": "Firme",
   "ghost.tone.neutral": "Neutral",
